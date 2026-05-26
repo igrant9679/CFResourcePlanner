@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "CommunityForce Org Chart & Resource Planner",
   "scripts": {
-    "start": "serve . --single -p ${PORT:-3000}"
+    "start": "serve . -p ${PORT:-3000}"
   },
   "dependencies": {
     "serve": "^14.2.4"

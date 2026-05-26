@@ -1,8 +1,1241 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta http-equiv="refresh" content="0;url=CommunityForce_OrgChart_5_26_2026.html">
-<title>CommunityForce Resource Planner</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CommunityForce — Org Chart</title>
+<style>
+:root{--navy:#1B2A4A;--navy-light:#243656;--navy-hover:#2C4068;--gold:#C5A55A;--gold-dim:rgba(197,165,90,0.12);--green:#2D6A4F;--green-dim:rgba(45,106,79,0.1);--violet:#7C5CBF;--violet-dim:rgba(124,92,191,0.1);--amber:#D97706;--amber-dim:rgba(217,119,6,0.1);--slate:#546478;--slate-dim:rgba(84,100,120,0.07);--red:#DC2626;--red-light:#FEE2E2;--teal:#0D9488;--teal-dim:rgba(13,148,136,0.08);--warn-border:#F59E0B;--warn-text:#92400E;--card-bg:#fff;--page-bg:#ECEEF2;--text-primary:#1B2A4A;--text-secondary:#5A6A7E;--text-muted:#94A3B8;--border:#DDE2EA;--radius:10px;--shadow-sm:0 1px 3px rgba(27,42,74,0.06);--shadow-md:0 6px 24px rgba(27,42,74,0.1);--shadow-lg:0 20px 60px rgba(27,42,74,0.18);}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;background:var(--page-bg);color:var(--text-primary);line-height:1.45;-webkit-font-smoothing:antialiased;}
+.hdr{background:linear-gradient(135deg,var(--navy),var(--navy-light));padding:24px 28px 20px;border-bottom:3px solid var(--gold);position:sticky;top:0;z-index:50;}
+.hdr-in{max-width:1300px;margin:0 auto;}
+.hdr-top{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;}
+.hdr-brand{font-size:10px;font-weight:700;letter-spacing:2.5px;color:var(--gold);text-transform:uppercase;margin-bottom:3px;}
+.hdr-title{font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.3px;}
+.hdr-sub{font-size:11px;color:rgba(255,255,255,0.38);margin-top:2px;}
+.hdr-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.btn{padding:9px 18px;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;letter-spacing:0.2px;transition:transform 0.1s,box-shadow 0.1s;}
+.btn:hover{transform:translateY(-1px);}
+.btn-gold{background:var(--gold);color:var(--navy);}
+.btn-gold:hover{box-shadow:0 4px 14px rgba(197,165,90,0.4);}
+.btn-outline{background:rgba(255,255,255,0.08);color:#fff;border:1px solid rgba(255,255,255,0.15);}
+.btn-outline:hover{background:rgba(255,255,255,0.14);}
+.btn-navy{background:var(--navy);color:#fff;}
+.btn-navy:hover{background:var(--navy-hover);}
+.btn-sec{background:#F1F5F9;color:var(--text-secondary);}
+.btn-sec:hover{background:#E2E8F0;}
+.btn-danger-sm{background:none;color:var(--red);border:1.5px solid var(--red-light);font-size:12px;}
+.btn-danger-sm:hover{background:var(--red-light);}
+.btn-sm{padding:6px 12px;font-size:11px;}
+.btn-full{width:100%;margin-top:10px;}
+.stats{display:flex;gap:14px;margin-top:16px;flex-wrap:wrap;}
+.st{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.07);border-radius:9px;padding:10px 18px;min-width:115px;}
+.st.warn{border-color:rgba(251,191,36,0.35);}
+.st-l{font-size:9px;font-weight:700;color:rgba(255,255,255,0.36);text-transform:uppercase;letter-spacing:1px;}
+.st-v{font-size:20px;font-weight:800;color:#fff;margin-top:1px;}
+.st-v.wv{color:#FBBF24;}
+.st-u{font-size:10px;font-weight:400;color:rgba(255,255,255,0.28);margin-left:3px;}
+.toolbar{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;align-items:center;}
+.search{flex:1;min-width:200px;max-width:380px;padding:9px 13px;border:1px solid rgba(255,255,255,0.12);border-radius:7px;background:rgba(255,255,255,0.06);color:#fff;font-size:13px;font-family:inherit;outline:none;}
+.search::placeholder{color:rgba(255,255,255,0.28);}
+.search:focus{border-color:var(--gold);}
+.tab-bar{display:flex;gap:2px;background:rgba(255,255,255,0.06);border-radius:7px;padding:3px;}
+.tab{padding:7px 16px;border-radius:5px;font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);cursor:pointer;border:none;background:none;font-family:inherit;transition:all 0.15s;}
+.tab.active{background:rgba(255,255,255,0.14);color:#fff;}
+.tab:hover:not(.active){color:rgba(255,255,255,0.7);}
+.main{max-width:1300px;margin:0 auto;padding:20px 24px 64px;}
+.legend{display:flex;gap:16px;flex-wrap:wrap;padding:12px 18px;margin-bottom:18px;background:var(--card-bg);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow-sm);align-items:center;}
+.leg-i{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-secondary);font-weight:600;}
+.leg-sw{width:24px;height:14px;border-radius:3px;border:1px solid rgba(0,0,0,0.08);}
+.dept{margin-bottom:20px;}
+.dept-h{display:flex;align-items:center;justify-content:space-between;padding:13px 18px;cursor:pointer;user-select:none;background:linear-gradient(135deg,var(--navy),var(--navy-light));border-radius:11px 11px 0 0;transition:border-radius 0.2s;}
+.dept-h.coll{border-radius:11px;}
+.dept-h:hover{filter:brightness(1.05);}
+.dept-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.dept-inf{margin-left:11px;flex:1;}
+.dept-nm{font-size:14px;font-weight:700;color:#fff;letter-spacing:0.2px;}
+.dept-st{font-size:10px;color:rgba(255,255,255,0.45);margin-top:1px;}
+.dept-stats{text-align:right;margin-right:10px;}
+.dept-cost{font-size:13px;font-weight:700;}
+.dept-cu{font-size:9px;font-weight:400;color:rgba(255,255,255,0.38);}
+.dept-cnt{font-size:10px;color:rgba(255,255,255,0.42);}
+.dept-chev{font-size:14px;color:rgba(255,255,255,0.3);transition:transform 0.2s;}
+.dept-chev.open{transform:rotate(0deg);}
+.dept-chev.closed{transform:rotate(-90deg);}
+.dept-del{margin-left:4px;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);background:rgba(255,255,255,0.06);border:none;cursor:pointer;font-family:inherit;}
+.dept-del:hover{color:#FCA5A5;background:rgba(220,38,38,0.15);}
+.dept-edit-btn{margin-left:8px;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700;color:rgba(255,255,255,0.35);background:rgba(255,255,255,0.06);border:none;cursor:pointer;font-family:inherit;}
+.dept-edit-btn:hover{color:#93C5FD;background:rgba(37,99,235,0.2);}
+.btn-sub{margin-left:4px;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);background:rgba(255,255,255,0.06);border:none;cursor:pointer;font-family:inherit;}
+.btn-sub:hover{color:#86efac;background:rgba(34,197,94,0.2);}
+.subdept-section{grid-column:1/-1;display:flex;flex-direction:column;gap:10px;margin:4px 0 6px 20px;padding-left:16px;border-left:2px solid rgba(27,42,74,0.12);}
+.subdept-item{border-radius:11px;overflow:hidden;border-left:4px solid var(--border);}
+.subdept-item .dept-body{background:#ECEEF4;border-color:rgba(0,0,0,0.06);}
+.depth2 .subdept-item .dept-body{background:#E8EAF0;}
+.subdept-direct-label{grid-column:1/-1;font-size:9px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--text-muted);padding:6px 2px 2px;margin-top:2px;}
+.parent-badge{display:inline-block;font-size:9px;font-weight:700;background:rgba(197,165,90,0.15);color:var(--gold);border-radius:3px;padding:1px 5px;margin-left:6px;vertical-align:middle;}
+.admin-tab-bar{display:flex;gap:2px;flex-wrap:wrap;background:#F1F5F9;border-radius:7px;padding:3px;margin-bottom:12px;}
+.admin-tab{padding:5px 10px;border-radius:5px;font-size:10px;font-weight:700;color:var(--text-muted);cursor:pointer;border:none;background:none;font-family:inherit;transition:all 0.15s;white-space:nowrap;}
+.admin-tab.active{background:#fff;color:var(--text-primary);box-shadow:0 1px 3px rgba(0,0,0,0.1);}
+.admin-tab:hover:not(.active){color:var(--text-secondary);}
+.fld-section-hdr{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-muted);padding:10px 0 2px;border-top:1px solid var(--border);margin-top:4px;display:block;}
+.fld-row2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.ms-chip.cert-chip{background:rgba(13,148,136,0.1);color:var(--teal);}
+.ms-chip.past-chip{background:rgba(84,100,120,0.1);color:var(--slate);}
+.card-clr{display:inline-block;font-size:8px;font-weight:800;letter-spacing:0.5px;padding:1px 5px;border-radius:3px;text-transform:uppercase;margin-top:3px;}
+.card-location{font-size:10px;color:var(--text-muted);margin-top:2px;}
+.card-cert-row{display:flex;flex-wrap:wrap;gap:3px;margin-top:3px;}
+.card-cert{font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(13,148,136,0.08);color:var(--teal);letter-spacing:0.3px;}
+.prof-clr-badge{display:inline-block;font-size:10px;font-weight:800;letter-spacing:0.5px;padding:3px 10px;border-radius:4px;text-transform:uppercase;margin-top:4px;}
+.prof-resume-link{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--navy);text-decoration:none;padding:5px 10px;border:1px solid var(--border);border-radius:6px;margin-top:4px;}
+.prof-resume-link:hover{background:var(--page-bg);}
+.prof-cert-chip{font-size:10px;font-weight:700;padding:3px 9px;border-radius:4px;background:rgba(13,148,136,0.1);color:var(--teal);}
+.prof-past-chip{font-size:10px;font-weight:700;padding:3px 9px;border-radius:4px;background:var(--slate-dim);color:var(--slate);}
+.color-swatch{display:inline-block;width:28px;height:28px;border-radius:6px;cursor:pointer;border:3px solid transparent;transition:outline 0.1s;}
+.color-swatch.selected{outline:2px solid var(--navy);outline-offset:1px;}
+.dept-body{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:8px;padding:10px;background:#F6F8FA;border-radius:0 0 11px 11px;border:1px solid var(--border);border-top:none;min-height:44px;}
+.dept-body.drop-over{background:rgba(197,165,90,0.06);outline:2px dashed var(--gold);outline-offset:-3px;}
+.card{position:relative;padding:11px 13px 11px 17px;background:var(--card-bg);border-radius:var(--radius);border:1px solid var(--border);cursor:pointer;transition:all 0.14s;box-shadow:var(--shadow-sm);}
+.card:hover{box-shadow:var(--shadow-md);transform:translateY(-1px);background:#F8FAFC;}
+.card[draggable="true"]{cursor:grab;}
+.card.dragging{opacity:0.35;}
+.card.reassess{border:2px solid var(--warn-border);background:linear-gradient(135deg,#FFFBEB,#FEF3C7);}
+.card.reassess:hover{background:linear-gradient(135deg,#FEF9E7,#FEF3C7);}
+.card-stripe{position:absolute;left:0;top:7px;bottom:7px;width:3.5px;border-radius:0 2px 2px 0;}
+.card-eh{position:absolute;top:6px;right:7px;font-size:9px;color:var(--text-muted);background:#F1F5F9;padding:1px 5px;border-radius:3px;opacity:0;transition:opacity 0.15s;pointer-events:none;}
+.card:hover .card-eh{opacity:1;}
+.card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:6px;}
+.card-name{font-size:13px;font-weight:700;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.card-role{font-size:11px;color:var(--text-secondary);margin-top:1px;}
+.card-cost{font-size:12px;font-weight:700;text-align:right;flex-shrink:0;font-variant-numeric:tabular-nums;}
+.card-badge{display:inline-block;margin-top:2px;font-size:8px;font-weight:700;letter-spacing:1px;color:var(--gold);background:var(--gold-dim);padding:1px 5px;border-radius:3px;text-transform:uppercase;}
+.card-meta{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;}
+.card-tag{font-size:9px;font-weight:700;letter-spacing:0.6px;padding:2px 6px;border-radius:3px;text-transform:uppercase;}
+.tag-hub{background:var(--teal-dim);color:var(--teal);}
+.tag-sme{background:var(--violet-dim);color:var(--violet);}
+.tag-assoc{background:var(--amber-dim);color:var(--amber);}
+.card-pills{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;}
+.card-pill{font-size:9px;font-weight:600;padding:2px 6px;border-radius:3px;}
+.card-pill.proj{background:rgba(45,106,79,0.08);color:var(--green);}
+.card-pill.skill{background:rgba(124,92,191,0.08);color:var(--violet);}
+.card-reports{font-size:10px;color:var(--text-muted);margin-top:3px;}
+.card-note{display:inline-block;font-size:10px;margin-top:4px;padding:2px 7px;border-radius:3px;font-weight:600;}
+.card-note.trans{background:var(--green-dim);color:#065F46;}
+.card-note.neutral{background:var(--slate-dim);color:#475569;}
+.reassess-ban{display:flex;align-items:center;gap:5px;margin-top:5px;padding:4px 8px;border-radius:4px;background:rgba(245,158,11,0.18);border:1px solid rgba(245,158,11,0.3);font-size:9px;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;color:var(--warn-text);}
+.overalloc-ban{display:flex;align-items:center;gap:5px;margin-top:5px;padding:4px 8px;border-radius:4px;background:rgba(220,38,38,0.08);border:1px solid rgba(220,38,38,0.25);font-size:9px;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;color:var(--red);}
+.alloc-meter{margin-top:7px;padding:7px 10px;border-radius:6px;font-size:11px;font-weight:700;display:flex;align-items:center;gap:8px;transition:background 0.2s,color 0.2s;}
+.alloc-meter.am-under{background:var(--slate-dim);color:var(--text-secondary);}
+.alloc-meter.am-full{background:var(--green-dim);color:var(--green);}
+.alloc-meter.am-over{background:rgba(220,38,38,0.08);color:var(--red);border:1px solid rgba(220,38,38,0.2);}
+.alloc-bar{flex:1;height:5px;border-radius:3px;background:var(--border);overflow:visible;position:relative;}
+.alloc-bar-fill{height:100%;border-radius:3px;transition:width 0.15s,background 0.15s;max-width:100%;}
+.alloc-bar-over{position:absolute;top:0;right:0;height:100%;border-radius:0 3px 3px 0;background:var(--red);opacity:0.5;}
+.ov{position:fixed;inset:0;background:rgba(15,20,35,0.55);backdrop-filter:blur(5px);display:none;align-items:center;justify-content:center;z-index:100;}
+.ov.show{display:flex;}
+.mdl{background:#fff;border-radius:14px;padding:26px 24px;width:480px;max-width:94vw;box-shadow:var(--shadow-lg);max-height:92vh;overflow-y:auto;}
+.mdl-over{font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--text-muted);text-transform:uppercase;margin-bottom:3px;}
+.mdl-title{font-size:18px;font-weight:800;color:var(--text-primary);margin-bottom:16px;}
+.fld{margin-bottom:12px;}
+.fld-l{display:block;font-size:10px;font-weight:700;color:var(--text-secondary);margin-bottom:3px;letter-spacing:0.5px;text-transform:uppercase;}
+.fld-i,.fld-sel{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:inherit;color:var(--text-primary);outline:none;transition:border-color 0.15s;background:#fff;}
+.fld-i:focus,.fld-sel:focus{border-color:var(--gold);}
+.chk-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.chk-row input[type="checkbox"]{width:16px;height:16px;accent-color:var(--navy);cursor:pointer;}
+.chk-row label{font-size:12px;font-weight:600;color:var(--text-primary);cursor:pointer;}
+.chk-row.warn-chk label{color:var(--warn-text);}
+.ms-wrap{border:1.5px solid var(--border);border-radius:7px;padding:6px 8px;min-height:38px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;cursor:text;transition:border-color 0.15s;background:#fff;}
+.ms-wrap:focus-within{border-color:var(--gold);}
+.ms-chip{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:3px 8px;border-radius:4px;}
+.ms-chip.proj-chip{background:rgba(45,106,79,0.1);color:var(--green);}
+.ms-chip.skill-chip{background:rgba(124,92,191,0.1);color:var(--violet);}
+.ms-x{cursor:pointer;font-size:13px;line-height:1;opacity:0.5;}
+.ms-x:hover{opacity:1;}
+.pct-input{width:34px;border:none;background:rgba(0,0,0,0.09);border-radius:3px;padding:1px 3px;font-size:10px;font-weight:800;color:inherit;text-align:center;outline:none;font-family:inherit;margin:0 1px;-moz-appearance:textfield;}
+.pct-input::-webkit-outer-spin-button,.pct-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+.pct-input:focus{background:rgba(0,0,0,0.15);}
+.proj-pct-badge{font-size:9px;font-weight:800;opacity:0.65;margin-left:2px;}
+.ms-input{border:none;outline:none;font-size:12px;font-family:inherit;flex:1;min-width:80px;background:transparent;color:var(--text-primary);}
+.ms-dd{position:absolute;left:0;right:0;top:100%;background:#fff;border:1px solid var(--border);border-radius:7px;box-shadow:var(--shadow-md);max-height:180px;overflow-y:auto;z-index:10;margin-top:2px;}
+.ms-opt{padding:8px 12px;font-size:12px;cursor:pointer;transition:background 0.1s;}
+.ms-opt:hover{background:var(--page-bg);}
+.ms-opt.add-new{color:var(--gold);font-weight:700;border-top:1px solid var(--border);}
+.proj-scroll{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:12px;padding-bottom:18px;-webkit-overflow-scrolling:touch;align-items:flex-start;}
+.proj-scroll::-webkit-scrollbar{height:7px;}
+.proj-scroll::-webkit-scrollbar-track{background:transparent;}
+.proj-scroll::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:4px;}
+.proj-card{flex:0 0 300px;width:300px;background:var(--card-bg);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow-sm);overflow:hidden;display:flex;flex-direction:column;}
+.proj-hdr{padding:13px 15px;display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid var(--border);gap:8px;}
+.proj-hdr-left{flex:1;min-width:0;}
+.proj-financials{margin-top:7px;background:#F8FAF8;border:1px solid rgba(45,106,79,0.12);border-radius:7px;padding:8px 10px;}
+.proj-fin-row{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;line-height:1.7;}
+.proj-fin-lbl{color:var(--text-muted);font-weight:600;}
+.proj-fin-val{font-weight:800;font-variant-numeric:tabular-nums;}
+.proj-fin-rev{color:var(--green);}
+.proj-fin-cost{color:var(--text-secondary);}
+.proj-fin-sep{height:1px;background:var(--border);margin:5px 0;}
+.proj-margin-bar{height:4px;border-radius:2px;background:var(--border);margin-top:5px;overflow:hidden;}
+.proj-margin-fill{height:100%;border-radius:2px;}
+.proj-pursuit-tag{display:inline-block;margin-top:5px;font-size:9px;font-weight:800;letter-spacing:0.8px;text-transform:uppercase;color:var(--amber);background:var(--amber-dim);padding:2px 7px;border-radius:3px;}
+.proj-rev-note{font-size:10px;color:var(--text-muted);margin-top:4px;font-style:italic;}
+.proj-subcard-section{border-top:1px dashed var(--border);margin-top:8px;padding-top:8px;grid-column:1/-1;}
+.proj-subcard-lbl{font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--text-muted);margin-bottom:5px;}
+.proj-subcard{border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:5px;border-left:3px solid var(--gold);}
+.proj-subcard-hdr{padding:8px 10px;background:#F6F8FA;cursor:pointer;display:flex;align-items:flex-start;gap:8px;}
+.proj-subcard-hdr:hover{background:#EEF1F5;}
+.proj-subcard-nm{font-size:11px;font-weight:700;color:var(--text-primary);}
+.proj-subcard-fin{font-size:10px;color:var(--text-muted);margin-top:2px;line-height:1.5;}
+.proj-subcard-body{display:block;border-top:1px solid var(--border);}
+.res-dept-lbl{font-size:11px;font-weight:700;color:var(--text-secondary);margin:18px 0 7px;padding-bottom:5px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:7px;}
+.res-dept-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+.res-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:8px;margin-bottom:4px;}
+.proj-nm{font-size:13px;font-weight:700;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.proj-cnt{font-size:10px;color:var(--text-muted);margin-top:1px;}
+.proj-members{padding:8px 12px;flex:1;}
+.proj-mem{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #F1F5F9;}
+.proj-mem:last-child{border-bottom:none;}
+.proj-mem-nm{font-size:12px;font-weight:600;color:var(--text-primary);}
+.proj-mem-link{cursor:pointer;transition:color 0.12s;}
+.proj-mem-link:hover{color:var(--gold);text-decoration:underline;}
+.prof-accent-bar{height:5px;border-radius:3px 3px 0 0;margin:-26px -24px 18px;width:calc(100% + 48px);display:block;}
+.prof-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px;}
+.prof-name{font-size:18px;font-weight:800;color:var(--text-primary);line-height:1.2;}
+.prof-role{font-size:12px;color:var(--text-secondary);margin-top:2px;}
+.prof-cost{font-size:22px;font-weight:800;line-height:1;}
+.prof-cost-lbl{font-size:10px;color:var(--text-muted);margin-top:1px;}
+.prof-crumb{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:6px;}
+.prof-crumb-seg{font-size:10px;font-weight:600;color:var(--text-secondary);}
+.prof-crumb-sep{font-size:10px;color:var(--text-muted);}
+.prof-crumb-last{font-size:10px;font-weight:700;color:var(--text-primary);}
+.prof-badges{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0 0;}
+.prof-badge{font-size:9px;font-weight:800;letter-spacing:0.8px;padding:3px 8px;border-radius:4px;text-transform:uppercase;}
+.prof-badge-hub{background:var(--teal-dim);color:var(--teal);}
+.prof-badge-sme{background:var(--violet-dim);color:var(--violet);}
+.prof-badge-assoc{background:var(--amber-dim);color:var(--amber);}
+.prof-badge-reassess{background:rgba(245,158,11,0.18);color:var(--warn-text);border:1px solid rgba(245,158,11,0.3);}
+.prof-divider{border:none;border-top:1px solid var(--border);margin:13px 0;}
+.prof-sec{margin-top:13px;}
+.prof-sec-lbl{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-muted);margin-bottom:7px;}
+.prof-proj-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F1F5F9;}
+.prof-proj-row:last-child{border-bottom:none;}
+.prof-proj-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.prof-proj-nm{flex:1;font-size:12px;font-weight:600;color:var(--text-primary);}
+.prof-proj-pct{font-size:10px;font-weight:800;padding:2px 7px;border-radius:3px;background:var(--amber-dim);color:var(--amber);}
+.prof-proj-pct.full{background:var(--green-dim);color:var(--green);}
+.prof-proj-cost{font-size:11px;font-weight:700;color:var(--text-secondary);min-width:58px;text-align:right;font-variant-numeric:tabular-nums;}
+.prof-skill-wrap{display:flex;flex-wrap:wrap;gap:4px;}
+.prof-skill{font-size:10px;font-weight:700;padding:3px 9px;border-radius:4px;background:var(--violet-dim);color:var(--violet);}
+.prof-meta-row{display:flex;gap:8px;margin:4px 0;font-size:11px;color:var(--text-secondary);}
+.prof-meta-lbl{font-weight:700;color:var(--text-primary);flex-shrink:0;}
+.prof-note-box{margin-top:6px;padding:7px 10px;background:var(--green-dim);border-radius:6px;font-size:11px;color:#065F46;font-weight:600;}
+.prof-note-box.neutral{background:var(--slate-dim);color:#475569;}
+.proj-mem-dept{font-size:10px;color:var(--text-muted);}
+.proj-mem-cost{font-size:11px;font-weight:700;color:var(--text-secondary);font-variant-numeric:tabular-nums;flex-shrink:0;margin-left:6px;}
+.empty-msg{grid-column:1/-1;padding:24px;text-align:center;color:var(--text-muted);font-size:13px;}
+.dept-list-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #F1F5F9;}
+.dept-list-row:last-child{border-bottom:none;}
+.dept-list-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.dept-list-info{flex:1;min-width:0;}
+.dept-list-nm{font-size:13px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dept-list-sub{font-size:10px;color:var(--text-muted);}
+.dept-list-actions{display:flex;gap:4px;flex-shrink:0;}
+.btn-icon{padding:4px 8px;border-radius:5px;font-size:11px;cursor:pointer;border:none;font-family:inherit;font-weight:700;transition:background 0.12s;}
+.btn-icon-edit{background:#EFF6FF;color:#2563EB;}
+.btn-icon-edit:hover{background:#DBEAFE;}
+.btn-icon-del{background:#FEF2F2;color:var(--red);}
+.btn-icon-del:hover{background:#FEE2E2;}
+::-webkit-scrollbar{width:6px;}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px;}
+@media(max-width:600px){.hdr{padding:16px 12px 14px;}.main{padding:12px 10px 48px;}.stats{gap:6px;}.st{min-width:90px;padding:8px 10px;}.dept-body{grid-template-columns:1fr;}.proj-scroll{flex-wrap:wrap;overflow-x:visible;}.proj-card{flex:0 0 100%;width:100%;}}
+</style>
 </head>
-<body></body>
+<body>
+<div class="hdr"><div class="hdr-in">
+  <div class="hdr-top">
+    <div>
+      <div class="hdr-brand">CommunityForce</div>
+      <div class="hdr-title">Organizational Chart</div>
+      <div class="hdr-sub">Drag to reassign departments · Click cards to edit · <span id="ghStatus" style="transition:color 0.3s">Checking sync...</span></div>
+    </div>
+    <div class="hdr-actions">
+      <button class="btn btn-gold" onclick="openAddMember()">+ Person</button>
+      <button class="btn btn-outline" onclick="openManageDepts()">Departments</button>
+      <button class="btn btn-outline" onclick="openAddProject()">+ Project</button>
+      <button class="btn btn-outline" onclick="openManageSkills()">Skills</button>
+      <button class="btn btn-outline" onclick="openAdmin()">&#9881; Admin</button>
+      <button class="btn btn-outline" onclick="exportData()" title="Download backup JSON">&#8595; Export</button>
+      <button class="btn btn-outline" onclick="importData()" title="Restore from JSON file">&#8593; Import</button>
+      <button class="btn btn-outline" onclick="openGHSettings()" title="Configure GitHub sync">&#9729; Sync</button>
+    </div>
+  </div>
+  <div class="stats" id="statsBar"></div>
+  <div class="toolbar">
+    <input type="text" class="search" id="searchInput" placeholder="Search name, role, project, skill..." oninput="renderView()">
+    <div class="tab-bar">
+      <button class="tab active" id="tabOrg" onclick="switchTab('org')">Department View</button>
+      <button class="tab" id="tabProj" onclick="switchTab('proj')">Projects View</button>
+      <button class="tab" id="tabRes" onclick="switchTab('res')">Resources View</button>
+    </div>
+  </div>
+</div></div>
+<div class="main" id="mainContent"></div>
+<div class="ov" id="ovEdit" onclick="closeModal('ovEdit')"><div class="mdl" id="mdlEdit" onclick="event.stopPropagation()"></div></div>
+<div class="ov" id="ovAdd" onclick="closeModal('ovAdd')"><div class="mdl" id="mdlAdd" onclick="event.stopPropagation()"></div></div>
+<div class="ov" id="ovDept" onclick="closeModal('ovDept')"><div class="mdl" id="mdlDept" onclick="event.stopPropagation()"></div></div>
+<div class="ov" id="ovDeptEdit" onclick="closeModal('ovDeptEdit')"><div class="mdl" id="mdlDeptEdit" onclick="event.stopPropagation()"></div></div>
+<div class="ov" id="ovProj" onclick="closeModal('ovProj')"><div class="mdl" id="mdlProj" onclick="event.stopPropagation()"></div></div>
+<div class="ov" id="ovSkill" onclick="closeModal('ovSkill')"><div class="mdl" id="mdlSkill" onclick="event.stopPropagation()"></div></div>
+<div class="ov" id="ovAdmin" onclick="closeModal('ovAdmin')"><div class="mdl" id="mdlAdmin" onclick="event.stopPropagation()" style="max-width:520px"></div></div>
+<div class="ov" id="ovProfile" onclick="closeModal('ovProfile')"><div class="mdl" id="mdlProfile" onclick="event.stopPropagation()" style="max-width:460px"></div></div>
+<div class="ov" id="ovGHSettings" onclick="closeModal('ovGHSettings')"><div class="mdl" id="mdlGHSettings" onclick="event.stopPropagation()" style="max-width:480px"></div></div>
+
+<script>
+var STORE_KEY='cf_orgchart_v2';
+var GH_REPO='igrant9679/CFResourcePlanner';
+var GH_FILE='data.json';
+var GH_TOKEN_KEY='cf_gh_token';
+var PALETTE=['#2D6A4F','#C5A55A','#7C5CBF','#D97706','#546478','#0D9488','#DC2626','#2563EB','#7C3AED','#059669','#B45309','#6366F1'];
+var D,viewMode='org',collState={},dragInfo=null,MS_REG={},adminTab='skills';
+var ghFileSha=null,ghSyncing=false,ghSaveQueued=false;
+
+function defaultData(){return{
+skillsets:[
+{id:'sk1',name:'Tableau'},{id:'sk2',name:'Salesforce'},{id:'sk3',name:'Azure/Cloud'},
+{id:'sk4',name:'AI/ML'},{id:'sk5',name:'ATO/Security'},{id:'sk6',name:'PowerBI'},
+{id:'sk7',name:'Federal PM'},{id:'sk8',name:'Software Dev'},{id:'sk9',name:'Finance/Ops'},
+{id:'sk10',name:'Business Dev'},{id:'sk11',name:'Data Analytics'},{id:'sk12',name:'Slack/Integrations'}],
+locations:[
+{id:'loc1',name:'Ashburn, VA'},{id:'loc2',name:'Washington, DC'},{id:'loc3',name:'Remote'},
+{id:'loc4',name:'Pentagon'},{id:'loc5',name:'San Antonio, TX'},{id:'loc6',name:'Colorado Springs, CO'},
+{id:'loc7',name:'Norfolk, VA'},{id:'loc8',name:'Overseas / OCONUS'},{id:'loc9',name:'Quantico, VA'}],
+clearances:[
+{id:'clr1',name:'None / Unclassified'},{id:'clr2',name:'Public Trust'},
+{id:'clr3',name:'Secret'},{id:'clr4',name:'Top Secret'},{id:'clr5',name:'TS/SCI'},
+{id:'clr6',name:'TS/SCI w/ CI Poly'},{id:'clr7',name:'TS/SCI w/ Full Scope Poly'}],
+certifications:[
+{id:'cert1',name:'PMP'},{id:'cert2',name:'CAPM'},{id:'cert3',name:'CompTIA Security+'},
+{id:'cert4',name:'CISSP'},{id:'cert5',name:'AWS Solutions Architect'},{id:'cert6',name:'Azure Administrator'},
+{id:'cert7',name:'Salesforce Admin'},{id:'cert8',name:'Tableau Desktop Specialist'},
+{id:'cert9',name:'ITIL Foundation'},{id:'cert10',name:'CEH'},{id:'cert11',name:'DoD 8570 IAT Level II'},
+{id:'cert12',name:'DoD 8570 IAM Level II'},{id:'cert13',name:'AgilePM'},{id:'cert14',name:'DISA RMF'}],
+pastProjects:[],
+pastClients:[
+{id:'pc1',name:'U.S. Air Force'},{id:'pc2',name:'U.S. Marine Corps'},{id:'pc3',name:'U.S. Army'},
+{id:'pc4',name:'U.S. Navy'},{id:'pc5',name:'U.S. Space Force'},{id:'pc6',name:'DHS'},
+{id:'pc7',name:'DoJ'},{id:'pc8',name:'HHS / NIH'},{id:'pc9',name:'Dept. of Treasury'},
+{id:'pc10',name:'DISA'},{id:'pc11',name:'NSA'},{id:'pc12',name:'CBP / FEMA'},{id:'pc13',name:'Leidos'}],
+projects:[
+{id:'p_bclm',name:'BCLM Contract',revenue:212756,revenueNote:'→ $265,945/mo Aug 15 · BCLM +25% extension'},
+{id:'p_fams',name:'FAMS',revenue:76944,revenueNote:'Ends Sep 24, 2026 · 85.2% margin'},
+{id:'p_c1fams',name:'C1FAMS (Leidos)',revenue:25984,revenueNote:'→ $100,000/mo target Oct 2026 · 61% margin at maturity'},
+{id:'p_software',name:'Software Platform',revenue:50000,revenueNote:'$550K ARR floor · 7.65% margin — needs intervention'},
+{id:'p_marines',name:'Marines DD577',revenue:0,revenueNote:'Active pursuit · SBIR Phase III via ForwardEdge-AI · $1.2M'},
+{id:'p_salesforce',name:'Salesforce Practice',revenue:0,revenueNote:'Build phase · 3 engagements seeding · AgentForce / Rev Cloud / Tableau'},
+{id:'p_afosi',name:'AFOSI Recompete',revenue:0,revenueNote:'Proposal due Jun 8 · $1.0M opportunity · GSA 8a STARS via RDTS'},
+{id:'p_phoenix',name:'Phoenix 2.0',revenue:0,revenueNote:'Software play · repricing initiative · impl $9.5K → $5K'},
+{id:'p_tableau',name:'Tableau Practice',revenue:0,revenueNote:'Internal capability build · offshore transition pathway'}],
+departments:[
+{id:'coe',name:'Center of Excellence',subtitle:'Strategic leadership · The Triad',accent:'#C5A55A',members:[
+{id:'khaja',name:'Khaja Syed',role:'CEO / CFO',cost:10833,badge:'Triad',projects:['p_bclm','p_marines','p_afosi'],skillsets:['sk10','sk7'],reportsTo:'',hub:false,sme:false,associate:false,note:'',reassess:true},
+{id:'idris',name:'Idris Grant',role:'PMO Lead / COO',cost:15000,badge:'Triad',projects:['p_bclm','p_afosi'],skillsets:['sk7','sk10'],reportsTo:'Khaja Syed',hub:false,sme:false,associate:false,note:'',reassess:true},
+{id:'anwer',name:'Anwer Sheikh',role:'Finance / Ops Lead / CFO',cost:12500,badge:'Triad',projects:['p_salesforce'],skillsets:['sk9','sk2'],reportsTo:'Khaja Syed',hub:false,sme:true,associate:false,note:'CFO + SF Rev Cloud Lead',reassess:false},
+{id:'junaid_t',name:'Junaid Anwar',role:'Product / Tech',cost:12500,badge:'Triad',projects:['p_software','p_phoenix'],skillsets:['sk8','sk4'],reportsTo:'Khaja Syed',hub:false,sme:true,associate:false,note:'W2 — $150K eff. May 1',reassess:false}]},
+{id:'bclm',name:'BCLM Team',subtitle:'Federal Anchor · 22 people',accent:'#2D6A4F',members:[
+{id:'b1',name:'SpiritOne',role:'Senior Federal Lead',cost:40194,badge:'',projects:['p_bclm','p_fams'],skillsets:['sk7','sk5'],reportsTo:'Khaja Syed',hub:true,sme:true,associate:false,note:'→ $66,794 Oct+',reassess:false},
+{id:'b2',name:'Don Van Meter',role:'Senior Federal Lead',cost:17640,badge:'',projects:['p_bclm','p_fams'],skillsets:['sk7','sk5'],reportsTo:'SpiritOne',hub:true,sme:true,associate:false,note:'',reassess:false},
+{id:'b3',name:'Todd Phillip',role:'Senior Engineer',cost:17600,badge:'',projects:['p_bclm'],skillsets:['sk3','sk8'],reportsTo:'SpiritOne',hub:false,sme:true,associate:false,note:'',reassess:false},
+{id:'b4',name:'Karl Omatsola',role:'Senior Engineer',cost:13640,badge:'',projects:['p_bclm'],skillsets:['sk3','sk8'],reportsTo:'SpiritOne',hub:false,sme:true,associate:false,note:'Asking 50% to 70%',reassess:false},
+{id:'b5',name:'Eric Merc',role:'Senior Engineer',cost:13000,badge:'',projects:['p_bclm'],skillsets:['sk3'],reportsTo:'SpiritOne',hub:false,sme:true,associate:false,note:'',reassess:false},
+{id:'b6',name:'Ayesha Khalid',role:'Mid Analyst',cost:9583,badge:'',projects:['p_bclm'],skillsets:['sk7','sk11'],reportsTo:'SpiritOne',hub:false,sme:false,associate:false,note:'',reassess:false},
+{id:'b7',name:'Daniel Ayala',role:'Mid Analyst',cost:9167,badge:'',projects:['p_bclm'],skillsets:['sk11'],reportsTo:'SpiritOne',hub:false,sme:false,associate:false,note:'→ Product Data Owner',reassess:false},
+{id:'b8',name:'Shameem Shah',role:'Mid Engineer',cost:6250,badge:'',projects:['p_bclm'],skillsets:['sk3'],reportsTo:'SpiritOne',hub:false,sme:false,associate:false,note:'→ Cloud SME',reassess:false},
+{id:'b9',name:'Keirra Bryd',role:'Mid Analyst',cost:6167,badge:'',projects:['p_bclm'],skillsets:['sk7'],reportsTo:'SpiritOne',hub:false,sme:false,associate:false,note:'→ Sunset + Pfm Coord',reassess:false},
+{id:'b10',name:'Sheikh M. Saqib Majeed',role:'Engineer',cost:4000,badge:'',projects:['p_bclm'],skillsets:['sk11','sk3'],reportsTo:'SpiritOne',hub:true,sme:false,associate:false,note:'→ Hub Data Analytics Lead',reassess:false},
+{id:'b11',name:'Basharat Ahmad',role:'Engineer',cost:2378,badge:'',projects:['p_bclm','p_tableau'],skillsets:['sk1'],reportsTo:'SpiritOne',hub:false,sme:false,associate:false,note:'→ Tableau by Jul 1',reassess:false},
+{id:'b12',name:'Asif Ahmed Rather',role:'Engineer',cost:2000,badge:'',projects:['p_fams'],skillsets:['sk8'],reportsTo:'SpiritOne',hub:false,sme:false,associate:false,note:'→ FAMS Core decommission',reassess:false},
+{id:'b13',name:'Hafiz Nadeem',role:'Jr Contractor',cost:714,badge:'',projects:['p_bclm','p_tableau'],skillsets:['sk1','sk6'],reportsTo:'SpiritOne',hub:false,sme:false,associate:true,note:'→ Tableau + PowerApp',reassess:false},
+{id:'b14',name:'Dayam Firdous',role:'Jr Contractor',cost:738,badge:'',projects:['p_bclm','p_tableau'],skillsets:['sk1'],reportsTo:'SpiritOne',hub:false,sme:false,associate:true,note:'→ Tableau by Jul 1',reassess:false},
+{id:'b15',name:'Shiekh Musaib',role:'Jr Contractor',cost:738,badge:'',projects:['p_bclm','p_tableau'],skillsets:['sk1'],reportsTo:'SpiritOne',hub:false,sme:false,associate:true,note:'→ Tableau by Jul 1',reassess:false},
+{id:'b16',name:'Muneer Wani',role:'Jr Contractor',cost:630,badge:'',projects:['p_bclm'],skillsets:['sk6'],reportsTo:'',hub:false,sme:false,associate:true,note:'',reassess:true},
+{id:'b17',name:'Yasir Arfath Farooqie',role:'Jr Contractor',cost:571,badge:'',projects:['p_c1fams','p_fams'],skillsets:[],reportsTo:'',hub:false,sme:false,associate:true,note:'',reassess:true},
+{id:'b18',name:'Sheikh Nasir Farooq',role:'Jr Contractor',cost:401,badge:'',projects:['p_software','p_phoenix'],skillsets:['sk8'],reportsTo:'',hub:false,sme:false,associate:true,note:'→ Phoenix 2.0',reassess:false},
+{id:'b19',name:'Danish Yousuf',role:'Jr Contractor',cost:214,badge:'',projects:['p_c1fams','p_salesforce'],skillsets:['sk2'],reportsTo:'',hub:false,sme:false,associate:true,note:'→ SalesForce',reassess:false},
+{id:'b20',name:'Hazak Muzaffar',role:'Jr Contractor',cost:214,badge:'',projects:['p_bclm'],skillsets:[],reportsTo:'',hub:false,sme:false,associate:true,note:'',reassess:true},
+{id:'b21',name:'Asrar Mehraj',role:'Jr Contractor',cost:214,badge:'',projects:[],skillsets:[],reportsTo:'',hub:false,sme:false,associate:true,note:'',reassess:true},
+{id:'b22',name:'Fehar Parvaiz',role:'Jr Contractor',cost:214,badge:'',projects:['p_bclm'],skillsets:[],reportsTo:'',hub:false,sme:false,associate:true,note:'',reassess:true}]},
+{id:'c1fams',name:'C1FAMS Team',subtitle:'Growth Lever via Leidos · 2 to 6 people',accent:'#C5A55A',members:[
+{id:'c1',name:'Ande Bhasker',role:'C1FAMS Lead',cost:15000,badge:'',projects:['p_c1fams'],skillsets:['sk7','sk5'],reportsTo:'Khaja Syed',hub:false,sme:true,associate:false,note:'',reassess:false},
+{id:'c2',name:'Melissa Jones',role:'C1FAMS Project Mgr',cost:10000,badge:'',projects:['p_c1fams'],skillsets:['sk7','sk5'],reportsTo:'Ande Bhasker',hub:false,sme:false,associate:false,note:'Rev5 ATO',reassess:false},
+{id:'c3',name:'Hashim Kalla',role:'Federal Engineer',cost:2000,badge:'',projects:['p_fams','p_c1fams'],skillsets:['sk5','sk8'],reportsTo:'Ande Bhasker',hub:false,sme:false,associate:false,note:'Rev5 ATO',reassess:false},
+{id:'c4',name:'Ajaz Ahmed Beigh',role:'Federal Analyst',cost:700,badge:'',projects:['p_fams','p_c1fams'],skillsets:[],reportsTo:'Ande Bhasker',hub:false,sme:false,associate:false,note:'FAMS Support',reassess:false}]},
+{id:'software',name:'Software Team',subtitle:'7.65% margin needs intervention · 14 people',accent:'#7C5CBF',members:[
+{id:'s1',name:'Junaid Anwar',role:'Senior Developer (W2)',cost:12500,badge:'',projects:['p_software'],skillsets:['sk8','sk4'],reportsTo:'Khaja Syed',hub:false,sme:true,associate:false,note:'$150K eff. May 1',reassess:false},
+{id:'s2',name:'Suhail Shah',role:'Software Contractor',cost:3864,badge:'',projects:['p_software'],skillsets:['sk8'],reportsTo:'Junaid Anwar',hub:false,sme:false,associate:false,note:'',reassess:false},
+{id:'s3',name:'Younus Shah',role:'Software Contractor',cost:3360,badge:'',projects:['p_software'],skillsets:['sk10'],reportsTo:'Junaid Anwar',hub:false,sme:false,associate:false,note:'In SW COGS doing Sales',reassess:false},
+{id:'s4',name:'Mohideen Shareef',role:'Software Contractor',cost:1410,badge:'',projects:['p_software'],skillsets:['sk8'],reportsTo:'Junaid Anwar',hub:false,sme:false,associate:false,note:'',reassess:false},
+{id:'s5',name:'Irah T.',role:'Software Contractor',cost:1300,badge:'',projects:['p_software'],skillsets:['sk10'],reportsTo:'Junaid Anwar',hub:false,sme:false,associate:false,note:'In SW COGS doing Pre-Sales',reassess:false},
+{id:'s6',name:'Syeda Mahreen Mirza',role:'Software Contractor',cost:1123,badge:'',projects:['p_software'],skillsets:['sk8'],reportsTo:'Junaid Anwar',hub:false,sme:false,associate:true,note:'',reassess:false},
+{id:'s7',name:'Mohammed Rehan Khan',role:'Software Contractor',cost:952,badge:'',projects:['p_software'],skillsets:['sk8'],reportsTo:'Junaid Anwar',hub:false,sme:false,associate:true,note:'',reassess:false},
+{id:'s8',name:'Suhail Farooq',role:'Software Contractor',cost:948,badge:'',projects:['p_software'],skillsets:['sk3','sk8'],reportsTo:'Junaid Anwar',hub:false,sme:false,associate:true,note:'',reassess:false},
+{id:'s9',name:'Arshiya Fatima',role:'Software Contractor',cost:937,badge:'',projects:['p_software'],skillsets:['sk8'],reportsTo:'Junaid Anwar',hub:false,sme:false,associate:true,note:'',reassess:false},
+{id:'s10',name:'Zahid Anjum',role:'Software Contractor',cost:800,badge:'',projects:['p_software'],skillsets:['sk8'],reportsTo:'Junaid Anwar',hub:false,sme:false,associate:true,note:'',reassess:false},
+{id:'s11',name:'Shafiya Mukhtar',role:'Software Contractor',cost:500,badge:'',projects:['p_software'],skillsets:[],reportsTo:'Junaid Anwar',hub:false,sme:false,associate:true,note:'',reassess:false},
+{id:'s12',name:'Shivanshu Raj',role:'Software Contractor',cost:250,badge:'',projects:['p_software'],skillsets:['sk8'],reportsTo:'Junaid Anwar',hub:false,sme:false,associate:true,note:'',reassess:false},
+{id:'s13',name:'Waqa Rafiq Bhat',role:'Software Contractor',cost:220,badge:'',projects:['p_software'],skillsets:['sk8'],reportsTo:'Junaid Anwar',hub:false,sme:false,associate:true,note:'',reassess:false},
+{id:'s14',name:'Sabera Begum',role:'Software Contractor',cost:200,badge:'',projects:['p_software'],skillsets:['sk8'],reportsTo:'Junaid Anwar',hub:false,sme:false,associate:true,note:'',reassess:false}]},
+{id:'fedsales',name:'Federal Sales & BD',subtitle:'5 + Educian · $40K/mo',accent:'#D97706',members:[
+{id:'f1',name:'Khaja Syed',role:'CEO / CFO',cost:10833,badge:'',projects:['p_afosi','p_marines'],skillsets:['sk10'],reportsTo:'',hub:false,sme:false,associate:false,note:'',reassess:true},
+{id:'f2',name:'Idris Grant',role:'Federal BD Lead',cost:15000,badge:'',projects:['p_afosi'],skillsets:['sk10','sk7'],reportsTo:'Khaja Syed',hub:false,sme:false,associate:false,note:'',reassess:true},
+{id:'f3',name:'Educian (related party)',role:'Vendor',cost:10000,badge:'',projects:[],skillsets:[],reportsTo:'',hub:false,sme:false,associate:false,note:'→ $5K Oct. Related party.',reassess:false},
+{id:'f4',name:'Owais Shora',role:'BD Support',cost:3000,badge:'',projects:['p_software'],skillsets:['sk10'],reportsTo:'Idris Grant',hub:false,sme:false,associate:false,note:'→ Proposal Capture',reassess:false},
+{id:'f5',name:'Mohammed Abrar',role:'BD Support',cost:696,badge:'',projects:['p_fams'],skillsets:[],reportsTo:'Idris Grant',hub:false,sme:false,associate:true,note:'→ Proposal Support',reassess:false},
+{id:'f6',name:'Omer Abdelrehim',role:'BD Support',cost:500,badge:'',projects:[],skillsets:[],reportsTo:'Idris Grant',hub:false,sme:false,associate:true,note:'',reassess:false}]},
+{id:'ga',name:'G&A / Operations',subtitle:'6 people · $16K/mo',accent:'#546478',members:[
+{id:'g1',name:'Anwer Sheikh',role:'Finance / Operations Lead',cost:12500,badge:'',projects:['p_salesforce'],skillsets:['sk9','sk2'],reportsTo:'Khaja Syed',hub:false,sme:true,associate:false,note:'CFO + SF Rev Cloud Lead',reassess:false},
+{id:'g2',name:'Mohammed Riyaz Khan',role:'Operations Support',cost:1480,badge:'',projects:[],skillsets:['sk9'],reportsTo:'Anwer Sheikh',hub:false,sme:false,associate:false,note:'Accounting & Finance',reassess:false},
+{id:'g3',name:'Zeeshan Ahmed',role:'Operations Support',cost:820,badge:'',projects:[],skillsets:['sk9'],reportsTo:'Anwer Sheikh',hub:false,sme:false,associate:false,note:'Accounting + India HR',reassess:false},
+{id:'g4',name:'Md Amjad Khan',role:'Operations Support',cost:597,badge:'',projects:[],skillsets:['sk9'],reportsTo:'Anwer Sheikh',hub:false,sme:false,associate:true,note:'Accounting',reassess:false},
+{id:'g5',name:'Syed Razi Ahmed',role:'Operations Support',cost:543,badge:'',projects:[],skillsets:[],reportsTo:'Anwer Sheikh',hub:false,sme:false,associate:true,note:'Marketing',reassess:false},
+{id:'g6',name:'Ghulam Hassan Bhat',role:'Operations Support',cost:228,badge:'',projects:[],skillsets:[],reportsTo:'Anwer Sheikh',hub:false,sme:false,associate:true,note:'Office Support',reassess:false}]}
+]};}
+
+/* ── GITHUB SYNC ── */
+function ghToken(){return localStorage.getItem(GH_TOKEN_KEY)||'';}
+function ghSetStatus(msg,color){var el=document.getElementById('ghStatus');if(!el)return;el.textContent=msg;el.style.color=color||'rgba(255,255,255,0.38)';}
+async function ghLoad(){
+  var token=ghToken();if(!token)return null;
+  try{
+    var res=await fetch('https://api.github.com/repos/'+GH_REPO+'/contents/'+GH_FILE,{headers:{'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json'}});
+    if(res.status===404)return null;
+    if(!res.ok)return null;
+    var json=await res.json();
+    ghFileSha=json.sha;
+    return JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g,'')))));
+  }catch(e){return null;}
+}
+async function ghPush(){
+  var token=ghToken();if(!token)return;
+  if(ghSyncing){ghSaveQueued=true;return;}
+  ghSyncing=true;
+  ghSetStatus('Syncing…','rgba(255,255,255,0.55)');
+  try{
+    var content=btoa(unescape(encodeURIComponent(JSON.stringify(D,null,2))));
+    var body={message:'Auto-save org chart data',content:content};
+    if(ghFileSha)body.sha=ghFileSha;
+    var res=await fetch('https://api.github.com/repos/'+GH_REPO+'/contents/'+GH_FILE,{method:'PUT',headers:{'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(res.ok){var json=await res.json();ghFileSha=json.content.sha;ghSetStatus('Synced ✓','#86efac');setTimeout(function(){ghSetStatus('GitHub sync on','rgba(255,255,255,0.38)');},2500);}
+    else{var err=await res.json().catch(function(){return{};});ghSetStatus('Sync error: '+(err.message||res.status),'#FCA5A5');}
+  }catch(e){ghSetStatus('Sync offline','rgba(255,255,255,0.38)')}
+  ghSyncing=false;
+  if(ghSaveQueued){ghSaveQueued=false;ghPush();}
+}
+function openGHSettings(){
+  document.getElementById('mdlGHSettings').innerHTML=
+    '<div class="mdl-over">Cloud Sync</div><div class="mdl-title">GitHub Sync</div>'
+    +'<p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;line-height:1.6">Enter a GitHub <strong>Personal Access Token</strong> (classic) with <code style="background:#F1F5F9;padding:1px 5px;border-radius:3px">repo</code> scope. Data will be saved to <code style="background:#F1F5F9;padding:1px 5px;border-radius:3px">data.json</code> in your CFResourcePlanner repo, accessible from any device.</p>'
+    +'<p style="font-size:11px;color:var(--text-muted);margin-bottom:14px">Generate one at: github.com → Settings → Developer settings → Personal access tokens</p>'
+    +'<div class="fld"><label class="fld-l">Personal Access Token</label><input class="fld-i" id="gh_tok_inp" type="password" placeholder="ghp_…" value="'+esc(ghToken())+'"></div>'
+    +'<div class="btn-row" style="margin-top:16px">'
+    +'<button class="btn btn-navy" style="flex:1" onclick="saveGHToken()">Save &amp; Sync Now</button>'
+    +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovGHSettings\')">Cancel</button>'
+    +'</div>'
+    +(ghToken()?'<div style="text-align:center;margin-top:10px"><button class="btn btn-danger-sm btn-sm" onclick="clearGHToken()">Remove token</button></div>':'');
+  openModal('ovGHSettings');
+}
+function saveGHToken(){
+  var t=document.getElementById('gh_tok_inp').value.trim();
+  if(t){localStorage.setItem(GH_TOKEN_KEY,t);}else{localStorage.removeItem(GH_TOKEN_KEY);ghFileSha=null;}
+  closeModal('ovGHSettings');
+  if(t){ghFileSha=null;ghPush();}else{ghSetStatus('No token — click ☁ Sync to set up','#FBBF24');}
+}
+function clearGHToken(){localStorage.removeItem(GH_TOKEN_KEY);ghFileSha=null;closeModal('ovGHSettings');ghSetStatus('Sync disabled','rgba(255,255,255,0.38)');}
+/* ── EXPORT / IMPORT ── */
+function exportData(){
+  var blob=new Blob([JSON.stringify(D,null,2)],{type:'application/json'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='cf_orgchart_'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+}
+function importData(){
+  var inp=document.createElement('input');inp.type='file';inp.accept='.json,application/json';
+  inp.onchange=function(e){
+    var f=e.target.files[0];if(!f)return;
+    var r=new FileReader();
+    r.onload=function(ev){
+      try{
+        var parsed=JSON.parse(ev.target.result);
+        if(confirm('Replace all current data with this backup?')){D=parsed;migrate();save();collState={};renderView();}
+      }catch(ex){alert('Invalid JSON file.');}
+    };
+    r.readAsText(f);
+  };
+  inp.click();
+}
+/* ── LOAD ── */
+async function loadAndRender(){
+  var token=ghToken();
+  if(token){
+    ghSetStatus('Loading from GitHub…','rgba(255,255,255,0.55)');
+    var ghData=await ghLoad();
+    if(ghData){D=ghData;migrate();try{localStorage.setItem(STORE_KEY,JSON.stringify(D));}catch(e){}ghSetStatus('GitHub sync on','rgba(255,255,255,0.38)');}
+    else{
+      ghSetStatus('GitHub unreachable — using local cache','#FBBF24');
+      try{var s=localStorage.getItem(STORE_KEY);if(s){D=JSON.parse(s);migrate();}else{D=defaultData();migrate();}}catch(e){D=defaultData();migrate();}
+    }
+  }else{
+    try{var s=localStorage.getItem(STORE_KEY);if(s){D=JSON.parse(s);migrate();}else{D=defaultData();migrate();save();}}catch(e){D=defaultData();migrate();save();}
+    ghSetStatus('Click ☁ Sync to enable cross-device sync','#FBBF24');
+  }
+  renderView();
+}
+function migrate(){
+  D.departments.forEach(function(d){if(!('parentId' in d))d.parentId=null;});
+  D.departments.forEach(function(d){d.members.forEach(function(m){m.projects=(m.projects||[]).map(function(x){return typeof x==='string'?{id:x,pct:100}:x;});});});
+  D.projects.forEach(function(p){if(!('parentId' in p))p.parentId=null;});
+  var dd=defaultData();
+  if(!D.locations||!D.locations.length)D.locations=dd.locations;
+  if(!D.clearances||!D.clearances.length)D.clearances=dd.clearances;
+  if(!D.certifications||!D.certifications.length)D.certifications=dd.certifications;
+  if(!D.pastProjects)D.pastProjects=dd.pastProjects;
+  if(!D.pastClients||!D.pastClients.length)D.pastClients=dd.pastClients;
+  D.departments.forEach(function(d){d.members.forEach(function(m){
+    if(!('location' in m))m.location='';
+    if(!('clearance' in m))m.clearance='';
+    if(!m.certifications)m.certifications=[];
+    if(!m.pastProjects)m.pastProjects=[];
+    if(!m.pastClients)m.pastClients=[];
+    if(!('resumeLink' in m))m.resumeLink='';
+  });});
+  var REV={'p_bclm':{revenue:212756,revenueNote:'→ $265,945/mo Aug 15 · BCLM +25% extension'},'p_fams':{revenue:76944,revenueNote:'Ends Sep 24, 2026 · 85.2% margin'},'p_c1fams':{revenue:25984,revenueNote:'→ $100,000/mo target Oct 2026 · 61% margin at maturity'},'p_software':{revenue:50000,revenueNote:'$550K ARR floor · 7.65% margin — needs intervention'},'p_marines':{revenue:0,revenueNote:'Active pursuit · SBIR Phase III via ForwardEdge-AI · $1.2M'},'p_salesforce':{revenue:0,revenueNote:'Build phase · 3 engagements seeding'},'p_afosi':{revenue:0,revenueNote:'Proposal due Jun 8 · $1.0M opportunity'},'p_phoenix':{revenue:0,revenueNote:'Software play · repricing initiative'},'p_tableau':{revenue:0,revenueNote:'Internal capability build'}};
+  D.projects.forEach(function(p){if(!('revenue' in p)){var d=REV[p.id];p.revenue=d?d.revenue:0;p.revenueNote=d?d.revenueNote:'';}if(!('revenueNote' in p))p.revenueNote='';});}
+/* ── DEPT TREE HELPERS ── */
+function deptChildren(pid){return D.departments.filter(function(d){return d.parentId===pid;});}
+function topLevelDepts(){return D.departments.filter(function(d){return !d.parentId;});}
+function deptDescendantIds(did){var ids=[did];deptChildren(did).forEach(function(c){ids=ids.concat(deptDescendantIds(c.id));});return ids;}
+function deptRollup(did){var dept=D.departments.find(function(d){return d.id===did;});if(!dept)return{count:0,cost:0};var count=dept.members.length,cost=dept.members.reduce(function(s,m){return s+m.cost;},0);deptChildren(did).forEach(function(c){var cr=deptRollup(c.id);count+=cr.count;cost+=cr.cost;});return{count:count,cost:cost};}
+function memberMatchesSearch(m,q){return m.name.toLowerCase().indexOf(q)>-1||m.role.toLowerCase().indexOf(q)>-1||projIds(m).some(function(pid){return pName(pid).toLowerCase().indexOf(q)>-1;})||(m.skillsets||[]).some(function(sid){return sName(sid).toLowerCase().indexOf(q)>-1;})||(m.certifications||[]).some(function(cid){var c=D.certifications.find(function(x){return x.id===cid;});return c&&c.name.toLowerCase().indexOf(q)>-1;})||(m.pastClients||[]).some(function(pcid){var pc=D.pastClients.find(function(x){return x.id===pcid;});return pc&&pc.name.toLowerCase().indexOf(q)>-1;});}
+function deptHasMatch(dept,q){if(dept.members.some(function(m){return memberMatchesSearch(m,q);}))return true;return deptChildren(dept.id).some(function(c){return deptHasMatch(c,q);});}
+function deptOptHTML(did,depth,excludeIds){return D.departments.filter(function(d){return d.parentId===did&&excludeIds.indexOf(d.id)===-1;}).map(function(d){var prefix=Array(depth+1).join('\u00a0\u00a0')+(depth>0?'\u21b3 ':'');return '<option value="'+d.id+'">'+prefix+esc(d.name)+'</option>'+deptOptHTML(d.id,depth+1,excludeIds);}).join('');}
+function projIds(m){return(m.projects||[]).map(function(x){return typeof x==='string'?x:x.id;});}
+function projPct(m,pid){var e=(m.projects||[]).find(function(x){return(typeof x==='string'?x:x.id)===pid;});if(!e)return 0;return typeof e==='string'?100:(e.pct||100);}
+function save(){
+  try{localStorage.setItem(STORE_KEY,JSON.stringify(D));}catch(e){}
+  clearTimeout(save._t);
+  save._t=setTimeout(function(){ghPush();},1500);
+}
+function resetData(){if(confirm('Reset all data to defaults? This cannot be undone.')){D=defaultData();save();collState={};renderView();}}
+function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+function fmt(n){return '$'+n.toLocaleString();}
+function uid(){return 'id_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);}
+function pName(pid){var p=D.projects.find(function(x){return x.id===pid;});return p?p.name:pid;}
+function sName(sid){var s=D.skillsets.find(function(x){return x.id===sid;});return s?s.name:sid;}
+function allM(){var r=[];D.departments.forEach(function(d){d.members.forEach(function(m){r.push(Object.assign({},m,{_dept:d.id,_dn:d.name}));});});return r;}
+function closeModal(id){document.getElementById(id).classList.remove('show');}
+function openModal(id){document.getElementById(id).classList.add('show');}
+
+/* ── PERSON PROFILE ── */
+function deptPath(did){var dept=D.departments.find(function(d){return d.id===did;});if(!dept)return[];return dept.parentId?deptPath(dept.parentId).concat([dept.name]):[dept.name];}
+
+function openPersonProfile(mid){
+var found;var foundDid;
+D.departments.forEach(function(d){var m=d.members.find(function(x){return x.id===mid;});if(m){found=m;foundDid=d.id;}});
+if(!found)return;
+var dept=D.departments.find(function(d){return d.id===foundDid;});
+var acc=dept?dept.accent:'#546478';
+var path=deptPath(foundDid);
+/* breadcrumb */
+var crumb=path.map(function(seg,i){
+  return i<path.length-1
+    ?'<span class="prof-crumb-seg">'+esc(seg)+'</span><span class="prof-crumb-sep">›</span>'
+    :'<span class="prof-crumb-last">'+esc(seg)+'</span>';
+}).join('');
+/* classification badges */
+var badges='';
+if(found.hub)badges+='<span class="prof-badge prof-badge-hub">Hub</span>';
+if(found.sme)badges+='<span class="prof-badge prof-badge-sme">SME</span>';
+if(found.associate)badges+='<span class="prof-badge prof-badge-assoc">Associate</span>';
+if(found.reassess)badges+='<span class="prof-badge prof-badge-reassess">⚠ Reassess</span>';
+/* projects */
+var projHTML='';
+(found.projects||[]).forEach(function(pe){
+  var pid=typeof pe==='string'?pe:pe.id;
+  var pct=typeof pe==='string'?100:(pe.pct||100);
+  var proj=D.projects.find(function(p){return p.id===pid;});
+  if(!proj)return;
+  var allocCost=Math.round(found.cost*(pct/100));
+  var revShare=proj.revenue>0?Math.round(proj.revenue*(pct/100)):0;
+  projHTML+='<div class="prof-proj-row">'
+    +'<div class="prof-proj-dot" style="background:'+acc+'"></div>'
+    +'<div class="prof-proj-nm">'+esc(proj.name)+'</div>'
+    +'<span class="prof-proj-pct'+(pct===100?' full':'')+'">'+pct+'%</span>'
+    +'<div class="prof-proj-cost">'+(revShare>0?'<div style="color:var(--green);font-size:10px">'+fmt(revShare)+' rev</div>':'')
+    +'<div>'+fmt(allocCost)+' cost</div></div>'
+    +'</div>';
+});
+if(!projHTML)projHTML='<div style="font-size:11px;color:var(--text-muted);padding:4px 0">No project assignments</div>';
+/* skills */
+var skillHTML=(found.skillsets||[]).map(function(sid){
+  var s=D.skillsets.find(function(x){return x.id===sid;});
+  return s?'<span class="prof-skill">'+esc(s.name)+'</span>':'';
+}).join('');
+if(!skillHTML)skillHTML='<span style="font-size:11px;color:var(--text-muted)">No skills on file</span>';
+/* certifications */
+var certHTML=(found.certifications||[]).map(function(cid){var c=D.certifications.find(function(x){return x.id===cid;});return c?'<span class="prof-cert-chip">'+esc(c.name)+'</span>':'';}).join('');
+/* clearance & location */
+var clrObj=found.clearance?D.clearances.find(function(c){return c.id===found.clearance;}):null;
+var locObj=found.location?D.locations.find(function(l){return l.id===found.location;}):null;
+/* past projects & clients */
+var pastProjHTML=(found.pastProjects||[]).map(function(pid){var p=D.pastProjects.find(function(x){return x.id===pid;});return p?'<span class="prof-past-chip">'+esc(p.name)+'</span>':'';}).join('');
+var pastClHTML=(found.pastClients||[]).map(function(pcid){var pc=D.pastClients.find(function(x){return x.id===pcid;});return pc?'<span class="prof-past-chip">'+esc(pc.name)+'</span>':'';}).join('');
+/* note */
+var noteHTML='';
+if(found.note){
+  var isTrans=found.note.indexOf('→')===0;
+  noteHTML='<div class="prof-note-box'+(isTrans?'':' neutral')+'">'+esc(found.note)+'</div>';
+}
+/* build modal */
+document.getElementById('mdlProfile').innerHTML=
+'<span class="prof-accent-bar" style="background:'+acc+'"></span>'
++'<div class="prof-top">'
++'<div><div class="prof-name">'+esc(found.name)+'</div><div class="prof-role">'+esc(found.role)+'</div>'
++(found.badge?'<div class="card-badge" style="margin-top:4px">'+esc(found.badge)+'</div>':'')
++'<div class="prof-crumb" style="margin-top:6px">'+crumb+'</div></div>'
++'<div style="text-align:right"><div class="prof-cost" style="color:'+acc+'">'+fmt(found.cost)+'</div><div class="prof-cost-lbl">/month total</div></div>'
++'</div>'
++(badges?'<div class="prof-badges">'+badges+'</div>':'')
++(found.reportsTo?'<div style="font-size:11px;color:var(--text-secondary);margin-top:8px">&#8627; Reports to <strong>'+esc(found.reportsTo)+'</strong></div>':'')
++(clrObj?'<div style="margin-top:6px"><span class="prof-clr-badge" style="'+clrStyle(clrObj.name)+'">&#9632; '+esc(clrObj.name)+'</span></div>':'')
++(locObj?'<div style="font-size:11px;color:var(--text-secondary);margin-top:5px">📍 '+esc(locObj.name)+'</div>':'')
++(found.resumeLink?'<div style="margin-top:6px"><a class="prof-resume-link" href="'+esc(found.resumeLink)+'" target="_blank">&#128196; View Resume</a></div>':'')
++'<hr class="prof-divider">'
++'<div class="prof-sec"><div class="prof-sec-lbl">Projects &amp; Allocation</div>'+projHTML+'</div>'
++'<hr class="prof-divider">'
++'<div class="prof-sec"><div class="prof-sec-lbl">Skills</div><div class="prof-skill-wrap">'+skillHTML+'</div></div>'
++(certHTML?'<div class="prof-sec" style="margin-top:8px"><div class="prof-sec-lbl">Certifications</div><div class="prof-skill-wrap">'+certHTML+'</div></div>':'')
++(pastProjHTML?'<hr class="prof-divider"><div class="prof-sec"><div class="prof-sec-lbl">Past Projects</div><div class="prof-skill-wrap">'+pastProjHTML+'</div></div>':'')
++(pastClHTML?'<div class="prof-sec" style="margin-top:8px"><div class="prof-sec-lbl">Past Clients</div><div class="prof-skill-wrap">'+pastClHTML+'</div></div>':'')
++(noteHTML?'<hr class="prof-divider">'+noteHTML:'')
++'<div class="btn-row" style="margin-top:18px">'
++'<button class="btn btn-navy" style="flex:1" onclick="closeModal(\'ovProfile\');openEditMember(\''+mid+'\',\''+foundDid+'\')">&#9998; Edit</button>'
++'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovProfile\')">Close</button>'
++'</div>';
+openModal('ovProfile');}
+
+function renderStats(){
+var hc=0,tc=0,fl=0,oa=0;
+D.departments.forEach(function(d){hc+=d.members.length;d.members.forEach(function(m){tc+=m.cost;if(m.reassess)fl++;if(totalAlloc(m)>100)oa++;});});
+document.getElementById('statsBar').innerHTML=[
+{l:'Headcount',v:hc,u:'people'},{l:'Monthly Cost',v:fmt(tc),u:'/month'},{l:'Projects',v:D.projects.length,u:'active'},
+{l:'Skills',v:D.skillsets.length,u:'defined'},{l:'Reassess',v:fl,u:'flagged',w:fl>0},{l:'Over-alloc',v:oa,u:'people',w:oa>0}
+].map(function(s){return '<div class="st'+(s.w?' warn':'')+'"><div class="st-l">'+s.l+'</div><div class="st-v'+(s.w?' wv':'')+'">'+s.v+'<span class="st-u">'+s.u+'</span></div></div>';}).join('');}
+
+function switchTab(mode){viewMode=mode;document.getElementById('tabOrg').className='tab'+(mode==='org'?' active':'');document.getElementById('tabProj').className='tab'+(mode==='proj'?' active':'');document.getElementById('tabRes').className='tab'+(mode==='res'?' active':'');renderView();}
+
+function cardHTML(m,did){
+var dept=D.departments.find(function(d){return d.id===did;});
+var acc=dept?dept.accent:'#546478';
+var isTrans=m.note&&m.note.indexOf('→')===0;
+var tags='';
+if(m.hub)tags+='<span class="card-tag tag-hub">Hub</span>';
+if(m.sme)tags+='<span class="card-tag tag-sme">SME</span>';
+if(m.associate)tags+='<span class="card-tag tag-assoc">Assoc</span>';
+var pp='';(m.projects||[]).forEach(function(pe){var pid=typeof pe==='string'?pe:pe.id;var pct=typeof pe==='string'?100:(pe.pct||100);pp+='<span class="card-pill proj">'+esc(pName(pid))+(pct<100?'<span class="proj-pct-badge"> '+pct+'%</span>':'')+'</span>';});
+var sp='';(m.skillsets||[]).forEach(function(sid){sp+='<span class="card-pill skill">'+esc(sName(sid))+'</span>';});
+var alloc=totalAlloc(m);var isOver=alloc>100;
+var clrObj=m.clearance?D.clearances.find(function(c){return c.id===m.clearance;}):null;
+var locObj=m.location?D.locations.find(function(l){return l.id===m.location;}):null;
+var certChips=(m.certifications||[]).slice(0,3).map(function(cid){var c=D.certifications.find(function(x){return x.id===cid;});return c?'<span class="card-cert">'+esc(c.name)+'</span>':'';}).join('');
+return '<div class="card'+(m.reassess?' reassess':'')+'" draggable="true" data-mid="'+m.id+'" data-did="'+did+'" onclick="openEditMember(\''+m.id+'\',\''+did+'\')" ondragstart="dStart(event,\''+m.id+'\',\''+did+'\')" ondragend="dEnd(event)">'
++'<div class="card-stripe" style="background:'+(m.reassess?'var(--warn-border)':acc)+'"></div>'
++'<span class="card-eh">edit</span>'
++'<div class="card-top"><div style="flex:1;min-width:0"><div class="card-name">'+esc(m.name)+'</div><div class="card-role">'+esc(m.role)+'</div></div>'
++'<div style="text-align:right;flex-shrink:0"><div class="card-cost" style="color:'+(m.reassess?'var(--warn-text)':acc)+'">'+fmt(m.cost)+'</div>'
++(m.badge?'<div class="card-badge">'+esc(m.badge)+'</div>':'')+'</div></div>'
++(tags?'<div class="card-meta">'+tags+'</div>':'')
++(pp?'<div class="card-pills">'+pp+'</div>':'')
++(sp?'<div class="card-pills">'+sp+'</div>':'')
++(m.reportsTo?'<div class="card-reports">&#8627; '+esc(m.reportsTo)+'</div>':'')
++(clrObj?'<span class="card-clr" style="'+clrStyle(clrObj.name)+'">'+esc(clrObj.name)+'</span>':'')
++(locObj?'<div class="card-location">📍 '+esc(locObj.name)+'</div>':'')
++(certChips?'<div class="card-cert-row">'+certChips+'</div>':'')
++(m.note?'<div class="card-note '+(isTrans?'trans':'neutral')+'">'+esc(m.note)+'</div>':'')
++(m.reassess?'<div class="reassess-ban"><svg width="12" height="12" viewBox="0 0 20 20" fill="none"><path d="M10 2L1 18h18L10 2z" fill="#F59E0B" stroke="#92400E" stroke-width="1.2"/><text x="10" y="15" text-anchor="middle" font-size="10" font-weight="bold" fill="#92400E">!</text></svg>Reassess Value</div>':'')
++(isOver?'<div class="overalloc-ban"><svg width="12" height="12" viewBox="0 0 20 20" fill="none"><path d="M10 2L1 18h18L10 2z" fill="#FCA5A5" stroke="#DC2626" stroke-width="1.2"/><text x="10" y="15" text-anchor="middle" font-size="10" font-weight="bold" fill="#DC2626">!</text></svg>Over-allocated · '+alloc+'% total</div>':'')
++'</div>';}
+
+function renderDeptBlock(dept,depth,q){
+var children=deptChildren(dept.id);
+var members=dept.members;
+if(q){members=members.filter(function(m){return memberMatchesSearch(m,q);});if(!members.length&&!children.some(function(c){return deptHasMatch(c,q);}))return '';}
+var acc=dept.accent||'#546478',rollup=deptRollup(dept.id),coll=!!collState[dept.id];
+var isRoot=depth===0;
+var wrap=isRoot?'dept':'subdept-item'+(depth>=2?' depth2':'');
+var html='<div class="'+wrap+'"'+(isRoot?'':' style="border-left-color:'+acc+'"')+'>';
+html+='<div class="dept-h'+(coll?' coll':'')+'" onclick="togDept(\''+dept.id+'\')">'
++'<div style="display:flex;align-items:center;flex:1"><div class="dept-dot" style="background:'+acc+';box-shadow:0 0 7px '+acc+'88"></div>'
++'<div class="dept-inf"><div class="dept-nm">'+esc(dept.name)+'</div>'+(dept.subtitle?'<div class="dept-st">'+esc(dept.subtitle)+'</div>':'')+'</div></div>'
++'<div class="dept-stats"><div class="dept-cost" style="color:'+acc+'">'+fmt(rollup.cost)+'<span class="dept-cu">/mo</span></div>'
++'<div class="dept-cnt">'+rollup.count+' '+(rollup.count===1?'person':'people')+(dept.members.length!==rollup.count?' <span style="opacity:0.55">('+dept.members.length+' direct)</span>':'')+'</div></div>'
++'<div class="dept-chev '+(coll?'closed':'open')+'">&#9662;</div>'
++'<button class="btn-sub" onclick="event.stopPropagation();openAddSubDept(\''+dept.id+'\')" title="Add sub-department">&#8853; Sub</button>'
++'<button class="dept-edit-btn" onclick="event.stopPropagation();openEditDept(\''+dept.id+'\')" title="Edit">&#9998;</button>'
++'<button class="dept-del" onclick="event.stopPropagation();deleteDept(\''+dept.id+'\')" title="Delete">&#10005;</button></div>';
+if(!coll){
+html+='<div class="dept-body" id="db_'+dept.id+'" ondragover="dOver(event,\''+dept.id+'\')" ondragleave="dLeave(event,\''+dept.id+'\')" ondrop="dDrop(event,\''+dept.id+'\')">';
+if(children.length){html+='<div class="subdept-section">';children.forEach(function(c){html+=renderDeptBlock(c,depth+1,q);});html+='</div>';}
+if(children.length&&members.length)html+='<div class="subdept-direct-label">Direct Members</div>';
+members.forEach(function(m){html+=cardHTML(m,dept.id);});
+if(!members.length&&!children.length)html+='<div class="empty-msg">Drop members here or add a sub-department</div>';
+html+='</div>';}
+html+='</div>';return html;}
+
+function renderOrgView(q){
+var html='<div class="legend">'
++'<div class="leg-i"><div class="leg-sw" style="background:linear-gradient(135deg,#FFFBEB,#FEF3C7);border-color:var(--warn-border)"></div>Reassess</div>'
++'<div class="leg-i"><div class="leg-sw" style="background:var(--teal-dim);border-color:var(--teal)"></div>Hub</div>'
++'<div class="leg-i"><div class="leg-sw" style="background:var(--violet-dim);border-color:var(--violet)"></div>SME</div>'
++'<div class="leg-i"><div class="leg-sw" style="background:var(--amber-dim);border-color:var(--amber)"></div>Associate</div>'
++'<div class="leg-i" style="margin-left:auto;font-size:10px;color:var(--text-muted)"><span style="cursor:pointer;text-decoration:underline" onclick="resetData()">Reset defaults</span></div></div>';
+topLevelDepts().forEach(function(dept){html+=renderDeptBlock(dept,0,q);});
+return html;}
+
+/* ── PROJECT TREE HELPERS ── */
+function projChildren(pid){return D.projects.filter(function(p){return p.parentId===pid;});}
+function topLevelProjects(){return D.projects.filter(function(p){return !p.parentId;});}
+function projDescendantIds(pid){var ids=[pid];projChildren(pid).forEach(function(c){ids=ids.concat(projDescendantIds(c.id));});return ids;}
+function projRollupData(pid,all){
+  var proj=D.projects.find(function(p){return p.id===pid;});
+  var rev=(proj&&proj.revenue)||0;
+  var pm=all.filter(function(m){return projIds(m).indexOf(pid)>-1;});
+  var cost=pm.reduce(function(s,m){return s+Math.round(m.cost*(projPct(m,pid)/100));},0);
+  var memberSet={};pm.forEach(function(m){memberSet[m.id]=true;});
+  projChildren(pid).forEach(function(c){
+    var cr=projRollupData(c.id,all);rev+=cr.revenue;cost+=cr.cost;
+    Object.keys(cr.memberSet).forEach(function(k){memberSet[k]=true;});});
+  return{revenue:rev,cost:cost,memberSet:memberSet,count:Object.keys(memberSet).length};}
+function projOrDescHasMatch(proj,q,all){
+  if(proj.name.toLowerCase().indexOf(q)>-1)return true;
+  if(all.some(function(m){return projIds(m).indexOf(proj.id)>-1&&memberMatchesSearch(m,q);}))return true;
+  return projChildren(proj.id).some(function(c){return projOrDescHasMatch(c,q,all);});}
+function togSubProj(id){
+  var el=document.getElementById('spb_'+id);if(!el)return;
+  var open=el.style.display==='block';el.style.display=open?'none':'block';
+  var ch=document.getElementById('spch_'+id);if(ch)ch.innerHTML=open?'&#9658;':'&#9660;';}
+function projMemRowHTML(m,projId){
+  var pct=projPct(m,projId),allocCost=Math.round(m.cost*(pct/100)),oa=totalAlloc(m)>100;
+  return '<div class="proj-mem"><div style="min-width:0"><div class="proj-mem-nm">'
+    +'<span class="proj-mem-link" onclick="openPersonProfile(\''+m.id+'\')">'+esc(m.name)+'</span>'
+    +(oa?'<span style="color:var(--red);margin-left:4px;font-size:11px;font-weight:800" title="Over-allocated ('+totalAlloc(m)+'% total)">⚠</span>':'')+'</div>'
+    +'<div class="proj-mem-dept">'+esc(m._dn)+(pct<100?' &middot; <span style="font-weight:700;color:var(--amber)">'+pct+'%</span>':'')+'</div></div>'
+    +'<div class="proj-mem-cost">'+fmt(allocCost)+(pct<100?'<div style="font-size:9px;color:var(--text-muted);text-align:right">of '+fmt(m.cost)+'</div>':'')+'</div></div>';}
+function projFinBlock(rev,tc,revenueNote,noteClass){
+  var margin=rev-tc,marginPct=rev>0?Math.round((margin/rev)*100):null;
+  var marginColor=margin>0?'var(--green)':margin===0&&rev===0?'var(--text-muted)':'var(--red)';
+  var barW=rev>0?Math.max(0,Math.min(100,Math.round((margin/rev)*100))):0;
+  return '<div class="proj-financials">'
+    +'<div class="proj-fin-row"><span class="proj-fin-lbl">Revenue</span><span class="proj-fin-val" style="color:'+(rev>0?'var(--green)':'var(--text-muted)')+'">'+(rev>0?fmt(rev):'$0')+'/mo</span></div>'
+    +'<div class="proj-fin-row"><span class="proj-fin-lbl">Team cost</span><span class="proj-fin-val proj-fin-cost">'+fmt(tc)+'/mo</span></div>'
+    +'<div class="proj-fin-sep"></div>'
+    +'<div class="proj-fin-row"><span class="proj-fin-lbl">Margin</span><span class="proj-fin-val" style="color:'+marginColor+'">'+(margin>=0?'':'\u2212')+fmt(Math.abs(margin))+'/mo'+(marginPct!==null?' <span style="opacity:0.75">('+marginPct+'%)</span>':'')+'</span></div>'
+    +'<div class="proj-margin-bar"><div class="proj-margin-fill" style="width:'+barW+'%;background:'+marginColor+'"></div></div>'
+    +'</div>'+(revenueNote?'<div class="'+noteClass+'">'+esc(revenueNote)+'</div>':'');}
+function renderSubProjCard(child,all,q){
+  var pm=all.filter(function(m){return projIds(m).indexOf(child.id)>-1;});
+  var fl=q?pm.filter(function(m){return memberMatchesSearch(m,q)||child.name.toLowerCase().indexOf(q)>-1;}):pm;
+  var rev=child.revenue||0;
+  var tc=fl.reduce(function(s,m){return s+Math.round(m.cost*(projPct(m,child.id)/100));},0);
+  var margin=rev-tc;
+  var mColor=margin>0?'var(--green)':margin===0&&rev===0?'var(--text-muted)':'var(--red)';
+  var finLine='<span style="color:'+(rev>0?'var(--green)':'var(--text-muted)')+'">'+fmt(rev)+'</span> rev &middot; '+fmt(tc)+' cost &middot; <span style="color:'+mColor+';font-weight:700">'+(margin>=0?'':'\u2212')+fmt(Math.abs(margin))+'</span>';
+  var membersHTML=fl.map(function(m){return projMemRowHTML(m,child.id);}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:8px 10px">No members assigned</div>';
+  return '<div class="proj-subcard">'
+    +'<div class="proj-subcard-hdr" onclick="togSubProj(\''+child.id+'\')">'
+    +'<div style="flex:1;min-width:0"><div class="proj-subcard-nm">'+esc(child.name)+'</div>'
+    +'<div class="proj-subcard-fin">'+finLine+' &middot; '+fl.length+' '+(fl.length===1?'person':'people')+'</div></div>'
+    +'<span id="spch_'+child.id+'" style="color:var(--text-muted);font-size:11px;flex-shrink:0;padding-top:1px">&#9660;</span></div>'
+    +'<div class="proj-subcard-body" id="spb_'+child.id+'">'+membersHTML+'</div></div>';}
+
+function renderProjView(q){
+  var all=allM(),html='<div class="proj-scroll">';
+  topLevelProjects().forEach(function(proj){
+    var children=projChildren(proj.id);
+    if(q&&!projOrDescHasMatch(proj,q,all))return;
+    var pm=all.filter(function(m){return projIds(m).indexOf(proj.id)>-1;});
+    var fl=q?pm.filter(function(m){return memberMatchesSearch(m,q)||proj.name.toLowerCase().indexOf(q)>-1;}):pm;
+    var rollup=projRollupData(proj.id,all);
+    var hasKids=children.length>0;
+    var rev=rollup.revenue,tc=rollup.cost;
+    var noteClass=(proj.revenue||0)>0?'proj-rev-note':'proj-pursuit-tag';
+    var hdrHTML='<div class="proj-nm">'+esc(proj.name)+(hasKids?'<span style="font-size:8px;font-weight:700;background:rgba(197,165,90,0.15);color:var(--gold);padding:1px 6px;border-radius:3px;margin-left:6px;vertical-align:middle;text-transform:uppercase">Rollup</span>':'')+'</div>'
+      +projFinBlock(rev,tc,proj.revenueNote,noteClass)
+      +'<div class="proj-cnt" style="margin-top:5px">'+(hasKids?fl.length+' direct &middot; '+rollup.count+' total':fl.length+' '+(fl.length===1?'person':'people'))+' assigned</div>';
+    html+='<div class="proj-card">'
+      +'<div class="proj-hdr"><div class="proj-hdr-left">'+hdrHTML+'</div>'
+      +'<button class="btn btn-danger-sm btn-sm" onclick="deleteProject(\''+proj.id+'\')" title="Delete">&#10005;</button></div>'
+      +'<div class="proj-members">';
+    if(fl.length)fl.forEach(function(m){html+=projMemRowHTML(m,proj.id);});
+    else if(!hasKids)html+='<div style="padding:14px;text-align:center;font-size:12px;color:var(--text-muted)">No members assigned</div>';
+    if(hasKids){html+='<div class="proj-subcard-section"><div class="proj-subcard-lbl">&#9660; Sub-Projects ('+children.length+')</div>';children.forEach(function(c){html+=renderSubProjCard(c,all,q);});html+='</div>';}
+    html+='</div></div>';});
+  if(!D.projects.length)html+='<div class="empty-msg">No projects yet</div>';
+  html+='</div>';return html;}
+
+function renderView(){renderStats();var q=(document.getElementById('searchInput').value||'').toLowerCase().trim();document.getElementById('mainContent').innerHTML=viewMode==='org'?renderOrgView(q):viewMode==='proj'?renderProjView(q):renderResourcesView(q);}
+
+/* ── RESOURCES VIEW ── */
+function renderResourcesView(q){
+var all=allM(),byDept={},deptOrder=[];
+all.forEach(function(m){
+  if(q&&!memberMatchesSearch(m,q))return;
+  if(!byDept[m._dept]){byDept[m._dept]=[];deptOrder.push(m._dept);}
+  byDept[m._dept].push(m);});
+if(!deptOrder.length)return '<div class="empty-msg">'+(q?'No resources match &ldquo;'+esc(q)+'&rdquo;':'No resources yet')+'</div>';
+var html='';
+deptOrder.forEach(function(did){
+  var dept=D.departments.find(function(d){return d.id===did;});
+  var acc=dept?dept.accent:'#546478';
+  var path=dept?deptPath(did).join(' \u203a '):did;
+  var cnt=byDept[did].length;
+  html+='<div class="res-dept-lbl">'
+    +'<span class="res-dept-dot" style="background:'+acc+';box-shadow:0 0 6px '+acc+'88"></span>'
+    +esc(path)+'<span style="font-size:10px;font-weight:400;color:var(--text-muted);margin-left:4px">'+cnt+' '+(cnt===1?'person':'people')+'</span>'
+    +'</div><div class="res-grid">';
+  byDept[did].forEach(function(m){html+=cardHTML(m,did);});
+  html+='</div>';});
+return html;}
+
+function togDept(id){collState[id]=!collState[id];renderView();}
+function dStart(e,mid,did){dragInfo={mid:mid,did:did};e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',mid);setTimeout(function(){e.target.classList.add('dragging');},0);}
+function dEnd(e){e.target.classList.remove('dragging');dragInfo=null;document.querySelectorAll('.drop-over').forEach(function(el){el.classList.remove('drop-over');});}
+function dOver(e,did){e.preventDefault();e.dataTransfer.dropEffect='move';var el=document.getElementById('db_'+did);if(el)el.classList.add('drop-over');}
+function dLeave(e,did){var el=document.getElementById('db_'+did);if(el)el.classList.remove('drop-over');}
+function dDrop(e,toDid){e.preventDefault();document.querySelectorAll('.drop-over').forEach(function(el){el.classList.remove('drop-over');});
+if(!dragInfo||dragInfo.did===toDid)return;
+var from=D.departments.find(function(d){return d.id===dragInfo.did;}),to=D.departments.find(function(d){return d.id===toDid;});
+if(!from||!to)return;var idx=-1;for(var i=0;i<from.members.length;i++){if(from.members[i].id===dragInfo.mid){idx=i;break;}}
+if(idx===-1)return;var mem=from.members.splice(idx,1)[0];to.members.push(mem);dragInfo=null;save();renderView();}
+
+/* ── MULTI-SELECT ── */
+function pChip(fid,id,pct,name){
+return '<span class="ms-chip proj-chip">'+esc(name)
++' <input type="number" class="pct-input" value="'+pct+'" min="1" max="100" title="% allocation" '
++'oninput="event.stopPropagation();msPctChange(\''+fid+'\',\''+id+'\',this.value)" '
++'onclick="event.stopPropagation()">'
++'%<span class="ms-x" onclick="event.stopPropagation();msRem(\''+fid+'\',\''+id+'\')">&times;</span></span>';}
+
+function msHTML(fid,selIds,items,chipCls,ph){
+var isP=chipCls==='proj-chip';
+MS_REG[fid]={items:items,chipCls:chipCls,isP:isP};
+var chips=selIds.map(function(entry){
+  var id=isP?(typeof entry==='string'?entry:entry.id):entry;
+  var pct=isP?(typeof entry==='string'?100:(entry.pct||100)):100;
+  var it=items.find(function(x){return x.id===id;});if(!it)return '';
+  return isP?pChip(fid,id,pct,it.name)
+    :'<span class="ms-chip '+chipCls+'">'+esc(it.name)+'<span class="ms-x" onclick="event.stopPropagation();msRem(\''+fid+'\',\''+id+'\')">&times;</span></span>';
+}).join('');
+return '<div style="position:relative"><div class="ms-wrap" id="'+fid+'_w" onclick="document.getElementById(\''+fid+'_i\').focus()">'
++chips+'<input class="ms-input" id="'+fid+'_i" placeholder="'+(selIds.length?'':ph)+'" onfocus="msShow(\''+fid+'\')" oninput="msFilt(\''+fid+'\')" autocomplete="off">'
++'</div><div class="ms-dd" id="'+fid+'_d" style="display:none"></div>'
++'<input type="hidden" id="'+fid+'_v" value=\''+JSON.stringify(selIds)+'\'></div>';}
+
+function msShow(fid){var dd=document.getElementById(fid+'_d');dd.style.display='block';msFilt(fid);
+setTimeout(function(){document.addEventListener('click',function handler(e){if(!e.target.closest('#'+fid+'_w')&&!e.target.closest('#'+fid+'_d')){dd.style.display='none';document.removeEventListener('click',handler);}});},10);}
+
+function msFilt(fid){
+var input=document.getElementById(fid+'_i'),q=(input.value||'').toLowerCase();
+var sel=JSON.parse(document.getElementById(fid+'_v').value);
+var reg=MS_REG[fid]||{},isP=reg.isP||false,items=reg.items||D.skillsets;
+var selIds=isP?sel.map(function(e){return typeof e==='string'?e:e.id;}):sel;
+var avail=items.filter(function(x){return selIds.indexOf(x.id)===-1&&x.name.toLowerCase().indexOf(q)>-1;});
+var dd=document.getElementById(fid+'_d');
+var html=avail.map(function(x){return '<div class="ms-opt" onmousedown="event.preventDefault();msAdd(\''+fid+'\',\''+x.id+'\')">'+esc(x.name)+'</div>';}).join('');
+if(q&&!items.some(function(x){return x.name.toLowerCase()===q;}))
+html+='<div class="ms-opt add-new" onmousedown="event.preventDefault();msNew(\''+fid+'\')">+ Add "'+esc(input.value)+'"</div>';
+if(!html)html='<div class="ms-opt" style="color:var(--text-muted);pointer-events:none">No options</div>';
+dd.innerHTML=html;}
+
+function msAdd(fid,itemId){
+var sel=JSON.parse(document.getElementById(fid+'_v').value);
+var isP=(MS_REG[fid]||{}).isP||false;
+if(isP){if(!sel.some(function(e){return(typeof e==='string'?e:e.id)===itemId;}))sel.push({id:itemId,pct:100});}
+else{if(sel.indexOf(itemId)===-1)sel.push(itemId);}
+document.getElementById(fid+'_v').value=JSON.stringify(sel);document.getElementById(fid+'_i').value='';rebuildChips(fid);}
+
+function msRem(fid,itemId){
+var sel=JSON.parse(document.getElementById(fid+'_v').value);
+var isP=(MS_REG[fid]||{}).isP||false;
+sel=sel.filter(function(x){return isP?((typeof x==='string'?x:x.id)!==itemId):(x!==itemId);});
+document.getElementById(fid+'_v').value=JSON.stringify(sel);rebuildChips(fid);}
+
+function msPctChange(fid,itemId,val){
+var sel=JSON.parse(document.getElementById(fid+'_v').value);
+var pct=Math.max(1,Math.min(100,parseInt(val)||100));
+sel.forEach(function(e){if((typeof e==='string'?e:e.id)===itemId){if(typeof e!=='string')e.pct=pct;}});
+document.getElementById(fid+'_v').value=JSON.stringify(sel);
+updateAllocMeter(fid);}
+
+function msNew(fid){var input=document.getElementById(fid+'_i'),name=input.value.trim();if(!name)return;
+var reg=MS_REG[fid]||{},nid=uid(),list=reg.items||D.skillsets;list.push({id:nid,name:name});save();msAdd(fid,nid);}
+
+function rebuildChips(fid){
+var sel=JSON.parse(document.getElementById(fid+'_v').value);
+var reg=MS_REG[fid]||{},isP=reg.isP||false,items=reg.items||D.skillsets,cc=reg.chipCls||'skill-chip';
+var wrap=document.getElementById(fid+'_w'),input=document.getElementById(fid+'_i');
+wrap.querySelectorAll('.ms-chip').forEach(function(el){el.remove();});
+sel.forEach(function(entry){
+  var id=isP?(typeof entry==='string'?entry:entry.id):entry;
+  var pct=isP?(typeof entry==='string'?100:(entry.pct||100)):100;
+  var it=items.find(function(x){return x.id===id;});if(!it)return;
+  var chip=document.createElement('span');chip.className='ms-chip '+cc;
+  if(isP){chip.innerHTML=pChip(fid,id,pct,it.name);}
+  else{chip.innerHTML=esc(it.name)+'<span class="ms-x" onclick="event.stopPropagation();msRem(\''+fid+'\',\''+id+'\')">&times;</span>';}
+  wrap.insertBefore(chip,input);});
+input.placeholder=sel.length?'':'Type to search...';msFilt(fid);updateAllocMeter(fid);}
+
+function msVal(fid){return JSON.parse(document.getElementById(fid+'_v').value);}
+
+function totalAlloc(m){return(m.projects||[]).reduce(function(s,e){return s+(typeof e==='string'?100:(e.pct||100));},0);}
+
+function updateAllocMeter(fid){
+var el=document.getElementById(fid+'_alloc');if(!el)return;
+var hidEl=document.getElementById(fid+'_v');if(!hidEl)return;
+var sel=JSON.parse(hidEl.value||'[]');
+var total=sel.reduce(function(s,e){return s+(typeof e==='string'?100:(e.pct||100));},0);
+var isOver=total>100,isFull=total===100;
+var cls=isOver?'am-over':isFull?'am-full':'am-under';
+var barColor=isOver?'var(--red)':isFull?'var(--green)':'var(--text-muted)';
+var barW=Math.min(100,total);
+var overW=isOver?Math.min(40,(total-100)/2)+'%':'0';
+el.innerHTML='<div class="alloc-meter '+cls+'">'
++'<div class="alloc-bar"><div class="alloc-bar-fill" style="width:'+barW+'%;background:'+barColor+'"></div>'
++(isOver?'<div class="alloc-bar-over" style="width:'+overW+'"></div>':'')
++'</div>'
++'<span>'+(isOver?'⚠ ':isFull?'✓ ':'')+total+'%'+(isOver?' — over-allocated':isFull?' — fully allocated':' allocated')+'</span>'
++'</div>';}
+
+/* ── FIELD HELPERS ── */
+function fT(id,l,v){return '<div class="fld"><label class="fld-l" for="'+id+'">'+l+'</label><input class="fld-i" id="'+id+'" type="text" value="'+esc(v)+'"></div>';}
+function fN(id,l,v){return '<div class="fld"><label class="fld-l" for="'+id+'">'+l+'</label><input class="fld-i" id="'+id+'" type="number" value="'+v+'"></div>';}
+function gv(id){return(document.getElementById(id)||{}).value||'';}
+function gc(id){return(document.getElementById(id)||{}).checked||false;}
+
+/* ── EDIT MEMBER ── */
+function clrStyle(cname){var n=(cname||'').toLowerCase();if(n.indexOf('poly')>-1)return 'background:#1E1B4B;color:#C7D2FE';if(n.indexOf('sci')>-1)return 'background:#F5F3FF;color:#5B21B6';if(n.indexOf('top')>-1)return 'background:#FFF7ED;color:#C2410C';if(n.indexOf('secret')>-1)return 'background:#FEF2F2;color:#991B1B';if(n.indexOf('trust')>-1)return 'background:#EFF6FF;color:#1D4ED8';return 'background:#F1F5F9;color:#64748B';}
+
+function openEditMember(mid,did){
+var dept=D.departments.find(function(d){return d.id===did;}),m;
+if(dept)m=dept.members.find(function(x){return x.id===mid;});
+if(!m)return;
+var names=allM().filter(function(x){return x.id!==mid;}).map(function(x){return x.name;});
+var dl=names.map(function(n){return '<option value="'+esc(n)+'">';}).join('');
+var locOpts='<option value="">— not set —</option>'+D.locations.map(function(l){return '<option value="'+l.id+'"'+(m.location===l.id?' selected':'')+'>'+esc(l.name)+'</option>';}).join('');
+var clrOpts='<option value="">— not set —</option>'+D.clearances.map(function(c){return '<option value="'+c.id+'"'+(m.clearance===c.id?' selected':'')+'>'+esc(c.name)+'</option>';}).join('');
+var deptMvOpts=deptOptHTML(null,0,[]);
+document.getElementById('mdlEdit').innerHTML=
+'<div class="mdl-over">Edit Team Member</div><div class="mdl-title">'+esc(m.name)+'</div>'
++'<div class="fld-row2">'+fT('e_name','Name',m.name)+fT('e_role','Role / Title',m.role)+'</div>'
++'<div class="fld-row2">'+fN('e_cost','Monthly Cost ($)',m.cost)+fT('e_badge','Badge',m.badge||'')+'</div>'
++'<div class="fld"><label class="fld-l" for="e_dept_mv">Move to Department</label><select class="fld-sel" id="e_dept_mv"><option value="">— keep in current dept —</option>'+deptMvOpts+'</select></div>'
++'<div class="fld"><label class="fld-l">Reports To</label><input class="fld-i" id="e_reports" list="e_rl" value="'+esc(m.reportsTo||'')+'"><datalist id="e_rl">'+dl+'</datalist></div>'
++'<span class="fld-section-hdr">Projects &amp; Skills</span>'
++'<div class="fld"><label class="fld-l">Current Projects</label>'+msHTML('e_proj',m.projects||[],D.projects,'proj-chip','Add projects...')+'<div id="e_proj_alloc"></div></div>'
++'<div class="fld"><label class="fld-l">Skills</label>'+msHTML('e_skill',m.skillsets||[],D.skillsets,'skill-chip','Add skills...')+'</div>'
++'<div class="fld"><label class="fld-l">Certifications</label>'+msHTML('e_cert',m.certifications||[],D.certifications,'cert-chip','Add certifications...')+'</div>'
++'<span class="fld-section-hdr">Profile</span>'
++'<div class="fld-row2"><div class="fld"><label class="fld-l" for="e_loc">Location</label><select class="fld-sel" id="e_loc">'+locOpts+'</select></div>'
++'<div class="fld"><label class="fld-l" for="e_clr">Clearance</label><select class="fld-sel" id="e_clr">'+clrOpts+'</select></div></div>'
++'<div class="fld"><label class="fld-l" for="e_resume">Resume (SharePoint Link)</label><input class="fld-i" id="e_resume" type="url" placeholder="https://..." value="'+esc(m.resumeLink||'')+'"></div>'
++'<span class="fld-section-hdr">Background</span>'
++'<div class="fld"><label class="fld-l">Past Projects</label>'+msHTML('e_ppj',m.pastProjects||[],D.pastProjects,'past-chip','Add past projects...')+'</div>'
++'<div class="fld"><label class="fld-l">Past Clients</label>'+msHTML('e_pcl',m.pastClients||[],D.pastClients,'past-chip','Add past clients...')+'</div>'
++'<span class="fld-section-hdr">Classification</span>'
++'<div class="fld"><div style="display:flex;gap:16px;flex-wrap:wrap">'
++'<div class="chk-row"><input type="checkbox" id="e_hub" '+(m.hub?'checked':'')+'><label for="e_hub">Hub</label></div>'
++'<div class="chk-row"><input type="checkbox" id="e_sme" '+(m.sme?'checked':'')+'><label for="e_sme">SME</label></div>'
++'<div class="chk-row"><input type="checkbox" id="e_assoc" '+(m.associate?'checked':'')+'><label for="e_assoc">Associate</label></div></div></div>'
++fT('e_note','Notes / Transition Plan',m.note||'')
++'<div class="fld"><div class="chk-row warn-chk"><input type="checkbox" id="e_reassess" '+(m.reassess?'checked':'')+'><label for="e_reassess">&#9888; Flag for value reassessment</label></div></div>'
++'<div class="btn-row"><button class="btn btn-navy" style="flex:1" onclick="saveEdit(\''+mid+'\',\''+did+'\')">Save</button><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovEdit\')">Cancel</button></div>'
++'<button class="btn btn-danger-sm btn-full" onclick="delMem(\''+mid+'\',\''+did+'\')">Remove from Team</button>';
+openModal('ovEdit');updateAllocMeter('e_proj');}
+
+function saveEdit(mid,did){
+var fromDept=D.departments.find(function(d){return d.id===did;}),m;
+if(fromDept)m=fromDept.members.find(function(x){return x.id===mid;});if(!m)return;
+m.name=gv('e_name');m.role=gv('e_role');m.cost=Number(gv('e_cost'))||0;m.badge=gv('e_badge');
+m.reportsTo=gv('e_reports');m.projects=msVal('e_proj');m.skillsets=msVal('e_skill');
+m.certifications=msVal('e_cert');m.pastProjects=msVal('e_ppj');m.pastClients=msVal('e_pcl');
+m.location=gv('e_loc');m.clearance=gv('e_clr');m.resumeLink=gv('e_resume');
+m.hub=gc('e_hub');m.sme=gc('e_sme');m.associate=gc('e_assoc');m.note=gv('e_note');m.reassess=gc('e_reassess');
+var newDid=gv('e_dept_mv');
+if(newDid&&newDid!==did){var toDept=D.departments.find(function(d){return d.id===newDid;});if(toDept){fromDept.members=fromDept.members.filter(function(x){return x.id!==mid;});toDept.members.push(m);}}
+closeModal('ovEdit');save();renderView();}
+
+function delMem(mid,did){var dept=D.departments.find(function(d){return d.id===did;});if(!dept)return;dept.members=dept.members.filter(function(m){return m.id!==mid;});closeModal('ovEdit');save();renderView();}
+
+/* ── ADD MEMBER ── */
+function openAddMember(){
+var names=allM().map(function(x){return x.name;}),dl=names.map(function(n){return '<option value="'+esc(n)+'">';}).join('');
+var locOpts='<option value="">— not set —</option>'+D.locations.map(function(l){return '<option value="'+l.id+'">'+esc(l.name)+'</option>';}).join('');
+var clrOpts='<option value="">— not set —</option>'+D.clearances.map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join('');
+document.getElementById('mdlAdd').innerHTML=
+'<div class="mdl-over">Add Team Member</div><div class="mdl-title">New Resource</div>'
++'<div class="fld"><label class="fld-l">Department</label><select class="fld-sel" id="a_dept"><option value="">Select department...</option>'+deptOptHTML(null,0,[])+'</select></div>'
++'<div class="fld-row2">'+fT('a_name','Name','')+fT('a_role','Role / Title','')+'</div>'
++'<div class="fld-row2">'+fN('a_cost','Monthly Cost ($)',0)+fT('a_badge','Badge','')+'</div>'
++'<div class="fld"><label class="fld-l">Reports To</label><input class="fld-i" id="a_reports" list="a_rl" value=""><datalist id="a_rl">'+dl+'</datalist></div>'
++'<span class="fld-section-hdr">Projects &amp; Skills</span>'
++'<div class="fld"><label class="fld-l">Current Projects</label>'+msHTML('a_proj',[],D.projects,'proj-chip','Add projects...')+'<div id="a_proj_alloc"></div></div>'
++'<div class="fld"><label class="fld-l">Skills</label>'+msHTML('a_skill',[],D.skillsets,'skill-chip','Add skills...')+'</div>'
++'<div class="fld"><label class="fld-l">Certifications</label>'+msHTML('a_cert',[],D.certifications,'cert-chip','Add certifications...')+'</div>'
++'<span class="fld-section-hdr">Profile</span>'
++'<div class="fld-row2"><div class="fld"><label class="fld-l" for="a_loc">Location</label><select class="fld-sel" id="a_loc">'+locOpts+'</select></div>'
++'<div class="fld"><label class="fld-l" for="a_clr">Clearance</label><select class="fld-sel" id="a_clr">'+clrOpts+'</select></div></div>'
++'<div class="fld"><label class="fld-l" for="a_resume">Resume (SharePoint Link)</label><input class="fld-i" id="a_resume" type="url" placeholder="https://..."></div>'
++'<span class="fld-section-hdr">Background</span>'
++'<div class="fld"><label class="fld-l">Past Projects</label>'+msHTML('a_ppj',[],D.pastProjects,'past-chip','Add past projects...')+'</div>'
++'<div class="fld"><label class="fld-l">Past Clients</label>'+msHTML('a_pcl',[],D.pastClients,'past-chip','Add past clients...')+'</div>'
++'<span class="fld-section-hdr">Classification</span>'
++'<div class="fld"><div style="display:flex;gap:16px;flex-wrap:wrap">'
++'<div class="chk-row"><input type="checkbox" id="a_hub"><label for="a_hub">Hub</label></div>'
++'<div class="chk-row"><input type="checkbox" id="a_sme"><label for="a_sme">SME</label></div>'
++'<div class="chk-row"><input type="checkbox" id="a_assoc"><label for="a_assoc">Associate</label></div></div></div>'
++fT('a_note','Notes','')
++'<div class="fld"><div class="chk-row warn-chk"><input type="checkbox" id="a_reassess"><label for="a_reassess">&#9888; Flag for value reassessment</label></div></div>'
++'<div class="btn-row"><button class="btn btn-navy" style="flex:1" onclick="saveAddMem()">Add</button><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovAdd\')">Cancel</button></div>';
+openModal('ovAdd');}
+
+function saveAddMem(){var name=gv('a_name').trim();if(!name)return;var did=gv('a_dept'),dept=D.departments.find(function(d){return d.id===did;});if(!dept)return;
+dept.members.push({id:uid(),name:name,role:gv('a_role'),cost:Number(gv('a_cost'))||0,badge:gv('a_badge'),reportsTo:gv('a_reports'),projects:msVal('a_proj'),skillsets:msVal('a_skill'),certifications:msVal('a_cert'),pastProjects:msVal('a_ppj'),pastClients:msVal('a_pcl'),location:gv('a_loc'),clearance:gv('a_clr'),resumeLink:gv('a_resume'),hub:gc('a_hub'),sme:gc('a_sme'),associate:gc('a_assoc'),note:gv('a_note'),reassess:gc('a_reassess')});
+closeModal('ovAdd');save();renderView();}
+
+/* ── ADD DEPT ── */
+/* ── MANAGE DEPTS (replaces bare openAddDept) ── */
+function openManageDepts(){
+document.getElementById('mdlDept').innerHTML=
+'<div class="mdl-over">Teams &amp; Categories</div><div class="mdl-title">Departments</div>'
++'<div id="deptList">'+renderDeptList()+'</div>'
++'<div style="border-top:1px solid var(--border);margin-top:14px;padding-top:14px">'
++'<div style="font-size:10px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:var(--text-secondary);margin-bottom:8px">Add New Team</div>'
++fT('d_name','Team Name','')+fT('d_sub','Subtitle / Description','')
++'<div class="fld"><label class="fld-l" for="d_parent">Parent Department (optional)</label>'
++'<select class="fld-sel" id="d_parent"><option value="">None (top-level)</option>'+deptOptHTML(null,0,[])+'</select></div>'
++'<div class="fld"><label class="fld-l">Accent Color</label><div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:4px" id="d_colorWrap">'+colorPickerHTML('d_color',null)+'</div></div>'
++'<button class="btn btn-navy btn-full" onclick="saveAddDept()" style="margin-top:4px">Create Team</button>'
++'</div>';
+openModal('ovDept');}
+
+function renderDeptList(){
+if(!D.departments.length)return '<div style="padding:12px 0;text-align:center;font-size:12px;color:var(--text-muted)">No teams yet</div>';
+function renderDeptListLevel(parentId,depth){
+  return D.departments.filter(function(d){return (d.parentId||null)===(parentId||null);}).map(function(dept){
+    var rollup=deptRollup(dept.id);
+    var indent=depth>0?'padding-left:'+(depth*18)+'px;':'';
+    return '<div class="dept-list-row" style="'+indent+'">'
+    +(depth>0?'<span style="color:var(--text-muted);margin-right:4px;font-size:11px">&#8627;</span>':'')
+    +'<div class="dept-list-dot" style="background:'+dept.accent+';box-shadow:0 0 5px '+dept.accent+'88"></div>'
+    +'<div class="dept-list-info"><div class="dept-list-nm">'+esc(dept.name)+'</div>'
+    +'<div class="dept-list-sub">'+rollup.count+' '+(rollup.count===1?'person':'people')+' &middot; '+fmt(rollup.cost)+'/mo'+(dept.subtitle?' &middot; '+esc(dept.subtitle):'')+'</div></div>'
+    +'<div class="dept-list-actions">'
+    +'<button class="btn-icon" style="background:#F0FDF4;color:#166534;font-size:10px" onclick="closeModal(\'ovDept\');openAddSubDept(\''+dept.id+'\')" title="Add sub-dept">&#8853;</button>'
+    +'<button class="btn-icon btn-icon-edit" onclick="closeModal(\'ovDept\');openEditDept(\''+dept.id+'\')">&#9998;</button>'
+    +'<button class="btn-icon btn-icon-del" onclick="deleteDeptFromList(\''+dept.id+'\')">&#10005;</button>'
+    +'</div></div>'
+    +renderDeptListLevel(dept.id,depth+1);
+  }).join('');}
+return renderDeptListLevel(null,0)||'<div style="padding:12px 0;text-align:center;font-size:12px;color:var(--text-muted)">No teams yet</div>';}
+
+function deleteDeptFromList(did){
+var dept=D.departments.find(function(d){return d.id===did;});if(!dept)return;
+var rollup=deptRollup(did),kids=deptChildren(did).length;
+if((rollup.count||kids)&&!confirm('"'+dept.name+'" has '+rollup.count+' member'+(rollup.count!==1?'s':'')+(kids?' + '+kids+' sub-team'+(kids!==1?'s':''):'')+'. Delete all?'))return;
+var toDelete=deptDescendantIds(did);
+D.departments=D.departments.filter(function(d){return toDelete.indexOf(d.id)===-1;});save();renderView();
+document.getElementById('deptList').innerHTML=renderDeptList();}
+
+function openAddDept(){openManageDepts();}
+
+function saveAddDept(){var name=gv('d_name').trim();if(!name)return;var el=document.querySelector('input[name="d_color"]:checked');var color=el?el.value:'#546478';
+var pid=gv('d_parent')||null;
+D.departments.push({id:uid(),name:name,subtitle:gv('d_sub'),accent:color,members:[],parentId:pid||null});
+document.getElementById('d_name').value='';document.getElementById('d_sub').value='';
+save();renderView();document.getElementById('deptList').innerHTML=renderDeptList();
+document.getElementById('d_colorWrap').innerHTML=colorPickerHTML('d_color',null);}
+
+function deleteDept(did){var dept=D.departments.find(function(d){return d.id===did;});if(!dept)return;
+var rollup=deptRollup(did),kids=deptChildren(did).length;
+if((rollup.count||kids)&&!confirm('"'+dept.name+'" has '+rollup.count+' member'+(rollup.count!==1?'s':'')+(kids?' + '+kids+' sub-team'+(kids!==1?'s':''):'')+'. Delete all?'))return;
+var toDelete=deptDescendantIds(did);
+D.departments=D.departments.filter(function(d){return toDelete.indexOf(d.id)===-1;});save();renderView();}
+
+/* ── EDIT DEPT ── */
+function colorPickerHTML(radioName,selected){
+return PALETTE.map(function(c){
+var isSel=c===(selected||PALETTE[0]);
+return '<label style="display:inline-block;cursor:pointer;margin:2px"><input type="radio" name="'+radioName+'" value="'+c+'" '+(isSel?'checked':'')+' style="display:none">'
++'<div class="color-swatch'+(isSel?' selected':'')+'" style="background:'+c+'" '
++'onclick="this.closest(\'div\').parentElement.parentElement.querySelectorAll(\'.color-swatch\').forEach(function(s){s.classList.remove(\'selected\');});this.classList.add(\'selected\');"></div></label>';
+}).join('');}
+
+function openEditDept(did){
+var dept=D.departments.find(function(d){return d.id===did;});if(!dept)return;
+var excl=deptDescendantIds(did);
+var parentOpts='<option value="">None (top-level)</option>'+D.departments.filter(function(d){return excl.indexOf(d.id)===-1;}).map(function(d){return '<option value="'+d.id+'"'+(dept.parentId===d.id?' selected':'')+'>'+esc(d.name)+'</option>';}).join('');
+document.getElementById('mdlDeptEdit').innerHTML=
+'<div class="mdl-over">Edit Team / Category</div><div class="mdl-title">'+esc(dept.name)+'</div>'
++fT('de_name','Team Name',dept.name)+fT('de_sub','Subtitle / Description',dept.subtitle||'')
++'<div class="fld"><label class="fld-l">Accent Color</label><div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:4px">'+colorPickerHTML('de_color',dept.accent)+'</div></div>'
++'<div class="fld"><label class="fld-l" for="de_parent">Parent Department</label><select class="fld-sel" id="de_parent">'+parentOpts+'</select></div>'
++'<div class="btn-row"><button class="btn btn-navy" style="flex:1" onclick="saveEditDept(\''+did+'\')">Save Changes</button><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovDeptEdit\')">Cancel</button></div>'
++'<button class="btn btn-danger-sm btn-full" onclick="deleteDept(\''+did+'\');closeModal(\'ovDeptEdit\')">Delete Team</button>';
+openModal('ovDeptEdit');}
+
+function saveEditDept(did){
+var dept=D.departments.find(function(d){return d.id===did;});if(!dept)return;
+var name=gv('de_name').trim();if(!name)return;
+var el=document.querySelector('input[name="de_color"]:checked');
+dept.name=name;dept.subtitle=gv('de_sub');dept.accent=el?el.value:dept.accent;
+dept.parentId=gv('de_parent')||null;
+closeModal('ovDeptEdit');save();renderView();}
+
+/* ── ADD SUB-DEPT ── */
+function openAddSubDept(parentId){
+var parent=D.departments.find(function(d){return d.id===parentId;});if(!parent)return;
+document.getElementById('mdlDeptEdit').innerHTML=
+'<div class="mdl-over">Add Sub-Department</div><div class="mdl-title">New Sub-Team</div>'
++'<div style="background:var(--gold-dim);border:1px solid rgba(197,165,90,0.3);border-radius:7px;padding:8px 12px;margin-bottom:14px;font-size:11px;color:var(--text-secondary)">'
++'Sub-team of <strong style="color:var(--text-primary)">'+esc(parent.name)+'</strong></div>'
++fT('ds_name','Team Name','')+fT('ds_sub','Subtitle / Description','')
++'<div class="fld"><label class="fld-l">Accent Color</label><div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:4px">'+colorPickerHTML('ds_color',parent.accent)+'</div></div>'
++'<div class="btn-row"><button class="btn btn-navy" style="flex:1" onclick="saveAddSubDept(\''+parentId+'\')">Create Sub-Team</button><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovDeptEdit\')">Cancel</button></div>';
+openModal('ovDeptEdit');}
+
+function saveAddSubDept(parentId){
+var name=gv('ds_name').trim();if(!name)return;
+var el=document.querySelector('input[name="ds_color"]:checked');var color=el?el.value:'#546478';
+D.departments.push({id:uid(),name:name,subtitle:gv('ds_sub'),accent:color,members:[],parentId:parentId});
+closeModal('ovDeptEdit');save();renderView();}
+
+/* ── ADD PROJECT ── */
+function openAddProject(){
+document.getElementById('mdlProj').innerHTML=
+'<div class="mdl-over">Manage Projects</div><div class="mdl-title">Projects</div>'
++'<div id="projList">'+renderProjList()+'</div>'
++'<div style="border-top:1px solid var(--border);margin-top:14px;padding-top:14px">'
++'<div style="font-size:10px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:var(--text-secondary);margin-bottom:8px">Add New Project</div>'
++fT('p_name','Project Name','')+fN('p_rev','Monthly Revenue ($) — leave 0 for pursuits',0)+fT('p_rnote','Revenue Note / Context','')
++'<div class="fld"><label class="fld-l" for="p_parent">Parent Project (optional)</label><select class="fld-sel" id="p_parent"><option value="">None (top-level)</option>'+projOptHTML(null,0)+'</select></div>'
++'<button class="btn btn-navy btn-full" onclick="saveAddProj()" style="margin-top:4px">Add Project</button>'
++'</div>';
+openModal('ovProj');}
+
+function projOptHTML(pid,depth){return D.projects.filter(function(p){return(p.parentId||null)===(pid||null);}).map(function(p){var pre=Array(depth+1).join('\u00a0\u00a0')+(depth>0?'\u21b3 ':'');return '<option value="'+p.id+'">'+pre+esc(p.name)+'</option>'+projOptHTML(p.id,depth+1);}).join('');}
+
+function renderProjList(){
+var all=allM();
+function renderLevel(pid,depth){
+  return D.projects.filter(function(p){return(p.parentId||null)===(pid||null);}).map(function(p){
+    var cnt=all.filter(function(m){return projIds(m).indexOf(p.id)>-1;}).length;
+    var rev=p.revenue||0;
+    var indent=depth>0?'padding-left:'+(depth*16)+'px;':'';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F1F5F9;gap:8px;'+indent+'">'
+      +(depth>0?'<span style="color:var(--text-muted);margin-right:2px">&#8627;</span>':'')
+      +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">'+esc(p.name)+'</div>'
+      +'<div style="font-size:10px;color:var(--text-muted);margin-top:1px">'+(rev>0?'<span style="color:var(--green);font-weight:700">'+fmt(rev)+'/mo</span> rev &middot; ':'<span style="color:var(--amber);font-weight:700">$0 rev</span> &middot; ')+cnt+' people'+(p.revenueNote?' &middot; '+esc(p.revenueNote):'')+'</div></div>'
+      +'<div style="display:flex;gap:4px;flex-shrink:0">'
+      +'<button class="btn-icon btn-icon-edit" onclick="openEditProject(\''+p.id+'\')" title="Edit">&#9998;</button>'
+      +'<button class="btn btn-danger-sm btn-sm" onclick="deleteProject(\''+p.id+'\');document.getElementById(\'projList\').innerHTML=renderProjList();">&#10005;</button>'
+      +'</div></div>'
+      +renderLevel(p.id,depth+1);
+  }).join('');}
+return renderLevel(null,0)||'<div style="padding:12px 0;text-align:center;font-size:12px;color:var(--text-muted)">No projects yet</div>';}
+
+function saveAddProj(){var name=gv('p_name').trim();if(!name)return;
+D.projects.push({id:uid(),name:name,revenue:Number(gv('p_rev'))||0,revenueNote:gv('p_rnote'),parentId:gv('p_parent')||null});
+save();document.getElementById('p_name').value='';document.getElementById('p_rev').value=0;document.getElementById('p_rnote').value='';
+document.getElementById('projList').innerHTML=renderProjList();renderView();}
+
+function openEditProject(pid){
+var p=D.projects.find(function(x){return x.id===pid;});if(!p)return;
+var excl=projDescendantIds(pid);
+var parentOpts='<option value="">None (top-level)</option>'+D.projects.filter(function(q){return excl.indexOf(q.id)===-1;}).map(function(q){return '<option value="'+q.id+'"'+((p.parentId===q.id)?' selected':'')+'>'+esc(q.name)+'</option>';}).join('');
+document.getElementById('mdlDeptEdit').innerHTML=
+'<div class="mdl-over">Edit Project</div><div class="mdl-title">'+esc(p.name)+'</div>'
++fT('ep_name','Project Name',p.name)
++fN('ep_rev','Monthly Revenue ($)',p.revenue||0)
++fT('ep_note','Revenue Note / Context',p.revenueNote||'')
++'<div class="fld"><label class="fld-l" for="ep_parent">Parent Project</label><select class="fld-sel" id="ep_parent">'+parentOpts+'</select></div>'
++'<div class="btn-row"><button class="btn btn-navy" style="flex:1" onclick="saveEditProject(\''+pid+'\')">Save</button>'
++'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovDeptEdit\')">Cancel</button></div>';
+openModal('ovDeptEdit');}
+
+function saveEditProject(pid){
+var p=D.projects.find(function(x){return x.id===pid;});if(!p)return;
+var name=gv('ep_name').trim();if(name)p.name=name;
+p.revenue=Number(gv('ep_rev'))||0;p.revenueNote=gv('ep_note');p.parentId=gv('ep_parent')||null;
+closeModal('ovDeptEdit');save();
+var el=document.getElementById('projList');if(el)el.innerHTML=renderProjList();
+renderView();}
+
+function deleteProject(pid){
+var toDelete=projDescendantIds(pid);
+D.projects=D.projects.filter(function(p){return toDelete.indexOf(p.id)===-1;});
+D.departments.forEach(function(d){d.members.forEach(function(m){m.projects=(m.projects||[]).filter(function(x){return toDelete.indexOf(typeof x==='string'?x:x.id)===-1;});});});
+save();renderView();}
+
+/* ── ADMIN (manage all lists) ── */
+var ADMIN_TABS=[
+{id:'skills',label:'Skills',key:'skillsets',memberKey:'skillsets'},
+{id:'certs',label:'Certifications',key:'certifications',memberKey:'certifications'},
+{id:'locs',label:'Locations',key:'locations',memberKey:'location'},
+{id:'clrs',label:'Clearances',key:'clearances',memberKey:'clearance'},
+{id:'pastproj',label:'Past Projects',key:'pastProjects',memberKey:'pastProjects'},
+{id:'pastcl',label:'Past Clients',key:'pastClients',memberKey:'pastClients'}];
+
+function openAdmin(){
+if(!adminTab)adminTab='skills';
+document.getElementById('mdlAdmin').innerHTML=renderAdminModal();
+openModal('ovAdmin');}
+
+function openManageSkills(){openAdmin();}
+
+function renderAdminModal(){
+var tab=ADMIN_TABS.find(function(t){return t.id===adminTab;})||ADMIN_TABS[0];
+var list=D[tab.key]||[];
+var all=allM();
+var tabBar=ADMIN_TABS.map(function(t){return '<button class="admin-tab'+(t.id===adminTab?' active':'')+'" onclick="switchAdminTab(\''+t.id+'\')">'+t.label+'</button>';}).join('');
+var listHTML=list.map(function(item){
+var cnt=all.filter(function(m){var v=m[tab.memberKey];return Array.isArray(v)?v.indexOf(item.id)>-1:v===item.id;}).length;
+return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #F1F5F9;gap:8px">'
++'<div><span style="font-size:13px;font-weight:600">'+esc(item.name)+'</span><span style="font-size:11px;color:var(--text-muted);margin-left:8px">'+cnt+' '+(cnt===1?'person':'people')+'</span></div>'
++'<button class="btn btn-danger-sm btn-sm" onclick="delAdminItem(\''+tab.key+'\',\''+tab.memberKey+'\',\''+item.id+'\')">&#10005;</button>'
++'</div>';}).join('')||'<div style="color:var(--text-muted);font-size:12px;padding:10px 0">No items yet — add one below</div>';
+return '<div class="mdl-over">Manage Lists</div><div class="mdl-title">Admin</div>'
++'<div class="admin-tab-bar">'+tabBar+'</div>'
++'<div style="display:flex;gap:8px;margin-bottom:10px"><input class="fld-i" id="adm_new" placeholder="New '+esc(tab.label.toLowerCase().replace(/s$/,''))+'..." style="flex:1" onkeydown="if(event.key===\'Enter\')addAdminItem(\''+tab.key+'\')"><button class="btn btn-navy" onclick="addAdminItem(\''+tab.key+'\')">Add</button></div>'
++'<div id="adminList">'+listHTML+'</div>';}
+
+function switchAdminTab(tabId){adminTab=tabId;document.getElementById('mdlAdmin').innerHTML=renderAdminModal();}
+
+function addAdminItem(key){
+var name=gv('adm_new').trim();if(!name)return;
+if((D[key]||[]).some(function(x){return x.name.toLowerCase()===name.toLowerCase();}))return;
+if(!D[key])D[key]=[];D[key].push({id:uid(),name:name});save();renderView();
+document.getElementById('mdlAdmin').innerHTML=renderAdminModal();}
+
+function delAdminItem(key,memberKey,id){
+D[key]=(D[key]||[]).filter(function(x){return x.id!==id;});
+D.departments.forEach(function(d){d.members.forEach(function(m){
+if(Array.isArray(m[memberKey]))m[memberKey]=(m[memberKey]||[]).filter(function(x){return x!==id;});
+else if(m[memberKey]===id)m[memberKey]='';
+});});save();renderView();
+document.getElementById('mdlAdmin').innerHTML=renderAdminModal();}
+
+function renderSkillList(){return '';}
+function addSkill(){}
+function delSkill(){}
+
+loadAndRender();
+</script>
+</body>
 </html>
