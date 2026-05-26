@@ -255,7 +255,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
     <div>
       <div class="hdr-brand">CommunityForce</div>
       <div class="hdr-title">Organizational Chart</div>
-      <div class="hdr-sub">Drag to reassign departments · Click cards to edit · <span id="ghStatus" style="transition:color 0.3s">Checking sync...</span></div>
+      <div class="hdr-sub">Drag to reassign departments · Click cards to edit · <span id="ghStatus" style="transition:color 0.3s">Loading…</span></div>
     </div>
     <div class="hdr-actions">
       <button class="btn btn-gold" onclick="openAddMember()">+ Person</button>
@@ -265,7 +265,6 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
       <button class="btn btn-outline" onclick="openAdmin()">&#9881; Admin</button>
       <button class="btn btn-outline" onclick="exportData()" title="Download backup JSON">&#8595; Export</button>
       <button class="btn btn-outline" onclick="importData()" title="Restore from JSON file">&#8593; Import</button>
-      <button class="btn btn-outline" onclick="openGHSettings()" title="Configure GitHub sync">&#9729; Sync</button>
     </div>
   </div>
   <div class="stats" id="statsBar"></div>
@@ -287,16 +286,11 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 <div class="ov" id="ovSkill" onclick="closeModal('ovSkill')"><div class="mdl" id="mdlSkill" onclick="event.stopPropagation()"></div></div>
 <div class="ov" id="ovAdmin" onclick="closeModal('ovAdmin')"><div class="mdl" id="mdlAdmin" onclick="event.stopPropagation()" style="max-width:520px"></div></div>
 <div class="ov" id="ovProfile" onclick="closeModal('ovProfile')"><div class="mdl" id="mdlProfile" onclick="event.stopPropagation()" style="max-width:460px"></div></div>
-<div class="ov" id="ovGHSettings" onclick="closeModal('ovGHSettings')"><div class="mdl" id="mdlGHSettings" onclick="event.stopPropagation()" style="max-width:480px"></div></div>
-
 <script>
 var STORE_KEY='cf_orgchart_v2';
-var GH_REPO='igrant9679/CFResourcePlanner';
-var GH_FILE='data.json';
-var GH_TOKEN_KEY='cf_gh_token';
 var PALETTE=['#2D6A4F','#C5A55A','#7C5CBF','#D97706','#546478','#0D9488','#DC2626','#2563EB','#7C3AED','#059669','#B45309','#6366F1'];
 var D,viewMode='org',collState={},dragInfo=null,MS_REG={},adminTab='skills';
-var ghFileSha=null,ghSyncing=false,ghSaveQueued=false;
+var syncing=false,saveQueued=false;
 
 function defaultData(){return{
 skillsets:[
@@ -399,56 +393,28 @@ departments:[
 {id:'g6',name:'Ghulam Hassan Bhat',role:'Operations Support',cost:228,badge:'',projects:[],skillsets:[],reportsTo:'Anwer Sheikh',hub:false,sme:false,associate:true,note:'Office Support',reassess:false}]}
 ]};}
 
-/* ── GITHUB SYNC ── */
-function ghToken(){return localStorage.getItem(GH_TOKEN_KEY)||'';}
-function ghSetStatus(msg,color){var el=document.getElementById('ghStatus');if(!el)return;el.textContent=msg;el.style.color=color||'rgba(255,255,255,0.38)';}
-async function ghLoad(){
-  var token=ghToken();if(!token)return null;
+/* ── SERVER SYNC ── */
+function syncSetStatus(msg,color){var el=document.getElementById('ghStatus');if(!el)return;el.textContent=msg;el.style.color=color||'rgba(255,255,255,0.38)';}
+async function serverLoad(){
   try{
-    var res=await fetch('https://api.github.com/repos/'+GH_REPO+'/contents/'+GH_FILE,{headers:{'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json'}});
-    if(res.status===404)return null;
-    if(!res.ok)return null;
-    var json=await res.json();
-    ghFileSha=json.sha;
-    return JSON.parse(decodeURIComponent(escape(atob(json.content.replace(/\n/g,'')))));
-  }catch(e){return null;}
+    var res=await fetch('/api/data',{cache:'no-store'});
+    if(!res.ok)return{reachable:false};
+    var data=await res.json();
+    return{reachable:true,data:data};
+  }catch(e){return{reachable:false};}
 }
-async function ghPush(){
-  var token=ghToken();if(!token)return;
-  if(ghSyncing){ghSaveQueued=true;return;}
-  ghSyncing=true;
-  ghSetStatus('Syncing…','rgba(255,255,255,0.55)');
+async function serverSave(){
+  if(syncing){saveQueued=true;return;}
+  syncing=true;
+  syncSetStatus('Saving…','rgba(255,255,255,0.55)');
   try{
-    var content=btoa(unescape(encodeURIComponent(JSON.stringify(D,null,2))));
-    var body={message:'Auto-save org chart data',content:content};
-    if(ghFileSha)body.sha=ghFileSha;
-    var res=await fetch('https://api.github.com/repos/'+GH_REPO+'/contents/'+GH_FILE,{method:'PUT',headers:{'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},body:JSON.stringify(body)});
-    if(res.ok){var json=await res.json();ghFileSha=json.content.sha;ghSetStatus('Synced ✓','#86efac');setTimeout(function(){ghSetStatus('GitHub sync on','rgba(255,255,255,0.38)');},2500);}
-    else{var err=await res.json().catch(function(){return{};});ghSetStatus('Sync error: '+(err.message||res.status),'#FCA5A5');}
-  }catch(e){ghSetStatus('Sync offline','rgba(255,255,255,0.38)')}
-  ghSyncing=false;
-  if(ghSaveQueued){ghSaveQueued=false;ghPush();}
+    var res=await fetch('/api/data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(D)});
+    if(res.ok){syncSetStatus('Saved ✓','#86efac');setTimeout(function(){syncSetStatus('Cloud sync on','rgba(255,255,255,0.38)');},2000);}
+    else{syncSetStatus('Save failed — kept local copy','#FCA5A5');}
+  }catch(e){syncSetStatus('Offline — kept local copy','#FBBF24');}
+  syncing=false;
+  if(saveQueued){saveQueued=false;serverSave();}
 }
-function openGHSettings(){
-  document.getElementById('mdlGHSettings').innerHTML=
-    '<div class="mdl-over">Cloud Sync</div><div class="mdl-title">GitHub Sync</div>'
-    +'<p style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;line-height:1.6">Enter a GitHub <strong>Personal Access Token</strong> (classic) with <code style="background:#F1F5F9;padding:1px 5px;border-radius:3px">repo</code> scope. Data will be saved to <code style="background:#F1F5F9;padding:1px 5px;border-radius:3px">data.json</code> in your CFResourcePlanner repo, accessible from any device.</p>'
-    +'<p style="font-size:11px;color:var(--text-muted);margin-bottom:14px">Generate one at: github.com → Settings → Developer settings → Personal access tokens</p>'
-    +'<div class="fld"><label class="fld-l">Personal Access Token</label><input class="fld-i" id="gh_tok_inp" type="password" placeholder="ghp_…" value="'+esc(ghToken())+'"></div>'
-    +'<div class="btn-row" style="margin-top:16px">'
-    +'<button class="btn btn-navy" style="flex:1" onclick="saveGHToken()">Save &amp; Sync Now</button>'
-    +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovGHSettings\')">Cancel</button>'
-    +'</div>'
-    +(ghToken()?'<div style="text-align:center;margin-top:10px"><button class="btn btn-danger-sm btn-sm" onclick="clearGHToken()">Remove token</button></div>':'');
-  openModal('ovGHSettings');
-}
-function saveGHToken(){
-  var t=document.getElementById('gh_tok_inp').value.trim();
-  if(t){localStorage.setItem(GH_TOKEN_KEY,t);}else{localStorage.removeItem(GH_TOKEN_KEY);ghFileSha=null;}
-  closeModal('ovGHSettings');
-  if(t){ghFileSha=null;ghPush();}else{ghSetStatus('No token — click ☁ Sync to set up','#FBBF24');}
-}
-function clearGHToken(){localStorage.removeItem(GH_TOKEN_KEY);ghFileSha=null;closeModal('ovGHSettings');ghSetStatus('Sync disabled','rgba(255,255,255,0.38)');}
 /* ── EXPORT / IMPORT ── */
 function exportData(){
   var blob=new Blob([JSON.stringify(D,null,2)],{type:'application/json'});
@@ -472,19 +438,17 @@ function importData(){
   inp.click();
 }
 /* ── LOAD ── */
+function loadLocal(){try{var s=localStorage.getItem(STORE_KEY);if(s){D=JSON.parse(s);migrate();return;}}catch(e){}D=defaultData();migrate();}
 async function loadAndRender(){
-  var token=ghToken();
-  if(token){
-    ghSetStatus('Loading from GitHub…','rgba(255,255,255,0.55)');
-    var ghData=await ghLoad();
-    if(ghData){D=ghData;migrate();try{localStorage.setItem(STORE_KEY,JSON.stringify(D));}catch(e){}ghSetStatus('GitHub sync on','rgba(255,255,255,0.38)');}
-    else{
-      ghSetStatus('GitHub unreachable — using local cache','#FBBF24');
-      try{var s=localStorage.getItem(STORE_KEY);if(s){D=JSON.parse(s);migrate();}else{D=defaultData();migrate();}}catch(e){D=defaultData();migrate();}
-    }
+  syncSetStatus('Loading…','rgba(255,255,255,0.55)');
+  var r=await serverLoad();
+  if(r.reachable&&r.data){
+    D=r.data;migrate();try{localStorage.setItem(STORE_KEY,JSON.stringify(D));}catch(e){}
+    syncSetStatus('Cloud sync on','rgba(255,255,255,0.38)');
+  }else if(r.reachable){
+    loadLocal();syncSetStatus('Initializing cloud storage…','rgba(255,255,255,0.55)');serverSave();
   }else{
-    try{var s=localStorage.getItem(STORE_KEY);if(s){D=JSON.parse(s);migrate();}else{D=defaultData();migrate();save();}}catch(e){D=defaultData();migrate();save();}
-    ghSetStatus('Click ☁ Sync to enable cross-device sync','#FBBF24');
+    loadLocal();syncSetStatus('Offline — using local copy','#FBBF24');
   }
   renderView();
 }
@@ -521,7 +485,7 @@ function projPct(m,pid){var e=(m.projects||[]).find(function(x){return(typeof x=
 function save(){
   try{localStorage.setItem(STORE_KEY,JSON.stringify(D));}catch(e){}
   clearTimeout(save._t);
-  save._t=setTimeout(function(){ghPush();},1500);
+  save._t=setTimeout(function(){serverSave();},1000);
 }
 function resetData(){if(confirm('Reset all data to defaults? This cannot be undone.')){D=defaultData();save();collState={};renderView();}}
 function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
