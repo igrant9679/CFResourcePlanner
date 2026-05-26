@@ -247,13 +247,37 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .btn-icon-del:hover{background:#FEE2E2;}
 ::-webkit-scrollbar{width:6px;}::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:3px;}
 @media(max-width:600px){.hdr{padding:16px 12px 14px;}.main{padding:12px 10px 48px;}.stats{gap:6px;}.st{min-width:90px;padding:8px 10px;}.dept-body{grid-template-columns:1fr;}.proj-scroll{flex-wrap:wrap;overflow-x:visible;}.proj-card{flex:0 0 100%;width:100%;}}
+.login-ov{position:fixed;inset:0;background:linear-gradient(135deg,#1B2A4A,#243656);display:flex;align-items:center;justify-content:center;z-index:1000;}
+.login-card{background:#fff;border-radius:14px;padding:34px 30px 28px;width:368px;max-width:92vw;box-shadow:0 24px 70px rgba(0,0,0,0.35);text-align:center;border-top:3px solid #C5A55A;}
+.login-logo{height:38px;margin:0 auto 4px;display:block;}
+.login-title{font-size:13px;font-weight:700;letter-spacing:0.3px;color:#5A6A7E;text-transform:uppercase;margin:16px 0 20px;}
+.login-card input{width:100%;padding:11px 13px;border:1.5px solid #DDE2EA;border-radius:8px;font-size:14px;margin-bottom:11px;font-family:inherit;outline:none;transition:border-color 0.15s;}
+.login-card input:focus{border-color:#C5A55A;}
+.login-btn{width:100%;padding:12px;background:#1B2A4A;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px;}
+.login-btn:hover{background:#2C4068;}
+.login-err{color:#DC2626;font-size:12px;font-weight:600;min-height:16px;margin-top:10px;}
+.brand-logo-wrap{display:inline-flex;align-items:center;background:#fff;border-radius:6px;padding:5px 10px;}
+.brand-logo{height:24px;display:block;}
+.wordmark{font-weight:800;letter-spacing:-0.3px;}
+.wordmark .w-comm{color:#6B7280;}.wordmark .w-force{color:#1B2A4A;}.wordmark .w-com{color:#C5283D;}
 </style>
 </head>
 <body>
+<div class="login-ov" id="loginOv" style="display:none">
+  <div class="login-card">
+    <img class="login-logo" src="logo.png" alt="CommunityForce" onerror="this.style.display='none';document.getElementById('loginLogoFb').style.display='block'">
+    <div id="loginLogoFb" class="wordmark" style="display:none;font-size:22px"><span class="w-comm">community</span><span class="w-force">force</span><span class="w-com">.com</span></div>
+    <div class="login-title">Resource Planner &middot; Sign In</div>
+    <input type="email" id="loginUser" placeholder="Email" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
+    <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="login-btn" onclick="doLogin()">Sign In</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
 <div class="hdr"><div class="hdr-in">
   <div class="hdr-top">
     <div>
-      <div class="hdr-brand">CommunityForce</div>
+      <div style="margin-bottom:6px"><span class="brand-logo-wrap"><img class="brand-logo" src="logo.png" alt="CommunityForce" onerror="this.style.display='none';document.getElementById('brandLogoFb').style.display='inline'"><span id="brandLogoFb" class="wordmark" style="display:none;font-size:15px"><span class="w-comm">community</span><span class="w-force">force</span><span class="w-com">.com</span></span></span></div>
       <div class="hdr-title">Organizational Chart</div>
       <div class="hdr-sub">Drag to reassign departments · Click cards to edit · <span id="ghStatus" style="transition:color 0.3s">Loading…</span></div>
     </div>
@@ -702,11 +726,17 @@ function togSubProj(id){
   var ch=document.getElementById('spch_'+id);if(ch)ch.innerHTML=open?'&#9658;':'&#9660;';}
 function projMemRowHTML(m,projId){
   var pct=projPct(m,projId),allocCost=Math.round(m.cost*(pct/100)),oa=totalAlloc(m)>100;
-  return '<div class="proj-mem"><div style="min-width:0"><div class="proj-mem-nm">'
+  return '<div class="proj-mem"><div style="min-width:0;flex:1"><div class="proj-mem-nm">'
     +'<span class="proj-mem-link" onclick="openPersonProfile(\''+m.id+'\')">'+esc(m.name)+'</span>'
     +(oa?'<span style="color:var(--red);margin-left:4px;font-size:11px;font-weight:800" title="Over-allocated ('+totalAlloc(m)+'% total)">⚠</span>':'')+'</div>'
-    +'<div class="proj-mem-dept">'+esc(m._dn)+(pct<100?' &middot; <span style="font-weight:700;color:var(--amber)">'+pct+'%</span>':'')+'</div></div>'
+    +'<div class="proj-mem-dept">'+esc(m._dn)+' &middot; <input type="number" class="pct-input" value="'+pct+'" min="1" max="100" title="% allocation to this item — edit to change" onclick="event.stopPropagation()" onchange="setMemberProjPct(\''+m.id+'\',\''+projId+'\',this.value)">% allocated</div></div>'
     +'<div class="proj-mem-cost">'+fmt(allocCost)+(pct<100?'<div style="font-size:9px;color:var(--text-muted);text-align:right">of '+fmt(m.cost)+'</div>':'')+'</div></div>';}
+function setMemberProjPct(mid,projId,val){
+  var pct=Math.max(1,Math.min(100,Math.round(Number(val)||0)));
+  D.departments.forEach(function(d){d.members.forEach(function(m){
+    if(m.id===mid)m.projects=(m.projects||[]).map(function(e){var id=typeof e==='string'?e:e.id;return id===projId?{id:id,pct:pct}:(typeof e==='string'?{id:id,pct:100}:e);});
+  });});
+  save();renderView();}
 function projFinBlock(rev,tc,revenueNote,noteClass,category){
   category=category||'project';
   if(category==='overhead'){
@@ -921,7 +951,8 @@ function openEditMember(mid,did){
 var dept=D.departments.find(function(d){return d.id===did;}),m;
 if(dept)m=dept.members.find(function(x){return x.id===mid;});
 if(!m)return;
-var names=allM().filter(function(x){return x.id!==mid;}).map(function(x){return x.name;});
+var names=allM().filter(function(x){return x.id!==mid&&x.name!==m.name;}).map(function(x){return x.name;});
+names=names.filter(function(n,i){return names.indexOf(n)===i;});
 var dl=names.map(function(n){return '<option value="'+esc(n)+'">';}).join('');
 var locOpts='<option value="">— not set —</option>'+D.locations.map(function(l){return '<option value="'+l.id+'"'+(m.location===l.id?' selected':'')+'>'+esc(l.name)+'</option>';}).join('');
 var clrOpts='<option value="">— not set —</option>'+D.clearances.map(function(c){return '<option value="'+c.id+'"'+(m.clearance===c.id?' selected':'')+'>'+esc(c.name)+'</option>';}).join('');
@@ -970,7 +1001,7 @@ function delMem(mid,did){var dept=D.departments.find(function(d){return d.id===d
 
 /* ── ADD MEMBER ── */
 function openAddMember(){
-var names=allM().map(function(x){return x.name;}),dl=names.map(function(n){return '<option value="'+esc(n)+'">';}).join('');
+var names=allM().map(function(x){return x.name;});names=names.filter(function(n,i){return names.indexOf(n)===i;});var dl=names.map(function(n){return '<option value="'+esc(n)+'">';}).join('');
 var locOpts='<option value="">— not set —</option>'+D.locations.map(function(l){return '<option value="'+l.id+'">'+esc(l.name)+'</option>';}).join('');
 var clrOpts='<option value="">— not set —</option>'+D.clearances.map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join('');
 document.getElementById('mdlAdd').innerHTML=
@@ -1246,7 +1277,20 @@ function renderSkillList(){return '';}
 function addSkill(){}
 function delSkill(){}
 
-loadAndRender();
+/* ── AUTH ── */
+var AUTH_USER='khaja@communityforce.com',AUTH_PASS='Namtra_CF27';
+function isAuthed(){try{return sessionStorage.getItem('cf_auth')==='1';}catch(e){return false;}}
+function doLogin(){
+  var u=(document.getElementById('loginUser').value||'').trim().toLowerCase();
+  var p=document.getElementById('loginPass').value||'';
+  if(u===AUTH_USER&&p===AUTH_PASS){try{sessionStorage.setItem('cf_auth','1');}catch(e){}document.getElementById('loginOv').style.display='none';loadAndRender();}
+  else{document.getElementById('loginErr').textContent='Invalid email or password.';}
+}
+function initApp(){
+  if(isAuthed()){document.getElementById('loginOv').style.display='none';loadAndRender();}
+  else{var ov=document.getElementById('loginOv');ov.style.display='flex';document.getElementById('loginUser').focus();}
+}
+initApp();
 </script>
 </body>
 </html>
