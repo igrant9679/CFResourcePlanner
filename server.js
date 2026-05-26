@@ -8,7 +8,18 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(__dirname));
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const dbUrl = process.env.DATABASE_URL;
+const useSsl = !!dbUrl && !/railway\.internal/.test(dbUrl) && !/localhost|127\.0\.0\.1/.test(dbUrl);
+const pool = new Pool({
+  connectionString: dbUrl,
+  ssl: useSsl ? { rejectUnauthorized: false } : false,
+});
+
+app.get('/api/health', (req, res) => {
+  let host = null, internal = false;
+  try { if (dbUrl) { host = new URL(dbUrl).host; internal = /railway\.internal/.test(dbUrl); } } catch (e) {}
+  res.json({ hasDatabaseUrl: !!dbUrl, internal, ssl: useSsl, host });
+});
 
 async function initDb() {
   await pool.query(`
@@ -27,7 +38,7 @@ app.get('/api/data', async (req, res) => {
     res.json(r.rows.length ? r.rows[0].data : null);
   } catch (e) {
     console.error('GET /api/data failed:', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: e.message, code: e.code });
   }
 });
 
@@ -41,7 +52,7 @@ app.post('/api/data', async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     console.error('POST /api/data failed:', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: e.message, code: e.code });
   }
 });
 
