@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CommunityForce — Org Chart</title>
+<title>Atlas · CommunityForce Resource Planner</title>
 <style>
 :root{--navy:#1B2A4A;--navy-light:#243656;--navy-hover:#2C4068;--gold:#C5A55A;--gold-dim:rgba(197,165,90,0.12);--green:#2D6A4F;--green-dim:rgba(45,106,79,0.1);--violet:#7C5CBF;--violet-dim:rgba(124,92,191,0.1);--amber:#D97706;--amber-dim:rgba(217,119,6,0.1);--slate:#546478;--slate-dim:rgba(84,100,120,0.07);--red:#DC2626;--red-light:#FEE2E2;--teal:#0D9488;--teal-dim:rgba(13,148,136,0.08);--warn-border:#F59E0B;--warn-text:#92400E;--card-bg:#fff;--page-bg:#ECEEF2;--text-primary:#1B2A4A;--text-secondary:#5A6A7E;--text-muted:#94A3B8;--border:#DDE2EA;--radius:10px;--shadow-sm:0 1px 3px rgba(27,42,74,0.06);--shadow-md:0 6px 24px rgba(27,42,74,0.1);--shadow-lg:0 20px 60px rgba(27,42,74,0.18);}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -260,14 +260,30 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .brand-logo{height:24px;display:block;}
 .wordmark{font-weight:800;letter-spacing:-0.3px;}
 .wordmark .w-comm{color:#6B7280;}.wordmark .w-force{color:#1B2A4A;}.wordmark .w-com{color:#C5283D;}
+.app-badge{flex-shrink:0;display:inline-flex;filter:drop-shadow(0 3px 8px rgba(0,0,0,0.25));}
+.app-name{font-size:26px;font-weight:800;color:#fff;letter-spacing:-0.5px;line-height:1;}
+.app-tagchip{font-size:9px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--navy);background:linear-gradient(135deg,#D8BE73,var(--gold));padding:3px 8px;border-radius:5px;vertical-align:middle;margin-left:9px;box-shadow:0 1px 4px rgba(197,165,90,0.4);}
+.cf-tag{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,0.4);}
+.cf-tag b{color:var(--gold);font-weight:800;}
 </style>
 </head>
 <body>
 <div class="login-ov" id="loginOv" style="display:none">
   <div class="login-card">
-    <img class="login-logo" src="logo.png" alt="CommunityForce" onerror="this.style.display='none';document.getElementById('loginLogoFb').style.display='block'">
-    <div id="loginLogoFb" class="wordmark" style="display:none;font-size:22px"><span class="w-comm">community</span><span class="w-force">force</span><span class="w-com">.com</span></div>
-    <div class="login-title">Resource Planner &middot; Sign In</div>
+    <svg width="58" height="58" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin:0 auto 10px;display:block">
+      <rect width="40" height="40" rx="11" fill="url(#lbg)"/>
+      <line x1="20" y1="12.5" x2="11" y2="27" stroke="#C5A55A" stroke-width="1.7" stroke-linecap="round"/>
+      <line x1="20" y1="12.5" x2="20" y2="27" stroke="#C5A55A" stroke-width="1.7" stroke-linecap="round"/>
+      <line x1="20" y1="12.5" x2="29" y2="27" stroke="#C5A55A" stroke-width="1.7" stroke-linecap="round"/>
+      <circle cx="20" cy="12" r="4.3" fill="#C5A55A"/>
+      <circle cx="11" cy="28" r="3.3" fill="#fff"/>
+      <circle cx="20" cy="28" r="3.3" fill="#fff"/>
+      <circle cx="29" cy="28" r="3.3" fill="#fff"/>
+      <defs><linearGradient id="lbg" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse"><stop stop-color="#33476B"/><stop offset="1" stop-color="#16223C"/></linearGradient></defs>
+    </svg>
+    <div style="font-size:25px;font-weight:800;color:#1B2A4A;letter-spacing:-0.5px">Atlas</div>
+    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#94A3B8;margin-top:3px">Resource Planner</div>
+    <div class="login-title" style="margin-top:16px">Sign in to continue</div>
     <input type="email" id="loginUser" placeholder="Email" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
     <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
     <button class="login-btn" onclick="doLogin()">Sign In</button>
@@ -277,9 +293,26 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 <div class="hdr"><div class="hdr-in">
   <div class="hdr-top">
     <div>
-      <div style="margin-bottom:6px"><span class="brand-logo-wrap"><img class="brand-logo" src="logo.png" alt="CommunityForce" onerror="this.style.display='none';document.getElementById('brandLogoFb').style.display='inline'"><span id="brandLogoFb" class="wordmark" style="display:none;font-size:15px"><span class="w-comm">community</span><span class="w-force">force</span><span class="w-com">.com</span></span></span></div>
-      <div class="hdr-title">Organizational Chart</div>
-      <div class="hdr-sub">Drag to reassign departments · Click cards to edit · <span id="ghStatus" style="transition:color 0.3s">Loading…</span></div>
+      <div class="cf-tag" style="margin-bottom:7px">by <b>communityforce.com</b></div>
+      <div style="display:flex;align-items:center;gap:13px">
+        <span class="app-badge">
+          <svg width="46" height="46" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="40" height="40" rx="11" fill="url(#abg)"/>
+            <line x1="20" y1="12.5" x2="11" y2="27" stroke="#C5A55A" stroke-width="1.7" stroke-linecap="round"/>
+            <line x1="20" y1="12.5" x2="20" y2="27" stroke="#C5A55A" stroke-width="1.7" stroke-linecap="round"/>
+            <line x1="20" y1="12.5" x2="29" y2="27" stroke="#C5A55A" stroke-width="1.7" stroke-linecap="round"/>
+            <circle cx="20" cy="12" r="4.3" fill="#C5A55A"/>
+            <circle cx="11" cy="28" r="3.3" fill="#fff"/>
+            <circle cx="20" cy="28" r="3.3" fill="#fff"/>
+            <circle cx="29" cy="28" r="3.3" fill="#fff"/>
+            <defs><linearGradient id="abg" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse"><stop stop-color="#33476B"/><stop offset="1" stop-color="#16223C"/></linearGradient></defs>
+          </svg>
+        </span>
+        <div>
+          <div><span class="app-name">Atlas</span><span class="app-tagchip">Resource Planner</span></div>
+          <div class="hdr-sub" style="margin-top:4px">Workforce · projects · capacity &nbsp;·&nbsp; <span id="ghStatus" style="transition:color 0.3s">Loading…</span></div>
+        </div>
+      </div>
     </div>
     <div class="hdr-actions">
       <button class="btn btn-gold" onclick="openAddMember()">+ Person</button>
@@ -315,6 +348,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 <div class="ov" id="ovAdmin" onclick="closeModal('ovAdmin')"><div class="mdl" id="mdlAdmin" onclick="event.stopPropagation()" style="max-width:520px"></div></div>
 <div class="ov" id="ovProfile" onclick="closeModal('ovProfile')"><div class="mdl" id="mdlProfile" onclick="event.stopPropagation()" style="max-width:460px"></div></div>
 <script>
+(function(){var svg="<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><rect width='40' height='40' rx='9' fill='#16223C'/><line x1='20' y1='12.5' x2='11' y2='27' stroke='#C5A55A' stroke-width='2.2' stroke-linecap='round'/><line x1='20' y1='12.5' x2='20' y2='27' stroke='#C5A55A' stroke-width='2.2' stroke-linecap='round'/><line x1='20' y1='12.5' x2='29' y2='27' stroke='#C5A55A' stroke-width='2.2' stroke-linecap='round'/><circle cx='20' cy='12' r='5' fill='#C5A55A'/><circle cx='11' cy='28' r='3.7' fill='#fff'/><circle cx='20' cy='28' r='3.7' fill='#fff'/><circle cx='29' cy='28' r='3.7' fill='#fff'/></svg>";var l=document.createElement('link');l.rel='icon';l.type='image/svg+xml';l.href='data:image/svg+xml,'+encodeURIComponent(svg);document.head.appendChild(l);})();
 var STORE_KEY='cf_orgchart_v2';
 var PALETTE=['#2D6A4F','#C5A55A','#7C5CBF','#D97706','#546478','#0D9488','#DC2626','#2563EB','#7C3AED','#059669','#B45309','#6366F1'];
 var D,viewMode='org',collState={},dragInfo=null,MS_REG={},adminTab='skills';
