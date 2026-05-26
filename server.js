@@ -15,12 +15,6 @@ const pool = new Pool({
   ssl: useSsl ? { rejectUnauthorized: false } : false,
 });
 
-app.get('/api/health', (req, res) => {
-  let host = null, internal = false;
-  try { if (dbUrl) { host = new URL(dbUrl).host; internal = /railway\.internal/.test(dbUrl); } } catch (e) {}
-  res.json({ hasDatabaseUrl: !!dbUrl, internal, ssl: useSsl, host });
-});
-
 async function initDb() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS app_state (

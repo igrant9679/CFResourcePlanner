@@ -260,7 +260,9 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
     <div class="hdr-actions">
       <button class="btn btn-gold" onclick="openAddMember()">+ Person</button>
       <button class="btn btn-outline" onclick="openManageDepts()">Departments</button>
-      <button class="btn btn-outline" onclick="openAddProject()">+ Project</button>
+      <button class="btn btn-outline" onclick="openItemModal('project')">+ Project</button>
+      <button class="btn btn-outline" onclick="openItemModal('initiative')">+ Initiative</button>
+      <button class="btn btn-outline" onclick="openItemModal('overhead')">+ Overhead</button>
       <button class="btn btn-outline" onclick="openManageSkills()">Skills</button>
       <button class="btn btn-outline" onclick="openAdmin()">&#9881; Admin</button>
       <button class="btn btn-outline" onclick="exportData()" title="Download backup JSON">&#8595; Export</button>
@@ -272,7 +274,9 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
     <input type="text" class="search" id="searchInput" placeholder="Search name, role, project, skill..." oninput="renderView()">
     <div class="tab-bar">
       <button class="tab active" id="tabOrg" onclick="switchTab('org')">Department View</button>
-      <button class="tab" id="tabProj" onclick="switchTab('proj')">Projects View</button>
+      <button class="tab" id="tabProj" onclick="switchTab('proj')">Projects</button>
+      <button class="tab" id="tabInit" onclick="switchTab('init')">Initiatives</button>
+      <button class="tab" id="tabOver" onclick="switchTab('over')">Overhead</button>
       <button class="tab" id="tabRes" onclick="switchTab('res')">Resources View</button>
     </div>
   </div>
@@ -443,8 +447,9 @@ async function loadAndRender(){
   syncSetStatus('Loading…','rgba(255,255,255,0.55)');
   var r=await serverLoad();
   if(r.reachable&&r.data){
+    var needsSeed=!r.data.overheadSeeded;
     D=r.data;migrate();try{localStorage.setItem(STORE_KEY,JSON.stringify(D));}catch(e){}
-    syncSetStatus('Cloud sync on','rgba(255,255,255,0.38)');
+    if(needsSeed)serverSave();else syncSetStatus('Cloud sync on','rgba(255,255,255,0.38)');
   }else if(r.reachable){
     loadLocal();syncSetStatus('Initializing cloud storage…','rgba(255,255,255,0.55)');serverSave();
   }else{
@@ -456,6 +461,13 @@ function migrate(){
   D.departments.forEach(function(d){if(!('parentId' in d))d.parentId=null;});
   D.departments.forEach(function(d){d.members.forEach(function(m){m.projects=(m.projects||[]).map(function(x){return typeof x==='string'?{id:x,pct:100}:x;});});});
   D.projects.forEach(function(p){if(!('parentId' in p))p.parentId=null;});
+  D.projects.forEach(function(p){if(!p.category)p.category='project';if(!('targetRevenue' in p))p.targetRevenue=0;});
+  if(!D.overheadSeeded){
+    [{id:'oh_fedbd',name:'Federal Sales/BD'},{id:'oh_gaops',name:'G&A / Operations'}].forEach(function(o){
+      if(!D.projects.some(function(p){return p.id===o.id;}))D.projects.push({id:o.id,name:o.name,category:'overhead',revenue:0,targetRevenue:0,revenueNote:'',parentId:null});
+    });
+    D.overheadSeeded=true;
+  }
   var dd=defaultData();
   if(!D.locations||!D.locations.length)D.locations=dd.locations;
   if(!D.clearances||!D.clearances.length)D.clearances=dd.clearances;
@@ -589,11 +601,11 @@ function renderStats(){
 var hc=0,tc=0,fl=0,oa=0;
 D.departments.forEach(function(d){hc+=d.members.length;d.members.forEach(function(m){tc+=m.cost;if(m.reassess)fl++;if(totalAlloc(m)>100)oa++;});});
 document.getElementById('statsBar').innerHTML=[
-{l:'Headcount',v:hc,u:'people'},{l:'Monthly Cost',v:fmt(tc),u:'/month'},{l:'Projects',v:D.projects.length,u:'active'},
+{l:'Headcount',v:hc,u:'people'},{l:'Monthly Cost',v:fmt(tc),u:'/month'},{l:'Projects',v:D.projects.filter(function(p){return projCat(p)==='project';}).length,u:'active'},{l:'Initiatives',v:D.projects.filter(function(p){return projCat(p)==='initiative';}).length,u:'in pipeline'},
 {l:'Skills',v:D.skillsets.length,u:'defined'},{l:'Reassess',v:fl,u:'flagged',w:fl>0},{l:'Over-alloc',v:oa,u:'people',w:oa>0}
 ].map(function(s){return '<div class="st'+(s.w?' warn':'')+'"><div class="st-l">'+s.l+'</div><div class="st-v'+(s.w?' wv':'')+'">'+s.v+'<span class="st-u">'+s.u+'</span></div></div>';}).join('');}
 
-function switchTab(mode){viewMode=mode;document.getElementById('tabOrg').className='tab'+(mode==='org'?' active':'');document.getElementById('tabProj').className='tab'+(mode==='proj'?' active':'');document.getElementById('tabRes').className='tab'+(mode==='res'?' active':'');renderView();}
+function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',init:'tabInit',over:'tabOver',res:'tabRes'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
 
 function cardHTML(m,did){
 var dept=D.departments.find(function(d){return d.id===did;});
@@ -666,10 +678,13 @@ return html;}
 /* ── PROJECT TREE HELPERS ── */
 function projChildren(pid){return D.projects.filter(function(p){return p.parentId===pid;});}
 function topLevelProjects(){return D.projects.filter(function(p){return !p.parentId;});}
+function projCat(p){return p.category||'project';}
+function topLevelByCat(cat){return D.projects.filter(function(p){return !p.parentId&&projCat(p)===cat;});}
+function itemRev(p){if(!p)return 0;var c=projCat(p);if(c==='overhead')return 0;if(c==='initiative')return p.targetRevenue||0;return p.revenue||0;}
 function projDescendantIds(pid){var ids=[pid];projChildren(pid).forEach(function(c){ids=ids.concat(projDescendantIds(c.id));});return ids;}
 function projRollupData(pid,all){
   var proj=D.projects.find(function(p){return p.id===pid;});
-  var rev=(proj&&proj.revenue)||0;
+  var rev=itemRev(proj);
   var pm=all.filter(function(m){return projIds(m).indexOf(pid)>-1;});
   var cost=pm.reduce(function(s,m){return s+Math.round(m.cost*(projPct(m,pid)/100));},0);
   var memberSet={};pm.forEach(function(m){memberSet[m.id]=true;});
@@ -692,21 +707,31 @@ function projMemRowHTML(m,projId){
     +(oa?'<span style="color:var(--red);margin-left:4px;font-size:11px;font-weight:800" title="Over-allocated ('+totalAlloc(m)+'% total)">⚠</span>':'')+'</div>'
     +'<div class="proj-mem-dept">'+esc(m._dn)+(pct<100?' &middot; <span style="font-weight:700;color:var(--amber)">'+pct+'%</span>':'')+'</div></div>'
     +'<div class="proj-mem-cost">'+fmt(allocCost)+(pct<100?'<div style="font-size:9px;color:var(--text-muted);text-align:right">of '+fmt(m.cost)+'</div>':'')+'</div></div>';}
-function projFinBlock(rev,tc,revenueNote,noteClass){
+function projFinBlock(rev,tc,revenueNote,noteClass,category){
+  category=category||'project';
+  if(category==='overhead'){
+    return '<div class="proj-financials">'
+      +'<div class="proj-fin-row"><span class="proj-fin-lbl">Monthly cost</span><span class="proj-fin-val proj-fin-cost">'+fmt(tc)+'/mo</span></div>'
+      +'<div class="proj-fin-row"><span class="proj-fin-lbl" style="font-size:9px;color:var(--text-muted)">Overhead \u00b7 no revenue</span></div>'
+      +'</div>'+(revenueNote?'<div class="'+noteClass+'">'+esc(revenueNote)+'</div>':'');}
+  var isInit=category==='initiative';
+  var revLbl=isInit?'Expected rev':'Revenue';
+  var marginLbl=isInit?'Projected margin':'Margin';
   var margin=rev-tc,marginPct=rev>0?Math.round((margin/rev)*100):null;
   var marginColor=margin>0?'var(--green)':margin===0&&rev===0?'var(--text-muted)':'var(--red)';
+  var revColor=isInit?'var(--amber)':(rev>0?'var(--green)':'var(--text-muted)');
   var barW=rev>0?Math.max(0,Math.min(100,Math.round((margin/rev)*100))):0;
   return '<div class="proj-financials">'
-    +'<div class="proj-fin-row"><span class="proj-fin-lbl">Revenue</span><span class="proj-fin-val" style="color:'+(rev>0?'var(--green)':'var(--text-muted)')+'">'+(rev>0?fmt(rev):'$0')+'/mo</span></div>'
+    +'<div class="proj-fin-row"><span class="proj-fin-lbl">'+revLbl+'</span><span class="proj-fin-val" style="color:'+revColor+'">'+(rev>0?fmt(rev):'$0')+'/mo'+(isInit?' <span style="font-size:9px;opacity:0.7">(future)</span>':'')+'</span></div>'
     +'<div class="proj-fin-row"><span class="proj-fin-lbl">Team cost</span><span class="proj-fin-val proj-fin-cost">'+fmt(tc)+'/mo</span></div>'
     +'<div class="proj-fin-sep"></div>'
-    +'<div class="proj-fin-row"><span class="proj-fin-lbl">Margin</span><span class="proj-fin-val" style="color:'+marginColor+'">'+(margin>=0?'':'\u2212')+fmt(Math.abs(margin))+'/mo'+(marginPct!==null?' <span style="opacity:0.75">('+marginPct+'%)</span>':'')+'</span></div>'
+    +'<div class="proj-fin-row"><span class="proj-fin-lbl">'+marginLbl+'</span><span class="proj-fin-val" style="color:'+marginColor+'">'+(margin>=0?'':'\u2212')+fmt(Math.abs(margin))+'/mo'+(marginPct!==null?' <span style="opacity:0.75">('+marginPct+'%)</span>':'')+'</span></div>'
     +'<div class="proj-margin-bar"><div class="proj-margin-fill" style="width:'+barW+'%;background:'+marginColor+'"></div></div>'
     +'</div>'+(revenueNote?'<div class="'+noteClass+'">'+esc(revenueNote)+'</div>':'');}
 function renderSubProjCard(child,all,q){
   var pm=all.filter(function(m){return projIds(m).indexOf(child.id)>-1;});
   var fl=q?pm.filter(function(m){return memberMatchesSearch(m,q)||child.name.toLowerCase().indexOf(q)>-1;}):pm;
-  var rev=child.revenue||0;
+  var rev=itemRev(child);
   var tc=fl.reduce(function(s,m){return s+Math.round(m.cost*(projPct(m,child.id)/100));},0);
   var margin=rev-tc;
   var mColor=margin>0?'var(--green)':margin===0&&rev===0?'var(--text-muted)':'var(--red)';
@@ -719,9 +744,15 @@ function renderSubProjCard(child,all,q){
     +'<span id="spch_'+child.id+'" style="color:var(--text-muted);font-size:11px;flex-shrink:0;padding-top:1px">&#9660;</span></div>'
     +'<div class="proj-subcard-body" id="spb_'+child.id+'">'+membersHTML+'</div></div>';}
 
-function renderProjView(q){
-  var all=allM(),html='<div class="proj-scroll">';
-  topLevelProjects().forEach(function(proj){
+function renderProjView(q,category){
+  category=category||'project';
+  var meta={project:{noun:'project',label:'Projects',empty:'No projects yet'},initiative:{noun:'initiative',label:'Initiatives',empty:'No initiatives yet'},overhead:{noun:'overhead item',label:'Overhead',empty:'No overhead items yet'}}[category];
+  var all=allM(),tops=topLevelByCat(category),html='<div class="proj-scroll">';
+  var totalRev=0,totalCost=0;
+  tops.forEach(function(proj){var r=projRollupData(proj.id,all);totalRev+=r.revenue;totalCost+=r.cost;});
+  var sumLine=category==='overhead'?('Total overhead: <strong style="color:var(--red)">'+fmt(totalCost)+'/mo</strong>'):((category==='initiative'?'Total expected rev: ':'Total revenue: ')+'<strong style="color:'+(category==='initiative'?'var(--amber)':'var(--green)')+'">'+fmt(totalRev)+'/mo</strong> &middot; Total cost: <strong>'+fmt(totalCost)+'/mo</strong>');
+  html+='<div style="padding:10px 14px;margin-bottom:14px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;color:var(--text-secondary)"><strong style="font-size:13px;color:var(--text-primary)">'+meta.label+'</strong> &middot; '+tops.length+' '+(tops.length===1?meta.noun:meta.noun+'s')+' &middot; '+sumLine+'</div>';
+  tops.forEach(function(proj){
     var children=projChildren(proj.id);
     if(q&&!projOrDescHasMatch(proj,q,all))return;
     var pm=all.filter(function(m){return projIds(m).indexOf(proj.id)>-1;});
@@ -729,9 +760,9 @@ function renderProjView(q){
     var rollup=projRollupData(proj.id,all);
     var hasKids=children.length>0;
     var rev=rollup.revenue,tc=rollup.cost;
-    var noteClass=(proj.revenue||0)>0?'proj-rev-note':'proj-pursuit-tag';
+    var noteClass=itemRev(proj)>0?'proj-rev-note':'proj-pursuit-tag';
     var hdrHTML='<div class="proj-nm">'+esc(proj.name)+(hasKids?'<span style="font-size:8px;font-weight:700;background:rgba(197,165,90,0.15);color:var(--gold);padding:1px 6px;border-radius:3px;margin-left:6px;vertical-align:middle;text-transform:uppercase">Rollup</span>':'')+'</div>'
-      +projFinBlock(rev,tc,proj.revenueNote,noteClass)
+      +projFinBlock(rev,tc,proj.revenueNote,noteClass,category)
       +'<div class="proj-cnt" style="margin-top:5px">'+(hasKids?fl.length+' direct &middot; '+rollup.count+' total':fl.length+' '+(fl.length===1?'person':'people'))+' assigned</div>';
     html+='<div class="proj-card">'
       +'<div class="proj-hdr"><div class="proj-hdr-left">'+hdrHTML+'</div>'
@@ -739,12 +770,12 @@ function renderProjView(q){
       +'<div class="proj-members">';
     if(fl.length)fl.forEach(function(m){html+=projMemRowHTML(m,proj.id);});
     else if(!hasKids)html+='<div style="padding:14px;text-align:center;font-size:12px;color:var(--text-muted)">No members assigned</div>';
-    if(hasKids){html+='<div class="proj-subcard-section"><div class="proj-subcard-lbl">&#9660; Sub-Projects ('+children.length+')</div>';children.forEach(function(c){html+=renderSubProjCard(c,all,q);});html+='</div>';}
+    if(hasKids){html+='<div class="proj-subcard-section"><div class="proj-subcard-lbl">&#9660; Sub-items ('+children.length+')</div>';children.forEach(function(c){html+=renderSubProjCard(c,all,q);});html+='</div>';}
     html+='</div></div>';});
-  if(!D.projects.length)html+='<div class="empty-msg">No projects yet</div>';
+  if(!tops.length)html+='<div class="empty-msg">'+meta.empty+'</div>';
   html+='</div>';return html;}
 
-function renderView(){renderStats();var q=(document.getElementById('searchInput').value||'').toLowerCase().trim();document.getElementById('mainContent').innerHTML=viewMode==='org'?renderOrgView(q):viewMode==='proj'?renderProjView(q):renderResourcesView(q);}
+function renderView(){renderStats();var q=(document.getElementById('searchInput').value||'').toLowerCase().trim();var html;if(viewMode==='org')html=renderOrgView(q);else if(viewMode==='proj')html=renderProjView(q,'project');else if(viewMode==='init')html=renderProjView(q,'initiative');else if(viewMode==='over')html=renderProjView(q,'overhead');else html=renderResourcesView(q);document.getElementById('mainContent').innerHTML=html;}
 
 /* ── RESOURCES VIEW ── */
 function renderResourcesView(q){
@@ -902,7 +933,7 @@ document.getElementById('mdlEdit').innerHTML=
 +'<div class="fld"><label class="fld-l" for="e_dept_mv">Move to Department</label><select class="fld-sel" id="e_dept_mv"><option value="">— keep in current dept —</option>'+deptMvOpts+'</select></div>'
 +'<div class="fld"><label class="fld-l">Reports To</label><input class="fld-i" id="e_reports" list="e_rl" value="'+esc(m.reportsTo||'')+'"><datalist id="e_rl">'+dl+'</datalist></div>'
 +'<span class="fld-section-hdr">Projects &amp; Skills</span>'
-+'<div class="fld"><label class="fld-l">Current Projects</label>'+msHTML('e_proj',m.projects||[],D.projects,'proj-chip','Add projects...')+'<div id="e_proj_alloc"></div></div>'
++'<div class="fld"><label class="fld-l">Assignments (Projects / Initiatives / Overhead)</label>'+msHTML('e_proj',m.projects||[],D.projects,'proj-chip','Add assignments...')+'<div id="e_proj_alloc"></div></div>'
 +'<div class="fld"><label class="fld-l">Skills</label>'+msHTML('e_skill',m.skillsets||[],D.skillsets,'skill-chip','Add skills...')+'</div>'
 +'<div class="fld"><label class="fld-l">Certifications</label>'+msHTML('e_cert',m.certifications||[],D.certifications,'cert-chip','Add certifications...')+'</div>'
 +'<span class="fld-section-hdr">Profile</span>'
@@ -949,7 +980,7 @@ document.getElementById('mdlAdd').innerHTML=
 +'<div class="fld-row2">'+fN('a_cost','Monthly Cost ($)',0)+fT('a_badge','Badge','')+'</div>'
 +'<div class="fld"><label class="fld-l">Reports To</label><input class="fld-i" id="a_reports" list="a_rl" value=""><datalist id="a_rl">'+dl+'</datalist></div>'
 +'<span class="fld-section-hdr">Projects &amp; Skills</span>'
-+'<div class="fld"><label class="fld-l">Current Projects</label>'+msHTML('a_proj',[],D.projects,'proj-chip','Add projects...')+'<div id="a_proj_alloc"></div></div>'
++'<div class="fld"><label class="fld-l">Assignments (Projects / Initiatives / Overhead)</label>'+msHTML('a_proj',[],D.projects,'proj-chip','Add assignments...')+'<div id="a_proj_alloc"></div></div>'
 +'<div class="fld"><label class="fld-l">Skills</label>'+msHTML('a_skill',[],D.skillsets,'skill-chip','Add skills...')+'</div>'
 +'<div class="fld"><label class="fld-l">Certifications</label>'+msHTML('a_cert',[],D.certifications,'cert-chip','Add certifications...')+'</div>'
 +'<span class="fld-section-hdr">Profile</span>'
@@ -1080,55 +1111,66 @@ var el=document.querySelector('input[name="ds_color"]:checked');var color=el?el.
 D.departments.push({id:uid(),name:name,subtitle:gv('ds_sub'),accent:color,members:[],parentId:parentId});
 closeModal('ovDeptEdit');save();renderView();}
 
-/* ── ADD PROJECT ── */
-function openAddProject(){
+/* ── ADD PROJECT / INITIATIVE / OVERHEAD ── */
+function itemMeta(cat){return {project:{title:'Projects',noun:'Project',revLbl:'Monthly Revenue ($) — leave 0 for pursuits'},initiative:{title:'Initiatives',noun:'Initiative',revLbl:'Expected Monthly Revenue ($) — future, not counted'},overhead:{title:'Overhead',noun:'Overhead Item',revLbl:null}}[cat]||{};}
+
+function openItemModal(category){
+var m=itemMeta(category);
 document.getElementById('mdlProj').innerHTML=
-'<div class="mdl-over">Manage Projects</div><div class="mdl-title">Projects</div>'
-+'<div id="projList">'+renderProjList()+'</div>'
+'<div class="mdl-over">Manage '+m.title+'</div><div class="mdl-title">'+m.title+'</div>'
++'<div id="projList">'+renderProjList(category)+'</div>'
 +'<div style="border-top:1px solid var(--border);margin-top:14px;padding-top:14px">'
-+'<div style="font-size:10px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:var(--text-secondary);margin-bottom:8px">Add New Project</div>'
-+fT('p_name','Project Name','')+fN('p_rev','Monthly Revenue ($) — leave 0 for pursuits',0)+fT('p_rnote','Revenue Note / Context','')
-+'<div class="fld"><label class="fld-l" for="p_parent">Parent Project (optional)</label><select class="fld-sel" id="p_parent"><option value="">None (top-level)</option>'+projOptHTML(null,0)+'</select></div>'
-+'<button class="btn btn-navy btn-full" onclick="saveAddProj()" style="margin-top:4px">Add Project</button>'
++'<div style="font-size:10px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:var(--text-secondary);margin-bottom:8px">Add New '+m.noun+'</div>'
++fT('p_name',m.noun+' Name','')+(m.revLbl?fN('p_rev',m.revLbl,0):'')+fT('p_rnote','Note / Context','')
++'<div class="fld"><label class="fld-l" for="p_parent">Parent (optional)</label><select class="fld-sel" id="p_parent"><option value="">None (top-level)</option>'+projOptHTML(null,0,category)+'</select></div>'
++'<button class="btn btn-navy btn-full" onclick="saveAddProj(\''+category+'\')" style="margin-top:4px">Add '+m.noun+'</button>'
 +'</div>';
 openModal('ovProj');}
 
-function projOptHTML(pid,depth){return D.projects.filter(function(p){return(p.parentId||null)===(pid||null);}).map(function(p){var pre=Array(depth+1).join('\u00a0\u00a0')+(depth>0?'\u21b3 ':'');return '<option value="'+p.id+'">'+pre+esc(p.name)+'</option>'+projOptHTML(p.id,depth+1);}).join('');}
+function projOptHTML(pid,depth,category){return D.projects.filter(function(p){return(p.parentId||null)===(pid||null)&&(!category||projCat(p)===category);}).map(function(p){var pre=Array(depth+1).join('\u00a0\u00a0')+(depth>0?'\u21b3 ':'');return '<option value="'+p.id+'">'+pre+esc(p.name)+'</option>'+projOptHTML(p.id,depth+1,category);}).join('');}
 
-function renderProjList(){
+function renderProjList(category){
 var all=allM();
 function renderLevel(pid,depth){
-  return D.projects.filter(function(p){return(p.parentId||null)===(pid||null);}).map(function(p){
+  return D.projects.filter(function(p){return(p.parentId||null)===(pid||null)&&(!category||projCat(p)===category);}).map(function(p){
     var cnt=all.filter(function(m){return projIds(m).indexOf(p.id)>-1;}).length;
-    var rev=p.revenue||0;
+    var cat=projCat(p),rev=itemRev(p);
+    var revHTML=cat==='overhead'?'<span style="color:var(--slate);font-weight:700">cost center</span> &middot; ':(rev>0?'<span style="color:'+(cat==='initiative'?'var(--amber)':'var(--green)')+';font-weight:700">'+fmt(rev)+'/mo</span> '+(cat==='initiative'?'exp.':'rev')+' &middot; ':'<span style="color:var(--amber);font-weight:700">$0</span> &middot; ');
     var indent=depth>0?'padding-left:'+(depth*16)+'px;':'';
     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F1F5F9;gap:8px;'+indent+'">'
       +(depth>0?'<span style="color:var(--text-muted);margin-right:2px">&#8627;</span>':'')
       +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">'+esc(p.name)+'</div>'
-      +'<div style="font-size:10px;color:var(--text-muted);margin-top:1px">'+(rev>0?'<span style="color:var(--green);font-weight:700">'+fmt(rev)+'/mo</span> rev &middot; ':'<span style="color:var(--amber);font-weight:700">$0 rev</span> &middot; ')+cnt+' people'+(p.revenueNote?' &middot; '+esc(p.revenueNote):'')+'</div></div>'
+      +'<div style="font-size:10px;color:var(--text-muted);margin-top:1px">'+revHTML+cnt+' people'+(p.revenueNote?' &middot; '+esc(p.revenueNote):'')+'</div></div>'
       +'<div style="display:flex;gap:4px;flex-shrink:0">'
       +'<button class="btn-icon btn-icon-edit" onclick="openEditProject(\''+p.id+'\')" title="Edit">&#9998;</button>'
-      +'<button class="btn btn-danger-sm btn-sm" onclick="deleteProject(\''+p.id+'\');document.getElementById(\'projList\').innerHTML=renderProjList();">&#10005;</button>'
+      +'<button class="btn btn-danger-sm btn-sm" onclick="deleteProject(\''+p.id+'\');document.getElementById(\'projList\').innerHTML=renderProjList(\''+category+'\');">&#10005;</button>'
       +'</div></div>'
       +renderLevel(p.id,depth+1);
   }).join('');}
-return renderLevel(null,0)||'<div style="padding:12px 0;text-align:center;font-size:12px;color:var(--text-muted)">No projects yet</div>';}
+return renderLevel(null,0)||'<div style="padding:12px 0;text-align:center;font-size:12px;color:var(--text-muted)">None yet</div>';}
 
-function saveAddProj(){var name=gv('p_name').trim();if(!name)return;
-D.projects.push({id:uid(),name:name,revenue:Number(gv('p_rev'))||0,revenueNote:gv('p_rnote'),parentId:gv('p_parent')||null});
-save();document.getElementById('p_name').value='';document.getElementById('p_rev').value=0;document.getElementById('p_rnote').value='';
-document.getElementById('projList').innerHTML=renderProjList();renderView();}
+function saveAddProj(category){var name=gv('p_name').trim();if(!name)return;
+var obj={id:uid(),name:name,category:category,revenue:0,targetRevenue:0,revenueNote:gv('p_rnote'),parentId:gv('p_parent')||null};
+if(category==='project')obj.revenue=Number(gv('p_rev'))||0;else if(category==='initiative')obj.targetRevenue=Number(gv('p_rev'))||0;
+D.projects.push(obj);
+save();document.getElementById('p_name').value='';var rv=document.getElementById('p_rev');if(rv)rv.value=0;document.getElementById('p_rnote').value='';
+document.getElementById('projList').innerHTML=renderProjList(category);renderView();}
 
 function openEditProject(pid){
 var p=D.projects.find(function(x){return x.id===pid;});if(!p)return;
+var cat=projCat(p);
+var labels={project:'Project',initiative:'Initiative',overhead:'Overhead Item'};
 var excl=projDescendantIds(pid);
-var parentOpts='<option value="">None (top-level)</option>'+D.projects.filter(function(q){return excl.indexOf(q.id)===-1;}).map(function(q){return '<option value="'+q.id+'"'+((p.parentId===q.id)?' selected':'')+'>'+esc(q.name)+'</option>';}).join('');
+var parentOpts='<option value="">None (top-level)</option>'+D.projects.filter(function(q){return excl.indexOf(q.id)===-1&&projCat(q)===cat;}).map(function(q){return '<option value="'+q.id+'"'+((p.parentId===q.id)?' selected':'')+'>'+esc(q.name)+'</option>';}).join('');
+var catOpts=['project','initiative','overhead'].map(function(c){return '<option value="'+c+'"'+(c===cat?' selected':'')+'>'+labels[c]+'</option>';}).join('');
+var revField=cat==='project'?fN('ep_rev','Monthly Revenue ($)',p.revenue||0):cat==='initiative'?fN('ep_rev','Expected Monthly Revenue ($) — future',p.targetRevenue||0):'';
 document.getElementById('mdlDeptEdit').innerHTML=
-'<div class="mdl-over">Edit Project</div><div class="mdl-title">'+esc(p.name)+'</div>'
-+fT('ep_name','Project Name',p.name)
-+fN('ep_rev','Monthly Revenue ($)',p.revenue||0)
-+fT('ep_note','Revenue Note / Context',p.revenueNote||'')
-+'<div class="fld"><label class="fld-l" for="ep_parent">Parent Project</label><select class="fld-sel" id="ep_parent">'+parentOpts+'</select></div>'
+'<div class="mdl-over">Edit '+labels[cat]+'</div><div class="mdl-title">'+esc(p.name)+'</div>'
++fT('ep_name','Name',p.name)
++'<div class="fld"><label class="fld-l" for="ep_cat">Category</label><select class="fld-sel" id="ep_cat">'+catOpts+'</select><div style="font-size:9px;color:var(--text-muted);margin-top:3px">Changing category? Save, then reopen to set its revenue.</div></div>'
++revField
++fT('ep_note','Note / Context',p.revenueNote||'')
++'<div class="fld"><label class="fld-l" for="ep_parent">Parent</label><select class="fld-sel" id="ep_parent">'+parentOpts+'</select></div>'
 +'<div class="btn-row"><button class="btn btn-navy" style="flex:1" onclick="saveEditProject(\''+pid+'\')">Save</button>'
 +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovDeptEdit\')">Cancel</button></div>';
 openModal('ovDeptEdit');}
@@ -1136,9 +1178,14 @@ openModal('ovDeptEdit');}
 function saveEditProject(pid){
 var p=D.projects.find(function(x){return x.id===pid;});if(!p)return;
 var name=gv('ep_name').trim();if(name)p.name=name;
-p.revenue=Number(gv('ep_rev'))||0;p.revenueNote=gv('ep_note');p.parentId=gv('ep_parent')||null;
+var newCat=gv('ep_cat')||'project';var catChanged=newCat!==projCat(p);p.category=newCat;
+var rv=document.getElementById('ep_rev');
+if(newCat==='project'){p.revenue=rv?(Number(rv.value)||0):(p.revenue||0);p.targetRevenue=0;}
+else if(newCat==='initiative'){p.targetRevenue=rv?(Number(rv.value)||0):(p.targetRevenue||0);p.revenue=0;}
+else{p.revenue=0;p.targetRevenue=0;}
+p.revenueNote=gv('ep_note');p.parentId=catChanged?null:(gv('ep_parent')||null);
 closeModal('ovDeptEdit');save();
-var el=document.getElementById('projList');if(el)el.innerHTML=renderProjList();
+var el=document.getElementById('projList');if(el)el.innerHTML=renderProjList(p.category);
 renderView();}
 
 function deleteProject(pid){
