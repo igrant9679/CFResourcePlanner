@@ -154,7 +154,27 @@ D = {
           resumeLink, pastProjects:[], pastClients:[] }
       ] }
   ],
-  overheadSeeded: true   // migration flag
+
+  // ── 120-Day Plan module (see §7a) ──
+  programs: [ { id, name, color, order, lead } ],
+  activities: [
+    { id, programId, program (legacy name cache), task, subtask (title),
+      outline, objective, phase ("Month 1".."Month 4"),
+      start (YYYY-MM-DD), dueDate (YYYY-MM-DD), isMilestone,
+      status ("todo"|"doing"|"done"|"blocked"),
+      parentId (null | parent activity id = subtask),
+      owners:[memberId], ownerText, projectId, pm, order,
+      updates:[{id,ts,author,text}], attachments:[{id,name,url,type,size?}] }
+  ],
+  planStart: "2026-06-01",   // Month 1 anchor for phase-derived dates
+
+  // ── Accounts / roles (client-side only — see §7b) ──
+  accounts: [
+    { id, email, name, password, role ("admin"|"owner"|"editor"|"viewer"),
+      programIds:[id] (owner scope), memberId (linked person), active }
+  ],
+
+  overheadSeeded: true, planSeeded: true   // migration flags
 }
 ```
 
@@ -167,18 +187,58 @@ D = {
 People are allocated to any item via `member.projects = [{id, pct}]`. `reportsTo` is a
 **name string** (used to build the Org Chart view).
 
+### 7a. 120-Day Plan module (the "ClickUp replacement")
+
+A task tracker seeded from the CommunityForce 120-day plan (8 programs, 58 tasks).
+- **Programs** are first-class objects (`D.programs`). Managed via the **Programs** button in
+  the Plan toolbar (create / rename-with-cascade / recolor / delete; also sets `planStart`).
+- **Tasks** = `D.activities`. Hierarchy is grouping by `programId` → `task` (text) → activity.
+  Activities can have a `parentId` (nested subtasks — full tasks in their own right).
+- **Owners** auto-link to member cards by name (`+`-joined, e.g. `Idris + Ayesha`); unmatched
+  tokens stay as text. `projectId` optionally links a task to a project/contract.
+- **Scheduling:** `start`/`dueDate` (ISO). When blank, dates fall back to the `phase` month
+  off `planStart` (`planActStart`/`planActEnd`).
+- **Five views** (segmented control in the toolbar): **List** (grouped, collapsible),
+  **Board** (status Kanban, drag-to-change), **Gantt** (month timeline, status-colored bars,
+  milestones as diamonds), **Calendar** (by `dueDate`/milestone), **Milestones** (timeline of
+  `isMilestone` tasks).
+- Each task carries **ongoing status updates** (`updates[]`) and **attachments[]** (reuse the
+  `/api/attachments` upload endpoint, or paste links).
+- Key functions: `renderPlanView`, `planListHTML`/`planBoardHTML`/`planGanttHTML`/
+  `planCalendarHTML`/`planMilestoneHTML`, `openPlanModal`, `savePlan`, `planMigrate`,
+  `openProgramsManager`.
+
+### 7b. Accounts & roles (CLIENT-SIDE ONLY)
+
+`D.accounts` holds login accounts with roles **admin / owner (Program Owner) / editor / viewer**.
+- Login (`doLogin`) validates email+password against `D.accounts`; session id is in
+  `sessionStorage.cf_user`. Seed admin = `khaja@communityforce.com` / `Namtra_CF27`
+  (the legacy gate credentials still work and map to that admin).
+- `can(action, ctx)` is the permission gate; `applyRoleUI()` (called from `renderView`) shows/
+  hides header buttons; the Plan module disables controls per role. **Program Owners** can edit
+  only tasks in their `programIds`.
+- Manage via the **Accounts** header button (admin only): `openAccountsManager`, `saveAccount`.
+- ⚠ **This is UI gating only — it does NOT secure `/api/*`.** See §10.
+
 ---
 
 ## 8. Views / Features
 
 - **Department View** — org structure; drag people between departments; click a card to edit.
-- **Org Chart** — hierarchical tree built from `reportsTo`.
+- **Org Chart** — five switchable layouts (segmented control at top): **Hierarchical**
+  (top-down `reportsTo` tree), **Flat/Horizontal** (same tree, left-to-right), **Matrix**
+  (team × project grid), **Functional** (columns by department), **Division** (columns by
+  business line / project). Functions: `renderOrgChartView` → `renderOrgHier` /
+  `renderOrgMatrix` / `renderOrgFunctional` / `renderOrgDivision`.
+- **120-Day Plan** — task tracker with 5 views, programs, subtasks, updates, attachments,
+  roles (see §7a / §7b).
 - **Projects / Initiatives / Opportunities / Overhead** — category-filtered views with
   revenue/cost/margin (or potential value / cost-only) and assigned resources. Utilization
   `%` is editable inline on each resource row.
 - **Resources View** — resource-centric listing.
 - Per-item **description** + **attachments** (file uploads or links).
-- **+ Person / Departments / + Project / + Initiative / + Opportunity / + Overhead / Skills / Admin**.
+- **+ Person / Departments / + Project / + Initiative / + Opportunity / + Overhead / Skills /
+  Accounts / Admin** (header buttons are role-gated; **Logout** + a user badge are in the header).
 - **Export / Import** JSON backups.
 - Persistence: loads from `/api/data` (Postgres), autosaves ~1s after edits;
   `localStorage` is an offline cache/fallback.
@@ -219,8 +279,11 @@ original machine — not in the repo; recreate if needed).
   browsers/people edit at once, the later save silently overwrites the earlier one.
   Recommended next step: add optimistic-locking via `updated_at`, or poll-and-merge with a
   conflict warning. (Not yet implemented.)
-- **Auth is client-side only** — credentials are visible in `index.html` and `/api/*` is
-  open. For real protection, move auth server-side (cookie/session gating page + API).
+- **Auth is client-side only** — `D.accounts` + roles (admin/owner/editor/viewer) gate the
+  **UI** via `can()`/`applyRoleUI()`, but passwords live in the JSON blob and `/api/*` is fully
+  open, so any technical user can bypass roles by hitting the API directly. For real protection,
+  move auth server-side (hashed passwords, cookie/session, gate the page **and** the API).
+  This is the recommended next phase ("Phase B").
 - **Attachments capped at 25 MB** each and stored in Postgres `bytea`. Fine for docs/images;
   migrate to S3-style object storage if you expect large media or very many files.
 - The "Management" department still exists in Department View even though Management is also
@@ -232,7 +295,15 @@ original machine — not in the repo; recreate if needed).
 
 - The whole app is `index.html`; search the `<script>` block for function names
   (`renderProjView`, `renderOrgChartView`, `openEditProject`, `saveEditProject`,
-  `openEditMember`, `loadAndRender`, `serverSave`, `projCat`, `itemRev`).
+  `openEditMember`, `serverSave`, `projCat`, `itemRev`).
+- **Boot sequence** (changed for accounts): `initApp()` → `bootstrapData()` loads `D` and runs
+  `migrate()` (which calls `planMigrate()` + `authMigrate()`) → `currentAccount()` resolves the
+  session → `renderView()`. `migrate()` is idempotent and seeds programs/activities/accounts
+  on first load (guarded by `planSeeded` / `accounts` presence).
+- **Plan module** functions: `renderPlanView`, `planMigrate`, `planFiltered`, `openPlanModal`,
+  `savePlan`, `planSetStatus`, `openProgramsManager`. **Org layouts:** `renderOrgHier`,
+  `renderOrgMatrix`, `renderOrgFunctional`, `renderOrgDivision`. **Auth:** `can`, `applyRoleUI`,
+  `doLogin`, `openAccountsManager`.
 - Data edits to live content are done by mutating `D` in the browser console and calling
   `save()` / `serverSave()`, OR through the UI — both persist to Postgres.
 - Syntax-check the inline script before deploying by extracting the `<script>` contents and
