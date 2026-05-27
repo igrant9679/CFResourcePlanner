@@ -1330,8 +1330,13 @@ function renderOppView(q){
   var html='<div class="plan-wrap">';
   var byStage={};OPP_STAGES.forEach(function(s){byStage[s.k]=opps.filter(function(p){return (p.stage||'Lead Gen')===s.k;}).length;});
   var totPot=opps.reduce(function(a,p){return a+(Number(p.potential)||0);},0);
+  var STATUS_C={Proposal:'#D97706',Qualified:'#2563EB',Won:'#2D6A4F',Lost:'#DC2626'};
+  var statusGroups={},statusOrder=[];
+  opps.forEach(function(p){var st=p.status||'—';if(!statusGroups[st]){statusGroups[st]={n:0,v:0};statusOrder.push(st);}statusGroups[st].n++;statusGroups[st].v+=Number(p.potential)||0;});
+  var statusChips=statusOrder.map(function(st){var g=statusGroups[st],c=STATUS_C[st]||'#546478';return '<span class="plan-chip" style="border-color:'+c+';color:'+c+'">'+esc(st)+': '+g.n+' &middot; '+fmt(g.v)+'</span>';}).join('');
   html+='<div class="plan-summary"><div class="plan-summary-top"><div><strong style="font-size:14px;color:var(--text-primary)">Opportunities</strong><span style="font-size:12px;color:var(--text-secondary);margin-left:8px">'+opps.length+' pursuit'+(opps.length===1?'':'s')+' &middot; <strong style="color:var(--gold)">'+fmt(totPot)+'</strong> potential</span></div>'
-    +'<div class="plan-counts">'+OPP_STAGES.map(function(s){return '<span class="plan-chip" style="border-color:'+s.c+';color:'+s.c+'">'+s.k+': '+byStage[s.k]+'</span>';}).join('')+'</div></div></div>';
+    +'<div class="plan-counts">'+OPP_STAGES.map(function(s){return '<span class="plan-chip" style="border-color:'+s.c+';color:'+s.c+'">'+s.k+': '+byStage[s.k]+'</span>';}).join('')+'</div></div>'
+    +'<div class="plan-counts" style="margin-top:8px;border-top:1px dashed var(--border);padding-top:8px"><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);align-self:center;margin-right:2px">By status</span>'+statusChips+'</div></div>';
   html+='<div class="plan-toolbar"><div class="plan-seg">'+[{k:'board',l:'Pipeline'},{k:'list',l:'List'},{k:'table',l:'Table'},{k:'calendar',l:'Calendar'}].map(function(v){return '<button class="'+(oppMode===v.k?'active':'')+'" onclick="setOppMode(\''+v.k+'\')">'+v.l+'</button>';}).join('')+'</div>'
     +(canEdit?'<button class="btn btn-gold btn-sm" onclick="openItemModal(\'opportunity\')">+ Opportunity</button>':'')+'</div>';
   if(!opps.length)return html+'<div class="empty-msg">No opportunities yet. Click <strong>+ Opportunity</strong> to add one.</div></div>';
