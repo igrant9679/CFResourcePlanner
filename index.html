@@ -1281,29 +1281,45 @@ document.getElementById('mdlDeptEdit').innerHTML=
 +revField
 +fT('ep_note','Note / Context',p.revenueNote||'')
 +'<div class="fld"><label class="fld-l" for="ep_desc">Description</label><textarea class="fld-i" id="ep_desc" rows="3">'+esc(p.description||'')+'</textarea></div>'
-+'<div class="fld"><label class="fld-l">Attachments (links)</label><div id="ep_att_list">'+renderAttList(pid)+'</div>'
-+'<div class="fld-row2" style="margin-top:6px"><input class="fld-i" id="ep_att_name" placeholder="Label (e.g. Proposal)"><input class="fld-i" id="ep_att_url" placeholder="https://..."></div>'
-+'<button class="btn btn-sec btn-sm" style="margin-top:6px" onclick="addItemAttachment(\''+pid+'\')">+ Add attachment link</button></div>'
++'<div class="fld"><label class="fld-l">Attachments</label><div id="ep_att_list">'+renderAttList(pid)+'</div>'
++'<div style="margin-top:8px"><input type="file" id="ep_att_file" style="font-size:11px;max-width:100%"> <button class="btn btn-navy btn-sm" id="ep_att_upbtn" onclick="uploadItemAttachment(\''+pid+'\')">&#8593; Upload file</button></div>'
++'<div style="margin-top:9px;font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">or link to a file/URL</div>'
++'<div class="fld-row2" style="margin-top:4px"><input class="fld-i" id="ep_att_name" placeholder="Label (e.g. Proposal)"><input class="fld-i" id="ep_att_url" placeholder="https://..."></div>'
++'<button class="btn btn-sec btn-sm" style="margin-top:6px" onclick="addItemAttachment(\''+pid+'\')">+ Add link</button></div>'
 +'<div class="fld"><label class="fld-l" for="ep_parent">Parent</label><select class="fld-sel" id="ep_parent">'+parentOpts+'</select></div>'
 +'<div class="btn-row"><button class="btn btn-navy" style="flex:1" onclick="saveEditProject(\''+pid+'\')">Save</button>'
 +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovDeptEdit\')">Cancel</button></div>';
 openModal('ovDeptEdit');}
+function fmtSize(b){if(!b)return '';var u=['B','KB','MB'],i=0;while(b>=1024&&i<2){b/=1024;i++;}return (b<10&&i>0?b.toFixed(1):Math.round(b))+u[i];}
 function renderAttList(pid){
 var p=D.projects.find(function(x){return x.id===pid;});if(!p)return '';
 var atts=p.attachments||[];
 if(!atts.length)return '<div style="font-size:11px;color:var(--text-muted)">No attachments yet</div>';
-return atts.map(function(a,i){return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid #F1F5F9">'
-  +'<a href="'+esc(a.url)+'" target="_blank" rel="noopener" style="font-size:12px;color:var(--navy);font-weight:600;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">&#128206; '+esc(a.name||a.url)+'</a>'
+return atts.map(function(a,i){var isFile=a.type==='file';var icon=isFile?'&#128196;':'&#128279;';var sz=isFile&&a.size?' <span style="font-size:10px;color:var(--text-muted);font-weight:400">'+fmtSize(a.size)+'</span>':'';
+  return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid #F1F5F9">'
+  +'<a href="'+esc(a.url)+'" target="_blank" rel="noopener"'+(isFile?' download="'+esc(a.name||'file')+'"':'')+' style="font-size:12px;color:var(--navy);font-weight:600;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+icon+' '+esc(a.name||a.url)+sz+'</a>'
   +'<button class="btn btn-danger-sm btn-sm" onclick="delItemAttachment(\''+pid+'\','+i+')">&#10005;</button></div>';}).join('');}
+function uploadItemAttachment(pid){
+var p=D.projects.find(function(x){return x.id===pid;});if(!p)return;
+var inp=document.getElementById('ep_att_file');var f=inp&&inp.files&&inp.files[0];
+if(!f){alert('Choose a file first.');return;}
+var btn=document.getElementById('ep_att_upbtn');if(btn){btn.disabled=true;btn.textContent='Uploading…';}
+var fd=new FormData();fd.append('file',f);fd.append('projectId',pid);
+fetch('/api/attachments',{method:'POST',body:fd}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(function(a){
+  if(!p.attachments)p.attachments=[];p.attachments.push({id:a.id,name:a.name,url:a.url,type:'file',size:a.size});
+  save();document.getElementById('ep_att_list').innerHTML=renderAttList(pid);renderView();if(inp)inp.value='';
+}).catch(function(e){alert('Upload failed: '+e.message);}).then(function(){if(btn){btn.disabled=false;btn.innerHTML='&#8593; Upload file';}});}
 function addItemAttachment(pid){
 var p=D.projects.find(function(x){return x.id===pid;});if(!p)return;
 var url=gv('ep_att_url').trim();if(!url)return;if(!/^https?:\/\//i.test(url))url='https://'+url;
 var name=gv('ep_att_name').trim()||url;
-if(!p.attachments)p.attachments=[];p.attachments.push({name:name,url:url});
+if(!p.attachments)p.attachments=[];p.attachments.push({name:name,url:url,type:'link'});
 save();document.getElementById('ep_att_list').innerHTML=renderAttList(pid);
 document.getElementById('ep_att_name').value='';document.getElementById('ep_att_url').value='';renderView();}
 function delItemAttachment(pid,idx){
 var p=D.projects.find(function(x){return x.id===pid;});if(!p)return;
+var a=(p.attachments||[])[idx];
+if(a&&a.type==='file'&&a.id){fetch('/api/attachments/'+a.id,{method:'DELETE'}).catch(function(){});}
 (p.attachments||[]).splice(idx,1);save();
 document.getElementById('ep_att_list').innerHTML=renderAttList(pid);renderView();}
 
