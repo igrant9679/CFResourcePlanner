@@ -823,14 +823,14 @@ function renderSubProjCard(child,all,q){
 
 function renderProjView(q,category){
   category=category||'project';
-  var meta={project:{noun:'project',label:'Projects',empty:'No projects yet'},initiative:{noun:'initiative',label:'Initiatives',empty:'No initiatives yet'},overhead:{noun:'overhead item',label:'Overhead',empty:'No overhead items yet'},opportunity:{noun:'opportunity',label:'Opportunities',empty:'No opportunities yet'}}[category];
+  var meta={project:{noun:'project',plural:'projects',label:'Projects',empty:'No projects yet'},initiative:{noun:'initiative',plural:'initiatives',label:'Initiatives',empty:'No initiatives yet'},overhead:{noun:'overhead item',plural:'overhead items',label:'Overhead',empty:'No overhead items yet'},opportunity:{noun:'opportunity',plural:'opportunities',label:'Opportunities',empty:'No opportunities yet'}}[category];
   var pipe=isPipelineCat(category);
   var all=allM(),tops=topLevelByCat(category),html='<div class="proj-scroll">';
   var totalRev=0,totalCost=0;
   tops.forEach(function(proj){var r=projRollupData(proj.id,all);totalRev+=r.revenue;totalCost+=r.cost;});
   var revWord=category==='opportunity'?'Total potential value: ':category==='initiative'?'Total expected rev: ':'Total revenue: ';
   var sumLine=category==='overhead'?('Total overhead: <strong style="color:var(--red)">'+fmt(totalCost)+'/mo</strong>'):(revWord+'<strong style="color:'+(pipe?'var(--amber)':'var(--green)')+'">'+fmt(totalRev)+'/mo</strong> &middot; Total cost: <strong>'+fmt(totalCost)+'/mo</strong>');
-  html+='<div style="padding:10px 14px;margin-bottom:14px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;color:var(--text-secondary)"><strong style="font-size:13px;color:var(--text-primary)">'+meta.label+'</strong> &middot; '+tops.length+' '+(tops.length===1?meta.noun:meta.noun+'s')+' &middot; '+sumLine+'</div>';
+  html+='<div style="padding:10px 14px;margin-bottom:14px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;color:var(--text-secondary)"><strong style="font-size:13px;color:var(--text-primary)">'+meta.label+'</strong> &middot; '+tops.length+' '+(tops.length===1?meta.noun:meta.plural)+' &middot; '+sumLine+'</div>';
   tops.forEach(function(proj){
     var children=projChildren(proj.id);
     if(q&&!projOrDescHasMatch(proj,q,all))return;
