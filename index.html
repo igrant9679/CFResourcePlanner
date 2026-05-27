@@ -265,6 +265,13 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .app-tagchip{font-size:9px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--navy);background:linear-gradient(135deg,#D8BE73,var(--gold));padding:3px 8px;border-radius:5px;vertical-align:middle;margin-left:9px;box-shadow:0 1px 4px rgba(197,165,90,0.4);}
 .cf-tag{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,0.4);}
 .cf-tag b{color:var(--gold);font-weight:800;}
+.oc-wrap{padding:4px 2px;}
+.oc-card{display:inline-block;background:var(--card-bg);border:1px solid var(--border);border-left:4px solid var(--navy);border-radius:9px;padding:9px 15px;margin:5px 0;cursor:pointer;box-shadow:var(--shadow-sm);transition:all .12s;min-width:230px;}
+.oc-card:hover{box-shadow:var(--shadow-md);transform:translateY(-1px);background:#F8FAFC;}
+.oc-name{font-size:14px;font-weight:700;color:var(--text-primary);}
+.oc-role{font-size:11px;color:var(--text-secondary);margin-top:1px;}
+.oc-meta{font-size:10px;color:var(--text-muted);margin-top:3px;}
+.oc-children{margin-left:26px;padding-left:18px;border-left:2px solid var(--border);}
 </style>
 </head>
 <body>
@@ -319,6 +326,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
       <button class="btn btn-outline" onclick="openManageDepts()">Departments</button>
       <button class="btn btn-outline" onclick="openItemModal('project')">+ Project</button>
       <button class="btn btn-outline" onclick="openItemModal('initiative')">+ Initiative</button>
+      <button class="btn btn-outline" onclick="openItemModal('opportunity')">+ Opportunity</button>
       <button class="btn btn-outline" onclick="openItemModal('overhead')">+ Overhead</button>
       <button class="btn btn-outline" onclick="openManageSkills()">Skills</button>
       <button class="btn btn-outline" onclick="openAdmin()">&#9881; Admin</button>
@@ -331,8 +339,10 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
     <input type="text" class="search" id="searchInput" placeholder="Search name, role, project, skill..." oninput="renderView()">
     <div class="tab-bar">
       <button class="tab active" id="tabOrg" onclick="switchTab('org')">Department View</button>
+      <button class="tab" id="tabChart" onclick="switchTab('orgchart')">Org Chart</button>
       <button class="tab" id="tabProj" onclick="switchTab('proj')">Projects</button>
       <button class="tab" id="tabInit" onclick="switchTab('init')">Initiatives</button>
+      <button class="tab" id="tabOpp" onclick="switchTab('opp')">Opportunities</button>
       <button class="tab" id="tabOver" onclick="switchTab('over')">Overhead</button>
       <button class="tab" id="tabRes" onclick="switchTab('res')">Resources View</button>
     </div>
@@ -659,11 +669,11 @@ function renderStats(){
 var hc=0,tc=0,fl=0,oa=0;
 D.departments.forEach(function(d){hc+=d.members.length;d.members.forEach(function(m){tc+=m.cost;if(m.reassess)fl++;if(totalAlloc(m)>100)oa++;});});
 document.getElementById('statsBar').innerHTML=[
-{l:'Headcount',v:hc,u:'people'},{l:'Monthly Cost',v:fmt(tc),u:'/month'},{l:'Projects',v:D.projects.filter(function(p){return projCat(p)==='project';}).length,u:'active'},{l:'Initiatives',v:D.projects.filter(function(p){return projCat(p)==='initiative';}).length,u:'in pipeline'},
+{l:'Headcount',v:hc,u:'people'},{l:'Monthly Cost',v:fmt(tc),u:'/month'},{l:'Projects',v:D.projects.filter(function(p){return projCat(p)==='project';}).length,u:'active'},{l:'Initiatives',v:D.projects.filter(function(p){return projCat(p)==='initiative';}).length,u:'in pipeline'},{l:'Opportunities',v:D.projects.filter(function(p){return projCat(p)==='opportunity';}).length,u:'pursuing'},
 {l:'Skills',v:D.skillsets.length,u:'defined'},{l:'Reassess',v:fl,u:'flagged',w:fl>0},{l:'Over-alloc',v:oa,u:'people',w:oa>0}
 ].map(function(s){return '<div class="st'+(s.w?' warn':'')+'"><div class="st-l">'+s.l+'</div><div class="st-v'+(s.w?' wv':'')+'">'+s.v+'<span class="st-u">'+s.u+'</span></div></div>';}).join('');}
 
-function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',init:'tabInit',over:'tabOver',res:'tabRes'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
+function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',init:'tabInit',opp:'tabOpp',over:'tabOver',orgchart:'tabChart',res:'tabRes'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
 
 function cardHTML(m,did){
 var dept=D.departments.find(function(d){return d.id===did;});
@@ -738,7 +748,9 @@ function projChildren(pid){return D.projects.filter(function(p){return p.parentI
 function topLevelProjects(){return D.projects.filter(function(p){return !p.parentId;});}
 function projCat(p){return p.category||'project';}
 function topLevelByCat(cat){return D.projects.filter(function(p){return !p.parentId&&projCat(p)===cat;});}
-function itemRev(p){if(!p)return 0;var c=projCat(p);if(c==='overhead')return 0;if(c==='initiative')return p.targetRevenue||0;return p.revenue||0;}
+function itemRev(p){if(!p)return 0;var c=projCat(p);if(c==='overhead')return 0;if(c==='initiative'||c==='opportunity')return p.targetRevenue||0;return p.revenue||0;}
+function isPipelineCat(c){return c==='initiative'||c==='opportunity';}
+function projAttachHTML(proj){var a=proj.attachments||[];if(!a.length)return '';return '<div style="margin-top:7px;display:flex;flex-wrap:wrap;gap:5px">'+a.map(function(at){return '<a href="'+esc(at.url)+'" target="_blank" rel="noopener" style="font-size:10px;font-weight:600;color:var(--navy);background:var(--page-bg);border:1px solid var(--border);border-radius:5px;padding:3px 7px;text-decoration:none">&#128206; '+esc(at.name||at.url)+'</a>';}).join('')+'</div>';}
 function projDescendantIds(pid){var ids=[pid];projChildren(pid).forEach(function(c){ids=ids.concat(projDescendantIds(c.id));});return ids;}
 function projRollupData(pid,all){
   var proj=D.projects.find(function(p){return p.id===pid;});
@@ -778,15 +790,16 @@ function projFinBlock(rev,tc,revenueNote,noteClass,category){
       +'<div class="proj-fin-row"><span class="proj-fin-lbl">Monthly cost</span><span class="proj-fin-val proj-fin-cost">'+fmt(tc)+'/mo</span></div>'
       +'<div class="proj-fin-row"><span class="proj-fin-lbl" style="font-size:9px;color:var(--text-muted)">Overhead \u00b7 no revenue</span></div>'
       +'</div>'+(revenueNote?'<div class="'+noteClass+'">'+esc(revenueNote)+'</div>':'');}
-  var isInit=category==='initiative';
-  var revLbl=isInit?'Expected rev':'Revenue';
-  var marginLbl=isInit?'Projected margin':'Margin';
+  var pipeline=isPipelineCat(category);
+  var revLbl=category==='opportunity'?'Potential value':(category==='initiative'?'Expected rev':'Revenue');
+  var marginLbl=pipeline?'Projected margin':'Margin';
+  var pipeTag=category==='opportunity'?'(pipeline)':'(future)';
   var margin=rev-tc,marginPct=rev>0?Math.round((margin/rev)*100):null;
   var marginColor=margin>0?'var(--green)':margin===0&&rev===0?'var(--text-muted)':'var(--red)';
-  var revColor=isInit?'var(--amber)':(rev>0?'var(--green)':'var(--text-muted)');
+  var revColor=pipeline?'var(--amber)':(rev>0?'var(--green)':'var(--text-muted)');
   var barW=rev>0?Math.max(0,Math.min(100,Math.round((margin/rev)*100))):0;
   return '<div class="proj-financials">'
-    +'<div class="proj-fin-row"><span class="proj-fin-lbl">'+revLbl+'</span><span class="proj-fin-val" style="color:'+revColor+'">'+(rev>0?fmt(rev):'$0')+'/mo'+(isInit?' <span style="font-size:9px;opacity:0.7">(future)</span>':'')+'</span></div>'
+    +'<div class="proj-fin-row"><span class="proj-fin-lbl">'+revLbl+'</span><span class="proj-fin-val" style="color:'+revColor+'">'+(rev>0?fmt(rev):'$0')+'/mo'+(pipeline?' <span style="font-size:9px;opacity:0.7">'+pipeTag+'</span>':'')+'</span></div>'
     +'<div class="proj-fin-row"><span class="proj-fin-lbl">Team cost</span><span class="proj-fin-val proj-fin-cost">'+fmt(tc)+'/mo</span></div>'
     +'<div class="proj-fin-sep"></div>'
     +'<div class="proj-fin-row"><span class="proj-fin-lbl">'+marginLbl+'</span><span class="proj-fin-val" style="color:'+marginColor+'">'+(margin>=0?'':'\u2212')+fmt(Math.abs(margin))+'/mo'+(marginPct!==null?' <span style="opacity:0.75">('+marginPct+'%)</span>':'')+'</span></div>'
@@ -810,11 +823,13 @@ function renderSubProjCard(child,all,q){
 
 function renderProjView(q,category){
   category=category||'project';
-  var meta={project:{noun:'project',label:'Projects',empty:'No projects yet'},initiative:{noun:'initiative',label:'Initiatives',empty:'No initiatives yet'},overhead:{noun:'overhead item',label:'Overhead',empty:'No overhead items yet'}}[category];
+  var meta={project:{noun:'project',label:'Projects',empty:'No projects yet'},initiative:{noun:'initiative',label:'Initiatives',empty:'No initiatives yet'},overhead:{noun:'overhead item',label:'Overhead',empty:'No overhead items yet'},opportunity:{noun:'opportunity',label:'Opportunities',empty:'No opportunities yet'}}[category];
+  var pipe=isPipelineCat(category);
   var all=allM(),tops=topLevelByCat(category),html='<div class="proj-scroll">';
   var totalRev=0,totalCost=0;
   tops.forEach(function(proj){var r=projRollupData(proj.id,all);totalRev+=r.revenue;totalCost+=r.cost;});
-  var sumLine=category==='overhead'?('Total overhead: <strong style="color:var(--red)">'+fmt(totalCost)+'/mo</strong>'):((category==='initiative'?'Total expected rev: ':'Total revenue: ')+'<strong style="color:'+(category==='initiative'?'var(--amber)':'var(--green)')+'">'+fmt(totalRev)+'/mo</strong> &middot; Total cost: <strong>'+fmt(totalCost)+'/mo</strong>');
+  var revWord=category==='opportunity'?'Total potential value: ':category==='initiative'?'Total expected rev: ':'Total revenue: ';
+  var sumLine=category==='overhead'?('Total overhead: <strong style="color:var(--red)">'+fmt(totalCost)+'/mo</strong>'):(revWord+'<strong style="color:'+(pipe?'var(--amber)':'var(--green)')+'">'+fmt(totalRev)+'/mo</strong> &middot; Total cost: <strong>'+fmt(totalCost)+'/mo</strong>');
   html+='<div style="padding:10px 14px;margin-bottom:14px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;color:var(--text-secondary)"><strong style="font-size:13px;color:var(--text-primary)">'+meta.label+'</strong> &middot; '+tops.length+' '+(tops.length===1?meta.noun:meta.noun+'s')+' &middot; '+sumLine+'</div>';
   tops.forEach(function(proj){
     var children=projChildren(proj.id);
@@ -826,8 +841,10 @@ function renderProjView(q,category){
     var rev=rollup.revenue,tc=rollup.cost;
     var noteClass=itemRev(proj)>0?'proj-rev-note':'proj-pursuit-tag';
     var hdrHTML='<div class="proj-nm">'+esc(proj.name)+(hasKids?'<span style="font-size:8px;font-weight:700;background:rgba(197,165,90,0.15);color:var(--gold);padding:1px 6px;border-radius:3px;margin-left:6px;vertical-align:middle;text-transform:uppercase">Rollup</span>':'')+'</div>'
+      +(proj.description?'<div style="font-size:11px;color:var(--text-secondary);margin:3px 0 6px;line-height:1.4">'+esc(proj.description)+'</div>':'')
       +projFinBlock(rev,tc,proj.revenueNote,noteClass,category)
-      +'<div class="proj-cnt" style="margin-top:5px">'+(hasKids?fl.length+' direct &middot; '+rollup.count+' total':fl.length+' '+(fl.length===1?'person':'people'))+' assigned</div>';
+      +'<div class="proj-cnt" style="margin-top:5px">'+(hasKids?fl.length+' direct &middot; '+rollup.count+' total':fl.length+' '+(fl.length===1?'person':'people'))+' assigned</div>'
+      +projAttachHTML(proj);
     html+='<div class="proj-card">'
       +'<div class="proj-hdr"><div class="proj-hdr-left">'+hdrHTML+'</div>'
       +'<button class="btn btn-danger-sm btn-sm" onclick="deleteProject(\''+proj.id+'\')" title="Delete">&#10005;</button></div>'
@@ -839,7 +856,32 @@ function renderProjView(q,category){
   if(!tops.length)html+='<div class="empty-msg">'+meta.empty+'</div>';
   html+='</div>';return html;}
 
-function renderView(){renderStats();var q=(document.getElementById('searchInput').value||'').toLowerCase().trim();var html;if(viewMode==='org')html=renderOrgView(q);else if(viewMode==='proj')html=renderProjView(q,'project');else if(viewMode==='init')html=renderProjView(q,'initiative');else if(viewMode==='over')html=renderProjView(q,'overhead');else html=renderResourcesView(q);document.getElementById('mainContent').innerHTML=html;}
+function renderOrgChartView(q){
+  var all=allM();
+  var byName={};all.forEach(function(m){(byName[m.name]=byName[m.name]||[]).push(m);});
+  var childrenOf={};var roots=[];
+  all.forEach(function(m){var mgr=(m.reportsTo||'').trim();if(mgr&&byName[mgr]&&mgr!==m.name){(childrenOf[mgr]=childrenOf[mgr]||[]).push(m);}else{roots.push(m);}});
+  function subtreeMatches(m,seen){seen=seen||{};if(seen[m.id])return false;seen[m.id]=true;if(memberMatchesSearch(m,q))return true;return (childrenOf[m.name]||[]).some(function(k){return subtreeMatches(k,seen);});}
+  var rendered={};
+  function node(m){
+    if(rendered[m.id])return '';
+    if(q&&!subtreeMatches(m,{}))return '';
+    rendered[m.id]=true;
+    var kids=(childrenOf[m.name]||[]);
+    var badges=(m.hub?'<span style="font-size:8px;font-weight:700;color:var(--green);background:var(--green-dim);border-radius:3px;padding:1px 5px;margin-left:5px">HUB</span>':'')+(m.sme?'<span style="font-size:8px;font-weight:700;color:var(--violet);background:var(--violet-dim);border-radius:3px;padding:1px 5px;margin-left:4px">SME</span>':'');
+    var childHTML=kids.map(function(k){return node(k);}).join('');
+    return '<div><div class="oc-card" onclick="openPersonProfile(\''+m.id+'\')">'
+      +'<div class="oc-name">'+esc(m.name)+badges+'</div>'
+      +'<div class="oc-role">'+esc(m.role||'')+'</div>'
+      +'<div class="oc-meta">'+esc(m._dn)+' &middot; '+fmt(m.cost)+'/mo'+(kids.length?' &middot; '+kids.length+' direct report'+(kids.length>1?'s':''):'')+'</div>'
+      +'</div>'+(childHTML?'<div class="oc-children">'+childHTML+'</div>':'')+'</div>';
+  }
+  var body=roots.map(function(r){return node(r);}).join('');
+  var unassigned=all.filter(function(m){return !rendered[m.id]&&(!q||memberMatchesSearch(m,q));});
+  var orphanHTML=unassigned.length?'<div style="margin-top:18px"><div style="font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px">Not in a reporting line</div>'+unassigned.map(function(m){rendered[m.id]=true;return '<div class="oc-card" onclick="openPersonProfile(\''+m.id+'\')" style="border-left-color:var(--text-muted)"><div class="oc-name">'+esc(m.name)+'</div><div class="oc-role">'+esc(m.role||'')+'</div><div class="oc-meta">'+esc(m._dn)+' &middot; '+fmt(m.cost)+'/mo &middot; reports to: '+(m.reportsTo?esc(m.reportsTo):'—')+'</div></div>';}).join('')+'</div>':'';
+  return '<div class="oc-wrap">'+(body||'<div class="empty-msg">No reporting structure yet</div>')+orphanHTML+'</div>';
+}
+function renderView(){renderStats();var q=(document.getElementById('searchInput').value||'').toLowerCase().trim();var html;if(viewMode==='org')html=renderOrgView(q);else if(viewMode==='proj')html=renderProjView(q,'project');else if(viewMode==='init')html=renderProjView(q,'initiative');else if(viewMode==='opp')html=renderProjView(q,'opportunity');else if(viewMode==='over')html=renderProjView(q,'overhead');else if(viewMode==='orgchart')html=renderOrgChartView(q);else html=renderResourcesView(q);document.getElementById('mainContent').innerHTML=html;}
 
 /* ── RESOURCES VIEW ── */
 function renderResourcesView(q){
@@ -997,7 +1039,7 @@ document.getElementById('mdlEdit').innerHTML=
 +'<div class="fld-row2">'+fN('e_cost','Monthly Cost ($)',m.cost)+fT('e_badge','Badge',m.badge||'')+'</div>'
 +'<div class="fld"><label class="fld-l">Current Department</label><div class="fld-i" style="background:var(--page-bg);font-weight:600;cursor:default">'+esc(dept.name)+'</div></div>'
 +'<div class="fld"><label class="fld-l" for="e_dept_mv">Move to Department</label><select class="fld-sel" id="e_dept_mv"><option value="">— keep in current dept —</option>'+deptMvOpts+'</select></div>'
-+'<div class="fld"><label class="fld-l">Reports To</label><input class="fld-i" id="e_reports" list="e_rl" value="'+esc(m.reportsTo||'')+'"><datalist id="e_rl">'+dl+'</datalist></div>'
++'<div class="fld"><label class="fld-l" for="e_reports">Reports To</label><select class="fld-sel" id="e_reports"><option value="">— none —</option>'+names.map(function(n){return '<option value="'+esc(n)+'"'+(m.reportsTo===n?' selected':'')+'>'+esc(n)+'</option>';}).join('')+'</select></div>'
 +'<span class="fld-section-hdr">Projects &amp; Skills</span>'
 +'<div class="fld"><label class="fld-l">Assignments (Projects / Initiatives / Overhead)</label>'+msHTML('e_proj',m.projects||[],D.projects,'proj-chip','Add assignments...')+'<div id="e_proj_alloc"></div></div>'
 +'<div class="fld"><label class="fld-l">Skills</label>'+msHTML('e_skill',m.skillsets||[],D.skillsets,'skill-chip','Add skills...')+'</div>'
@@ -1044,7 +1086,7 @@ document.getElementById('mdlAdd').innerHTML=
 +'<div class="fld"><label class="fld-l">Department</label><select class="fld-sel" id="a_dept"><option value="">Select department...</option>'+deptOptHTML(null,0,[])+'</select></div>'
 +'<div class="fld-row2">'+fT('a_name','Name','')+fT('a_role','Role / Title','')+'</div>'
 +'<div class="fld-row2">'+fN('a_cost','Monthly Cost ($)',0)+fT('a_badge','Badge','')+'</div>'
-+'<div class="fld"><label class="fld-l">Reports To</label><input class="fld-i" id="a_reports" list="a_rl" value=""><datalist id="a_rl">'+dl+'</datalist></div>'
++'<div class="fld"><label class="fld-l" for="a_reports">Reports To</label><select class="fld-sel" id="a_reports"><option value="">— none —</option>'+names.map(function(n){return '<option value="'+esc(n)+'">'+esc(n)+'</option>';}).join('')+'</select></div>'
 +'<span class="fld-section-hdr">Projects &amp; Skills</span>'
 +'<div class="fld"><label class="fld-l">Assignments (Projects / Initiatives / Overhead)</label>'+msHTML('a_proj',[],D.projects,'proj-chip','Add assignments...')+'<div id="a_proj_alloc"></div></div>'
 +'<div class="fld"><label class="fld-l">Skills</label>'+msHTML('a_skill',[],D.skillsets,'skill-chip','Add skills...')+'</div>'
@@ -1178,7 +1220,7 @@ D.departments.push({id:uid(),name:name,subtitle:gv('ds_sub'),accent:color,member
 closeModal('ovDeptEdit');save();renderView();}
 
 /* ── ADD PROJECT / INITIATIVE / OVERHEAD ── */
-function itemMeta(cat){return {project:{title:'Projects',noun:'Project',revLbl:'Monthly Revenue ($) — leave 0 for pursuits'},initiative:{title:'Initiatives',noun:'Initiative',revLbl:'Expected Monthly Revenue ($) — future, not counted'},overhead:{title:'Overhead',noun:'Overhead Item',revLbl:null}}[cat]||{};}
+function itemMeta(cat){return {project:{title:'Projects',noun:'Project',revLbl:'Monthly Revenue ($) — leave 0 for pursuits'},initiative:{title:'Initiatives',noun:'Initiative',revLbl:'Expected Monthly Revenue ($) — future, not counted'},overhead:{title:'Overhead',noun:'Overhead Item',revLbl:null},opportunity:{title:'Opportunities',noun:'Opportunity',revLbl:'Potential Monthly Value ($) — pipeline, not counted'}}[cat]||{};}
 
 function openItemModal(category){
 var m=itemMeta(category);
@@ -1188,6 +1230,7 @@ document.getElementById('mdlProj').innerHTML=
 +'<div style="border-top:1px solid var(--border);margin-top:14px;padding-top:14px">'
 +'<div style="font-size:10px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:var(--text-secondary);margin-bottom:8px">Add New '+m.noun+'</div>'
 +fT('p_name',m.noun+' Name','')+(m.revLbl?fN('p_rev',m.revLbl,0):'')+fT('p_rnote','Note / Context','')
++'<div class="fld"><label class="fld-l" for="p_desc">Description</label><textarea class="fld-i" id="p_desc" rows="2" placeholder="What is this and why does it matter?"></textarea></div>'
 +'<div class="fld"><label class="fld-l" for="p_parent">Parent (optional)</label><select class="fld-sel" id="p_parent"><option value="">None (top-level)</option>'+projOptHTML(null,0,category)+'</select></div>'
 +'<button class="btn btn-navy btn-full" onclick="saveAddProj(\''+category+'\')" style="margin-top:4px">Add '+m.noun+'</button>'
 +'</div>';
@@ -1201,7 +1244,8 @@ function renderLevel(pid,depth){
   return D.projects.filter(function(p){return(p.parentId||null)===(pid||null)&&(!category||projCat(p)===category);}).map(function(p){
     var cnt=all.filter(function(m){return projIds(m).indexOf(p.id)>-1;}).length;
     var cat=projCat(p),rev=itemRev(p);
-    var revHTML=cat==='overhead'?'<span style="color:var(--slate);font-weight:700">cost center</span> &middot; ':(rev>0?'<span style="color:'+(cat==='initiative'?'var(--amber)':'var(--green)')+';font-weight:700">'+fmt(rev)+'/mo</span> '+(cat==='initiative'?'exp.':'rev')+' &middot; ':'<span style="color:var(--amber);font-weight:700">$0</span> &middot; ');
+    var pipe=isPipelineCat(cat);var revWord=cat==='opportunity'?'pot.':cat==='initiative'?'exp.':'rev';
+    var revHTML=cat==='overhead'?'<span style="color:var(--slate);font-weight:700">cost center</span> &middot; ':(rev>0?'<span style="color:'+(pipe?'var(--amber)':'var(--green)')+';font-weight:700">'+fmt(rev)+'/mo</span> '+revWord+' &middot; ':'<span style="color:var(--amber);font-weight:700">$0</span> &middot; ');
     var indent=depth>0?'padding-left:'+(depth*16)+'px;':'';
     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F1F5F9;gap:8px;'+indent+'">'
       +(depth>0?'<span style="color:var(--text-muted);margin-right:2px">&#8627;</span>':'')
@@ -1216,30 +1260,52 @@ function renderLevel(pid,depth){
 return renderLevel(null,0)||'<div style="padding:12px 0;text-align:center;font-size:12px;color:var(--text-muted)">None yet</div>';}
 
 function saveAddProj(category){var name=gv('p_name').trim();if(!name)return;
-var obj={id:uid(),name:name,category:category,revenue:0,targetRevenue:0,revenueNote:gv('p_rnote'),parentId:gv('p_parent')||null};
-if(category==='project')obj.revenue=Number(gv('p_rev'))||0;else if(category==='initiative')obj.targetRevenue=Number(gv('p_rev'))||0;
+var obj={id:uid(),name:name,category:category,revenue:0,targetRevenue:0,revenueNote:gv('p_rnote'),description:gv('p_desc'),attachments:[],parentId:gv('p_parent')||null};
+if(category==='project')obj.revenue=Number(gv('p_rev'))||0;else if(isPipelineCat(category))obj.targetRevenue=Number(gv('p_rev'))||0;
 D.projects.push(obj);
-save();document.getElementById('p_name').value='';var rv=document.getElementById('p_rev');if(rv)rv.value=0;document.getElementById('p_rnote').value='';
+save();document.getElementById('p_name').value='';var rv=document.getElementById('p_rev');if(rv)rv.value=0;document.getElementById('p_rnote').value='';var dv=document.getElementById('p_desc');if(dv)dv.value='';
 document.getElementById('projList').innerHTML=renderProjList(category);renderView();}
 
 function openEditProject(pid){
 var p=D.projects.find(function(x){return x.id===pid;});if(!p)return;
 var cat=projCat(p);
-var labels={project:'Project',initiative:'Initiative',overhead:'Overhead Item'};
+var labels={project:'Project',initiative:'Initiative',overhead:'Overhead Item',opportunity:'Opportunity'};
 var excl=projDescendantIds(pid);
 var parentOpts='<option value="">None (top-level)</option>'+D.projects.filter(function(q){return excl.indexOf(q.id)===-1&&projCat(q)===cat;}).map(function(q){return '<option value="'+q.id+'"'+((p.parentId===q.id)?' selected':'')+'>'+esc(q.name)+'</option>';}).join('');
-var catOpts=['project','initiative','overhead'].map(function(c){return '<option value="'+c+'"'+(c===cat?' selected':'')+'>'+labels[c]+'</option>';}).join('');
-var revField=cat==='project'?fN('ep_rev','Monthly Revenue ($)',p.revenue||0):cat==='initiative'?fN('ep_rev','Expected Monthly Revenue ($) — future',p.targetRevenue||0):'';
+var catOpts=['project','initiative','opportunity','overhead'].map(function(c){return '<option value="'+c+'"'+(c===cat?' selected':'')+'>'+labels[c]+'</option>';}).join('');
+var revField=cat==='project'?fN('ep_rev','Monthly Revenue ($)',p.revenue||0):cat==='initiative'?fN('ep_rev','Expected Monthly Revenue ($) — future',p.targetRevenue||0):cat==='opportunity'?fN('ep_rev','Potential Monthly Value ($) — pipeline',p.targetRevenue||0):'';
 document.getElementById('mdlDeptEdit').innerHTML=
 '<div class="mdl-over">Edit '+labels[cat]+'</div><div class="mdl-title">'+esc(p.name)+'</div>'
 +fT('ep_name','Name',p.name)
 +'<div class="fld"><label class="fld-l" for="ep_cat">Category</label><select class="fld-sel" id="ep_cat">'+catOpts+'</select><div style="font-size:9px;color:var(--text-muted);margin-top:3px">Changing category? Save, then reopen to set its revenue.</div></div>'
 +revField
 +fT('ep_note','Note / Context',p.revenueNote||'')
++'<div class="fld"><label class="fld-l" for="ep_desc">Description</label><textarea class="fld-i" id="ep_desc" rows="3">'+esc(p.description||'')+'</textarea></div>'
++'<div class="fld"><label class="fld-l">Attachments (links)</label><div id="ep_att_list">'+renderAttList(pid)+'</div>'
++'<div class="fld-row2" style="margin-top:6px"><input class="fld-i" id="ep_att_name" placeholder="Label (e.g. Proposal)"><input class="fld-i" id="ep_att_url" placeholder="https://..."></div>'
++'<button class="btn btn-sec btn-sm" style="margin-top:6px" onclick="addItemAttachment(\''+pid+'\')">+ Add attachment link</button></div>'
 +'<div class="fld"><label class="fld-l" for="ep_parent">Parent</label><select class="fld-sel" id="ep_parent">'+parentOpts+'</select></div>'
 +'<div class="btn-row"><button class="btn btn-navy" style="flex:1" onclick="saveEditProject(\''+pid+'\')">Save</button>'
 +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovDeptEdit\')">Cancel</button></div>';
 openModal('ovDeptEdit');}
+function renderAttList(pid){
+var p=D.projects.find(function(x){return x.id===pid;});if(!p)return '';
+var atts=p.attachments||[];
+if(!atts.length)return '<div style="font-size:11px;color:var(--text-muted)">No attachments yet</div>';
+return atts.map(function(a,i){return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid #F1F5F9">'
+  +'<a href="'+esc(a.url)+'" target="_blank" rel="noopener" style="font-size:12px;color:var(--navy);font-weight:600;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">&#128206; '+esc(a.name||a.url)+'</a>'
+  +'<button class="btn btn-danger-sm btn-sm" onclick="delItemAttachment(\''+pid+'\','+i+')">&#10005;</button></div>';}).join('');}
+function addItemAttachment(pid){
+var p=D.projects.find(function(x){return x.id===pid;});if(!p)return;
+var url=gv('ep_att_url').trim();if(!url)return;if(!/^https?:\/\//i.test(url))url='https://'+url;
+var name=gv('ep_att_name').trim()||url;
+if(!p.attachments)p.attachments=[];p.attachments.push({name:name,url:url});
+save();document.getElementById('ep_att_list').innerHTML=renderAttList(pid);
+document.getElementById('ep_att_name').value='';document.getElementById('ep_att_url').value='';renderView();}
+function delItemAttachment(pid,idx){
+var p=D.projects.find(function(x){return x.id===pid;});if(!p)return;
+(p.attachments||[]).splice(idx,1);save();
+document.getElementById('ep_att_list').innerHTML=renderAttList(pid);renderView();}
 
 function saveEditProject(pid){
 var p=D.projects.find(function(x){return x.id===pid;});if(!p)return;
@@ -1247,9 +1313,9 @@ var name=gv('ep_name').trim();if(name)p.name=name;
 var newCat=gv('ep_cat')||'project';var catChanged=newCat!==projCat(p);p.category=newCat;
 var rv=document.getElementById('ep_rev');
 if(newCat==='project'){p.revenue=rv?(Number(rv.value)||0):(p.revenue||0);p.targetRevenue=0;}
-else if(newCat==='initiative'){p.targetRevenue=rv?(Number(rv.value)||0):(p.targetRevenue||0);p.revenue=0;}
+else if(isPipelineCat(newCat)){p.targetRevenue=rv?(Number(rv.value)||0):(p.targetRevenue||0);p.revenue=0;}
 else{p.revenue=0;p.targetRevenue=0;}
-p.revenueNote=gv('ep_note');p.parentId=catChanged?null:(gv('ep_parent')||null);
+p.revenueNote=gv('ep_note');p.description=gv('ep_desc');p.parentId=catChanged?null:(gv('ep_parent')||null);
 closeModal('ovDeptEdit');save();
 var el=document.getElementById('projList');if(el)el.innerHTML=renderProjList(p.category);
 renderView();}
