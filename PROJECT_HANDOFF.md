@@ -141,17 +141,36 @@ To get DB credentials on a new machine: Railway dashboard → **Postgres service
 D = {
   skillsets: [{id,name}], certifications:[], locations:[], clearances:[],
   pastProjects:[], pastClients:[],
+
   projects: [
     { id, name, category, revenue, targetRevenue, revenueNote,
-      description, attachments:[{id?,name,url,type,size?}], parentId }
+      description, attachments:[{id?,name,url,type,size?}], parentId,
+
+      // ── CLIN revenue breakdown (only used when category='project') see §7d ──
+      clins: [ { id, number, title, revenue (number $/mo), notes } ],
+
+      // ── Opportunity-only fields (when category='opportunity') see §7c ──
+      customer, leadGen, presales, sales, delivery,   // pipeline gate values
+      opr,                                            // owner (text → links to member by first name)
+      pm,                                             // project manager (text)
+      team,                                           // free-text team list
+      stage, status,                                  // stage = pipeline column; status = sales status
+      potential (number $),                           // yearly amount
+      closeDate (YYYY-MM-DD),
+      comment, changeRequested
+    }
   ],
+
   departments: [
     { id, name, subtitle, accent, parentId,
       members: [
         { id, name, role, cost, badge, reportsTo (name string),
-          projects:[{id,pct}], skillsets:[id], certifications:[id],
+          projects:[{ id, pct, clinId? }],            // clinId pins this allocation to a CLIN
+          skillsets:[id], certifications:[id],
           location, clearance, hub, sme, associate, note, reassess,
-          resumeLink, pastProjects:[], pastClients:[] }
+          resumeLink,                                 // legacy single-link
+          attachments:[{id?,name,url,type,size?}],    // Word/PDF + links (incl. SharePoint)
+          pastProjects:[], pastClients:[] }
       ] }
   ],
 
@@ -174,7 +193,12 @@ D = {
       programIds:[id] (owner scope), memberId (linked person), active }
   ],
 
-  overheadSeeded: true, planSeeded: true   // migration flags
+  // ── Per-role section visibility (see §7e) ──
+  sectionVis: { owner:{[sectionKey]:bool}, editor:{...}, viewer:{...} },
+
+  // migration flags — see migrate() / authMigrate() / planMigrate() / oppMigrate()
+  overheadSeeded:true, planSeeded:true, accountsSeeded:true,
+  oppSeeded:true, oppEnriched:true
 }
 ```
 
@@ -217,14 +241,68 @@ A task tracker seeded from the CommunityForce 120-day plan (8 programs, 58 tasks
 - `can(action, ctx)` is the permission gate; `applyRoleUI()` (called from `renderView`) shows/
   hides header buttons; the Plan module disables controls per role. **Program Owners** can edit
   only tasks in their `programIds`.
-- Manage via the **Accounts** header button (admin only): `openAccountsManager`, `saveAccount`.
+- Manage via **Admin → Accounts** (admin only): `openAccountsManager`, `saveAccount`.
+- **Auto-seeded accounts** (one-time, gated by `D.accountsSeeded`): on first migration the app
+  creates an account for every person — `firstname.lastname@communityforce.com`, role **Editor**,
+  shared password `CommunityForce2026` (the constant `DEFAULT_PW` in `index.html`), each linked
+  to its `memberId`. Single-name members (e.g. "SpiritOne") get the single token as the local part.
+  The original admin (`khaja@communityforce.com` / `Namtra_CF27`) is kept and not duplicated.
 - ⚠ **This is UI gating only — it does NOT secure `/api/*`.** See §10.
+
+### 7c. Opportunities pipeline
+
+Opportunities are `D.projects` rows with `category='opportunity'`. **Seeded from
+`CF_Pipeline_Project 2026_2027.xlsx`** (19 pursuits) via `oppMigrate()`, and enriched once with
+close dates / potential $ / status / PM via `OPP_ENRICH` (gated by `D.oppEnriched`).
+- **Pipeline gates** stored as plain strings: `leadGen`, `presales`, `sales`, `delivery`. The
+  rightmost non-empty / non-N/A gate derives the board stage via `oppDeriveStage(p)`.
+- **Stored stage** (`p.stage`) is editable and drives the Kanban board; values in `OPP_STAGES`:
+  Lead Gen / Presales / Sales / Delivery / Won / Lost (with colors).
+- **Status** (`p.status`) is the sales-status dropdown, fixed list in `OPP_STATUSES`:
+  **New / Qualified / Proposal / Negotiation / Closed Won / Closed Lost / On-Hold** (colors in
+  `OPP_STATUS_C`).
+- **Yearly amount**: `p.potential` (number); **Exp Close Date**: `p.closeDate` (YYYY-MM-DD).
+- **Four views** in the toolbar segmented control: **Pipeline** (Kanban, drag-to-change stage),
+  **List** (grouped by stage), **Table** (mirrors the source spreadsheet columns + totals row),
+  **Calendar** (by `closeDate`). Summary header shows stage counts and a per-status totals row.
+- Files + **SharePoint links** attach via the existing per-item attachment UI (`uploadItemAttachment`,
+  `addItemAttachment`).
+- Key functions: `renderOppView`, `oppBoardHTML` / `oppListHTML` / `oppTableHTML` / `oppCalendarHTML`,
+  `oppEditFields`, `oppMigrate`, `oppDeriveStage`, `oppStatusChip`. The opportunity edit fields live
+  inside `openEditProject` (gated on `category==='opportunity'`); save handled in `saveEditProject`.
+
+### 7d. CLINs (Contract Line Items) — revenue breakdown + P&L
+
+Each contract `project` (category `project`) can carry a `clins[]` array. Resources assigned
+to that project optionally pin to a specific CLIN via `member.projects[i].clinId`, giving
+per-CLIN cost rollups and profit/loss.
+
+**Edit UI** lives inside the project edit modal (`renderClinsSection(pid)`):
+- A **CLIN table**: inline-editable Number / Title / Revenue, plus computed Assigned Cost +
+  Profit/Loss per CLIN and a totals row (CLIN-assigned cost + unassigned project cost = total cost).
+- A **Resource → CLIN Assignments** table: every person on the project, their % and cost, with a
+  dropdown to pin them to a CLIN (or "General"). `setAssignmentClin(memberId, projectId, clinId)`
+  normalizes the member's `m.projects` entry to `{id, pct, clinId}`.
+- Helpers: `clinAdd`, `clinUpdate`, `clinDel`, `clinAssignedMembers`, `clinAssignedCost`,
+  `projClinRevenue`.
+- **Save preservation**: `saveEdit` in the Person modal now merges old `clinId` values into the
+  new `m.projects` so editing skills/projects there does NOT wipe CLIN pins.
+
+### 7e. Section visibility (per-role)
+
+`D.sectionVis` is a per-role map `{ role: { sectionKey: bool } }` where `sectionKey` is one of
+`org / orgchart / proj / init / opp / over / res / plan` (see `SECTIONS`). Admin always sees all.
+- `canSee(k)` is the gate; `applyRoleUI()` hides tab buttons via `display:none` and auto-
+  reassigns `viewMode` if the current tab is hidden for the user.
+- Manage via **Admin → Section visibility** (admin only): `openVisibilityManager`, `setSectionVis`.
 
 ---
 
 ## 8. Views / Features
 
 - **Department View** — org structure; drag people between departments; click a card to edit.
+  - Person edit modal supports **resume / file upload + links** (Word/PDF + SharePoint, see
+    `memberUpload`, `memberAddLink`, `renderMemberAtt`); files surface on the profile card.
 - **Org Chart** — five switchable layouts (segmented control at top): **Hierarchical**
   (top-down `reportsTo` tree), **Flat/Horizontal** (same tree, left-to-right), **Matrix**
   (team × project grid), **Functional** (columns by department), **Division** (columns by
@@ -232,14 +310,22 @@ A task tracker seeded from the CommunityForce 120-day plan (8 programs, 58 tasks
   `renderOrgMatrix` / `renderOrgFunctional` / `renderOrgDivision`.
 - **120-Day Plan** — task tracker with 5 views, programs, subtasks, updates, attachments,
   roles (see §7a / §7b).
-- **Projects / Initiatives / Opportunities / Overhead** — category-filtered views with
-  revenue/cost/margin (or potential value / cost-only) and assigned resources. Utilization
-  `%` is editable inline on each resource row.
-- **Resources View** — resource-centric listing.
+- **Projects / Initiatives / Overhead** — category-filtered card views with revenue/cost/margin
+  and assigned resources. Utilization `%` is editable inline. Contract projects gain a
+  **CLIN Revenue Breakdown** section in the edit modal (see §7d).
+- **Opportunities** — dedicated multi-view pipeline page (Pipeline / List / Table / Calendar),
+  status totals, fixed-list status dropdown, files + SharePoint links (see §7c).
+- **Resources View** — resource-centric listing **grouped by `member.location`** (with
+  "No location set" last); headcount + monthly cost per location.
 - Per-item **description** + **attachments** (file uploads or links).
-- **+ Person / Departments / + Project / + Initiative / + Opportunity / + Overhead / Skills /
-  Accounts / Admin** (header buttons are role-gated; **Logout** + a user badge are in the header).
-- **Export / Import** JSON backups.
+- **Header is now slim:** *user badge · ⚙ Admin · Logout*. All actions live under the **Admin**
+  button menu (`openAdmin`), categorized as:
+  - **People & Teams** — `+ Person`, `Departments`
+  - **Items** — `+ Project`, `+ Initiative`, `+ Opportunity`, `+ Overhead`
+  - **Reference Library** — `Skills, certifications, locations, clearances` (the old
+    tabbed admin, now reached via `openAdminLibrary`)
+  - **Access Control** — `Accounts`, `Section visibility` (admin only)
+  - **Data** — `Export`, `Import`
 - Persistence: loads from `/api/data` (Postgres), autosaves ~1s after edits;
   `localStorage` is an offline cache/fallback.
 
@@ -296,14 +382,30 @@ original machine — not in the repo; recreate if needed).
 - The whole app is `index.html`; search the `<script>` block for function names
   (`renderProjView`, `renderOrgChartView`, `openEditProject`, `saveEditProject`,
   `openEditMember`, `serverSave`, `projCat`, `itemRev`).
-- **Boot sequence** (changed for accounts): `initApp()` → `bootstrapData()` loads `D` and runs
-  `migrate()` (which calls `planMigrate()` + `authMigrate()`) → `currentAccount()` resolves the
-  session → `renderView()`. `migrate()` is idempotent and seeds programs/activities/accounts
-  on first load (guarded by `planSeeded` / `accounts` presence).
-- **Plan module** functions: `renderPlanView`, `planMigrate`, `planFiltered`, `openPlanModal`,
-  `savePlan`, `planSetStatus`, `openProgramsManager`. **Org layouts:** `renderOrgHier`,
-  `renderOrgMatrix`, `renderOrgFunctional`, `renderOrgDivision`. **Auth:** `can`, `applyRoleUI`,
-  `doLogin`, `openAccountsManager`.
+- **Boot sequence:** `initApp()` → `bootstrapData()` loads `D` and runs `migrate()` (which calls
+  `planMigrate()` + `authMigrate()` + `oppMigrate()`) → `currentAccount()` resolves the session →
+  `renderView()`. `migrate()` is idempotent; each module guards its one-time seed work behind a
+  flag (`planSeeded`, `accountsSeeded`, `oppSeeded`, `oppEnriched`). The seed-persistence check in
+  `bootstrapData` re-saves to Postgres when any flag is missing.
+- **Function inventory** (by module):
+  - **Plan** — `renderPlanView`, `planMigrate`, `planFiltered`, `openPlanModal`, `savePlan`,
+    `planSetStatus`, `openProgramsManager`, view-renderers `planListHTML` / `planBoardHTML` /
+    `planGanttHTML` / `planCalendarHTML` / `planMilestoneHTML`.
+  - **Org Chart** — `renderOrgChartView`, `renderOrgHier`, `renderOrgMatrix`,
+    `renderOrgFunctional`, `renderOrgDivision`.
+  - **Opportunities** — `renderOppView`, `oppBoardHTML` / `oppListHTML` / `oppTableHTML` /
+    `oppCalendarHTML`, `oppEditFields`, `oppMigrate`, `oppDeriveStage`, `oppStatusChip`,
+    `OPP_STAGES`, `OPP_STATUSES`, `OPP_STATUS_C`, `PIPELINE_SEED`, `OPP_ENRICH`.
+  - **CLINs** — `renderClinsSection`, `clinAdd`, `clinUpdate`, `clinDel`, `setAssignmentClin`,
+    `clinAssignedMembers`, `clinAssignedCost`, `projClinRevenue`.
+  - **Person attachments** — `memberUpload`, `memberAddLink`, `memberDelAtt`, `renderMemberAtt`,
+    `findMember`.
+  - **Auth / access** — `can`, `canSee`, `applyRoleUI`, `doLogin`, `authMigrate`, `currentAccount`,
+    `openAccountsManager`, `openAccountEdit`, `saveAccount`, `openVisibilityManager`,
+    `setSectionVis`, `SECTIONS`, `ROLE_LABELS`, `DEFAULT_PW`, `emailFromName`.
+  - **Admin menu** — `openAdmin` (the menu), `openAdminLibrary` (the legacy tabbed library).
+  - **Resources by Location** — `renderResourcesView` (groups by `m.location`, sorted via
+    `D.locations` order, "_none" last).
 - Data edits to live content are done by mutating `D` in the browser console and calling
   `save()` / `serverSave()`, OR through the UI — both persist to Postgres.
 - Syntax-check the inline script before deploying by extracting the `<script>` contents and
