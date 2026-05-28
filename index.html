@@ -419,6 +419,12 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .tpl-row input{flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;outline:none;}
 .tpl-row input:focus{border-color:var(--gold);}
 .tpl-wrap{background:#fff;border:1px solid var(--border);border-radius:10px;padding:6px 0;box-shadow:var(--shadow-sm);}
+.plan-row-drag{cursor:default;}
+.plan-row-drag .plan-grip{cursor:grab;color:var(--text-muted);font-size:14px;line-height:1;letter-spacing:-2px;padding:0 6px 0 0;user-select:none;flex-shrink:0;align-self:center;opacity:0.5;transition:opacity 0.15s,color 0.15s;}
+.plan-row-drag:hover .plan-grip{opacity:1;color:var(--gold);}
+.plan-row-drag .plan-grip:active{cursor:grabbing;}
+.plan-row-dragging{opacity:0.35;}
+.plan-row-over{box-shadow:inset 0 3px 0 var(--gold);}
 </style>
 </head>
 <body>
@@ -488,7 +494,6 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
       <button class="tab" id="tabClass" onclick="switchTab('class')">Classification View</button>
       <button class="tab" id="tabPlan" onclick="switchTab('plan')">COE Plan</button>
       <button class="tab" id="tabPTask" onclick="switchTab('ptask')">Project Tasks</button>
-      <button class="tab" id="tabTpl" onclick="switchTab('tpl')">Task Templates</button>
     </div>
   </div>
 </div></div>
@@ -502,6 +507,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 <div class="ov" id="ovAdmin" onclick="closeModal('ovAdmin')"><div class="mdl" id="mdlAdmin" onclick="event.stopPropagation()" style="max-width:520px"></div></div>
 <div class="ov" id="ovProfile" onclick="closeModal('ovProfile')"><div class="mdl" id="mdlProfile" onclick="event.stopPropagation()" style="max-width:460px"></div></div>
 <div class="ov" id="ovPlan" onclick="closeModal('ovPlan')"><div class="mdl" id="mdlPlan" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
+<div class="ov" id="ovTpl" onclick="closeModal('ovTpl')"><div class="mdl" id="mdlTpl" onclick="event.stopPropagation()" style="max-width:680px"></div></div>
 <script>
 (function(){var svg="<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><rect width='40' height='40' rx='9' fill='#16223C'/><line x1='20' y1='12.5' x2='11' y2='27' stroke='#C5A55A' stroke-width='2.2' stroke-linecap='round'/><line x1='20' y1='12.5' x2='20' y2='27' stroke='#C5A55A' stroke-width='2.2' stroke-linecap='round'/><line x1='20' y1='12.5' x2='29' y2='27' stroke='#C5A55A' stroke-width='2.2' stroke-linecap='round'/><circle cx='20' cy='12' r='5' fill='#C5A55A'/><circle cx='11' cy='28' r='3.7' fill='#fff'/><circle cx='20' cy='28' r='3.7' fill='#fff'/><circle cx='29' cy='28' r='3.7' fill='#fff'/></svg>";var l=document.createElement('link');l.rel='icon';l.type='image/svg+xml';l.href='data:image/svg+xml,'+encodeURIComponent(svg);document.head.appendChild(l);})();
 var STORE_KEY='cf_orgchart_v2';
@@ -776,6 +782,56 @@ function planProgress(acts){var done=acts.filter(function(a){return a.status==='
 function planSetFilter(key,val){planFilter[key]=val;renderView();}
 function planSetMode(m){planMode=m;renderView();}
 function planSetStatus(id,k){var a=D.activities.find(function(x){return x.id===id;});if(!a)return;if(!can('task',a.programId)){alert('You do not have permission to change this task.');return;}a.status=k;save();renderView();}
+var planRowDragId=null;
+function planRowDragStart(e,id){
+  planRowDragId=id;
+  if(e.stopPropagation)e.stopPropagation();
+  if(e.dataTransfer){e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',id);}catch(_){}}
+  var el=e.currentTarget||e.target;if(el&&el.classList)el.classList.add('plan-row-dragging');
+}
+function planRowDragOver(e,id){
+  if(!planRowDragId||planRowDragId===id)return;
+  e.preventDefault();
+  if(e.dataTransfer)e.dataTransfer.dropEffect='move';
+  var el=e.currentTarget||e.target;if(el&&el.classList)el.classList.add('plan-row-over');
+}
+function planRowDragLeave(e){
+  var el=e.currentTarget||e.target;if(el&&el.classList)el.classList.remove('plan-row-over');
+}
+function planRowDrop(e,id){
+  e.preventDefault();if(e.stopPropagation)e.stopPropagation();
+  var el=e.currentTarget||e.target;if(el&&el.classList)el.classList.remove('plan-row-over');
+  if(!planRowDragId||planRowDragId===id)return;
+  planReorder(planRowDragId,id);
+  planRowDragId=null;
+}
+function planRowDragEnd(){
+  planRowDragId=null;
+  document.querySelectorAll('.plan-row-dragging').forEach(function(el){el.classList.remove('plan-row-dragging');});
+  document.querySelectorAll('.plan-row-over').forEach(function(el){el.classList.remove('plan-row-over');});
+}
+function planReorder(srcId,tgtId){
+  if(srcId===tgtId)return;
+  var src=D.activities.find(function(a){return a.id===srcId;});
+  var tgt=D.activities.find(function(a){return a.id===tgtId;});
+  if(!src||!tgt)return;
+  if((src.kind||'coe')!==(tgt.kind||'coe'))return;
+  var isProj=(src.kind||'coe')==='project';
+  if(isProj){
+    if((src.projectId||'')!==(tgt.projectId||''))return;
+  }else{
+    if(src.programId!==tgt.programId)return;
+  }
+  src.order=(Number(tgt.order)||0)-0.5;
+  var bucket=D.activities.filter(function(a){
+    if((a.kind||'coe')!==(src.kind||'coe'))return false;
+    if(isProj)return (a.projectId||'')===(src.projectId||'');
+    return a.programId===src.programId;
+  });
+  bucket.sort(function(a,b){return (Number(a.order)||0)-(Number(b.order)||0);});
+  bucket.forEach(function(a,i){a.order=i+1;});
+  save();renderView();
+}
 function planCanAddAny(){if(!ME)return false;if(ME.role==='admin'||ME.role==='editor')return true;if(ME.role==='owner')return (ME.programIds||[]).length>0;return false;}
 function renderPlanView(q){
   var acts=planFiltered(q),prog=planProgress(acts),counts={};
@@ -811,7 +867,9 @@ function planRowHTML(a,depth){
   var editable=can('task',a.programId),kids=planChildren(a.id),dis=editable?'':' disabled';
   var st=planParseDate(a.start),du=planParseDate(a.dueDate);
   var dateChip=(st||du)?('<span class="plan-chip">'+(st?planFmtShort(st):'…')+' → '+(du?planFmtShort(du):'…')+'</span>'):'';
-  return '<div class="plan-row" style="margin-left:'+(depth*22)+'px">'
+  var dragAttrs=(editable&&depth===0)?(' draggable="true" ondragstart="planRowDragStart(event,\''+a.id+'\')" ondragover="planRowDragOver(event,\''+a.id+'\')" ondragleave="planRowDragLeave(event)" ondrop="planRowDrop(event,\''+a.id+'\')" ondragend="planRowDragEnd()"'):'';
+  return '<div class="plan-row'+(editable&&depth===0?' plan-row-drag':'')+'" style="margin-left:'+(depth*22)+'px"'+dragAttrs+'>'
+    +(editable&&depth===0?'<span class="plan-grip" title="Drag to reorder">&#8942;&#8942;</span>':'')
     +'<select class="plan-pill" style="background:'+s.c+'" title="Change status" onclick="event.stopPropagation()" onchange="planSetStatus(\''+a.id+'\',this.value)"'+dis+'>'
       +PLAN_STS.map(function(o){return '<option value="'+o.k+'"'+(o.k===a.status?' selected':'')+'>'+o.l+'</option>';}).join('')+'</select>'
     +'<div class="plan-row-main" onclick="openPlanModal(\''+a.id+'\')">'
@@ -838,6 +896,7 @@ function planListHTML(acts){
   groups.forEach(function(p){
     var pacts=isProj?acts.filter(function(a){return (a.projectId||'')===p.id;}):acts.filter(function(a){return a.programId===p.id;});
     if(!pacts.length)return;
+    pacts.sort(function(a,b){return (Number(a.order)||0)-(Number(b.order)||0);});
     var pp=planProgress(pacts),ck='planp_'+(p.id||'unassigned'),open=!collState[ck];
     html+='<div class="plan-prog-card"><div class="plan-prog-hdr" style="background:linear-gradient(135deg,'+(p.color||'#546478')+',var(--navy))" onclick="togDept(\''+ck+'\')">'
       +'<span class="plan-prog-nm">'+(open?'&#9660; ':'&#9658; ')+esc(p.name)+'</span>'
@@ -1177,7 +1236,7 @@ document.getElementById('statsBar').innerHTML=[
 {l:'Skills',v:D.skillsets.length,u:'defined'},{l:'Reassess',v:fl,u:'flagged',w:fl>0},{l:'Over-alloc',v:oa,u:'people',w:oa>0}
 ].map(function(s){return '<div class="st'+(s.w?' warn':'')+'"><div class="st-l">'+s.l+'</div><div class="st-v'+(s.w?' wv':'')+'">'+s.v+'<span class="st-u">'+s.u+'</span></div></div>';}).join('');}
 
-function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',init:'tabInit',opp:'tabOpp',over:'tabOver',orgchart:'tabChart',res:'tabRes',class:'tabClass',plan:'tabPlan',ptask:'tabPTask',tpl:'tabTpl'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
+function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',init:'tabInit',opp:'tabOpp',over:'tabOver',orgchart:'tabChart',res:'tabRes',class:'tabClass',plan:'tabPlan',ptask:'tabPTask'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
 
 function cardHTML(m,did){
 var dept=D.departments.find(function(d){return d.id===did;});
@@ -1552,7 +1611,6 @@ function renderView(){
   else if(viewMode==='orgchart')html=renderOrgChartView(q);
   else if(viewMode==='plan'||viewMode==='ptask')html=renderPlanView(q);
   else if(viewMode==='class')html=renderClassificationView(q);
-  else if(viewMode==='tpl')html=renderTaskTemplatesView();
   else html=renderResourcesView(q);
   document.getElementById('mainContent').innerHTML=html;
 }
@@ -1625,9 +1683,10 @@ function renderClassificationView(q){
   return html||'<div class="empty-msg">No classified resources yet. Edit a person to set Hub / SME / Associate / Proposal / Recruiter.</div>';
 }
 
-/* ── TASK TEMPLATES VIEW ── */
-function renderTaskTemplatesView(){
-  var canEdit=ME&&(ME.role==='admin'||ME.role==='editor');
+/* ── TASK TEMPLATES MANAGER (admin-only modal) ── */
+function openTaskTemplatesManager(){
+  if(!ME)return;
+  var canEdit=ME.role==='admin'||ME.role==='editor';
   var tpls=D.taskTemplates||[];
   var rows=tpls.map(function(t){
     var usage=D.activities.filter(function(a){return a.templateId===t.id;}).length;
@@ -1637,20 +1696,22 @@ function renderTaskTemplatesView(){
       +(canEdit?'<button class="btn btn-danger-sm btn-sm" onclick="tplDel(\''+t.id+'\')" title="Delete template">&#10005;</button>':'')
       +'</div>';
   }).join('')||'<div style="padding:14px;text-align:center;font-size:12px;color:var(--text-muted)">No task templates yet.</div>';
-  return '<div style="max-width:760px;margin:0 auto">'
-    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
-      +'<div><div style="font-size:18px;font-weight:800">Task Templates</div>'
-      +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Repeatable tasks you can attach to any opportunity. Selecting a template in an opportunity creates a Project Task named <code>Task_&lt;OppName&gt;_&lt;Customer&gt;</code>.</div></div>'
-      +(canEdit?'<button class="btn btn-gold btn-sm" onclick="tplAdd()">+ Add Template</button>':'')
-    +'</div>'
-    +'<div class="tpl-wrap">'+rows+'</div></div>';
+  document.getElementById('mdlTpl').innerHTML=
+    '<div class="mdl-over">Administration</div><div class="mdl-title">Task Templates</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Repeatable workflow tasks. Selecting a template inside an opportunity creates a Project Task named <code>Task_&lt;OppName&gt;_&lt;Customer&gt;</code>.</div>'
+    +'<div class="tpl-wrap">'+rows+'</div>'
+    +'<div class="btn-row" style="margin-top:14px">'
+      +(canEdit?'<button class="btn btn-gold" style="flex:1" onclick="tplAdd()">+ Add Template</button>':'')
+      +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovTpl\')">Close</button>'
+    +'</div>';
+  openModal('ovTpl');
 }
 function tplAdd(){
   var name=prompt('New task template name (e.g. "Perform Lead Generation"):');
   if(!name||!name.trim())return;
   if(!D.taskTemplates)D.taskTemplates=[];
   D.taskTemplates.push({id:uid(),name:name.trim()});
-  save();renderView();
+  save();openTaskTemplatesManager();
 }
 function tplUpdateName(id,val){
   var t=(D.taskTemplates||[]).find(function(x){return x.id===id;});
@@ -1661,7 +1722,7 @@ function tplDel(id){
   if(!confirm('Delete this template?'+(inUse?'\n\n'+inUse+' task(s) currently reference it — they will be kept but unlinked from this template.':'')))return;
   D.activities.forEach(function(a){if(a.templateId===id)a.templateId='';});
   D.taskTemplates=(D.taskTemplates||[]).filter(function(t){return t.id!==id;});
-  save();renderView();
+  save();openTaskTemplatesManager();
 }
 
 /* ── OPPORTUNITY WORKFLOW ── */
@@ -2263,6 +2324,7 @@ function openAdmin(){
       +'</div></div>';
     html+='<div class="admin-menu-sec"><div class="admin-menu-lbl">Reference Library</div><div class="admin-menu-row">'
       +'<button class="btn btn-outline btn-sm admin-mi" onclick="openAdminLibrary()">Skills, certifications, locations, clearances</button>'
+      +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openTaskTemplatesManager()">Task Templates</button>'
       +'</div></div>';
   }
   if(canA){
@@ -2398,7 +2460,7 @@ function delAccount(id){if(!can('accounts'))return;if(ME&&ME.id===id){alert('You
 /* ── AUTH & PERMISSIONS (client-side roles only — not API security) ── */
 var AUTH_USER='khaja@communityforce.com',AUTH_PASS='Namtra_CF27',DEFAULT_PW='CommunityForce2026';
 var ME=null;
-var SECTIONS=[{k:'org',tab:'tabOrg',l:'Department View'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources View'},{k:'class',tab:'tabClass',l:'Classification View'},{k:'plan',tab:'tabPlan',l:'COE Plan'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'tpl',tab:'tabTpl',l:'Task Templates'}];
+var SECTIONS=[{k:'org',tab:'tabOrg',l:'Department View'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources View'},{k:'class',tab:'tabClass',l:'Classification View'},{k:'plan',tab:'tabPlan',l:'COE Plan'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'}];
 function emailFromName(name){var clean=(name||'').replace(/\(.*?\)/g,'').replace(/[^A-Za-z .\-]/g,'').trim();var parts=clean.split(/\s+/).filter(Boolean);var local=parts.length>=2?(parts[0]+'.'+parts[parts.length-1]):(parts[0]||'user');return local.toLowerCase().replace(/[^a-z0-9.]/g,'')+'@communityforce.com';}
 function authMigrate(){
   if(!D.accounts)D.accounts=[];
