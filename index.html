@@ -298,6 +298,13 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .vis-table tbody td:first-child{font-weight:600;}
 .opp-table td{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .opp-table th{white-space:nowrap;}
+.admin-menu-sec{padding:10px 0;border-bottom:1px solid var(--border);}
+.admin-menu-sec:last-of-type{border-bottom:none;}
+.admin-menu-lbl{font-size:10px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:var(--text-secondary);margin-bottom:6px;}
+.admin-menu-row{display:flex;flex-wrap:wrap;gap:6px;}
+.admin-mi{font-size:12px;}
+.admin-menu-row .btn-outline.admin-mi{color:var(--navy);background:#fff;border:1px solid var(--border);}
+.admin-menu-row .btn-outline.admin-mi:hover{background:var(--page-bg);border-color:var(--navy);}
 /* ── 120-DAY PLAN / ACTIVITY TRACKER ── */
 .plan-wrap{padding:2px 2px 30px;}
 .plan-summary{padding:12px 16px;margin-bottom:14px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);}
@@ -422,17 +429,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
     </div>
     <div class="hdr-actions">
       <span class="user-badge" id="userBadge"></span>
-      <button class="btn btn-gold" id="hb_person" onclick="openAddMember()">+ Person</button>
-      <button class="btn btn-outline" id="hb_depts" onclick="openManageDepts()">Departments</button>
-      <button class="btn btn-outline" id="hb_proj" onclick="openItemModal('project')">+ Project</button>
-      <button class="btn btn-outline" id="hb_init" onclick="openItemModal('initiative')">+ Initiative</button>
-      <button class="btn btn-outline" id="hb_opp" onclick="openItemModal('opportunity')">+ Opportunity</button>
-      <button class="btn btn-outline" id="hb_over" onclick="openItemModal('overhead')">+ Overhead</button>
-      <button class="btn btn-outline" id="hb_skills" onclick="openManageSkills()">Skills</button>
-      <button class="btn btn-outline" id="hb_accounts" onclick="openAccountsManager()">&#128100; Accounts</button>
-      <button class="btn btn-outline" id="hb_admin" onclick="openAdmin()">&#9881; Admin</button>
-      <button class="btn btn-outline" onclick="exportData()" title="Download backup JSON">&#8595; Export</button>
-      <button class="btn btn-outline" id="hb_import" onclick="importData()" title="Restore from JSON file">&#8593; Import</button>
+      <button class="btn btn-gold" id="hb_admin" onclick="openAdmin()" title="People, items, library, access, data">&#9881; Admin</button>
       <button class="btn btn-outline" onclick="logout()" title="Sign out">Logout</button>
     </div>
   </div>
@@ -1901,12 +1898,46 @@ var ADMIN_TABS=[
 {id:'pastproj',label:'Past Projects',key:'pastProjects',memberKey:'pastProjects'},
 {id:'pastcl',label:'Past Clients',key:'pastClients',memberKey:'pastClients'}];
 
-function openAdmin(){
+function openAdminLibrary(){
 if(!adminTab)adminTab='skills';
 document.getElementById('mdlAdmin').innerHTML=renderAdminModal();
 openModal('ovAdmin');}
 
-function openManageSkills(){openAdmin();}
+function openManageSkills(){openAdminLibrary();}
+
+function openAdmin(){
+  if(!ME)return;
+  var canG=can('globals'),canA=can('accounts'),canI=can('import');
+  var html='<div class="mdl-over">Administration</div><div class="mdl-title">Admin</div>';
+  if(canG){
+    html+='<div class="admin-menu-sec"><div class="admin-menu-lbl">People &amp; Teams</div><div class="admin-menu-row">'
+      +'<button class="btn btn-gold btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openAddMember()">+ Person</button>'
+      +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openManageDepts()">Departments</button>'
+      +'</div></div>';
+    html+='<div class="admin-menu-sec"><div class="admin-menu-lbl">Items</div><div class="admin-menu-row">'
+      +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openItemModal(\'project\')">+ Project</button>'
+      +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openItemModal(\'initiative\')">+ Initiative</button>'
+      +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openItemModal(\'opportunity\')">+ Opportunity</button>'
+      +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openItemModal(\'overhead\')">+ Overhead</button>'
+      +'</div></div>';
+    html+='<div class="admin-menu-sec"><div class="admin-menu-lbl">Reference Library</div><div class="admin-menu-row">'
+      +'<button class="btn btn-outline btn-sm admin-mi" onclick="openAdminLibrary()">Skills, certifications, locations, clearances</button>'
+      +'</div></div>';
+  }
+  if(canA){
+    html+='<div class="admin-menu-sec"><div class="admin-menu-lbl">Access Control</div><div class="admin-menu-row">'
+      +'<button class="btn btn-outline btn-sm admin-mi" onclick="openAccountsManager()">&#128100; Accounts</button>'
+      +'<button class="btn btn-outline btn-sm admin-mi" onclick="openVisibilityManager()">Section visibility</button>'
+      +'</div></div>';
+  }
+  html+='<div class="admin-menu-sec"><div class="admin-menu-lbl">Data</div><div class="admin-menu-row">'
+    +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');exportData()" title="Download backup JSON">&#8595; Export</button>'
+    +(canI?'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');importData()" title="Restore from JSON file">&#8593; Import</button>':'')
+    +'</div></div>';
+  html+='<div class="btn-row" style="margin-top:14px"><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovAdmin\')">Close</button></div>';
+  document.getElementById('mdlAdmin').innerHTML=html;
+  openModal('ovAdmin');
+}
 
 function renderAdminModal(){
 var tab=ADMIN_TABS.find(function(t){return t.id===adminTab;})||ADMIN_TABS[0];
@@ -2063,9 +2094,7 @@ function can(act,ctx){
   }
 }
 function applyRoleUI(){
-  var showGlobals=can('globals');
-  ['hb_person','hb_depts','hb_proj','hb_init','hb_opp','hb_over','hb_skills','hb_admin','hb_import'].forEach(function(idd){var el=document.getElementById(idd);if(el)el.style.display=showGlobals?'':'none';});
-  var acctBtn=document.getElementById('hb_accounts');if(acctBtn)acctBtn.style.display=can('accounts')?'':'none';
+  var adm=document.getElementById('hb_admin');if(adm)adm.style.display=ME?'':'none';
   SECTIONS.forEach(function(s){var el=document.getElementById(s.tab);if(el){el.style.display=canSee(s.k)?'':'none';el.className='tab'+(viewMode===s.k?' active':'');}});
   var badge=document.getElementById('userBadge');if(badge&&ME)badge.innerHTML=esc(ME.name)+' <span style="opacity:0.7">· '+ROLE_LABELS[ME.role]+'</span>';
 }
