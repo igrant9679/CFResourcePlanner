@@ -398,6 +398,27 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .rt-area a{color:var(--navy);text-decoration:underline;}
 .plan-next{font-size:11px;color:var(--text-secondary);margin:3px 0 5px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .plan-next b{color:var(--text-primary);font-weight:700;}
+.prof-badge-prop{background:rgba(5,150,105,0.15);color:#059669;}
+.prof-badge-recr{background:rgba(124,58,237,0.15);color:#7C3AED;}
+.tag-prop{background:rgba(5,150,105,0.15);color:#059669;}
+.tag-recr{background:rgba(124,58,237,0.15);color:#7C3AED;}
+.wf-tbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px;}
+.wf-tbl th{background:var(--page-bg);text-align:left;padding:6px 8px;font-size:10px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:var(--text-secondary);border-bottom:1px solid var(--border);}
+.wf-tbl td{padding:6px 8px;border-bottom:1px solid #F1F5F9;vertical-align:middle;}
+.wf-tbl td .fld-sel{padding:5px 7px;font-size:11px;}
+.wf-add-row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px;}
+.wf-add-row button{font-size:11px;}
+.wf-add-row button.added{opacity:0.5;cursor:default;}
+.class-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px;box-shadow:var(--shadow-sm);}
+.class-card-hdr{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.class-card-dot{width:10px;height:10px;border-radius:50%;}
+.class-card-ttl{font-size:14px;font-weight:800;letter-spacing:0.3px;text-transform:uppercase;}
+.class-card-sub{font-size:10px;font-weight:400;color:var(--text-muted);margin-left:6px;text-transform:none;letter-spacing:0;}
+.tpl-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-bottom:1px solid #F1F5F9;}
+.tpl-row:last-child{border-bottom:none;}
+.tpl-row input{flex:1;padding:7px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;outline:none;}
+.tpl-row input:focus{border-color:var(--gold);}
+.tpl-wrap{background:#fff;border:1px solid var(--border);border-radius:10px;padding:6px 0;box-shadow:var(--shadow-sm);}
 </style>
 </head>
 <body>
@@ -464,8 +485,10 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
       <button class="tab" id="tabOpp" onclick="switchTab('opp')">Opportunities</button>
       <button class="tab" id="tabOver" onclick="switchTab('over')">Overhead</button>
       <button class="tab" id="tabRes" onclick="switchTab('res')">Resources View</button>
+      <button class="tab" id="tabClass" onclick="switchTab('class')">Classification View</button>
       <button class="tab" id="tabPlan" onclick="switchTab('plan')">COE Plan</button>
       <button class="tab" id="tabPTask" onclick="switchTab('ptask')">Project Tasks</button>
+      <button class="tab" id="tabTpl" onclick="switchTab('tpl')">Task Templates</button>
     </div>
   </div>
 </div></div>
@@ -674,7 +697,25 @@ function migrate(){
   });});
   var REV={'p_bclm':{revenue:212756,revenueNote:'→ $265,945/mo Aug 15 · BCLM +25% extension'},'p_fams':{revenue:76944,revenueNote:'Ends Sep 24, 2026 · 85.2% margin'},'p_c1fams':{revenue:25984,revenueNote:'→ $100,000/mo target Oct 2026 · 61% margin at maturity'},'p_software':{revenue:50000,revenueNote:'$550K ARR floor · 7.65% margin — needs intervention'},'p_marines':{revenue:0,revenueNote:'Active pursuit · SBIR Phase III via ForwardEdge-AI · $1.2M'},'p_salesforce':{revenue:0,revenueNote:'Build phase · 3 engagements seeding'},'p_afosi':{revenue:0,revenueNote:'Proposal due Jun 8 · $1.0M opportunity'},'p_phoenix':{revenue:0,revenueNote:'Software play · repricing initiative'},'p_tableau':{revenue:0,revenueNote:'Internal capability build'}};
   D.projects.forEach(function(p){if(!('revenue' in p)){var d=REV[p.id];p.revenue=d?d.revenue:0;p.revenueNote=d?d.revenueNote:'';}if(!('revenueNote' in p))p.revenueNote='';if(!p.clins)p.clins=[];});
-  planMigrate();authMigrate();oppMigrate();}
+  planMigrate();authMigrate();oppMigrate();tplMigrate();}
+function tplMigrate(){
+  if(!D.taskTemplates)D.taskTemplates=[];
+  if(!D.tplSeeded){
+    D.taskTemplates=[
+      {id:'tpl_leadgen',name:'Perform Lead Generation'},
+      {id:'tpl_bd',name:'Perform Business Development'},
+      {id:'tpl_scoping',name:'Perform Scoping'},
+      {id:'tpl_proposal',name:'Perform Proposal Development'},
+      {id:'tpl_recruit',name:'Perform Recruiting'},
+      {id:'tpl_delivery',name:'Oversee Delivery'}
+    ];
+    D.tplSeeded=true;
+  }
+  D.departments.forEach(function(d){d.members.forEach(function(m){
+    if(!('proposal' in m))m.proposal=false;
+    if(!('recruiter' in m))m.recruiter=false;
+  });});
+}
 /* ── 120-DAY PLAN / ACTIVITY TRACKER ── */
 var PLAN_SEED=[{"pr":"1. Recruiting & Staffing Program","tk":"1.1 Role Architecture & Job Families","st":"Define role taxonomy: five-seat model + job families with leveling","ol":"Document the five engagement seats (Contract Lead/PM, Strategic Advisor, Lead Action Officer, Technical/Delivery Lead, Analyst/Supporting AO) and three job families (Federal Services Delivery; Awards Software Product/Engineering; Salesforce/Tableau Commercial Practice), with leveling Associate → Analyst → Senior → Lead → SME for each.","ob":"A single role taxonomy with clear career ladders that every hire, JD, and staffing decision maps back to.","ph":"Month 1","due":"","ow":"Idris + Ayesha","sts":"todo","pm":"Idris Grant"},{"pr":"1. Recruiting & Staffing Program","tk":"1.1 Role Architecture & Job Families","st":"Define SME/coach roles and map roles to clearance & compliance","ol":"Specify the US-based Click SME, the Salesforce/Tableau practice SME/coach, and AO coach roles (distinguish 'doer' from 'mentor/advisory' seats); tag each federal role with clearance level, CAC eligibility, Section 508 / Trusted Tester needs, and SAM/FAR exposure.","ob":"Protect knowledge transfer and the hub-and-spoke model from day one, with no staffing surprises on cleared or compliance-bound contracts.","ph":"Month 1","due":"","ow":"Idris + Ayesha + Anwer","sts":"todo","pm":"Idris Grant"},{"pr":"1. Recruiting & Staffing Program","tk":"1.2 Job Description Library","st":"Draft JDs for BCLM expansion & US hub; standardize template","ol":"Finalize the +3.5 BCLM expansion JDs (Ayesha's drafts) and the US hub JDs (Click SME + 2-3 interns, with independent-ramp expectation via Udemy/Trailhead); standardize one JD template (mission, outcomes, must-haves, nice-to-haves, comp band, reports-to) routed through CoE for sign-off before posting.","ob":"Recruit-ready, CoE-governed JDs that stand up the BCLM expansion and US hub by July 30 without breaking delivery.","ph":"Month 1","due":"","ow":"Ayesha + Idris","sts":"todo","pm":"Idris Grant"},{"pr":"1. Recruiting & Staffing Program","tk":"1.2 Job Description Library","st":"Draft JDs for Salesforce/Tableau practice","ol":"Create JDs for AgentForce, Revenue Cloud, and Tableau Next delivery roles, plus the Slack-native UX specialization. Map offshore Click team transition paths into these roles.","ob":"Give the offshore Click team a visible destination so they release federal seats.","ph":"Month 2","due":"","ow":"Idris","sts":"done","pm":"Idris Grant"},{"pr":"1. Recruiting & Staffing Program","tk":"1.3 Sourcing & Candidate Pipeline","st":"Build sourcing channels: US interns, cleared/federal, strategic advisors","ol":"Stand up a US intern funnel (university partnerships, internship boards, referrals targeting data-science/analytics/Salesforce-curious), a cleared/federal + PMP-PM channel for pursuits like AFOSI and IDOS ICBM (incl. AF GAL listings), and source 2 retired senior officers for Strategic Advisor (Seat 2) placements.","ob":"Repeatable funnels of US junior talent and win-ready federal staff, plus loyal strategic influence per CoE doctrine.","ph":"Month 2","due":"","ow":"Ayesha + Khaja","sts":"todo","pm":"Idris Grant"},{"pr":"1. Recruiting & Staffing Program","tk":"1.3 Sourcing & Candidate Pipeline","st":"Create candidate tracking in ClickUp","ol":"Stand up an ATS-style pipeline in ClickUp: stages (Sourced → Screened → Interview → Offer → Hired), with role and engagement tags.","ob":"Single view of all hiring activity tied to the operating system.","ph":"Month 1","due":"","ow":"Idris","sts":"todo","pm":"Idris Grant"},{"pr":"1. Recruiting & Staffing Program","tk":"1.4 Interview & Selection Process","st":"Build interview scorecards, loops, and skills assessments","ol":"Create role-specific scorecards aligned to JD must-haves (rating scale + disqualifiers), 4-day interview loops per seat (screen, technical/skills, scenario, CoE final) with assigned interviewers, and practical skills assessments (Click config task, Salesforce/Tableau exercise, AO writing sample, analyst data exercise).","ob":"Objective, comparable, demonstrated-ability hiring — no 'close enough' friends-and-family selection.","ph":"Month 2","due":"","ow":"Idris + Ayesha + Junaid","sts":"todo","pm":"Idris Grant"},{"pr":"1. Recruiting & Staffing Program","tk":"1.5 Hub-and-Spoke Staffing Model","st":"Document hub-and-spoke logic & plan offshore Click transition","ol":"Write the model (US hub owns delivery + client-facing work; offshore becomes advisory/build capacity; SME coaches both; escalation/handoff rules) and build the 2.5-month transition plan for Saqib, Daiyan, Basharat, Nadeem (+ Mohammad Irfan): knowledge transfer to the US hub with parallel ramp into the Salesforce/Tableau practice.","ob":"Reduce federal-side risk to zero while moving offshore talent from high-risk federal seats into zero-risk commercial seats.","ph":"Month 1","due":"","ow":"Idris + Ayesha","sts":"todo","pm":"Idris Grant"},{"pr":"1. Recruiting & Staffing Program","tk":"1.5 Hub-and-Spoke Staffing Model","st":"Define offshore Salesforce/Tableau bench","ol":"Formalize the offshore Salesforce engineers and AI developers as a managed bench: utilization tracking, assignment rules, performance-review cadence.","ob":"Scalable, accountable delivery capacity for the commercial practice.","ph":"Month 2","due":"","ow":"Idris","sts":"todo","pm":"Idris Grant"},{"pr":"1. Recruiting & Staffing Program","tk":"1.6 Contractor & Subcontractor Management","st":"Build subcontractor framework & execute RDTS teaming agreements","ol":"Define metrics, review cadence, and retention/replacement criteria for subs and teaming partners (RDTS, ForwardEdge-AI, KPMG, Lucayan/Expentor), and complete RDTS teaming agreements for AFOSI and IDOS ICBM (confirm Polaris Prime path — ADERA via RDTS or FE alternate).","ob":"Partners held to the same standard as direct staff, with GSA 8a STARS and Polaris vehicles unlocked.","ph":"Month 1","due":"","ow":"Ayesha + Anwer + Idris + Khaja","sts":"todo","pm":"Idris Grant"},{"pr":"1. Recruiting & Staffing Program","tk":"1.7 Active Engagement Staffing","st":"Staff the BCLM expansion (3.5 CF seats)","ol":"Recruit or reassign to fill the 3.5 CF resources on BCLM. Sequence hires; protect delivery during ramp.","ob":"Capture the 50% BCLM expansion ($2.5M → $3.75M) without service drop.","ph":"Month 2","due":"","ow":"Ayesha","sts":"todo","pm":"Idris Grant"},{"pr":"1. Recruiting & Staffing Program","tk":"1.7 Active Engagement Staffing","st":"Designate AFOSI PM/proposal team & plan FAMS redeployment","ol":"Name the CF AFOSI Program Manager, pull the AF GAL staff listing, submit questions, and support Patrick Eager on the proposal due June 8; map each FAMS member (Ande, Aijaz, Ahsan, Melissa, Amr, Mustafa) to a destination (BCLM, C1FAMS, BD, or software) for redeploy by Oct 1 ahead of the Sept 24 sunset.","ob":"Submit a competitive AFOSI recompete (CF past perf 13/15 task areas) and reach zero idle headcount when FAMS sunsets.","ph":"Month 1","due":"","ow":"Idris + Khaja + Anwer","sts":"todo","pm":"Idris Grant"},{"pr":"2. Onboarding Program","tk":"2.1 Pre-boarding & Admin Setup","st":"Build & automate the pre-boarding workflow","ol":"Create the pre-boarding checklist (offer letter, background check, NDA, equipment, system accounts — ClickUp, email, platform — and clearance/CAC initiation where required) and automate it as a ClickUp template that auto-generates tasks per new hire across IT, HR, security, and manager.","ob":"New hires productive on day one through repeatable, nothing-falls-through onboarding.","ph":"Month 1","due":"","ow":"Ayesha + Idris","sts":"todo","pm":"Idris Grant"},{"pr":"2. Onboarding Program","tk":"2.2 Company Orientation & Culture","st":"Build company orientation + product overview for all hires","ol":"Cover CommunityForce history (since 2010, 165M+ applications, $569M+ awarded), mission, both business arms, and the CoE operating philosophy, plus a plain-language overview of the awards lifecycle platform (grants, scholarships, fellowships, research), AI features, and the four solution areas.","ob":"Every hire understands both sides of the business and how they connect — breaking the federal/software silo.","ph":"Month 1","due":"","ow":"Khaja + Idris + Junaid","sts":"todo","pm":"Idris Grant"},{"pr":"2. Onboarding Program","tk":"2.3 Role-Specific Onboarding Tracks","st":"Build role-specific onboarding tracks (federal, software, Salesforce/Tableau)","ol":"Federal: contract/PWS orientation, AO doctrine, client-coaching, compliance (508, NIST 800-53, FAR/DFARS), contract context (BCLM, C1FAMS). Software/product: platform architecture, Phoenix 2.0, the module suite. Salesforce/Tableau: AgentForce/Revenue Cloud/Tableau Next fundamentals, the Slack-native model, and the practice playbook.","ob":"Each hire ready in-role fast — federal hires coaching counterparts, product hires shipping in the first sprint, practice hires aligned to the delivery model.","ph":"Month 2","due":"","ow":"Ayesha + Junaid + Idris","sts":"todo","pm":"Idris Grant"},{"pr":"2. Onboarding Program","tk":"2.4 Federal Services Onboarding","st":"Document clearance/CAC process & contract-context briefs","ol":"Step-by-step clearance initiation, CAC issuance, and badge/access per active contract (tracked in ClickUp), plus a one-pager per contract (BCLM, C1FAMS, FAMS, SAF/IA): customer, scope, key POCs, deliverables, current state.","ob":"No delivery delays from access gaps; instant context for anyone joining an engagement.","ph":"Month 2","due":"","ow":"Ayesha","sts":"todo","pm":"Idris Grant"},{"pr":"2. Onboarding Program","tk":"2.5 Software & Commercial Onboarding","st":"Stand up platform sandbox & document awards lifecycle end-to-end","ol":"Stand up a training tenant where new hires configure forms, run a mock review cycle, and process a test disbursement without touching production, and document the full lifecycle: program design → dynamic form → eligibility → committee review/scoring → award/disbursement → post-award compliance → reporting.","ob":"Hands-on learning with zero production risk and full customer-journey literacy.","ph":"Month 2","due":"","ow":"Junaid","sts":"todo","pm":"Idris Grant"},{"pr":"2. Onboarding Program","tk":"2.6 30/60/90-Day Framework","st":"Define 30/60/90 milestones & manager check-in cadence","ol":"Set explicit 30/60/90-day expectations per archetype tied to JD performance metrics, and schedule structured 30/60/90 reviews (manager + new hire + CoE visibility) documented in ClickUp.","ob":"Clear ramp expectations and early performance signal; catch ramp problems early.","ph":"Month 2","due":"","ow":"Idris + Ayesha","sts":"todo","pm":"Idris Grant"},{"pr":"2. Onboarding Program","tk":"2.7 Mentor / Buddy System","st":"Assign onboarding buddies","ol":"Pair each new hire with an experienced buddy in the same job family. Define buddy responsibilities and time commitment.","ob":"Faster ramp and stronger retention through peer support.","ph":"Month 3","due":"","ow":"Ayesha","sts":"todo","pm":"Idris Grant"},{"pr":"3. Training & Certification Program","tk":"3.1 Action Officer (AO) Certification","st":"Build AO curriculum & certification assessment","ol":"Build the AO training curriculum (coaching a government counterpart, drafting on their behalf, meeting posture, escalation handling, making the POC look good — codifying what Ed does for Vani) and a practical pass/fail certification (gov-facing draft, mock posture scenario, simulated escalation, with rubric).","ob":"Turn AO excellence from one person's talent into a verified company capability.","ph":"Month 2","due":"","ow":"Idris","sts":"todo","pm":"Idris Grant"},{"pr":"3. Training & Certification Program","tk":"3.1 Action Officer (AO) Certification","st":"Backfill AO certification for current staff","ol":"Audit which current contract staff completed AO training (the original gap). Enroll those who haven't.","ob":"Close the historical gap where not all staff were AO-trained.","ph":"Month 3","due":"","ow":"Ayesha","sts":"todo","pm":"Idris Grant"},{"pr":"3. Training & Certification Program","tk":"3.2 Platform Certifications","st":"Build Click certification path & map Salesforce/Tableau certs","ol":"Build a tiered internal Click certification (form builder, review/scoring config, disbursements, post-award, reporting — Associate/Practitioner/Expert) and define required Salesforce Trailhead trails/certs (AgentForce, Revenue Cloud) and Tableau certifications, tied to the offshore Click team's data-science background, with target completion dates.","ob":"Verified platform competency and credentialed Salesforce/Tableau staff for credible commercial delivery.","ph":"Month 2","due":"","ow":"Junaid + Idris","sts":"todo","pm":"Idris Grant"},{"pr":"3. Training & Certification Program","tk":"3.3 Independent Ramp Paths","st":"Build self-serve learning paths & a resource library","ol":"Curate Udemy/Trailhead/internal content so new hires ramp without depending on the offshore team (monthly competency targets), and centralize all courses, docs, recordings, and sandboxes in a ClickUp library tagged by role/skill with completion tracking.","ob":"Break the dependency on offshore staff for teaching — they advise, not train — from one enablement hub.","ph":"Month 2","due":"","ow":"Idris","sts":"todo","pm":"Idris Grant"},{"pr":"3. Training & Certification Program","tk":"3.4 Federal Domain & Compliance Training","st":"Build compliance training & pursue DHS Trusted Tester cert","ol":"Build compliance modules (Section 508 / WCAG 2.1 AA, NIST 800-53, FISMA, FedRAMP awareness, FAR/DFARS basics, CMMC awareness) required for federal-line staff, and enroll relevant staff in the DHS Certified Trusted Tester program for Section 508 remediation work.","ob":"Keep the zero-incident, 100%-compliant federal track record and the accessibility-compliance differentiator.","ph":"Month 3","due":"","ow":"Ayesha + Anwer","sts":"todo","pm":"Idris Grant"},{"pr":"3. Training & Certification Program","tk":"3.5 AI Tooling Enablement","st":"Train staff on AI-assisted delivery & AI module sales/delivery","ol":"Hands-on enablement with Claude Code, MCP servers, and platform AI features (automated scoring, GPT-Zero plagiarism detection, AI email drafting) using the Tableau-rebuild win as the case study, and train the team to demo/deliver the AI Insights modules (scoring, narrative drafting, pattern analysis) into the existing ~200 customers.","ob":"Make the whole team AI-leveraged and support the $550K → $1.5M software ARR expansion.","ph":"Month 2","due":"","ow":"Junaid + Idris","sts":"todo","pm":"Idris Grant"},{"pr":"3. Training & Certification Program","tk":"3.6 Knowledge Transfer (Offshore → US Hub)","st":"Document Click team tribal knowledge & run parallel shadowing","ol":"Capture undocumented knowledge from Saqib, Daiyan, Basharat, Nadeem (record sessions, build runbooks) and run a parallel-shadowing period — US hub shadows offshore on BCLM workstreams (June) then takes production handoff (July) as offshore moves to advisory.","ob":"De-risk the transition with a smooth, no-gap transfer of BCLM delivery to the US hub.","ph":"Month 2","due":"","ow":"Ayesha + Idris","sts":"todo","pm":"Idris Grant"},{"pr":"3. Training & Certification Program","tk":"3.7 Certification Tracking & Renewal","st":"Build cert tracker & tie certifications to staffing eligibility","ol":"Track every staff member's certs, status, and renewal dates (AO, platform, Salesforce, Tableau, compliance) in ClickUp, and make relevant certs a prerequisite for placement, enforced via the CoE staffing gate.","ob":"Always know who is qualified for what, never miss a renewal, and make quality structural.","ph":"Month 3","due":"","ow":"Idris","sts":"todo","pm":"Idris Grant"},{"pr":"4. Operating Model","tk":"4.1 CoE Governance & Structure","st":"Ratify the CoE Charter & define decision rights","ol":"Finalize and sign the CommunityForce PMO/Operations CoE Charter (seats: Khaja CEO, Idris PMO/COO, Ayesha Fed Ops, Anwer CFO) and document decision rights and escalation paths for staffing, scope, pricing, pivots, and partner management — including the walk-away clause.","ob":"A single governing authority with clear accountability — one neck to wring per function.","ph":"Month 1","due":"","ow":"Khaja + Idris","sts":"todo","pm":"Idris Grant"},{"pr":"4. Operating Model","tk":"4.2 Engagement Operating Model (Five-Seat)","st":"Operationalize & specialize the five-seat model","ol":"Staff and document the five seats for each active engagement (BCLM, C1FAMS, software, Salesforce practice) — no delivery starts until seats are filled or waived in writing — and define how the seats specialize per business line (e.g., Product Owner / Solutions Architect / Tech Lead / Implementation PM / CSM for product engagements).","ob":"Consistent, controlled delivery structure — one model, correctly specialized per line of business.","ph":"Month 2","due":"","ow":"Idris","sts":"todo","pm":"Idris Grant"},{"pr":"4. Operating Model","tk":"4.3 Operating Cadence & Rhythm","st":"Stand up daily software-expansion scrum + weekly/monthly reviews","ol":"Run a 15-min daily scrum (Idris, Junaid, Anwer, Riyaz) on the $1.5M plan until ARR trajectory is locked, plus weekly reviews (cash, AR aging, RDTS proposal status, customer health) and monthly pillar reviews (Sustain/Grow/Build/Scale) against the FY27 plan.","ob":"Daily momentum on the software expansion and a steady governance rhythm that resists drift.","ph":"Month 1","due":"","ow":"Idris + Anwer","sts":"todo","pm":"Idris Grant"},{"pr":"4. Operating Model","tk":"4.3 Operating Cadence & Rhythm","st":"Establish quarterly strategic review","ol":"Quarterly review of roadmap milestones, pipeline ratios, FY27 pacing, and the strategic-pivot assessment (is each engagement still pointed at what the customer wants?).","ob":"Catch needed pivots before they become bad CPARs.","ph":"Month 3","due":"","ow":"Khaja + Idris","sts":"todo","pm":"Idris Grant"},{"pr":"4. Operating Model","tk":"4.4 SOP & Template Library","st":"Build the SOP library (federal, software, sales)","ol":"Federal SOPs (contract intake/PWS decomposition, requirements, deliverable QA, PMR templates, CPAR-positioning tracker, AO playbook, pivot decision memo), software delivery SOPs (productized Phoenix 2.0 at fixed scope/price, module runbooks, CS/QBR playbook, renewals), and the customer segmentation & sales-play SOP (200-customer segmentation, three play models, renewal calendar).","ob":"Codified, repeatable execution and implementation-as-product — not reinvented per engagement.","ph":"Month 2","due":"","ow":"Ayesha + Junaid + Idris","sts":"todo","pm":"Idris Grant"},{"pr":"4. Operating Model","tk":"4.5 Tooling & Systems (ClickUp as OS)","st":"Configure ClickUp as the operating system & build dashboards","ol":"Set up Spaces per program/pillar, standardized Lists, custom fields (engagement, business line, owner, status), and executive/pillar dashboards (ARR pipeline, federal pursuit pipeline, staffing/recruiting funnel, certification status, cash & AR) rolling up to a CoE view.","ob":"One system of record for all work with real-time CoE visibility — no status-chasing.","ph":"Month 1","due":"","ow":"Idris + Anwer","sts":"todo","pm":"Idris Grant"},{"pr":"4. Operating Model","tk":"4.5 Tooling & Systems (ClickUp as OS)","st":"Integrate the tooling stack","ol":"Connect ClickUp to email, calendar, and the platform where useful. Define what lives where (ClickUp vs platform vs Drive).","ob":"Reduce tool sprawl and double-entry.","ph":"Month 3","due":"","ow":"Idris","sts":"todo","pm":"Idris Grant"},{"pr":"4. Operating Model","tk":"4.6 Quality Gates & Performance Mgmt","st":"Define quality gates & performance management framework","ol":"Require CoE-defined QA sign-off (checklist + approval flow) before any deliverable leaves the firm, and tie 30/60/90 expectations, certification status, and engagement metrics into a quarterly performance review with defined improvement and exit paths.","ob":"Protect CPARs and customer trust; performance is measured, managed, and acted on.","ph":"Month 2","due":"","ow":"Ayesha + Idris","sts":"todo","pm":"Idris Grant"},{"pr":"4. Operating Model","tk":"4.7 Financial Operating Discipline","st":"Build margin model per business line","ol":"Anwer models margin for federal delivery, awards software (per play), and the Salesforce practice. Validate the Phoenix 2.0 reprice ($9.5K → $5K) unit economics.","ob":"Every line of business has known, defended margins.","ph":"Month 1","due":"","ow":"Anwer","sts":"todo","pm":"Idris Grant"},{"pr":"4. Operating Model","tk":"4.7 Financial Operating Discipline","st":"Restructure the Sterling note & build cash/AR discipline","ol":"Execute the 5-year quarterly schedule on the Sterling debt (the single most important financial action before FY27) and run weekly cash and AR-aging reviews — resolve the SAF/IA April-May payment issue and tie the revenue forecast to the FY27 build.","ob":"Stabilize the balance sheet and move from survival-mode to a managed-growth cash posture.","ph":"Month 1","due":"","ow":"Anwer","sts":"todo","pm":"Idris Grant"},{"pr":"4. Operating Model","tk":"4.8 Strategic Pivot & Portfolio Review","st":"Build the pivot protocol & map FY27 portfolio to the operating model","ol":"Quarterly assessment of whether each engagement is pointed at the customer's real need (the SAF/IA / Linda Theroff lesson) as a forcing function to flag reframes, and tie all four pillars (Sustain/Grow/Build/Scale) to CoE seats and cadence with a named owner and co-owner each.","ob":"Stay ahead of customer needs and make the operating model and the strategic plan one system.","ph":"Month 3","due":"","ow":"Khaja + Idris","sts":"todo","pm":"Idris Grant"},{"pr":"5. Certification & Learning Program","tk":"5.1 Program Setup","st":"Approve budget/bonuses & lock the certification matrix","ol":"Anwer approves per-exam reimbursement, tiered cert bonuses ($100-$750), and Udemy Business (~$400/user/yr) against the margin model; finalize required/target certs per role as a placement prerequisite and assign a learning-path owner to keep paths current vs Salesforce exam updates.","ob":"A funded, defensible learning program where certs become a structural quality gate.","ph":"Month 1","due":"","ow":"Anwer + Idris + Junaid","sts":"todo","pm":"Idris Grant"},{"pr":"5. Certification & Learning Program","tk":"5.2 Tracks & Pods","st":"Run the five certification tracks through SME pods","ol":"Run the five tracks — Foundation (SF Associate + Slack Admin), Agentforce (AI-201), Revenue Cloud (Rev-Con-201), Tableau (Desktop → Data Analyst → Consultant), Slack Developer — through 1 SME : 3-4 junior pods on 70-20-10 learning, with per-junior development plans in ClickUp and SMEs measured on pod growth.","ob":"A credentialed Salesforce/Tableau/AI practice with scalable delivery and visible growth paths.","ph":"Month 2","due":"","ow":"Idris + SME","sts":"todo","pm":"Idris Grant"},{"pr":"5. Certification & Learning Program","tk":"5.3 Reward & Culture","st":"Launch rewards, leaderboard & protected learning time","ol":"Cert bonuses on pass, exam fees company-paid, #certifications channel + leaderboard, protected weekly learning block, demo days.","ob":"Make continuous learning normal and rewarded.","ph":"Month 2","due":"","ow":"Idris","sts":"todo","pm":"Idris Grant"},{"pr":"6. Rev 5 ATO Update (FAMS)","tk":"6.1 Program Governance & Weekly Tracking","st":"Establish weekly cadence & mitigate part-time-lead risk","ol":"Stand up a weekly ClickUp tracking ritual (Melissa Jones reports status weekly; Idris reviews; hard deadline September 2026) and mitigate the part-time-lead risk — name a backup owner (Mohammad Saqib), document decisions, and escalate slipped weeks immediately. No silent slippage.","ob":"Keep an ambitious, deadline-bound effort on track and protect the September deadline against availability risk.","ph":"Month 1","due":"","ow":"Idris + Anwer","sts":"todo","pm":"Idris Grant"},{"pr":"6. Rev 5 ATO Update (FAMS)","tk":"6.1 Program Governance & Weekly Tracking","st":"Build the Rev 5 master timeline & milestones","ol":"Backwards-plan from September 2026: gap assessment, control implementation, evidence, documentation, assessment, authorization. Set monthly milestones.","ob":"A dated path to ATO, not an open-ended effort.","ph":"Month 1","due":"","ow":"Melissa + Saqib","sts":"todo","pm":"Idris Grant"},{"pr":"6. Rev 5 ATO Update (FAMS)","tk":"6.2 Rev 5 Gap Assessment","st":"Map Rev 4 → Rev 5 controls & prioritize remediation","ol":"Assess every control against the FedRAMP Rev 5 baseline (new/changed controls, supply-chain SR family additions, current FAMS gaps) and rank gaps by effort and authorization impact so the riskiest/longest items start first.","ob":"Know exactly what must change to meet Rev 5 and front-load the work that threatens the deadline.","ph":"Month 1","due":"","ow":"Melissa + Saqib + Offshore","sts":"todo","pm":"Idris Grant"},{"pr":"6. Rev 5 ATO Update (FAMS)","tk":"6.3 Control Implementation & Evidence","st":"Implement technical controls/STIGs & collect evidence","ol":"Apply Rev 5 control changes, complete STIG hardening, and configure required security tooling across the FAMS environment, and gather evidence artifacts per control into a control-mapped evidence index for the assessment package.","ob":"Bring the system into Rev 5 technical compliance with assessment-ready evidence — no last-minute scramble.","ph":"Month 2","due":"","ow":"Saqib + Melissa + Offshore","sts":"todo","pm":"Idris Grant"},{"pr":"6. Rev 5 ATO Update (FAMS)","tk":"6.4 Documentation & SSP","st":"Update the SSP and supporting authorization plans","ol":"Revise the SSP and all body-of-evidence documents to the Rev 5 baseline (policies, procedures, POA&M) and refresh supporting plans — contingency, incident response, and configuration management.","ob":"A complete, current authorization documentation set that matches the implemented controls.","ph":"Month 3","due":"","ow":"Melissa + Saqib","sts":"todo","pm":"Idris Grant"},{"pr":"6. Rev 5 ATO Update (FAMS)","tk":"6.5 Assessment & Authorization","st":"Coordinate the assessment & submit the ATO package","ol":"Work with the assessor/3PAO to validate controls and remediate findings on a tight loop, then compile and submit the final Rev 5 authorization package, tracking to an ATO decision by September 2026.","ob":"Pass assessment with minimal open findings and maintain FAMS ATO under the Rev 5 standard.","ph":"Month 4","due":"","ow":"Melissa + Idris","sts":"todo","pm":"Idris Grant"},{"pr":"7. ATO-as-a-Service (New Offering)","tk":"7.1 Offering Definition","st":"Define the ATO-as-a-Service offering & target demand","ol":"Scope a service that helps DoD/DoW agencies comply with FedRAMP Rev 5 to maintain ATOs (in/out scope, deliverables, outcomes) and map agencies with renewal pressure starting from existing relationships (SAF/FMFS, AETC, ARPC, CISA) to size the demand.","ob":"A clear, sellable compliance service offering with a known target market.","ph":"Month 1","due":"","ow":"Khaja + Idris","sts":"todo","pm":"Idris Grant"},{"pr":"7. ATO-as-a-Service (New Offering)","tk":"7.2 Methodology & Playbook","st":"Productize FAMS Rev 5 into a playbook with accelerators","ol":"Turn the lessons and artifacts from the FAMS Rev 5 work into a standardized methodology (gap assessment, remediation, evidence, SSP, assessment support) and build reusable templates (control mappings, SSP shells, evidence indices, POA&M templates) and tooling that speed delivery.","ob":"Deliver Rev 5 ATO work as a repeatable, higher-margin product, not a custom scramble.","ph":"Month 2","due":"","ow":"Saqib + Idris","sts":"todo","pm":"Idris Grant"},{"pr":"7. ATO-as-a-Service (New Offering)","tk":"7.3 Delivery Capability & Staffing","st":"Define the delivery pod, skills, credentials & partnerships","ol":"Specify the team to deliver ATO-as-a-Service (assessor liaison, control engineers, documentation lead) mapped to the five-seat model and NIST/FedRAMP certifications, and secure needed credentials/partnerships (3PAO relationships, FedRAMP expertise, RDTS teaming).","ob":"A credible, staffable delivery capability tied to the operating model.","ph":"Month 2","due":"","ow":"Idris + Khaja","sts":"todo","pm":"Idris Grant"},{"pr":"7. ATO-as-a-Service (New Offering)","tk":"7.4 Go-to-Market","st":"Build positioning/materials & land a pilot client","ol":"Create the pitch, one-pager, and proposal template positioned around the Rev 5 mandate and ATO-maintenance urgency, and pursue a first paying engagement using FAMS Rev 5 as the proof point — ideally within an existing agency relationship.","ob":"Sales-ready materials that convert the offering into real revenue.","ph":"Month 3","due":"","ow":"Idris + Khaja","sts":"todo","pm":"Idris Grant"},{"pr":"7. ATO-as-a-Service (New Offering)","tk":"7.5 Pricing & Packaging","st":"Define pricing & packaging with the CFO","ol":"Build fixed-fee and/or subscription packaging with Anwer. Validate margin against the productized delivery model.","ob":"Profitable, predictable pricing.","ph":"Month 3","due":"","ow":"Anwer + Idris","sts":"todo","pm":"Idris Grant"},{"pr":"8. Software Sales, Marketing & SupportAI","tk":"8.1 SupportAI Operationalization","st":"Operationalize SupportAI & integrate with sales/time tracking","ol":"Put the newly launched SupportAI marketing & outreach module into production for CommunityForce's own sales/marketing (configuration, owners, workflows) and wire it to the sales pipeline and project/time tracking for one connected workflow from lead to delivery.","ob":"Use our own product as the engine for our own growth, with a single connected workflow.","ph":"Month 1","due":"","ow":"Junaid + Younus","sts":"todo","pm":"Idris Grant"},{"pr":"8. Software Sales, Marketing & SupportAI","tk":"8.2 Sales Function","st":"Stand up the sales motion under Younus & tie to $1.5M ARR plan","ol":"Define the sales process, pipeline stages, targets, and reporting for Younus's team, and feed the segmentation and three play models (Reporting, AI, Phoenix 2.0) into the pipeline with Khaja's CEO-led closing calls scheduled.","ob":"A managed, measurable sales function aligned to the software ARR target.","ph":"Month 1","due":"","ow":"Younus + Idris","sts":"todo","pm":"Idris Grant"},{"pr":"8. Software Sales, Marketing & SupportAI","tk":"8.3 Marketing & Outreach","st":"Run AI email campaigns & prospect scraping/list-building","ol":"Offshore interns run marketing email campaigns via SupportAI (cadence, segmentation, deliverability safeguards, content approval) and AI-driven prospect scraping/list-building (CauseIQ + LLM enrichment), feeding qualified leads to sales.","ob":"Consistent, on-brand outbound that doesn't get blacklisted, plus a steady, enriched prospect pipeline.","ph":"Month 1","due":"","ow":"Offshore Interns","sts":"todo","pm":"Idris Grant"},{"pr":"8. Software Sales, Marketing & SupportAI","tk":"8.3 Marketing & Outreach","st":"Establish marketing governance & metrics","ol":"Track open/reply/conversion rates, manage sender reputation, and review campaign performance weekly.","ob":"Measurable marketing with protected deliverability.","ph":"Month 2","due":"","ow":"Younus","sts":"todo","pm":"Idris Grant"},{"pr":"8. Software Sales, Marketing & SupportAI","tk":"8.4 Website & Inbound Leads","st":"Capture/route SEO website leads & optimize conversion","ol":"Build capture, routing, and follow-up SLAs from the SEO-optimized communityforce.com ('Book a Demo' / 'Talk to an Expert') to sales, and monitor search rankings, content performance, and conversion — iterating on landing pages and the demo-request funnel.","ob":"No inbound lead goes uncontacted; grow inbound volume and conversion rate over time.","ph":"Month 1","due":"","ow":"Younus + Offshore","sts":"todo","pm":"Idris Grant"},{"pr":"8. Software Sales, Marketing & SupportAI","tk":"8.5 Project & Time Tracking","st":"Stand up project/time tracking","ol":"Implement project and time tracking (via SupportAI / ClickUp) across software delivery so effort, capacity, and margin are visible.","ob":"Visibility into capacity, utilization, and project margin.","ph":"Month 2","due":"","ow":"Junaid + Anwer","sts":"todo","pm":"Idris Grant"}];
 var PLAN_STS=[{k:'todo',l:'Not Started',c:'#546478'},{k:'doing',l:'In Progress',c:'#D97706'},{k:'done',l:'Completed',c:'#2D6A4F'},{k:'blocked',l:'Blocked',c:'#DC2626'}];
@@ -1058,6 +1099,8 @@ var badges='';
 if(found.hub)badges+='<span class="prof-badge prof-badge-hub">Hub</span>';
 if(found.sme)badges+='<span class="prof-badge prof-badge-sme">SME</span>';
 if(found.associate)badges+='<span class="prof-badge prof-badge-assoc">Associate</span>';
+if(found.proposal)badges+='<span class="prof-badge prof-badge-prop">Proposal</span>';
+if(found.recruiter)badges+='<span class="prof-badge prof-badge-recr">Recruiter</span>';
 if(found.reassess)badges+='<span class="prof-badge prof-badge-reassess">⚠ Reassess</span>';
 /* projects */
 var projHTML='';
@@ -1134,7 +1177,7 @@ document.getElementById('statsBar').innerHTML=[
 {l:'Skills',v:D.skillsets.length,u:'defined'},{l:'Reassess',v:fl,u:'flagged',w:fl>0},{l:'Over-alloc',v:oa,u:'people',w:oa>0}
 ].map(function(s){return '<div class="st'+(s.w?' warn':'')+'"><div class="st-l">'+s.l+'</div><div class="st-v'+(s.w?' wv':'')+'">'+s.v+'<span class="st-u">'+s.u+'</span></div></div>';}).join('');}
 
-function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',init:'tabInit',opp:'tabOpp',over:'tabOver',orgchart:'tabChart',res:'tabRes',plan:'tabPlan',ptask:'tabPTask'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
+function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',init:'tabInit',opp:'tabOpp',over:'tabOver',orgchart:'tabChart',res:'tabRes',class:'tabClass',plan:'tabPlan',ptask:'tabPTask',tpl:'tabTpl'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
 
 function cardHTML(m,did){
 var dept=D.departments.find(function(d){return d.id===did;});
@@ -1144,6 +1187,8 @@ var tags='';
 if(m.hub)tags+='<span class="card-tag tag-hub">Hub</span>';
 if(m.sme)tags+='<span class="card-tag tag-sme">SME</span>';
 if(m.associate)tags+='<span class="card-tag tag-assoc">Assoc</span>';
+if(m.proposal)tags+='<span class="card-tag tag-prop">Proposal</span>';
+if(m.recruiter)tags+='<span class="card-tag tag-recr">Recruiter</span>';
 var pp='';(m.projects||[]).forEach(function(pe){var pid=typeof pe==='string'?pe:pe.id;var pct=typeof pe==='string'?100:(pe.pct||100);pp+='<span class="card-pill proj">'+esc(pName(pid))+(pct<100?'<span class="proj-pct-badge"> '+pct+'%</span>':'')+'</span>';});
 var sp='';(m.skillsets||[]).forEach(function(sid){sp+='<span class="card-pill skill">'+esc(sName(sid))+'</span>';});
 var alloc=totalAlloc(m);var isOver=alloc>100;
@@ -1486,7 +1531,8 @@ function oppEditFields(p){
     +'<div class="fld"><label class="fld-l">PM</label><input class="fld-i" id="ep_pm" value="'+esc(p.pm||'')+'"></div></div>'
     +'<div class="fld"><label class="fld-l">Exp Close / Decision date</label><input class="fld-i" type="date" id="ep_close" value="'+esc(p.closeDate||'')+'"></div>'
     +'<div class="fld"><label class="fld-l">Team</label><input class="fld-i" id="ep_team" value="'+esc(p.team||'')+'"></div>'
-    +'<div class="fld"><label class="fld-l">Change Requested</label><textarea class="fld-i" id="ep_change" rows="2">'+esc(p.changeRequested||'')+'</textarea></div>';
+    +'<div class="fld"><label class="fld-l">Change Requested</label><textarea class="fld-i" id="ep_change" rows="2">'+esc(p.changeRequested||'')+'</textarea></div>'
+    +oppWorkflowHTML(p);
 }
 /* ── PERSON FILE / RESUME ATTACHMENTS ── */
 function findMember(mid){var res=null;D.departments.forEach(function(d){d.members.forEach(function(m){if(m.id===mid)res={m:m,d:d};});});return res;}
@@ -1505,6 +1551,8 @@ function renderView(){
   else if(viewMode==='over')html=renderProjView(q,'overhead');
   else if(viewMode==='orgchart')html=renderOrgChartView(q);
   else if(viewMode==='plan'||viewMode==='ptask')html=renderPlanView(q);
+  else if(viewMode==='class')html=renderClassificationView(q);
+  else if(viewMode==='tpl')html=renderTaskTemplatesView();
   else html=renderResourcesView(q);
   document.getElementById('mainContent').innerHTML=html;
 }
@@ -1538,6 +1586,148 @@ locOrder.forEach(function(lid){
   byLoc[lid].forEach(function(m){html+=cardHTML(m,m._dept);});
   html+='</div>';});
 return html;}
+
+/* ── CLASSIFICATION VIEW ── */
+var CLASSIFICATIONS=[
+  {k:'sme',l:'SME',c:'#7C5CBF'},
+  {k:'hub',l:'Hub',c:'#0D9488'},
+  {k:'associate',l:'Associate',c:'#D97706'},
+  {k:'proposal',l:'Proposal',c:'#059669'},
+  {k:'recruiter',l:'Recruiter',c:'#7C3AED'}
+];
+function renderClassificationView(q){
+  var all=allM().filter(function(m){return !q||memberMatchesSearch(m,q);});
+  if(!all.length)return '<div class="empty-msg">'+(q?'No resources match &ldquo;'+esc(q)+'&rdquo;':'No resources yet')+'</div>';
+  var html='';
+  CLASSIFICATIONS.forEach(function(c){
+    var people=all.filter(function(m){return !!m[c.k];});
+    if(!people.length)return;
+    var cost=people.reduce(function(s,m){return s+(m.cost||0);},0);
+    html+='<div class="class-card">'
+      +'<div class="class-card-hdr">'
+        +'<span class="class-card-dot" style="background:'+c.c+';box-shadow:0 0 6px '+c.c+'88"></span>'
+        +'<span class="class-card-ttl" style="color:'+c.c+'">'+c.l+'<span class="class-card-sub">'+people.length+' '+(people.length===1?'person':'people')+' &middot; '+fmt(cost)+'/mo</span></span>'
+      +'</div>'
+      +'<div class="res-grid">'+people.map(function(m){return cardHTML(m,m._dept);}).join('')+'</div>'
+      +'</div>';
+  });
+  var unclassified=all.filter(function(m){return !CLASSIFICATIONS.some(function(c){return m[c.k];});});
+  if(unclassified.length){
+    var cost=unclassified.reduce(function(s,m){return s+(m.cost||0);},0);
+    html+='<div class="class-card">'
+      +'<div class="class-card-hdr">'
+        +'<span class="class-card-dot" style="background:#94A3B8"></span>'
+        +'<span class="class-card-ttl" style="color:#64748B">Unclassified<span class="class-card-sub">'+unclassified.length+' '+(unclassified.length===1?'person':'people')+' &middot; '+fmt(cost)+'/mo</span></span>'
+      +'</div>'
+      +'<div class="res-grid">'+unclassified.map(function(m){return cardHTML(m,m._dept);}).join('')+'</div>'
+      +'</div>';
+  }
+  return html||'<div class="empty-msg">No classified resources yet. Edit a person to set Hub / SME / Associate / Proposal / Recruiter.</div>';
+}
+
+/* ── TASK TEMPLATES VIEW ── */
+function renderTaskTemplatesView(){
+  var canEdit=ME&&(ME.role==='admin'||ME.role==='editor');
+  var tpls=D.taskTemplates||[];
+  var rows=tpls.map(function(t){
+    var usage=D.activities.filter(function(a){return a.templateId===t.id;}).length;
+    return '<div class="tpl-row">'
+      +(canEdit?'<input value="'+esc(t.name)+'" onchange="tplUpdateName(\''+t.id+'\',this.value)">':'<span style="flex:1;font-size:13px;font-weight:600">'+esc(t.name)+'</span>')
+      +'<span style="font-size:11px;color:var(--text-muted);min-width:90px;text-align:right">'+usage+' in use</span>'
+      +(canEdit?'<button class="btn btn-danger-sm btn-sm" onclick="tplDel(\''+t.id+'\')" title="Delete template">&#10005;</button>':'')
+      +'</div>';
+  }).join('')||'<div style="padding:14px;text-align:center;font-size:12px;color:var(--text-muted)">No task templates yet.</div>';
+  return '<div style="max-width:760px;margin:0 auto">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
+      +'<div><div style="font-size:18px;font-weight:800">Task Templates</div>'
+      +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Repeatable tasks you can attach to any opportunity. Selecting a template in an opportunity creates a Project Task named <code>Task_&lt;OppName&gt;_&lt;Customer&gt;</code>.</div></div>'
+      +(canEdit?'<button class="btn btn-gold btn-sm" onclick="tplAdd()">+ Add Template</button>':'')
+    +'</div>'
+    +'<div class="tpl-wrap">'+rows+'</div></div>';
+}
+function tplAdd(){
+  var name=prompt('New task template name (e.g. "Perform Lead Generation"):');
+  if(!name||!name.trim())return;
+  if(!D.taskTemplates)D.taskTemplates=[];
+  D.taskTemplates.push({id:uid(),name:name.trim()});
+  save();renderView();
+}
+function tplUpdateName(id,val){
+  var t=(D.taskTemplates||[]).find(function(x){return x.id===id;});
+  if(!t)return;t.name=(val||'').trim()||t.name;save();
+}
+function tplDel(id){
+  var inUse=D.activities.filter(function(a){return a.templateId===id;}).length;
+  if(!confirm('Delete this template?'+(inUse?'\n\n'+inUse+' task(s) currently reference it — they will be kept but unlinked from this template.':'')))return;
+  D.activities.forEach(function(a){if(a.templateId===id)a.templateId='';});
+  D.taskTemplates=(D.taskTemplates||[]).filter(function(t){return t.id!==id;});
+  save();renderView();
+}
+
+/* ── OPPORTUNITY WORKFLOW ── */
+function wfSanitize(s){return (s||'').toString().replace(/[^A-Za-z0-9]+/g,'').trim()||'Item';}
+function wfGroupName(opp){var pn=wfSanitize(opp.name),cn=wfSanitize(opp.customer||'');return 'Task_'+pn+(cn&&cn!==pn?'_'+cn:'');}
+function oppWorkflowHTML(opp){
+  if(!opp)return '';
+  var tpls=D.taskTemplates||[];
+  var tasks=D.activities.filter(function(a){return a.projectId===opp.id&&(a.kind||'coe')==='project';});
+  var members=allM();
+  var addedTpl={};tasks.forEach(function(t){if(t.templateId)addedTpl[t.templateId]=t.id;});
+  var addBtns=tpls.map(function(tpl){
+    var added=!!addedTpl[tpl.id];
+    return '<button type="button" class="btn btn-sec btn-sm'+(added?' added':'')+'"'+(added?' disabled':'')+' onclick="oppAddTemplateTask(\''+opp.id+'\',\''+tpl.id+'\')">'+(added?'&#10003; ':'+ ')+esc(tpl.name)+'</button>';
+  }).join('');
+  var trs=tasks.length?tasks.map(function(t){
+    var sc=planStsCfg(t.status);
+    var ownerOpts='<option value="">— unassigned —</option>'+members.map(function(m){return '<option value="'+esc(m.name)+'"'+(t.ownerText===m.name?' selected':'')+'>'+esc(m.name)+'</option>';}).join('');
+    var stsOpts=PLAN_STS.map(function(s){return '<option value="'+s.k+'"'+((t.status||'todo')===s.k?' selected':'')+'>'+s.l+'</option>';}).join('');
+    return '<tr>'
+      +'<td style="font-weight:600">'+esc(t.subtask||'(untitled)')+'</td>'
+      +'<td><select class="fld-sel" onchange="oppTaskAssign(\''+t.id+'\',this.value)">'+ownerOpts+'</select></td>'
+      +'<td><select class="fld-sel" style="background:'+sc.c+'14;border-color:'+sc.c+'66" onchange="oppTaskStatus(\''+t.id+'\',\''+opp.id+'\',this.value)">'+stsOpts+'</select></td>'
+      +'<td><input class="fld-i" type="date" value="'+esc(t.dueDate||'')+'" onchange="oppTaskDue(\''+t.id+'\',this.value)" style="padding:5px 7px;font-size:11px"></td>'
+      +'<td style="white-space:nowrap"><button class="btn btn-sec btn-sm" type="button" onclick="openPlanModal(\''+t.id+'\')">Open</button> '
+      +'<button class="btn btn-danger-sm btn-sm" type="button" onclick="oppRemoveTask(\''+t.id+'\',\''+opp.id+'\')" title="Remove from workflow">&#10005;</button></td>'
+      +'</tr>';
+  }).join(''):'<tr><td colspan="5" style="text-align:center;color:var(--text-muted);font-size:11px;padding:14px">No workflow tasks yet. Click a template above to add one.</td></tr>';
+  return '<span class="fld-section-hdr">Workflow</span>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Add standard workflow tasks. Each becomes a Project Task linked to this opportunity, grouped under <code>'+esc(wfGroupName(opp))+'</code>.</div>'
+    +(tpls.length?'<div class="wf-add-row">'+addBtns+'</div>':'<div style="font-size:11px;color:var(--text-muted);font-style:italic;padding:6px 0">No templates defined. Go to Task Templates to create some.</div>')
+    +'<table class="wf-tbl"><thead><tr><th>Task</th><th style="width:170px">Assignee</th><th style="width:140px">Status</th><th style="width:140px">Due</th><th style="width:140px">Actions</th></tr></thead><tbody>'+trs+'</tbody></table>';
+}
+function oppAddTemplateTask(oppId,tplId){
+  var opp=D.projects.find(function(p){return p.id===oppId;});
+  var tpl=(D.taskTemplates||[]).find(function(t){return t.id===tplId;});
+  if(!opp||!tpl)return;
+  D.activities.push({
+    id:uid(),kind:'project',projectId:oppId,templateId:tplId,programId:'',
+    task:wfGroupName(opp),subtask:tpl.name,
+    outline:'',objective:'',phase:'Month 1',status:'todo',
+    start:'',dueDate:'',isMilestone:false,parentId:null,
+    pm:opp.pm||'',ownerText:'',owners:[],
+    updates:[],attachments:[],order:D.activities.length
+  });
+  save();openEditProject(oppId);
+}
+function oppTaskAssign(taskId,ownerName){
+  var a=D.activities.find(function(x){return x.id===taskId;});if(!a)return;
+  a.ownerText=ownerName||'';
+  a.owners=planResolveOwners(a.ownerText);
+  save();
+}
+function oppTaskStatus(taskId,oppId,k){
+  var a=D.activities.find(function(x){return x.id===taskId;});if(!a)return;
+  a.status=k;save();openEditProject(oppId);
+}
+function oppTaskDue(taskId,val){
+  var a=D.activities.find(function(x){return x.id===taskId;});if(!a)return;
+  a.dueDate=val||'';save();
+}
+function oppRemoveTask(taskId,oppId){
+  if(!confirm('Remove this workflow task? (This deletes the underlying Project Task.)'))return;
+  D.activities=D.activities.filter(function(a){return a.id!==taskId;});
+  save();openEditProject(oppId);
+}
 
 function togDept(id){collState[id]=!collState[id];renderView();}
 function dStart(e,mid,did){dragInfo={mid:mid,did:did};e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',mid);setTimeout(function(){e.target.classList.add('dragging');},0);}
@@ -1693,7 +1883,9 @@ document.getElementById('mdlEdit').innerHTML=
 +'<div class="fld"><div style="display:flex;gap:16px;flex-wrap:wrap">'
 +'<div class="chk-row"><input type="checkbox" id="e_hub" '+(m.hub?'checked':'')+'><label for="e_hub">Hub</label></div>'
 +'<div class="chk-row"><input type="checkbox" id="e_sme" '+(m.sme?'checked':'')+'><label for="e_sme">SME</label></div>'
-+'<div class="chk-row"><input type="checkbox" id="e_assoc" '+(m.associate?'checked':'')+'><label for="e_assoc">Associate</label></div></div></div>'
++'<div class="chk-row"><input type="checkbox" id="e_assoc" '+(m.associate?'checked':'')+'><label for="e_assoc">Associate</label></div>'
++'<div class="chk-row"><input type="checkbox" id="e_prop" '+(m.proposal?'checked':'')+'><label for="e_prop">Proposal</label></div>'
++'<div class="chk-row"><input type="checkbox" id="e_recr" '+(m.recruiter?'checked':'')+'><label for="e_recr">Recruiter</label></div></div></div>'
 +fT('e_note','Notes / Transition Plan',m.note||'')
 +'<div class="fld"><div class="chk-row warn-chk"><input type="checkbox" id="e_reassess" '+(m.reassess?'checked':'')+'><label for="e_reassess">&#9888; Flag for value reassessment</label></div></div>'
 +'<div class="btn-row"><button class="btn btn-navy" style="flex:1" onclick="saveEdit(\''+mid+'\',\''+did+'\')">Save</button><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovEdit\')">Cancel</button></div>'
@@ -1707,7 +1899,7 @@ m.name=gv('e_name');m.role=gv('e_role');m.cost=Number(gv('e_cost'))||0;m.badge=g
 m.reportsTo=gv('e_reports');var __prev=m.projects||[];var __np=msVal('e_proj');__np.forEach(function(np){var old=__prev.find(function(o){return (typeof o==='object'?o.id:o)===np.id;});if(old&&typeof old==='object'&&old.clinId)np.clinId=old.clinId;});m.projects=__np;m.skillsets=msVal('e_skill');
 m.certifications=msVal('e_cert');m.pastProjects=msVal('e_ppj');m.pastClients=msVal('e_pcl');
 m.location=gv('e_loc');m.clearance=gv('e_clr');m.resumeLink=gv('e_resume');
-m.hub=gc('e_hub');m.sme=gc('e_sme');m.associate=gc('e_assoc');m.note=gv('e_note');m.reassess=gc('e_reassess');
+m.hub=gc('e_hub');m.sme=gc('e_sme');m.associate=gc('e_assoc');m.proposal=gc('e_prop');m.recruiter=gc('e_recr');m.note=gv('e_note');m.reassess=gc('e_reassess');
 var newDid=gv('e_dept_mv');
 if(newDid&&newDid!==did){var toDept=D.departments.find(function(d){return d.id===newDid;});if(toDept){fromDept.members=fromDept.members.filter(function(x){return x.id!==mid;});toDept.members.push(m);}}
 closeModal('ovEdit');save();renderView();}
@@ -2206,7 +2398,7 @@ function delAccount(id){if(!can('accounts'))return;if(ME&&ME.id===id){alert('You
 /* ── AUTH & PERMISSIONS (client-side roles only — not API security) ── */
 var AUTH_USER='khaja@communityforce.com',AUTH_PASS='Namtra_CF27',DEFAULT_PW='CommunityForce2026';
 var ME=null;
-var SECTIONS=[{k:'org',tab:'tabOrg',l:'Department View'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources View'},{k:'plan',tab:'tabPlan',l:'COE Plan'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'}];
+var SECTIONS=[{k:'org',tab:'tabOrg',l:'Department View'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources View'},{k:'class',tab:'tabClass',l:'Classification View'},{k:'plan',tab:'tabPlan',l:'COE Plan'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'tpl',tab:'tabTpl',l:'Task Templates'}];
 function emailFromName(name){var clean=(name||'').replace(/\(.*?\)/g,'').replace(/[^A-Za-z .\-]/g,'').trim();var parts=clean.split(/\s+/).filter(Boolean);var local=parts.length>=2?(parts[0]+'.'+parts[parts.length-1]):(parts[0]||'user');return local.toLowerCase().replace(/[^a-z0-9.]/g,'')+'@communityforce.com';}
 function authMigrate(){
   if(!D.accounts)D.accounts=[];
