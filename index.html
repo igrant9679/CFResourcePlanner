@@ -449,7 +449,8 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
       <button class="tab" id="tabOpp" onclick="switchTab('opp')">Opportunities</button>
       <button class="tab" id="tabOver" onclick="switchTab('over')">Overhead</button>
       <button class="tab" id="tabRes" onclick="switchTab('res')">Resources View</button>
-      <button class="tab" id="tabPlan" onclick="switchTab('plan')">120-Day Plan</button>
+      <button class="tab" id="tabPlan" onclick="switchTab('plan')">COE Plan</button>
+      <button class="tab" id="tabPTask" onclick="switchTab('ptask')">Project Tasks</button>
     </div>
   </div>
 </div></div>
@@ -690,8 +691,10 @@ function planMigrate(){
     if(!('parentId' in a))a.parentId=null;
     if(!a.updates)a.updates=[];
     if(!a.attachments)a.attachments=[];
+    if(!('kind' in a))a.kind='coe';
   });
 }
+function planKind(){return viewMode==='ptask'?'project':'coe';}
 function planOwnerParts(a){var members=planMembers(),parts=[];(a.ownerText||'').split(/\s*\+\s*/).forEach(function(tok){tok=tok.trim();if(!tok)return;var lt=tok.toLowerCase();var hit=members.find(function(m){var n=m.name.toLowerCase();return n===lt||n.split(/\s+/).indexOf(lt)>-1;});if(hit)parts.push({m:hit});else parts.push({txt:tok});});return parts;}
 function planOwnerHTML(a){var parts=planOwnerParts(a);if(!parts.length)return '<span class="plan-own txt">Unassigned</span>';return parts.map(function(p){if(p.m)return '<span class="plan-own" onclick="event.stopPropagation();openPersonProfile(\''+p.m.id+'\')" title="'+esc(p.m.role||'')+'">'+esc(p.m.name)+'</span>';return '<span class="plan-own txt">'+esc(p.txt)+'</span>';}).join('');}
 function planParseDate(s){if(!s)return null;var p=/^(\d{4})-(\d{2})-(\d{2})/.exec(s);if(p)return new Date(+p[1],+p[2]-1,+p[3]);var d=new Date(s);return isNaN(d.getTime())?null:d;}
@@ -704,7 +707,8 @@ function planMonthName(m){return ['January','February','March','April','May','Ju
 function planFmtShort(d){return d?(['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]+' '+d.getDate()):'';}
 function planSameDay(a,b){return a&&b&&a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();}
 function planChildren(id){return D.activities.filter(function(a){return a.parentId===id;});}
-function planFiltered(q){return D.activities.filter(function(a){
+function planFiltered(q){var kind=planKind();return D.activities.filter(function(a){
+  if((a.kind||'coe')!==kind)return false;
   if(planFilter.program&&a.programId!==planFilter.program)return false;
   if(planFilter.phase&&a.phase!==planFilter.phase)return false;
   if(planFilter.status&&a.status!==planFilter.status)return false;
@@ -721,7 +725,7 @@ function renderPlanView(q){
   PLAN_STS.forEach(function(s){counts[s.k]=acts.filter(function(a){return a.status===s.k;}).length;});
   var html='<div class="plan-wrap">';
   html+='<div class="plan-summary"><div class="plan-summary-top">'
-    +'<div><strong style="font-size:14px;color:var(--text-primary)">120-Day Operating Plan</strong>'
+    +'<div><strong style="font-size:14px;color:var(--text-primary)">'+(planKind()==='project'?'Project Tasks':'COE Plan')+'</strong>'
     +'<span style="font-size:12px;color:var(--text-secondary);margin-left:8px">'+acts.length+' task'+(acts.length===1?'':'s')+' &middot; '+prog.done+' completed ('+prog.pct+'%)</span></div>'
     +'<div class="plan-counts">'+PLAN_STS.map(function(s){return '<span class="plan-chip" style="border-color:'+s.c+';color:'+s.c+'">'+s.l+': '+counts[s.k]+'</span>';}).join('')+'</div>'
     +'</div><div class="plan-bar" style="max-width:none;margin-top:10px"><div class="plan-bar-fill" style="width:'+prog.pct+'%"></div></div></div>';
@@ -881,8 +885,19 @@ function openPlanModal(id,presetParent){
   var pid=v.programId,editable=a?can('task',pid):planCanAddAny(),dis=editable?'':' disabled';
   var progOpts=progs.map(function(p){return '<option value="'+p.id+'"'+(v.programId===p.id?' selected':'')+'>'+esc(p.name)+'</option>';}).join('');
   var parentOpts='<option value="">— none (top-level task) —</option>'+D.activities.filter(function(x){return !x.parentId&&x.id!==(a?a.id:'')&&x.programId===v.programId;}).map(function(x){return '<option value="'+x.id+'"'+(v.parentId===x.id?' selected':'')+'>'+esc(x.subtask)+'</option>';}).join('');
-  var projOpts='<option value="">— none —</option>'+D.projects.map(function(p){return '<option value="'+p.id+'"'+(v.projectId===p.id?' selected':'')+'>'+esc(p.name)+'</option>';}).join('');
-  var h='<div class="mdl-over">120-Day Plan'+(editable?'':' · read-only')+'</div><div class="mdl-title">'+(a?'Edit Task':(presetParent?'New Subtask':'New Task'))+'</div>'
+  var REL_CATS=[{k:'',l:'All categories'},{k:'project',l:'Projects'},{k:'opportunity',l:'Opportunities'},{k:'initiative',l:'Initiatives'},{k:'overhead',l:'Overhead'}];
+  var curRelCat='';
+  if(v.projectId){var _rp=D.projects.find(function(x){return x.id===v.projectId;});if(_rp)curRelCat=projCat(_rp);}
+  var relCatOpts=REL_CATS.map(function(c){return '<option value="'+c.k+'"'+(curRelCat===c.k?' selected':'')+'>'+c.l+'</option>';}).join('');
+  var projOpts='<option value="">— none —</option>'+D.projects.filter(function(p){return !curRelCat||projCat(p)===curRelCat;}).map(function(p){return '<option value="'+p.id+'"'+(v.projectId===p.id?' selected':'')+'>'+esc(p.name)+'</option>';}).join('');
+  var modalKind=a?(a.kind||'coe'):planKind();
+  var modalKindLabel=modalKind==='project'?'Project Task':'COE Plan';
+  var h='<div class="mdl-over">'+modalKindLabel+(editable?'':' · read-only')+'</div><div class="mdl-title">'+(a?'Edit Task':(presetParent?'New Subtask':'New Task'))+'</div>'
+    +'<div style="display:flex;gap:10px">'
+      +'<div class="fld" style="flex:1"><label class="fld-l">PM</label><input class="fld-i" id="pl_pm" value="'+esc(v.pm)+'"'+dis+'></div>'
+      +'<div class="fld" style="flex:1"><label class="fld-l">Related item — filter</label><select class="fld-sel" id="pl_relcat" onchange="planUpdateRelOpts()"'+dis+'>'+relCatOpts+'</select></div>'
+    +'</div>'
+    +'<div class="fld"><label class="fld-l">Related item</label><select class="fld-sel" id="pl_project"'+dis+'>'+projOpts+'</select></div>'
     +'<div style="display:flex;gap:10px"><div class="fld" style="flex:1"><label class="fld-l">Program</label><select class="fld-sel" id="pl_program"'+dis+'>'+progOpts+'</select></div>'
       +'<div class="fld" style="flex:1"><label class="fld-l">Parent task</label><select class="fld-sel" id="pl_parent"'+dis+'>'+parentOpts+'</select></div></div>'
     +'<div class="fld"><label class="fld-l">Task (group)</label><input class="fld-i" id="pl_task" value="'+esc(v.task)+'" placeholder="e.g. 1.1 Role Architecture"'+dis+'></div>'
@@ -898,9 +913,7 @@ function openPlanModal(id,presetParent){
       +'<div class="fld" style="flex:1"><label class="fld-l">Due date</label><input class="fld-i" type="date" id="pl_dueDate" value="'+esc(v.dueDate)+'"'+dis+'></div>'
     +'</div>'
     +'<div class="fld"><label class="chk-row" style="cursor:pointer"><input type="checkbox" id="pl_milestone"'+(v.isMilestone?' checked':'')+dis+'> <span class="fld-l" style="margin:0">Mark as milestone</span></label></div>'
-    +'<div class="fld"><label class="fld-l">Owners <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted)">— names joined by + (auto-linked)</span></label><input class="fld-i" id="pl_owners" value="'+esc(v.ownerText)+'" placeholder="e.g. Idris + Ayesha"'+dis+'></div>'
-    +'<div style="display:flex;gap:10px"><div class="fld" style="flex:1"><label class="fld-l">Related item</label><select class="fld-sel" id="pl_project"'+dis+'>'+projOpts+'</select></div>'
-      +'<div class="fld" style="flex:1"><label class="fld-l">PM</label><input class="fld-i" id="pl_pm" value="'+esc(v.pm)+'"'+dis+'></div></div>';
+    +'<div class="fld"><label class="fld-l">Owners <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted)">— names joined by + (auto-linked)</span></label><input class="fld-i" id="pl_owners" value="'+esc(v.ownerText)+'" placeholder="e.g. Idris + Ayesha"'+dis+'></div>';
   if(a){
     h+='<div class="pl-sec"><div class="fld-l">Status Updates</div><div class="pl-updates">'+(a.updates&&a.updates.length?a.updates.slice().reverse().map(function(u){return '<div class="pl-update"><div class="pl-update-meta">'+esc(u.author||'—')+' · '+new Date(u.ts).toLocaleString()+'</div><div>'+esc(u.text)+'</div></div>';}).join(''):'<div style="font-size:11px;color:var(--text-muted)">No updates yet.</div>')+'</div>'
       +(can('update',pid)?'<div style="display:flex;gap:6px;margin-top:6px"><input class="fld-i" id="pl_update" placeholder="Add a status update…"><button class="btn btn-navy btn-sm" onclick="addPlanUpdate(\''+a.id+'\')">Post</button></div>':'')+'</div>';
@@ -928,8 +941,14 @@ function savePlan(){
   var data={programId:pid,parentId:gv('pl_parent')||null,task:gv('pl_task').trim(),subtask:sub,outline:gv('pl_outline').trim(),objective:gv('pl_objective').trim(),phase:gv('pl_phase'),status:gv('pl_status'),start:gv('pl_start'),dueDate:gv('pl_dueDate'),isMilestone:document.getElementById('pl_milestone').checked,ownerText:ownerText,owners:planResolveOwners(ownerText),projectId:gv('pl_project')||null,pm:gv('pl_pm').trim()};
   var p=progById(data.programId);data.program=p?p.name:'';
   if(planEditId){var a=D.activities.find(function(x){return x.id===planEditId;});if(a)Object.assign(a,data);}
-  else{data.id=uid();data.order=D.activities.length;data.updates=[];data.attachments=[];D.activities.push(data);}
+  else{data.id=uid();data.order=D.activities.length;data.updates=[];data.attachments=[];data.kind=planKind();D.activities.push(data);}
   closeModal('ovPlan');save();renderView();
+}
+function planUpdateRelOpts(){
+  var sel=document.getElementById('pl_project');if(!sel)return;
+  var cat=gv('pl_relcat');var cur=sel.value;
+  var opts='<option value="">— none —</option>'+D.projects.filter(function(p){return !cat||projCat(p)===cat;}).map(function(p){return '<option value="'+p.id+'"'+(cur===p.id?' selected':'')+'>'+esc(p.name)+'</option>';}).join('');
+  sel.innerHTML=opts;
 }
 function delPlan(id){var a=D.activities.find(function(x){return x.id===id;});if(a&&!can('task',a.programId)){alert('No permission.');return;}var kids=planChildren(id);if(!confirm('Delete this task'+(kids.length?' and its '+kids.length+' subtask(s)':'')+'?'))return;var rm={};rm[id]=1;kids.forEach(function(c){rm[c.id]=1;});D.activities=D.activities.filter(function(x){return !rm[x.id];});closeModal('ovPlan');save();renderView();}
 /* ── DEPT TREE HELPERS ── */
@@ -954,8 +973,9 @@ function uid(){return 'id_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)
 function pName(pid){var p=D.projects.find(function(x){return x.id===pid;});return p?p.name:pid;}
 function sName(sid){var s=D.skillsets.find(function(x){return x.id===sid;});return s?s.name:sid;}
 function allM(){var r=[];D.departments.forEach(function(d){d.members.forEach(function(m){r.push(Object.assign({},m,{_dept:d.id,_dn:d.name}));});});return r;}
-function closeModal(id){document.getElementById(id).classList.remove('show');}
-function openModal(id){document.getElementById(id).classList.add('show');}
+var _modalZ=100;
+function closeModal(id){var el=document.getElementById(id);el.classList.remove('show');el.style.zIndex='';}
+function openModal(id){_modalZ+=1;var el=document.getElementById(id);el.style.zIndex=_modalZ;el.classList.add('show');}
 
 /* ── PERSON PROFILE ── */
 function deptPath(did){var dept=D.departments.find(function(d){return d.id===did;});if(!dept)return[];return dept.parentId?deptPath(dept.parentId).concat([dept.name]):[dept.name];}
@@ -1054,7 +1074,7 @@ document.getElementById('statsBar').innerHTML=[
 {l:'Skills',v:D.skillsets.length,u:'defined'},{l:'Reassess',v:fl,u:'flagged',w:fl>0},{l:'Over-alloc',v:oa,u:'people',w:oa>0}
 ].map(function(s){return '<div class="st'+(s.w?' warn':'')+'"><div class="st-l">'+s.l+'</div><div class="st-v'+(s.w?' wv':'')+'">'+s.v+'<span class="st-u">'+s.u+'</span></div></div>';}).join('');}
 
-function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',init:'tabInit',opp:'tabOpp',over:'tabOver',orgchart:'tabChart',res:'tabRes',plan:'tabPlan'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
+function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',init:'tabInit',opp:'tabOpp',over:'tabOver',orgchart:'tabChart',res:'tabRes',plan:'tabPlan',ptask:'tabPTask'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
 
 function cardHTML(m,did){
 var dept=D.departments.find(function(d){return d.id===did;});
@@ -1424,7 +1444,7 @@ function renderView(){
   else if(viewMode==='opp')html=renderOppView(q);
   else if(viewMode==='over')html=renderProjView(q,'overhead');
   else if(viewMode==='orgchart')html=renderOrgChartView(q);
-  else if(viewMode==='plan')html=renderPlanView(q);
+  else if(viewMode==='plan'||viewMode==='ptask')html=renderPlanView(q);
   else html=renderResourcesView(q);
   document.getElementById('mainContent').innerHTML=html;
 }
@@ -2054,7 +2074,7 @@ function openProgramsManager(){
       +'<span style="font-size:11px;color:var(--text-muted);white-space:nowrap">'+cnt+' task'+(cnt===1?'':'s')+'</span>'
       +'<button class="btn btn-danger-sm btn-sm" onclick="delProgram(\''+p.id+'\')">&#10005;</button></div>';
   }).join('');
-  document.getElementById('mdlAdmin').innerHTML='<div class="mdl-over">120-Day Plan</div><div class="mdl-title">Manage Programs</div>'
+  document.getElementById('mdlAdmin').innerHTML='<div class="mdl-over">'+(planKind()==='project'?'Project Tasks':'COE Plan')+'</div><div class="mdl-title">Manage Programs</div>'
     +'<div class="fld"><label class="fld-l">Plan start (Month 1 anchor)</label><input class="fld-i" type="date" id="pm_planstart" value="'+esc(D.planStart||'2026-06-01')+'" onchange="setPlanStart(this.value)"></div>'
     +'<div id="pm_list">'+(rows||'<div style="font-size:12px;color:var(--text-muted)">No programs yet.</div>')+'</div>'
     +'<div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px;display:flex;gap:6px"><input class="fld-i" id="pm_new" placeholder="New program name"><button class="btn btn-navy btn-sm" onclick="addProgram()">+ Add</button></div>';
@@ -2126,7 +2146,7 @@ function delAccount(id){if(!can('accounts'))return;if(ME&&ME.id===id){alert('You
 /* ── AUTH & PERMISSIONS (client-side roles only — not API security) ── */
 var AUTH_USER='khaja@communityforce.com',AUTH_PASS='Namtra_CF27',DEFAULT_PW='CommunityForce2026';
 var ME=null;
-var SECTIONS=[{k:'org',tab:'tabOrg',l:'Department View'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources View'},{k:'plan',tab:'tabPlan',l:'120-Day Plan'}];
+var SECTIONS=[{k:'org',tab:'tabOrg',l:'Department View'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources View'},{k:'plan',tab:'tabPlan',l:'COE Plan'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'}];
 function emailFromName(name){var clean=(name||'').replace(/\(.*?\)/g,'').replace(/[^A-Za-z .\-]/g,'').trim();var parts=clean.split(/\s+/).filter(Boolean);var local=parts.length>=2?(parts[0]+'.'+parts[parts.length-1]):(parts[0]||'user');return local.toLowerCase().replace(/[^a-z0-9.]/g,'')+'@communityforce.com';}
 function authMigrate(){
   if(!D.accounts)D.accounts=[];
