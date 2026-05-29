@@ -810,7 +810,13 @@ function recruitMigrate(){
   if(!D.recruitings)D.recruitings=[];
   if(!D.candidates)D.candidates=[];
   if(!D.notifications)D.notifications=[];
-  (D.accounts||[]).forEach(function(a){if(!('apiKey' in a))a.apiKey='';});
+  (D.accounts||[]).forEach(function(a){
+    if(!('apiKey' in a))a.apiKey='';                           // Anthropic (legacy field name kept)
+    if(!('apiKey_openai' in a))a.apiKey_openai='';
+    if(!('apiKey_google' in a))a.apiKey_google='';
+    if(!('defaultLlmProvider' in a))a.defaultLlmProvider='anthropic';
+    if(!('defaultLlmModel' in a))a.defaultLlmModel='';         // empty = provider default
+  });
   D.recruitings.forEach(function(r){
     if(!r.status)r.status='open';
     if(!r.jdAttachments)r.jdAttachments=[];
@@ -2530,7 +2536,12 @@ function markAllNotifRead(){
 
 /* ── LLM HELPERS ── */
 function llmDocComplete(opts){
-  var body=Object.assign({accountId:ME?ME.id:''},opts||{});
+  var myAcc=ME?(D.accounts||[]).find(function(a){return a.id===ME.id;}):null;
+  var body=Object.assign({
+    accountId:ME?ME.id:'',
+    provider:(opts&&opts.provider)||(myAcc&&myAcc.defaultLlmProvider)||'anthropic',
+    model:(opts&&opts.model)||(myAcc&&myAcc.defaultLlmModel)||''
+  },opts||{});
   return fetch('/api/llm/with-attachment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||('HTTP '+r.status));return j;});});
 }
@@ -2814,40 +2825,98 @@ function candCopyEmail(){
   navigator.clipboard.writeText(txt).then(function(){alert('Copied to clipboard.');},function(){alert('Could not copy.');});
 }
 
-/* ── INTEGRATIONS (Claude API key) ── */
+/* ── INTEGRATIONS (multi-provider LLM keys + defaults) ── */
+var LLM_PROVIDER_LIST=[
+  {k:'anthropic',l:'Anthropic Claude',keyField:'apiKey',envVar:'ANTHROPIC_API_KEY',placeholder:'sk-ant-...',models:[
+    {k:'claude-sonnet-4-5',l:'Sonnet 4.5 (balanced — default)'},
+    {k:'claude-opus-4-5',l:'Opus 4.5 (highest quality)'},
+    {k:'claude-haiku-4-5',l:'Haiku 4.5 (fastest, cheapest)'}
+  ]},
+  {k:'openai',l:'OpenAI',keyField:'apiKey_openai',envVar:'OPENAI_API_KEY',placeholder:'sk-...',models:[
+    {k:'gpt-4o',l:'GPT-4o'},
+    {k:'gpt-4o-mini',l:'GPT-4o mini (fast/cheap)'},
+    {k:'o1',l:'o1 (reasoning)'},
+    {k:'o1-mini',l:'o1 mini'}
+  ]},
+  {k:'google',l:'Google Gemini',keyField:'apiKey_google',envVar:'GOOGLE_API_KEY',placeholder:'AIza...',models:[
+    {k:'gemini-2.0-flash-exp',l:'Gemini 2.0 Flash (default)'},
+    {k:'gemini-1.5-pro',l:'Gemini 1.5 Pro'},
+    {k:'gemini-1.5-flash',l:'Gemini 1.5 Flash'}
+  ]}
+];
+function llmProvCfg(k){return LLM_PROVIDER_LIST.find(function(p){return p.k===k;})||LLM_PROVIDER_LIST[0];}
+function llmModelOpts(providerKey,selected){
+  var p=llmProvCfg(providerKey);
+  return p.models.map(function(m){return '<option value="'+esc(m.k)+'"'+(m.k===selected?' selected':'')+'>'+esc(m.l)+'</option>';}).join('');
+}
+function llmProvOpts(selected){
+  return LLM_PROVIDER_LIST.map(function(p){return '<option value="'+p.k+'"'+(p.k===selected?' selected':'')+'>'+esc(p.l)+'</option>';}).join('');
+}
 function openIntegrationsManager(){
   if(!ME)return;
   var myAcc=(D.accounts||[]).find(function(a){return a.id===ME.id;});
+  if(!myAcc)return;
+  var curProv=myAcc.defaultLlmProvider||'anthropic';
+  var curModel=myAcc.defaultLlmModel||llmProvCfg(curProv).defaultModel||llmProvCfg(curProv).models[0].k;
+  var keyRows=LLM_PROVIDER_LIST.map(function(p){
+    var hasKey=!!(myAcc[p.keyField]);
+    return '<div class="fld" style="margin-bottom:10px">'
+      +'<label class="fld-l" style="display:flex;justify-content:space-between;align-items:center">'+esc(p.l)+' API Key'
+      +'<span id="intg_org_'+p.k+'" style="font-size:9px;font-weight:600;letter-spacing:0.3px;color:var(--text-muted)">Checking…</span></label>'
+      +'<input class="fld-i" id="intg_key_'+p.k+'" type="password" value="'+esc(myAcc[p.keyField]||'')+'" placeholder="'+esc(p.placeholder)+'" autocomplete="off">'
+      +'<div style="font-size:10px;color:var(--text-muted);margin-top:3px">Env var: <code>'+p.envVar+'</code>'+(hasKey?' &middot; <span style="color:var(--green)">your override set</span>':'')+'</div>'
+      +'</div>';
+  }).join('');
   document.getElementById('mdlIntg').innerHTML=
-    '<div class="mdl-over">Administration</div><div class="mdl-title">Integrations</div>'
-    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Atlas uses the Anthropic Claude API for AI features (resume parsing, interview kits, outcome summaries — coming soon). Set up either an org-wide key on the server or a personal override here.</div>'
-    +'<span class="fld-section-hdr">Org-Wide Key</span>'
-    +'<div id="intg_org_status" style="font-size:12px;padding:8px 10px;background:var(--page-bg);border-radius:6px;color:var(--text-secondary);margin-bottom:6px">Checking…</div>'
-    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:14px">Set <code>ANTHROPIC_API_KEY</code> as an env var in your Railway deployment to enable AI features for everyone.</div>'
-    +'<span class="fld-section-hdr">Your Personal Override</span>'
-    +'<div class="fld"><label class="fld-l">Your Anthropic API Key (optional)</label>'
-    +'<input class="fld-i" id="intg_mykey" type="password" value="'+esc(myAcc?(myAcc.apiKey||''):'')+'" placeholder="sk-ant-..." autocomplete="off"></div>'
-    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:14px">Used only for AI calls initiated by your account. Overrides the org-wide key when present. Stored in Postgres alongside your other account data.</div>'
+    '<div class="mdl-over">Administration</div><div class="mdl-title">Integrations &middot; LLM Providers</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Atlas can call Anthropic Claude, OpenAI, and Google Gemini. Each AI feature picks the provider from the calling user\'s default (set below) or per-proposal override. For each provider you can set an org-wide key on the server (env var) OR a per-user override here.</div>'
+    +'<span class="fld-section-hdr">Per-Provider API Keys (your overrides)</span>'
+    +keyRows
+    +'<span class="fld-section-hdr">Your Default Provider &amp; Model</span>'
+    +'<div style="display:flex;gap:10px"><div class="fld" style="flex:1"><label class="fld-l">Default Provider</label>'
+    +'<select class="fld-sel" id="intg_def_prov" onchange="intgUpdateModelOpts()">'+llmProvOpts(curProv)+'</select></div>'
+    +'<div class="fld" style="flex:1"><label class="fld-l">Default Model</label>'
+    +'<select class="fld-sel" id="intg_def_model">'+llmModelOpts(curProv,curModel)+'</select></div></div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin:-4px 0 14px">Used for AI calls initiated by your account when no per-proposal override is set.</div>'
     +'<div class="btn-row">'
       +'<button class="btn btn-navy" style="flex:1" onclick="saveIntegrations()">Save</button>'
       +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovIntg\')">Close</button>'
     +'</div>';
   openModal('ovIntg');
-  // Async fetch org-wide key status
-  fetch('/api/llm/status').then(function(r){return r.json();}).then(function(j){
-    var el=document.getElementById('intg_org_status');if(!el)return;
-    el.innerHTML=j.orgKeyConfigured?'<span style="color:var(--green);font-weight:700">&#10003; Configured</span> — AI features available to all users by default.':'<span style="color:var(--text-muted);font-weight:700">Not configured</span> — AI features require a personal override key.';
-  }).catch(function(){var el=document.getElementById('intg_org_status');if(el)el.textContent='Could not check status.';});
+  // Fetch per-provider org-key status
+  fetch('/api/llm/providers').then(function(r){return r.json();}).then(function(j){
+    LLM_PROVIDER_LIST.forEach(function(p){
+      var el=document.getElementById('intg_org_'+p.k);if(!el)return;
+      var ok=j&&j[p.k]&&j[p.k].orgKeyConfigured;
+      el.innerHTML=ok?'<span style="color:var(--green)">&#10003; ORG KEY</span>':'<span style="color:var(--text-muted)">no org key</span>';
+    });
+  }).catch(function(){});
+}
+function intgUpdateModelOpts(){
+  var prov=gv('intg_def_prov');
+  var sel=document.getElementById('intg_def_model');if(!sel)return;
+  sel.innerHTML=llmModelOpts(prov,'');
 }
 function saveIntegrations(){
   if(!ME)return;
   var myAcc=(D.accounts||[]).find(function(a){return a.id===ME.id;});
-  if(myAcc){myAcc.apiKey=gv('intg_mykey').trim();save();}
-  closeModal('ovIntg');
+  if(!myAcc){closeModal('ovIntg');return;}
+  LLM_PROVIDER_LIST.forEach(function(p){
+    var v=gv('intg_key_'+p.k);if(v!==undefined)myAcc[p.keyField]=v.trim();
+  });
+  myAcc.defaultLlmProvider=gv('intg_def_prov')||'anthropic';
+  myAcc.defaultLlmModel=gv('intg_def_model')||'';
+  save();closeModal('ovIntg');
 }
 function llmComplete(opts){
-  // Helper for future LLM features. opts: {system, messages, model, max_tokens}
-  var body=Object.assign({accountId:ME?ME.id:''},opts||{});
+  // opts: {provider, model, system, messages, max_tokens}. Provider/model
+  // fall back to the calling user's default if not set.
+  var myAcc=ME?(D.accounts||[]).find(function(a){return a.id===ME.id;}):null;
+  var body=Object.assign({
+    accountId:ME?ME.id:'',
+    provider:(opts&&opts.provider)||(myAcc&&myAcc.defaultLlmProvider)||'anthropic',
+    model:(opts&&opts.model)||(myAcc&&myAcc.defaultLlmModel)||''
+  },opts||{});
   return fetch('/api/llm/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||('HTTP '+r.status));return j;});});
 }

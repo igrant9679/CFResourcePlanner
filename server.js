@@ -102,92 +102,220 @@ app.delete('/api/attachments/:id', async (req, res) => {
   }
 });
 
-// ── LLM PROXY (Claude API) ──
+// ── LLM PROXY (multi-provider: Anthropic, OpenAI, Google Gemini) ──
+// Resolves the API key for a request from (1) the calling user's per-provider
+// override, falling back to (2) the org-wide env var. Normalizes the response
+// shape across providers so the client always sees Anthropic-style
+// {content:[{type:'text',text}], usage, model, provider}.
+
+const LLM_PROVIDERS = {
+  anthropic: {
+    label: 'Anthropic Claude',
+    envVar: 'ANTHROPIC_API_KEY',
+    accountKey: 'apiKey',          // existing field — kept for backward compat
+    defaultModel: 'claude-sonnet-4-5',
+    supportsPdf: true,
+  },
+  openai: {
+    label: 'OpenAI',
+    envVar: 'OPENAI_API_KEY',
+    accountKey: 'apiKey_openai',
+    defaultModel: 'gpt-4o',
+    supportsPdf: false,            // requires Files API + assistant endpoint; not v1
+  },
+  google: {
+    label: 'Google Gemini',
+    envVar: 'GOOGLE_API_KEY',
+    accountKey: 'apiKey_google',
+    defaultModel: 'gemini-2.0-flash-exp',
+    supportsPdf: true,             // supports inline_data PDFs
+  },
+};
+
+async function resolveApiKey(providerKey, accountId) {
+  const cfg = LLM_PROVIDERS[providerKey];
+  if (!cfg) throw new Error('Unknown provider: ' + providerKey);
+  let key = process.env[cfg.envVar] || '';
+  if (accountId) {
+    const r = await pool.query('SELECT data FROM app_state WHERE id = 1');
+    const data = r.rows[0] && r.rows[0].data;
+    const acc = data && Array.isArray(data.accounts) && data.accounts.find((a) => a.id === accountId);
+    if (acc && acc[cfg.accountKey]) key = acc[cfg.accountKey];
+  }
+  return key;
+}
+
+// Provider-specific calls. Each returns a normalized
+// {content:[{type:'text',text}], usage, model, provider} shape.
+
+async function callAnthropic({ apiKey, model, system, messages, max_tokens }) {
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({
+      model: model || LLM_PROVIDERS.anthropic.defaultModel,
+      max_tokens: max_tokens || 4096,
+      system: system || '',
+      messages,
+    }),
+  });
+  const json = await resp.json();
+  if (!resp.ok) { const err = new Error(json.error?.message || ('HTTP ' + resp.status)); err.status = resp.status; err.body = json; throw err; }
+  // Anthropic already returns {content:[{type:'text',text}]}
+  json.provider = 'anthropic';
+  return json;
+}
+
+async function callOpenAI({ apiKey, model, system, messages, max_tokens }) {
+  // Convert Anthropic-shaped messages to OpenAI chat format.
+  const oaiMessages = [];
+  if (system) oaiMessages.push({ role: 'system', content: system });
+  for (const m of messages) {
+    let content = m.content;
+    if (Array.isArray(content)) content = content.filter((b) => b.type === 'text').map((b) => b.text).join('\n');
+    oaiMessages.push({ role: m.role, content });
+  }
+  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey },
+    body: JSON.stringify({
+      model: model || LLM_PROVIDERS.openai.defaultModel,
+      messages: oaiMessages,
+      max_tokens: max_tokens || 4096,
+    }),
+  });
+  const json = await resp.json();
+  if (!resp.ok) { const err = new Error(json.error?.message || ('HTTP ' + resp.status)); err.status = resp.status; err.body = json; throw err; }
+  const text = json.choices?.[0]?.message?.content || '';
+  return {
+    content: [{ type: 'text', text }],
+    usage: { input_tokens: json.usage?.prompt_tokens, output_tokens: json.usage?.completion_tokens },
+    model: json.model,
+    provider: 'openai',
+    stop_reason: json.choices?.[0]?.finish_reason,
+  };
+}
+
+async function callGoogle({ apiKey, model, system, messages, max_tokens, fileBase64, fileMime }) {
+  const m = model || LLM_PROVIDERS.google.defaultModel;
+  const body = {
+    contents: messages.map((msg) => {
+      const parts = [];
+      // PDF/file goes inline before text
+      if (fileBase64 && msg === messages[messages.length - 1]) {
+        parts.push({ inline_data: { mime_type: fileMime || 'application/pdf', data: fileBase64 } });
+      }
+      const text = Array.isArray(msg.content)
+        ? msg.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n')
+        : msg.content;
+      if (text) parts.push({ text });
+      return { role: msg.role === 'assistant' ? 'model' : msg.role, parts };
+    }),
+    generationConfig: { maxOutputTokens: max_tokens || 4096 },
+  };
+  if (system) body.systemInstruction = { parts: [{ text: system }] };
+  const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const json = await resp.json();
+  if (!resp.ok) { const err = new Error(json.error?.message || ('HTTP ' + resp.status)); err.status = resp.status; err.body = json; throw err; }
+  const text = json.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
+  return {
+    content: [{ type: 'text', text }],
+    usage: { input_tokens: json.usageMetadata?.promptTokenCount, output_tokens: json.usageMetadata?.candidatesTokenCount },
+    model: m,
+    provider: 'google',
+    stop_reason: json.candidates?.[0]?.finishReason,
+  };
+}
+
+app.get('/api/llm/providers', (req, res) => {
+  const out = {};
+  for (const [k, cfg] of Object.entries(LLM_PROVIDERS)) {
+    out[k] = {
+      label: cfg.label,
+      orgKeyConfigured: !!process.env[cfg.envVar],
+      envVar: cfg.envVar,
+      defaultModel: cfg.defaultModel,
+      supportsPdf: cfg.supportsPdf,
+    };
+  }
+  res.json(out);
+});
+
+// Backward-compat: keep /api/llm/status returning the Anthropic status.
 app.get('/api/llm/status', (req, res) => {
   res.json({ orgKeyConfigured: !!process.env.ANTHROPIC_API_KEY });
 });
 
 app.post('/api/llm/complete', async (req, res) => {
   try {
-    const { accountId, system: systemPrompt, messages, model, max_tokens } = req.body || {};
+    const { accountId, provider, system: systemPrompt, messages, model, max_tokens } = req.body || {};
     if (!Array.isArray(messages) || !messages.length) return res.status(400).json({ error: 'messages required' });
-    let apiKey = process.env.ANTHROPIC_API_KEY || '';
-    if (accountId) {
-      const r = await pool.query('SELECT data FROM app_state WHERE id = 1');
-      const data = r.rows[0] && r.rows[0].data;
-      const acc = data && Array.isArray(data.accounts) && data.accounts.find((a) => a.id === accountId);
-      if (acc && acc.apiKey) apiKey = acc.apiKey;
-    }
-    if (!apiKey) return res.status(400).json({ error: 'No API key configured. Set ANTHROPIC_API_KEY env var or your personal override in Admin → Integrations.' });
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: model || 'claude-sonnet-4-5',
-        max_tokens: max_tokens || 4096,
-        system: systemPrompt || '',
-        messages,
-      }),
-    });
-    const json = await resp.json();
-    if (!resp.ok) return res.status(resp.status).json(json);
+    const prov = (provider || 'anthropic').toLowerCase();
+    if (!LLM_PROVIDERS[prov]) return res.status(400).json({ error: 'Unknown provider: ' + prov });
+    const apiKey = await resolveApiKey(prov, accountId);
+    if (!apiKey) return res.status(400).json({ error: `No ${LLM_PROVIDERS[prov].label} API key configured. Set ${LLM_PROVIDERS[prov].envVar} env var or your personal override in Admin → Integrations.` });
+    const params = { apiKey, model, system: systemPrompt, messages, max_tokens };
+    let json;
+    if (prov === 'openai') json = await callOpenAI(params);
+    else if (prov === 'google') json = await callGoogle(params);
+    else json = await callAnthropic(params);
     res.json(json);
   } catch (e) {
     console.error('LLM completion failed:', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(e.status || 500).json(e.body || { error: e.message });
   }
 });
 
-// LLM with attachment (e.g. resume PDF as a `document` content block)
+// LLM with attachment (e.g. resume PDF as a document content block).
+// Currently anthropic + google (both support inline PDF); openai requires the
+// Files API + assistant endpoint, so it falls back to text-only with a note.
 app.post('/api/llm/with-attachment', async (req, res) => {
   try {
-    const { accountId, attachmentId, system: systemPrompt, instruction, model, max_tokens } = req.body || {};
+    const { accountId, provider, attachmentId, system: systemPrompt, instruction, model, max_tokens } = req.body || {};
     if (!attachmentId) return res.status(400).json({ error: 'attachmentId required' });
     if (!instruction) return res.status(400).json({ error: 'instruction required' });
-    let apiKey = process.env.ANTHROPIC_API_KEY || '';
-    if (accountId) {
-      const r = await pool.query('SELECT data FROM app_state WHERE id = 1');
-      const data = r.rows[0] && r.rows[0].data;
-      const acc = data && Array.isArray(data.accounts) && data.accounts.find((a) => a.id === accountId);
-      if (acc && acc.apiKey) apiKey = acc.apiKey;
-    }
-    if (!apiKey) return res.status(400).json({ error: 'No API key configured. See Admin → Integrations.' });
+    const prov = (provider || 'anthropic').toLowerCase();
+    if (!LLM_PROVIDERS[prov]) return res.status(400).json({ error: 'Unknown provider: ' + prov });
+    const apiKey = await resolveApiKey(prov, accountId);
+    if (!apiKey) return res.status(400).json({ error: `No ${LLM_PROVIDERS[prov].label} API key configured. See Admin → Integrations.` });
     const ar = await pool.query('SELECT name, mime, data FROM attachments WHERE id = $1', [attachmentId]);
     if (!ar.rows.length) return res.status(404).json({ error: 'Attachment not found' });
     const att = ar.rows[0];
     const mime = att.mime || 'application/octet-stream';
     const isPdf = /pdf$/i.test(mime) || /\.pdf$/i.test(att.name || '');
-    // Build user content: PDFs go as document blocks, anything else gets a fallback text note
-    const userContent = [];
-    if (isPdf) {
-      userContent.push({
-        type: 'document',
-        source: { type: 'base64', media_type: 'application/pdf', data: Buffer.from(att.data).toString('base64') },
+    const fileBase64 = Buffer.from(att.data).toString('base64');
+    let json;
+    if (prov === 'anthropic') {
+      const userContent = [];
+      if (isPdf) userContent.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: fileBase64 } });
+      else userContent.push({ type: 'text', text: `[Attachment "${att.name}" is type ${mime}; Claude cannot read it directly. Proceed using only the instruction below.]` });
+      userContent.push({ type: 'text', text: instruction });
+      json = await callAnthropic({ apiKey, model, system: systemPrompt, max_tokens, messages: [{ role: 'user', content: userContent }] });
+    } else if (prov === 'google') {
+      json = await callGoogle({
+        apiKey, model, system: systemPrompt, max_tokens,
+        messages: [{ role: 'user', content: instruction }],
+        fileBase64: isPdf ? fileBase64 : null,
+        fileMime: 'application/pdf',
       });
+      if (!isPdf) json.content[0].text = `[Attachment "${att.name}" is type ${mime}; not sent inline.]\n\n` + json.content[0].text;
     } else {
-      userContent.push({ type: 'text', text: `[Attachment "${att.name}" is type ${mime}; Claude cannot read it directly. Proceed using only the instruction below.]` });
+      // OpenAI: chat/completions endpoint cannot accept binary; instruct that
+      // attachment was not included. The Files+Assistants API would require a
+      // larger refactor; defer until there's user demand.
+      json = await callOpenAI({
+        apiKey, model, system: systemPrompt, max_tokens,
+        messages: [{ role: 'user', content: `[Attachment "${att.name}" (${mime}) cannot be sent to OpenAI via this proxy yet — switch to Anthropic or Google for PDF analysis.]\n\n${instruction}` }],
+      });
     }
-    userContent.push({ type: 'text', text: instruction });
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: model || 'claude-sonnet-4-5',
-        max_tokens: max_tokens || 4096,
-        system: systemPrompt || '',
-        messages: [{ role: 'user', content: userContent }],
-      }),
-    });
-    const json = await resp.json();
-    if (!resp.ok) return res.status(resp.status).json(json);
     res.json(json);
   } catch (e) {
     console.error('LLM with-attachment failed:', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(e.status || 500).json(e.body || { error: e.message });
   }
 });
 
