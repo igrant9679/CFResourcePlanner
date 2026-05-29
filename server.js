@@ -425,8 +425,60 @@ app.get('/api/atlas-snapshot', async (req, res) => {
       attachments: a.attachments || [],
     }));
 
+    // Proposals — full record. Sections HTML, RFP fields, staffing, redTeam are
+    // all included. Sensitive bits (per-user API keys, account passwords) live
+    // on D.accounts and are excluded above.
+    const proposals = (data.proposals || []).map((p) => ({
+      id: p.id,
+      title: p.title || '',
+      status: p.status || 'draft',
+      opportunityId: p.opportunityId || '',
+      templateId: p.templateId || '',
+      llmProvider: p.llmProvider || '',
+      llmModel: p.llmModel || '',
+      createdAt: p.createdAt || 0,
+      createdBy: p.createdBy || '',
+      rfp: p.rfp || {},
+      sections: (p.sections || []).map((s) => ({
+        id: s.id,
+        title: s.title,
+        source: s.source || 'user-only',
+        pageBudget: s.pageBudget || 0,
+        html: s.html || '',
+        draftedAt: s.draftedAt || 0,
+        draftedBy: s.draftedBy || '',
+        draftedWith: s.draftedWith || null,
+        templatePrompt: s.templatePrompt || '',
+        evidence: s.evidence || [],
+      })),
+      pastPerformance: p.pastPerformance || { matches: [], generatedAt: 0 },
+      coverSheet: p.coverSheet || { certIds: [], includedCaseStudyIds: [], generatedAt: 0 },
+      pricing: p.pricing || { mode: 'manual', items: [] },
+      staffing: p.staffing || { generatedAt: 0, roleMatches: [] },
+      redTeam: p.redTeam || { rubric: [], reviews: [], createdTaskId: '', generatedAt: 0 },
+      winLoss: p.winLoss || null,
+      gapAnalysis: p.gapAnalysis || null,
+      events: p.events || [],
+    }));
+
+    // Company profile — the inputs Claude uses. Identity + voice + boilerplate
+    // + services + case studies + win themes + key personnel + teaming partners.
+    const companyProfile = data.companyProfile || {};
+
+    // Corporate certifications & designations — for cover sheets.
+    const corporateCertifications = (data.corporateCertifications || []).map((c) => ({
+      id: c.id,
+      name: c.name || '',
+      number: c.number || '',
+      issuer: c.issuer || '',
+      issuedAt: c.issuedAt || '',
+      expiresAt: c.expiresAt || '',
+      logoUrl: c.logoUrl || '',
+      supportingDocId: c.supportingDocId || '',
+    }));
+
     res.json({
-      version: '1',
+      version: '2',
       source: 'atlas',
       generatedAt: new Date().toISOString(),
       updatedAt: updatedAt ? updatedAt.toISOString() : null,
@@ -442,6 +494,9 @@ app.get('/api/atlas-snapshot', async (req, res) => {
       clearances: data.clearances || [],
       pastProjects: data.pastProjects || [],
       pastClients: data.pastClients || [],
+      proposals,
+      companyProfile,
+      corporateCertifications,
     });
   } catch (e) {
     console.error('GET /api/atlas-snapshot failed:', e.message);
