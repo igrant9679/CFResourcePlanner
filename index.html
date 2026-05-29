@@ -551,6 +551,43 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .tpl-card-meta{font-size:11px;color:var(--text-muted);margin-top:4px;}
 .tpl-sec-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
 .tpl-sec-chip{display:inline-block;padding:2px 7px;font-size:10px;font-weight:600;border-radius:3px;background:var(--page-bg);color:var(--text-secondary);}
+.prop-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;box-shadow:var(--shadow-sm);cursor:pointer;transition:transform 0.1s,box-shadow 0.15s;border-left:4px solid var(--navy);margin-bottom:10px;}
+.prop-card:hover{transform:translateY(-1px);box-shadow:var(--shadow-md);}
+.prop-card-hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px;}
+.prop-card-ttl{font-size:14px;font-weight:800;color:var(--text-primary);}
+.prop-card-sub{font-size:11px;color:var(--text-muted);}
+.prop-card-meta{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text-secondary);margin-top:6px;}
+.prop-status-pill{display:inline-block;padding:3px 8px;font-size:10px;font-weight:700;border-radius:4px;letter-spacing:.4px;text-transform:uppercase;}
+.np-choice{flex:1;background:#fff;border:2px solid var(--border);border-radius:10px;padding:18px;cursor:pointer;text-align:center;transition:border-color 0.15s,transform 0.1s;}
+.np-choice:hover{border-color:var(--gold);transform:translateY(-1px);}
+.np-choice.selected{border-color:var(--gold);background:rgba(197,165,90,0.06);}
+.np-choice-icon{font-size:34px;margin-bottom:8px;display:block;}
+.np-choice-ttl{font-size:14px;font-weight:800;margin-bottom:4px;}
+.np-choice-sub{font-size:11px;color:var(--text-muted);line-height:1.5;}
+.np-extract-fld{background:var(--page-bg);border-radius:6px;padding:8px 10px;margin-bottom:6px;}
+.np-extract-lbl{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-muted);margin-bottom:3px;}
+.np-extract-val{font-size:12px;color:var(--text-primary);line-height:1.45;}
+.np-progress{display:flex;align-items:center;gap:10px;background:linear-gradient(135deg,rgba(124,58,237,0.08),rgba(14,165,233,0.08));border:1px solid rgba(124,58,237,0.25);border-radius:8px;padding:14px;margin:14px 0;}
+.np-spin{width:18px;height:18px;border:2px solid rgba(124,58,237,0.25);border-top-color:#7C3AED;border-radius:50%;animation:np-rot 0.7s linear infinite;flex-shrink:0;}
+@keyframes np-rot{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+.role-chip-line{display:flex;gap:8px;align-items:center;padding:6px 8px;background:#fff;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;font-size:11px;flex-wrap:wrap;}
+.pd-tabs{display:flex;gap:2px;border-bottom:2px solid var(--border);margin-bottom:14px;flex-wrap:wrap;}
+.pd-tab{background:transparent;border:none;padding:8px 14px;font-size:12px;font-weight:700;color:var(--text-muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;letter-spacing:.2px;}
+.pd-tab:hover{color:var(--text-secondary);}
+.pd-tab.active{color:var(--navy);border-bottom-color:var(--gold);}
+.pp-card{background:#fff;border:1px solid var(--border);border-left:4px solid #0d9488;border-radius:8px;padding:12px 14px;margin-bottom:8px;}
+.pp-card-hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+.pp-score{display:inline-block;padding:3px 9px;font-size:12px;font-weight:800;border-radius:4px;background:rgba(13,148,136,.12);color:#0d9488;}
+.pp-score-high{background:rgba(22,163,74,.15);color:#16a34a;}
+.pp-score-med{background:rgba(217,119,6,.15);color:#d97706;}
+.pp-score-low{background:rgba(100,116,139,.15);color:#64748b;}
+.pp-card-rationale{font-size:11px;color:var(--text-secondary);margin-top:6px;line-height:1.5;}
+.cs-cover-preview{background:#fff;border:1px solid var(--border);border-radius:8px;padding:18px 22px;font-family:Georgia,serif;line-height:1.6;color:#1f2937;}
+.cs-cover-preview h2{font-family:inherit;font-size:18px;color:var(--navy);margin:14px 0 8px;border-bottom:1px solid var(--border);padding-bottom:4px;}
+.cs-cover-preview .cs-cert-list{margin:6px 0;font-size:13px;}
+.cs-cover-preview .cs-cert-list b{color:var(--navy);}
+.cs-cert-toggle{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-bottom:1px solid #F1F5F9;font-size:12px;}
+.cs-cert-toggle:last-child{border-bottom:none;}
 </style>
 </head>
 <body>
@@ -643,6 +680,8 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 <div class="ov" id="ovCP" onclick="closeModal('ovCP')"><div class="mdl" id="mdlCP" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
 <div class="ov" id="ovCert" onclick="closeModal('ovCert')"><div class="mdl" id="mdlCert" onclick="event.stopPropagation()" style="max-width:720px"></div></div>
 <div class="ov" id="ovTplProp" onclick="closeModal('ovTplProp')"><div class="mdl" id="mdlTplProp" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
+<div class="ov" id="ovNewProp" onclick="closeModal('ovNewProp')"><div class="mdl" id="mdlNewProp" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
+<div class="ov" id="ovProp" onclick="closeModal('ovProp')"><div class="mdl" id="mdlProp" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
 <div class="ov" id="ovNotif" onclick="closeModal('ovNotif')"><div class="mdl" id="mdlNotif" onclick="event.stopPropagation()" style="max-width:520px;padding:0;overflow:hidden"></div></div>
 <div class="ov" id="ovAIPrev" onclick="closeModal('ovAIPrev')"><div class="mdl" id="mdlAIPrev" onclick="event.stopPropagation()" style="max-width:760px"></div></div>
 <script>
@@ -846,6 +885,18 @@ function proposalsMigrate(){
   if(!D.proposalTemplates)D.proposalTemplates=[];
   if(!D.corporateCertifications)D.corporateCertifications=[];
   if(!D.companyProfile)D.companyProfile={};
+  D.proposals.forEach(function(p){
+    if(!p.status)p.status='draft';
+    if(!p.sections)p.sections=[];
+    if(!p.rfp)p.rfp={};
+    if(!p.pastPerformance)p.pastPerformance={matches:[],generatedAt:0};
+    if(!p.coverSheet)p.coverSheet={certIds:[],generatedAt:0};
+    if(!p.pricing)p.pricing={mode:'manual',linkedProjectId:'',items:[]};
+    if(!('llmProvider' in p))p.llmProvider='';
+    if(!('llmModel' in p))p.llmModel='';
+    if(!('createdAt' in p))p.createdAt=Date.now();
+    if(!p.events)p.events=[];
+  });
   var p=D.companyProfile;
   if(!p.identity)p.identity={legalName:'CommunityForce',dba:'',duns:'',uei:'',cage:'',naics:[],hq:{addr:'',city:'',state:'',zip:''},foundedYear:'',ownershipType:'',employeeCount:''};
   if(!p.voice)p.voice={primaryTone:'',toneTags:[],samples:[],do:[],dont:[]};
@@ -2569,7 +2620,7 @@ function renderProposalsView(q){
     +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:6px">'
       +'<div><div style="font-size:18px;font-weight:800">Proposals</div>'
       +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Author RFP responses, manage templates, and keep the corporate profile current. RFP intake and AI drafting arrive in Phase B.</div></div>'
-      +(canProposal()?'<button class="btn btn-gold btn-sm" disabled title="RFP intake coming in Phase B">+ New Proposal</button>':'')
+      +(canProposal()?'<button class="btn btn-gold btn-sm" onclick="openNewProposalModal()">+ New Proposal</button>':'')
     +'</div>'
     +'<div class="prop-hero">'
       +'<div class="prop-hero-card" onclick="openCompanyProfileManager()" style="border-left-color:#0d9488"><div class="prop-hero-ttl">&#127970; Company Profile</div><div class="prop-hero-n">'+(hasProfile?'Set':'—')+'</div><div class="prop-hero-sub">'+profileBadges+' items &middot; '+(cp.services||[]).length+' services &middot; '+(cp.caseStudies||[]).length+' case studies</div></div>'
@@ -2577,8 +2628,32 @@ function renderProposalsView(q){
       +'<div class="prop-hero-card" onclick="openCorporateCertsManager()" style="border-left-color:#0EA5E9"><div class="prop-hero-ttl">&#127942; Corporate Certifications</div><div class="prop-hero-n">'+certActive+'</div><div class="prop-hero-sub">'+(certExpSoon?'<span style="color:var(--warn-text)">'+certExpSoon+' expiring &lt;60d</span> &middot; ':'')+certs.length+' total</div></div>'
       +'<div class="prop-hero-card" style="border-left-color:var(--gold);cursor:default"><div class="prop-hero-ttl">&#128202; Pipeline</div><div class="prop-hero-n">'+openProps+'</div><div class="prop-hero-sub">'+submitted+' submitted &middot; '+won+' won ('+winRate+'%)</div></div>'
     +'</div>'
-    +(props.length?'<div class="rq-section-lbl">Recent Proposals</div>':'<div class="empty-recruit"><div style="font-size:14px;margin-bottom:6px">No proposals yet</div><div style="font-size:12px">In Phase B you\'ll upload an RFP (PDF/DOCX) and Atlas will parse it into structured fields, seed an opportunity, generate JDs into Recruiting, and draft each proposal section. Meanwhile, use the cards above to set up your Company Profile, Templates, and Corporate Certifications — these are the inputs Claude will use during proposal drafting.</div></div>')
+    +(props.length?'<div class="rq-section-lbl">Proposals</div>'+propCardsHTML(props):'<div class="empty-recruit"><div style="font-size:14px;margin-bottom:6px">No proposals yet</div><div style="font-size:12px">Click <b>+ New Proposal</b> to upload an RFP (PDF/DOCX) — Claude will extract the customer, requirements, certifications, roles, scope, period of performance, and key dates. Then Atlas creates or links an opportunity and gives you a tabbed proposal workspace.</div></div>')
     +'</div>';
+}
+function propStatusCfg(k){return (PROP_STATUSES.find(function(s){return s.k===k;}))||PROP_STATUSES[0];}
+function propCardsHTML(props){
+  return props.slice().sort(function(a,b){return (b.createdAt||0)-(a.createdAt||0);}).map(function(p){
+    var s=propStatusCfg(p.status);
+    var opp=p.opportunityId?D.projects.find(function(x){return x.id===p.opportunityId;}):null;
+    var tpl=p.templateId?(D.proposalTemplates||[]).find(function(x){return x.id===p.templateId;}):null;
+    var due=p.rfp&&p.rfp.dueDate?p.rfp.dueDate:'';
+    var dueChip='';
+    if(due){var dd=new Date(due);if(!isNaN(dd)){var days=Math.round((dd-Date.now())/86400000);if(days<0)dueChip='<span class="rq-sla rq-sla-red">'+Math.abs(days)+'d overdue</span>';else if(days<14)dueChip='<span class="rq-sla rq-sla-warn">due in '+days+'d</span>';else dueChip='<span class="rq-sla">due in '+days+'d</span>';}}
+    var ppCount=p.pastPerformance&&p.pastPerformance.matches?p.pastPerformance.matches.length:0;
+    return '<div class="prop-card" onclick="openProposalDetail(\''+p.id+'\')">'
+      +'<div class="prop-card-hdr">'
+      +'<div><div class="prop-card-ttl">'+esc(p.title||'(untitled proposal)')+'</div>'
+      +(opp?'<div class="prop-card-sub">'+esc(opp.name)+(opp.customer?' &middot; '+esc(opp.customer):'')+'</div>':(p.rfp&&p.rfp.customer?'<div class="prop-card-sub">'+esc(p.rfp.customer)+'</div>':''))+'</div>'
+      +'<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span class="prop-status-pill" style="background:'+s.c+'22;color:'+s.c+'">'+s.l+'</span>'+dueChip+'</div></div>'
+      +'<div class="prop-card-meta">'
+      +(tpl?'<span>📄 '+esc(tpl.name)+'</span>':'')
+      +(p.rfp&&p.rfp.potentialValue?'<span>💰 '+fmt(p.rfp.potentialValue)+'</span>':'')
+      +(p.rfp&&p.rfp.requirements&&p.rfp.requirements.length?'<span>📋 '+p.rfp.requirements.length+' reqs</span>':'')
+      +(p.rfp&&p.rfp.requiredRoles&&p.rfp.requiredRoles.length?'<span>👥 '+p.rfp.requiredRoles.length+' roles</span>':'')
+      +(ppCount?'<span>🎯 '+ppCount+' PP matches</span>':'')
+      +'</div></div>';
+  }).join('');
 }
 
 /* ── COMPANY PROFILE MANAGER ── */
@@ -2858,6 +2933,531 @@ function propTplSecAdd(tid){
   t.sections=t.sections||[];
   t.sections.push({id:uid(),title:ttl.trim(),order:t.sections.length,required:false,source:'user-only',pageBudget:1,prompt:'',evidence:[]});
   save();propTplEdit(tid);
+}
+
+/* ── NEW PROPOSAL: choice (upload RFP vs. manual) → extraction → confirm → create ── */
+var _npState={mode:'',rfpAttachmentId:'',rfpFileName:'',extracted:null,extracting:false,opportunityId:'',createNewOpp:false,templateId:'',title:'',customer:'',provider:'',model:''};
+function openNewProposalModal(){
+  if(!canProposal()){alert('You don\'t have permission.');return;}
+  _npState={mode:'',rfpAttachmentId:'',rfpFileName:'',extracted:null,extracting:false,opportunityId:'',createNewOpp:false,templateId:(D.proposalTemplates&&D.proposalTemplates[0]?D.proposalTemplates[0].id:''),title:'',customer:'',provider:'',model:''};
+  renderNewProposalModal();
+  openModal('ovNewProp');
+}
+function renderNewProposalModal(){
+  var st=_npState;
+  var myAcc=ME?(D.accounts||[]).find(function(a){return a.id===ME.id;}):null;
+  var defProv=st.provider||(myAcc&&myAcc.defaultLlmProvider)||'anthropic';
+  var defModel=st.model||(myAcc&&myAcc.defaultLlmModel)||'';
+  var llmRow='<div style="display:flex;gap:10px"><div class="fld" style="flex:1"><label class="fld-l">AI Provider for this Proposal</label><select class="fld-sel" id="np_prov" onchange="_npState.provider=this.value;_npRefreshModels()">'+llmProvOpts(defProv)+'</select></div>'
+    +'<div class="fld" style="flex:1"><label class="fld-l">Model</label><select class="fld-sel" id="np_model" onchange="_npState.model=this.value">'+llmModelOpts(defProv,defModel)+'</select></div></div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin:-4px 0 10px">Defaults to your account preference. PDF extraction requires Anthropic or Google.</div>';
+  var body='<div class="mdl-over">Proposals</div><div class="mdl-title">New Proposal</div>'+llmRow;
+  if(!st.mode){
+    body+='<div style="display:flex;gap:14px;margin-top:8px">'
+      +'<div class="np-choice" onclick="_npChoose(\'rfp\')"><span class="np-choice-icon">📤</span><div class="np-choice-ttl">Upload RFP</div><div class="np-choice-sub">Claude reads the PDF / DOCX, extracts customer, requirements, certifications, roles, scope, PoP, key dates. Recommended.</div></div>'
+      +'<div class="np-choice" onclick="_npChoose(\'manual\')"><span class="np-choice-icon">✍</span><div class="np-choice-ttl">Manual entry</div><div class="np-choice-sub">Skip RFP upload. Fill the essentials yourself; you can add an RFP later from the proposal detail.</div></div>'
+      +'</div>';
+  } else if(st.mode==='rfp'){
+    if(!st.rfpAttachmentId){
+      body+='<span class="fld-section-hdr">Upload RFP</span>'
+        +'<div class="fld"><input type="file" id="np_rfp_file" accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="font-size:12px"></div>'
+        +'<div class="btn-row" style="margin-top:6px">'
+        +'<button class="btn btn-navy" style="flex:1" onclick="_npUploadRFP()">Upload &amp; Extract</button>'
+        +'<button class="btn btn-sec" onclick="_npChoose(\'\')">&larr; Back</button></div>';
+    } else if(st.extracting){
+      body+='<div class="np-progress"><div class="np-spin"></div><div><div style="font-size:13px;font-weight:700">Reading RFP with Claude…</div><div style="font-size:11px;color:var(--text-muted);margin-top:2px">File: '+esc(st.rfpFileName)+'</div></div></div>';
+    } else if(st.extracted){
+      body+=_npExtractPreviewHTML(st.extracted);
+      body+=_npLinkOppHTML(st.extracted);
+      body+='<div class="btn-row" style="margin-top:14px">'
+        +'<button class="btn btn-navy" style="flex:1" onclick="_npCreateFromRFP()">Create Proposal</button>'
+        +'<button class="btn btn-sec" onclick="_npReextract()">Re-extract</button>'
+        +'<button class="btn btn-sec" onclick="closeModal(\'ovNewProp\')">Cancel</button></div>';
+    }
+  } else if(st.mode==='manual'){
+    var oppOpts='<option value="">— none —</option>'+D.projects.filter(function(p){return projCat(p)==='opportunity';}).map(function(p){return '<option value="'+p.id+'"'+(st.opportunityId===p.id?' selected':'')+'>'+esc(p.name)+(p.customer?' · '+esc(p.customer):'')+'</option>';}).join('');
+    var tplOpts='<option value="">— none —</option>'+(D.proposalTemplates||[]).map(function(t){return '<option value="'+t.id+'"'+(st.templateId===t.id?' selected':'')+'>'+esc(t.name)+'</option>';}).join('');
+    body+='<span class="fld-section-hdr">Proposal Details</span>'
+      +'<div class="fld"><label class="fld-l">Title</label><input class="fld-i" id="np_title" value="'+esc(st.title)+'" placeholder="e.g. AFOSI Recompete Response"></div>'
+      +'<div class="fld"><label class="fld-l">Customer</label><input class="fld-i" id="np_cust" value="'+esc(st.customer)+'" placeholder="e.g. Air Force OSI"></div>'
+      +'<div style="display:flex;gap:10px"><div class="fld" style="flex:1"><label class="fld-l">Linked Opportunity</label><select class="fld-sel" id="np_opp">'+oppOpts+'</select></div>'
+      +'<div class="fld" style="flex:1"><label class="fld-l">Template</label><select class="fld-sel" id="np_tpl">'+tplOpts+'</select></div></div>'
+      +'<div class="btn-row" style="margin-top:14px">'
+      +'<button class="btn btn-navy" style="flex:1" onclick="_npCreateManual()">Create Proposal</button>'
+      +'<button class="btn btn-sec" onclick="_npChoose(\'\')">&larr; Back</button></div>';
+  }
+  document.getElementById('mdlNewProp').innerHTML=body;
+}
+function _npChoose(mode){_npState.mode=mode;renderNewProposalModal();}
+function _npRefreshModels(){
+  var prov=_npState.provider||'anthropic';
+  var sel=document.getElementById('np_model');if(!sel)return;
+  sel.innerHTML=llmModelOpts(prov,'');_npState.model='';
+}
+function _npUploadRFP(){
+  var inp=document.getElementById('np_rfp_file');
+  if(!inp||!inp.files||!inp.files[0]){alert('Pick an RFP file first.');return;}
+  var f=inp.files[0];
+  _npState.rfpFileName=f.name;
+  var fd=new FormData();fd.append('file',f);
+  _npState.extracting=true;renderNewProposalModal();
+  fetch('/api/attachments',{method:'POST',body:fd}).then(function(r){if(!r.ok)throw new Error('upload failed: '+r.status);return r.json();}).then(function(att){
+    _npState.rfpAttachmentId=att.id;
+    return _npExtractRFP(att.id);
+  }).catch(function(e){
+    _npState.extracting=false;
+    alert('RFP upload/extraction failed: '+(e&&e.message||e));
+    renderNewProposalModal();
+  });
+}
+function _npReextract(){if(!_npState.rfpAttachmentId)return;_npState.extracting=true;_npState.extracted=null;renderNewProposalModal();_npExtractRFP(_npState.rfpAttachmentId).catch(function(e){_npState.extracting=false;alert('Re-extraction failed: '+(e&&e.message||e));renderNewProposalModal();});}
+function _npExtractRFP(attachmentId){
+  var sys='You are extracting structured data from a federal government Request for Proposal (RFP), RFI, RFQ, or Statement of Work for a US consulting firm. Output ONLY a JSON object inside a ```json``` code block. Return null for any field you cannot determine from the document. Do not invent.';
+  var schema=JSON.stringify({
+    customer:'agency or company issuing the RFP',
+    summary:'2-3 sentence elevator pitch of what they want',
+    scope:'detailed scope of work',
+    pop:'period of performance (e.g. "12 months base + 4 options" or "Jul 2026 - Jun 2027")',
+    dueDate:'YYYY-MM-DD or null',
+    potentialValue:'estimated dollar value (integer) or null',
+    contractVehicle:'e.g. GSA STARS III, IDIQ, sole-source, or null',
+    setAsideType:'small business, 8(a), WOSB, none, or null',
+    requirements:['line item','line item'],
+    requiredCerts:['e.g. FedRAMP Moderate','ISO 27001'],
+    requiredClearances:['Secret','Top Secret'],
+    requiredRoles:[{title:'role name',count:1,skills:['skill','skill'],clearance:'Secret or null',location:'remote / DC / null'}],
+    deliverables:['line item','line item'],
+    evaluationCriteria:['technical approach 40%','past performance 30%','price 30%'],
+    keyDates:[{label:'Q&A deadline',date:'YYYY-MM-DD'}]
+  });
+  var instruction='Read the attached RFP document. Extract these fields and return ONLY this JSON shape:\n\n'+schema+'\n\nFor lists like requirements/deliverables, return distinct line items (do not bundle multiple into one). For requiredRoles, infer based on staffing/key-personnel sections — return an empty array if none specified. No prose outside the JSON code block.';
+  return llmDocComplete({
+    attachmentId:attachmentId,
+    provider:_npState.provider||undefined,
+    model:_npState.model||undefined,
+    system:sys,
+    instruction:instruction,
+    max_tokens:4000
+  }).then(function(j){
+    var parsed=llmExtractJSON(j);
+    if(!parsed)throw new Error('Could not parse RFP extraction response.');
+    _npState.extracted=parsed;_npState.extracting=false;
+    // Default linked-opportunity behavior: if customer matches an existing opp, suggest linking; otherwise propose creating
+    if(parsed.customer){
+      var match=D.projects.find(function(p){return projCat(p)==='opportunity'&&(p.customer||p.name).toLowerCase().indexOf(parsed.customer.toLowerCase().slice(0,20))>-1;});
+      if(match)_npState.opportunityId=match.id;
+      else _npState.createNewOpp=true;
+    }
+    renderNewProposalModal();
+  });
+}
+function _npExtractPreviewHTML(ex){
+  function fld(lbl,val){if(val===null||val===undefined||val==='')return '';return '<div class="np-extract-fld"><div class="np-extract-lbl">'+esc(lbl)+'</div><div class="np-extract-val">'+(Array.isArray(val)?val.map(esc).map(function(x){return '• '+x;}).join('<br>'):esc(val))+'</div></div>';}
+  var rolesHTML=(ex.requiredRoles||[]).map(function(r){return '<div class="role-chip-line"><strong>'+esc(r.title||'?')+'</strong> × '+(r.count||1)+(r.clearance?' · '+esc(r.clearance):'')+(r.location?' · '+esc(r.location):'')+(r.skills&&r.skills.length?'<span style="color:var(--text-muted)"> — '+esc(r.skills.slice(0,5).join(', '))+'</span>':'')+'</div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted)">No required roles extracted.</div>';
+  var keyDatesHTML=(ex.keyDates||[]).map(function(d){return '<div>• <strong>'+esc(d.label||'?')+':</strong> '+esc(d.date||'?')+'</div>';}).join('')||'';
+  return '<span class="fld-section-hdr">Extracted from RFP</span>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Review the extraction. Editing happens in the proposal detail after creation. Nothing saves until you click Create.</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    +fld('Customer',ex.customer)
+    +fld('Due Date',ex.dueDate)
+    +fld('Period of Performance',ex.pop)
+    +fld('Potential Value',ex.potentialValue?'$'+Number(ex.potentialValue).toLocaleString():'')
+    +fld('Contract Vehicle',ex.contractVehicle)
+    +fld('Set-Aside',ex.setAsideType)
+    +'</div>'
+    +fld('Summary',ex.summary)
+    +fld('Scope',(ex.scope||'').slice(0,800)+((ex.scope||'').length>800?'…':''))
+    +fld('Required Certifications',ex.requiredCerts)
+    +fld('Required Clearances',ex.requiredClearances)
+    +'<div class="np-extract-fld"><div class="np-extract-lbl">Required Roles ('+((ex.requiredRoles||[]).length)+')</div><div>'+rolesHTML+'</div></div>'
+    +fld('Requirements ('+((ex.requirements||[]).length)+')',ex.requirements)
+    +fld('Deliverables ('+((ex.deliverables||[]).length)+')',ex.deliverables)
+    +fld('Evaluation Criteria',ex.evaluationCriteria)
+    +(keyDatesHTML?'<div class="np-extract-fld"><div class="np-extract-lbl">Key Dates</div><div class="np-extract-val">'+keyDatesHTML+'</div></div>':'');
+}
+function _npLinkOppHTML(ex){
+  var oppOpts='<option value="">— Create new opportunity from this RFP —</option>'+D.projects.filter(function(p){return projCat(p)==='opportunity';}).map(function(p){return '<option value="'+p.id+'"'+(_npState.opportunityId===p.id?' selected':'')+'>'+esc(p.name)+(p.customer?' · '+esc(p.customer):'')+'</option>';}).join('');
+  var tplOpts='<option value="">— none —</option>'+(D.proposalTemplates||[]).map(function(t){return '<option value="'+t.id+'"'+(_npState.templateId===t.id?' selected':'')+'>'+esc(t.name)+'</option>';}).join('');
+  return '<span class="fld-section-hdr">Link &amp; Template</span>'
+    +'<div style="display:flex;gap:10px">'
+    +'<div class="fld" style="flex:1"><label class="fld-l">Opportunity</label><select class="fld-sel" id="np_opp" onchange="_npState.opportunityId=this.value;_npState.createNewOpp=!this.value">'+oppOpts+'</select></div>'
+    +'<div class="fld" style="flex:1"><label class="fld-l">Template</label><select class="fld-sel" id="np_tpl" onchange="_npState.templateId=this.value">'+tplOpts+'</select></div>'
+    +'</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin:-4px 0 6px">'+(_npState.createNewOpp?'<span style="color:var(--gold)">↗ A new opportunity will be created and seeded with the standard <i>Perform Proposal Development</i> workflow task.</span>':'Linking to an existing opportunity — no new opportunity will be created.')+'</div>';
+}
+function _npCreateFromRFP(){
+  if(!_npState.extracted){alert('No extracted data.');return;}
+  var ex=_npState.extracted;
+  // Update opportunityId from current dropdown
+  var oppSel=document.getElementById('np_opp');if(oppSel){_npState.opportunityId=oppSel.value;_npState.createNewOpp=!oppSel.value;}
+  var tplSel=document.getElementById('np_tpl');if(tplSel)_npState.templateId=tplSel.value;
+  var oppId=_npState.opportunityId;
+  if(_npState.createNewOpp){oppId=_propAutoCreateOpp(ex);}
+  var title=(ex.customer?ex.customer+' — ':'')+(ex.summary?ex.summary.split(/[.!?]/)[0].slice(0,80):'RFP Response');
+  var prop={
+    id:uid(),
+    title:title.trim(),
+    status:'draft',
+    opportunityId:oppId||'',
+    templateId:_npState.templateId||'',
+    rfp:{
+      sourceFile:_npState.rfpFileName,
+      sourceAttachmentId:_npState.rfpAttachmentId,
+      customer:ex.customer||'',
+      summary:ex.summary||'',
+      scope:ex.scope||'',
+      pop:ex.pop||'',
+      dueDate:ex.dueDate||'',
+      potentialValue:Number(ex.potentialValue)||0,
+      contractVehicle:ex.contractVehicle||'',
+      setAsideType:ex.setAsideType||'',
+      requirements:ex.requirements||[],
+      requiredCerts:ex.requiredCerts||[],
+      requiredClearances:ex.requiredClearances||[],
+      requiredRoles:ex.requiredRoles||[],
+      deliverables:ex.deliverables||[],
+      evaluationCriteria:ex.evaluationCriteria||[],
+      keyDates:ex.keyDates||[]
+    },
+    sections:[],
+    pastPerformance:{matches:[],generatedAt:0},
+    coverSheet:{certIds:(D.corporateCertifications||[]).filter(function(c){return !c.expiresAt||new Date(c.expiresAt)>Date.now();}).map(function(c){return c.id;}),generatedAt:Date.now()},
+    pricing:{mode:'manual',linkedProjectId:'',items:[]},
+    llmProvider:_npState.provider||'',
+    llmModel:_npState.model||'',
+    createdAt:Date.now(),
+    createdBy:ME?ME.id:'',
+    events:[{ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'proposal.created',payload:{source:'rfp-upload'}}]
+  };
+  D.proposals=D.proposals||[];D.proposals.push(prop);
+  save();
+  closeModal('ovNewProp');
+  renderView();
+  // Open the new proposal
+  setTimeout(function(){openProposalDetail(prop.id);},150);
+}
+function _npCreateManual(){
+  var title=gv('np_title').trim();if(!title){alert('Title is required.');return;}
+  var oppId=gv('np_opp')||'';
+  var tplId=gv('np_tpl')||'';
+  var cust=gv('np_cust').trim();
+  var prop={
+    id:uid(),
+    title:title,
+    status:'draft',
+    opportunityId:oppId,
+    templateId:tplId,
+    rfp:{customer:cust,requirements:[],requiredCerts:[],requiredClearances:[],requiredRoles:[],deliverables:[],evaluationCriteria:[],keyDates:[]},
+    sections:[],
+    pastPerformance:{matches:[],generatedAt:0},
+    coverSheet:{certIds:(D.corporateCertifications||[]).filter(function(c){return !c.expiresAt||new Date(c.expiresAt)>Date.now();}).map(function(c){return c.id;}),generatedAt:Date.now()},
+    pricing:{mode:'manual',linkedProjectId:'',items:[]},
+    llmProvider:_npState.provider||'',
+    llmModel:_npState.model||'',
+    createdAt:Date.now(),
+    createdBy:ME?ME.id:'',
+    events:[{ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'proposal.created',payload:{source:'manual'}}]
+  };
+  D.proposals=D.proposals||[];D.proposals.push(prop);
+  save();
+  closeModal('ovNewProp');
+  renderView();
+  setTimeout(function(){openProposalDetail(prop.id);},150);
+}
+function _propAutoCreateOpp(ex){
+  // Workflow 2: Opportunity Auto-Provisioning from RFP
+  var nm=(ex.customer?ex.customer+' — ':'')+(ex.summary?ex.summary.split(/[.!?]/)[0].slice(0,60):'New Pursuit');
+  var newOpp={
+    id:uid(),
+    name:nm.trim(),
+    category:'opportunity',
+    revenue:0,
+    targetRevenue:Number(ex.potentialValue)||0,
+    revenueNote:'',
+    description:ex.summary||'',
+    parentId:null,
+    attachments:_npState.rfpAttachmentId?[{id:_npState.rfpAttachmentId,name:_npState.rfpFileName||'RFP',url:'/api/attachments/'+_npState.rfpAttachmentId,type:'file'}]:[],
+    customer:ex.customer||'',
+    stage:'Presales',
+    status:'Qualified',
+    potential:Number(ex.potentialValue)||0,
+    closeDate:ex.dueDate||'',
+    pm:ME?ME.name:'',
+    opr:'',
+    team:'',
+    leadGen:'',presales:'',sales:'',delivery:''
+  };
+  D.projects.push(newOpp);
+  // Seed Perform Proposal Development task
+  var tpl=(D.taskTemplates||[]).find(function(t){return /proposal/i.test(t.name);});
+  if(tpl){
+    D.activities=D.activities||[];
+    D.activities.push({
+      id:uid(),kind:'project',projectId:newOpp.id,templateId:tpl.id,programId:'',
+      task:'Task_'+(newOpp.name||'New').replace(/[^A-Za-z0-9]+/g,'').slice(0,40),
+      subtask:tpl.name,outline:'',objective:'',phase:'Month 1',status:'todo',
+      start:'',dueDate:ex.dueDate||'',isMilestone:false,parentId:null,
+      pm:newOpp.pm||'',ownerText:'',owners:[],
+      updates:[],attachments:[],order:D.activities.length
+    });
+  }
+  return newOpp.id;
+}
+
+/* ── PROPOSAL DETAIL MODAL (tabbed) ── */
+var _pdTab='overview';
+function openProposalDetail(id){
+  if(!canProposal()){alert('You don\'t have permission.');return;}
+  var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
+  _pdTab=_pdTab||'overview';
+  renderProposalDetail(id);
+  openModal('ovProp');
+}
+function pdSetTab(id,tab){_pdTab=tab;renderProposalDetail(id);}
+function renderProposalDetail(id){
+  var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
+  var s=propStatusCfg(p.status);
+  var opp=p.opportunityId?D.projects.find(function(x){return x.id===p.opportunityId;}):null;
+  var tpl=p.templateId?(D.proposalTemplates||[]).find(function(x){return x.id===p.templateId;}):null;
+  var due=p.rfp&&p.rfp.dueDate?p.rfp.dueDate:'';
+  var dueChip='';
+  if(due){var dd=new Date(due);if(!isNaN(dd)){var days=Math.round((dd-Date.now())/86400000);if(days<0)dueChip='<span class="rq-sla rq-sla-red">'+Math.abs(days)+'d overdue</span>';else if(days<14)dueChip='<span class="rq-sla rq-sla-warn">due in '+days+'d</span>';else dueChip='<span class="rq-sla">due in '+days+'d</span>';}}
+  var stsOpts=PROP_STATUSES.map(function(s){return '<option value="'+s.k+'"'+(p.status===s.k?' selected':'')+'>'+s.l+'</option>';}).join('');
+  var tabs=[
+    {k:'overview',l:'Overview'},
+    {k:'rfp',l:'RFP Details'},
+    {k:'pp',l:'Past Performance'},
+    {k:'cover',l:'Cover Sheet'},
+    {k:'files',l:'Files'},
+    {k:'settings',l:'Settings'}
+  ];
+  var tabBar='<div class="pd-tabs">'+tabs.map(function(t){return '<button class="pd-tab'+(_pdTab===t.k?' active':'')+'" onclick="pdSetTab(\''+id+'\',\''+t.k+'\')">'+t.l+'</button>';}).join('')+'</div>';
+  var hdr='<div class="mdl-over">Proposal</div>'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:6px">'
+    +'<div style="flex:1;min-width:280px"><div class="mdl-title" style="margin-bottom:4px">'+esc(p.title)+'</div>'
+    +(opp?'<div style="font-size:12px;color:var(--text-muted)">Linked to <b>'+esc(opp.name)+'</b>'+(opp.customer?' · '+esc(opp.customer):'')+'</div>':'<div style="font-size:12px;color:var(--text-muted)">Not linked to an opportunity</div>')
+    +(tpl?'<div style="font-size:11px;color:var(--text-muted);margin-top:2px">Template: '+esc(tpl.name)+'</div>':'')+'</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><select class="fld-sel" style="font-size:11px;padding:5px 8px;width:auto;background:'+s.c+'14;color:'+s.c+';border-color:'+s.c+'66;font-weight:700" onchange="pdSetStatus(\''+id+'\',this.value)">'+stsOpts+'</select>'+dueChip+'</div></div>';
+  var body=hdr+tabBar;
+  if(_pdTab==='overview')body+=_pdOverviewHTML(p,opp,tpl);
+  else if(_pdTab==='rfp')body+=_pdRFPHTML(p);
+  else if(_pdTab==='pp')body+=_pdPastPerfHTML(p);
+  else if(_pdTab==='cover')body+=_pdCoverSheetHTML(p);
+  else if(_pdTab==='files')body+=_pdFilesHTML(p);
+  else if(_pdTab==='settings')body+=_pdSettingsHTML(p);
+  body+='<div class="btn-row" style="margin-top:14px">'
+    +'<button class="btn btn-danger-sm" onclick="pdDelete(\''+id+'\')">Delete Proposal</button>'
+    +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovProp\')">Close</button>'
+    +'</div>';
+  document.getElementById('mdlProp').innerHTML=body;
+}
+function pdSetStatus(id,k){
+  var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
+  if(p.status===k)return;
+  p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'status.changed',payload:{from:p.status,to:k}});
+  p.status=k;save();renderProposalDetail(id);renderView();
+}
+function pdDelete(id){
+  if(!confirm('Delete this proposal? Linked opportunity (if any) is not removed.'))return;
+  D.proposals=(D.proposals||[]).filter(function(x){return x.id!==id;});
+  save();closeModal('ovProp');renderView();
+}
+
+function _pdOverviewHTML(p,opp,tpl){
+  var rfp=p.rfp||{};
+  var keyFacts='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">'
+    +(rfp.customer?'<div class="np-extract-fld"><div class="np-extract-lbl">Customer</div><div class="np-extract-val">'+esc(rfp.customer)+'</div></div>':'')
+    +(rfp.dueDate?'<div class="np-extract-fld"><div class="np-extract-lbl">Due Date</div><div class="np-extract-val">'+esc(rfp.dueDate)+'</div></div>':'')
+    +(rfp.pop?'<div class="np-extract-fld"><div class="np-extract-lbl">Period of Performance</div><div class="np-extract-val">'+esc(rfp.pop)+'</div></div>':'')
+    +(rfp.potentialValue?'<div class="np-extract-fld"><div class="np-extract-lbl">Potential Value</div><div class="np-extract-val">'+fmt(rfp.potentialValue)+'</div></div>':'')
+    +(rfp.contractVehicle?'<div class="np-extract-fld"><div class="np-extract-lbl">Contract Vehicle</div><div class="np-extract-val">'+esc(rfp.contractVehicle)+'</div></div>':'')
+    +(rfp.setAsideType?'<div class="np-extract-fld"><div class="np-extract-lbl">Set-Aside</div><div class="np-extract-val">'+esc(rfp.setAsideType)+'</div></div>':'')
+    +'</div>';
+  return keyFacts
+    +(rfp.summary?'<div class="np-extract-fld" style="margin-top:8px"><div class="np-extract-lbl">Summary</div><div class="np-extract-val">'+esc(rfp.summary)+'</div></div>':'')
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-top:8px">'
+    +'<div class="prop-hero-card" style="cursor:default"><div class="prop-hero-ttl">📋 Requirements</div><div class="prop-hero-n">'+((rfp.requirements||[]).length)+'</div><div class="prop-hero-sub">tap RFP Details to review</div></div>'
+    +'<div class="prop-hero-card" style="cursor:default"><div class="prop-hero-ttl">👥 Required Roles</div><div class="prop-hero-n">'+((rfp.requiredRoles||[]).length)+'</div><div class="prop-hero-sub">'+(rfp.requiredRoles&&rfp.requiredRoles.length?'positions to staff':'none specified')+'</div></div>'
+    +'<div class="prop-hero-card" style="cursor:pointer" onclick="pdSetTab(\''+p.id+'\',\'pp\')"><div class="prop-hero-ttl">🎯 Past Performance</div><div class="prop-hero-n">'+((p.pastPerformance&&p.pastPerformance.matches)?p.pastPerformance.matches.length:0)+'</div><div class="prop-hero-sub">'+(p.pastPerformance&&p.pastPerformance.generatedAt?'matched · click to view':'not run yet · click to find')+'</div></div>'
+    +'<div class="prop-hero-card" style="cursor:pointer" onclick="pdSetTab(\''+p.id+'\',\'cover\')"><div class="prop-hero-ttl">🏆 Cover Sheet</div><div class="prop-hero-n">'+((p.coverSheet&&p.coverSheet.certIds)?p.coverSheet.certIds.length:0)+'</div><div class="prop-hero-sub">certifications selected</div></div>'
+    +'</div>';
+}
+
+function _pdRFPHTML(p){
+  var rfp=p.rfp||{};
+  function listEdit(field,label,placeholder){
+    var items=rfp[field]||[];
+    return '<div class="fld"><label class="fld-l">'+esc(label)+' ('+items.length+')</label>'
+      +'<textarea class="fld-i" rows="'+Math.max(3,Math.min(items.length+1,10))+'" id="pd_rfp_'+field+'" placeholder="'+esc(placeholder)+'">'+esc(items.join('\n'))+'</textarea>'
+      +'<div style="font-size:10px;color:var(--text-muted);margin-top:2px">One per line.</div></div>';
+  }
+  var rolesHTML=(rfp.requiredRoles||[]).map(function(r,i){return '<div class="role-chip-line"><strong>'+esc(r.title||'?')+'</strong> × '+(r.count||1)+(r.clearance?' · '+esc(r.clearance):'')+(r.location?' · '+esc(r.location):'')+(r.skills&&r.skills.length?'<span style="color:var(--text-muted)"> — '+esc(r.skills.slice(0,5).join(', '))+'</span>':'')+'</div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted)">No required roles.</div>';
+  return '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Edit the extracted RFP fields. These feed every AI-powered workflow downstream (past-performance matching, gap analysis, section drafting). Click Save below.</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    +'<div class="fld"><label class="fld-l">Customer</label><input class="fld-i" id="pd_rfp_customer" value="'+esc(rfp.customer||'')+'"></div>'
+    +'<div class="fld"><label class="fld-l">Due Date</label><input class="fld-i" type="date" id="pd_rfp_dueDate" value="'+esc(rfp.dueDate||'')+'"></div>'
+    +'<div class="fld"><label class="fld-l">Period of Performance</label><input class="fld-i" id="pd_rfp_pop" value="'+esc(rfp.pop||'')+'"></div>'
+    +'<div class="fld"><label class="fld-l">Potential Value ($)</label><input class="fld-i" type="number" id="pd_rfp_potentialValue" value="'+(Number(rfp.potentialValue)||0)+'"></div>'
+    +'<div class="fld"><label class="fld-l">Contract Vehicle</label><input class="fld-i" id="pd_rfp_contractVehicle" value="'+esc(rfp.contractVehicle||'')+'"></div>'
+    +'<div class="fld"><label class="fld-l">Set-Aside Type</label><input class="fld-i" id="pd_rfp_setAsideType" value="'+esc(rfp.setAsideType||'')+'"></div>'
+    +'</div>'
+    +'<div class="fld"><label class="fld-l">Summary</label><textarea class="fld-i" rows="2" id="pd_rfp_summary">'+esc(rfp.summary||'')+'</textarea></div>'
+    +'<div class="fld"><label class="fld-l">Scope</label><textarea class="fld-i" rows="6" id="pd_rfp_scope">'+esc(rfp.scope||'')+'</textarea></div>'
+    +listEdit('requirements','Requirements','One requirement per line')
+    +listEdit('requiredCerts','Required Certifications','e.g. FedRAMP Moderate')
+    +listEdit('requiredClearances','Required Clearances','e.g. Top Secret')
+    +listEdit('deliverables','Deliverables','One deliverable per line')
+    +listEdit('evaluationCriteria','Evaluation Criteria','e.g. technical 40%, past performance 30%, price 30%')
+    +'<div class="fld"><label class="fld-l">Required Roles</label><div>'+rolesHTML+'</div></div>'
+    +'<div class="btn-row" style="margin-top:6px"><button class="btn btn-navy" onclick="pdSaveRFP(\''+p.id+'\')">Save RFP Details</button></div>';
+}
+function pdSaveRFP(id){
+  var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
+  p.rfp=p.rfp||{};
+  ['customer','dueDate','pop','contractVehicle','setAsideType','summary','scope'].forEach(function(f){p.rfp[f]=gv('pd_rfp_'+f);});
+  p.rfp.potentialValue=Number(gv('pd_rfp_potentialValue'))||0;
+  ['requirements','requiredCerts','requiredClearances','deliverables','evaluationCriteria'].forEach(function(f){
+    p.rfp[f]=gv('pd_rfp_'+f).split('\n').map(function(s){return s.trim();}).filter(Boolean);
+  });
+  p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'rfp.edited',payload:{}});
+  save();renderProposalDetail(id);renderView();
+  alert('RFP details saved.');
+}
+
+function _pdPastPerfHTML(p){
+  var matches=(p.pastPerformance&&p.pastPerformance.matches)||[];
+  var caseStudies=(D.companyProfile&&D.companyProfile.caseStudies)||[];
+  var gen=p.pastPerformance&&p.pastPerformance.generatedAt;
+  var btnLabel=gen?'↻ Re-run match':'✨ Find Past Performance Matches';
+  var btn=caseStudies.length?'<button type="button" class="ai-btn" onclick="pdRunPastPerf(\''+p.id+'\')">'+btnLabel+'</button>':'<div style="font-size:12px;color:var(--text-muted)">Add case studies to your <b>Company Profile</b> first — Claude needs them to match against.</div>';
+  var matchesHTML=matches.length?matches.slice().sort(function(a,b){return (b.relevanceScore||0)-(a.relevanceScore||0);}).map(function(m){
+    var cs=caseStudies.find(function(c){return c.id===m.caseStudyId;});
+    if(!cs)return '';
+    var s=m.relevanceScore||0;
+    var cls=s>=75?'pp-score-high':s>=50?'pp-score-med':'pp-score-low';
+    var checked=(p.coverSheet&&p.coverSheet.includedCaseStudyIds||[]).indexOf(cs.id)>-1;
+    return '<div class="pp-card"><div class="pp-card-hdr"><div style="flex:1"><div style="font-size:13px;font-weight:700">'+esc(cs.title||cs.customer||'?')+'</div><div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+esc(cs.customer||'')+(cs.value?' · '+fmt(cs.value):'')+(cs.period?' · '+esc(cs.period):'')+'</div></div><span class="pp-score '+cls+'">'+s+'%</span></div>'
+      +'<div class="pp-card-rationale"><b>Why it matches:</b> '+esc(m.rationale||'(no rationale)')+'</div>'
+      +(cs.outcomes&&cs.outcomes.length?'<div style="font-size:11px;color:var(--text-secondary);margin-top:4px"><b>Outcomes:</b> '+esc(cs.outcomes.slice(0,3).join(' · '))+'</div>':'')
+      +'<div style="margin-top:6px;font-size:11px"><label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" '+(checked?'checked':'')+' onchange="pdTogglePPInclude(\''+p.id+'\',\''+cs.id+'\',this.checked)"> Include in proposal</label></div>'
+      +'</div>';
+  }).join(''):(gen?'<div style="font-size:12px;color:var(--text-muted)">No matches found. Try adding more case studies to the Company Profile.</div>':'<div style="font-size:12px;color:var(--text-muted);padding:14px 0">No past performance run yet. Click the button above.</div>');
+  return '<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Claude semantically matches the RFP scope against your Company Profile case studies and ranks them. Pick the ones you want cited in the proposal.</div>'
+    +'<div style="margin-bottom:10px">'+btn+(gen?' <span style="font-size:11px;color:var(--text-muted);margin-left:8px">last run '+new Date(gen).toLocaleString()+'</span>':'')+'</div>'
+    +matchesHTML;
+}
+function _propLLMOpts(p){
+  // Returns {provider, model} resolving proposal override → user default → app default
+  var myAcc=ME?(D.accounts||[]).find(function(a){return a.id===ME.id;}):null;
+  return {
+    provider:p.llmProvider||(myAcc&&myAcc.defaultLlmProvider)||'anthropic',
+    model:p.llmModel||(myAcc&&myAcc.defaultLlmModel)||''
+  };
+}
+function pdRunPastPerf(id){
+  var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
+  var caseStudies=(D.companyProfile&&D.companyProfile.caseStudies)||[];
+  if(!caseStudies.length){alert('Add case studies to Company Profile first.');return;}
+  var rfp=p.rfp||{};
+  var rfpCtx=[rfp.summary||'',rfp.scope||'',(rfp.requirements||[]).join('; '),'Customer: '+(rfp.customer||''),'Vehicle: '+(rfp.contractVehicle||'')].filter(Boolean).join('\n\n').slice(0,3500);
+  var library=caseStudies.map(function(c){return {id:c.id,title:c.title||c.customer||'?',customer:c.customer||'',scope:(c.scope||'').slice(0,400),outcomes:(c.outcomes||[]).slice(0,4),tech:(c.tech||[]).slice(0,8),period:c.period||'',value:c.value||0};});
+  var sys='You are a federal capture analyst scoring past performance relevance against an RFP. Output ONLY a JSON object inside a ```json``` block.';
+  var prompt='Score each case study below for relevance to this RFP (0-100, higher = better fit). Provide a 1-sentence rationale for each. Return at most '+Math.min(10,library.length)+' results sorted highest-first.\n\nRFP CONTEXT:\n'+rfpCtx+'\n\nCASE STUDY LIBRARY:\n'+JSON.stringify(library)+'\n\nReturn:\n{"matches":[{"caseStudyId":"...","relevanceScore":number,"rationale":"why this is relevant to the RFP"}]}';
+  var llm=_propLLMOpts(p);
+  var btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent='✨ Scoring…';}
+  llmComplete({provider:llm.provider,model:llm.model,system:sys,messages:[{role:'user',content:prompt}],max_tokens:2500})
+    .then(function(j){
+      var parsed=llmExtractJSON(j);
+      if(!parsed||!parsed.matches)throw new Error('Could not parse past-performance response.');
+      p.pastPerformance={matches:parsed.matches.filter(function(m){return library.find(function(c){return c.id===m.caseStudyId;});}),generatedAt:Date.now()};
+      p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'pp.matched',payload:{count:p.pastPerformance.matches.length}});
+      save();renderProposalDetail(id);renderView();
+    })
+    .catch(function(e){alert('Past performance matching failed: '+(e&&e.message||e));})
+    .finally(function(){if(btn){btn.disabled=false;btn.textContent='↻ Re-run match';}});
+}
+function pdTogglePPInclude(id,csId,on){
+  var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
+  p.coverSheet=p.coverSheet||{};p.coverSheet.includedCaseStudyIds=p.coverSheet.includedCaseStudyIds||[];
+  var i=p.coverSheet.includedCaseStudyIds.indexOf(csId);
+  if(on&&i<0)p.coverSheet.includedCaseStudyIds.push(csId);
+  else if(!on&&i>-1)p.coverSheet.includedCaseStudyIds.splice(i,1);
+  save();
+}
+
+function _pdCoverSheetHTML(p){
+  var certs=D.corporateCertifications||[];
+  var cp=D.companyProfile||{};
+  var ident=cp.identity||{};
+  var includedIds=(p.coverSheet&&p.coverSheet.certIds)||[];
+  var togRows=certs.length?certs.map(function(c){
+    var on=includedIds.indexOf(c.id)>-1;
+    var expired=c.expiresAt&&new Date(c.expiresAt)<Date.now();
+    return '<div class="cs-cert-toggle"><div><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" '+(on?'checked':'')+(expired?' disabled':'')+' onchange="pdToggleCert(\''+p.id+'\',\''+c.id+'\',this.checked)"><span style="font-weight:'+(on?'700':'400')+'">'+esc(c.name)+'</span></label><div style="font-size:10px;color:var(--text-muted);font-family:Consolas,monospace;margin-left:22px">'+esc(c.number||'')+(c.issuer?' · '+esc(c.issuer):'')+'</div></div>'+(expired?'<span class="cert-exp-bad">EXPIRED</span>':'')+'</div>';
+  }).join(''):'<div style="font-size:12px;color:var(--text-muted);padding:12px;text-align:center">No corporate certifications yet. Add some via the Cert manager.</div>';
+  // Preview render
+  var active=certs.filter(function(c){return includedIds.indexOf(c.id)>-1&&(!c.expiresAt||new Date(c.expiresAt)>Date.now());});
+  var includedCS=(p.coverSheet&&p.coverSheet.includedCaseStudyIds)||[];
+  var pickedCases=(cp.caseStudies||[]).filter(function(c){return includedCS.indexOf(c.id)>-1;});
+  var preview='<div class="cs-cover-preview">'
+    +'<div style="text-align:center;font-size:11px;letter-spacing:.3px;color:var(--text-muted)">PROPOSAL FOR</div>'
+    +'<div style="text-align:center;font-size:22px;font-weight:800;color:var(--navy);margin:4px 0">'+esc(p.title)+'</div>'
+    +'<div style="text-align:center;font-size:13px;color:var(--text-secondary);margin-bottom:14px">'+(p.rfp&&p.rfp.customer?'Submitted to <b>'+esc(p.rfp.customer)+'</b>':'')+(p.rfp&&p.rfp.dueDate?' · due '+esc(p.rfp.dueDate):'')+'</div>'
+    +'<h2>'+esc(ident.legalName||'CommunityForce')+'</h2>'
+    +'<div style="font-size:12px;color:var(--text-secondary)">'+(ident.duns?'DUNS: '+esc(ident.duns):'')+(ident.uei?' · UEI: '+esc(ident.uei):'')+(ident.cage?' · CAGE: '+esc(ident.cage):'')+(ident.foundedYear?' · Founded '+esc(ident.foundedYear):'')+(ident.ownershipType?' · '+esc(ident.ownershipType):'')+'</div>'
+    +(ident.naics&&ident.naics.length?'<div style="font-size:11px;color:var(--text-muted);margin-top:2px">NAICS: '+esc(ident.naics.join(', '))+'</div>':'')
+    +(active.length?'<h2>Corporate Certifications &amp; Designations</h2><div class="cs-cert-list">'+active.map(function(c){return '<div>• <b>'+esc(c.name)+'</b>'+(c.number?' — '+esc(c.number):'')+(c.expiresAt?' <span style="color:var(--text-muted);font-size:11px">(expires '+esc(c.expiresAt)+')</span>':'')+'</div>';}).join('')+'</div>':'')
+    +(pickedCases.length?'<h2>Relevant Past Performance</h2><div style="font-size:12px">'+pickedCases.map(function(c){return '<div style="margin-bottom:6px"><b>'+esc(c.title||c.customer)+'</b>'+(c.period?' — '+esc(c.period):'')+(c.value?' — '+fmt(c.value):'')+'<br><span style="color:var(--text-secondary);font-size:11px">'+esc((c.scope||'').slice(0,160)+((c.scope||'').length>160?'…':''))+'</span></div>';}).join('')+'</div>':'')
+    +'</div>';
+  return '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Active certifications and past performance citations land on the cover sheet of the rendered proposal. Pick which to include.</div>'
+    +'<div style="display:grid;grid-template-columns:380px 1fr;gap:14px">'
+    +'<div><div class="fld-section-hdr" style="margin-top:0">Certifications</div><div style="background:#fff;border:1px solid var(--border);border-radius:8px">'+togRows+'</div></div>'
+    +'<div><div class="fld-section-hdr" style="margin-top:0">Live Cover Sheet Preview</div>'+preview+'</div>'
+    +'</div>';
+}
+function pdToggleCert(id,certId,on){
+  var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
+  p.coverSheet=p.coverSheet||{certIds:[]};
+  p.coverSheet.certIds=p.coverSheet.certIds||[];
+  var i=p.coverSheet.certIds.indexOf(certId);
+  if(on&&i<0)p.coverSheet.certIds.push(certId);
+  else if(!on&&i>-1)p.coverSheet.certIds.splice(i,1);
+  p.coverSheet.generatedAt=Date.now();
+  save();renderProposalDetail(id);
+}
+
+function _pdFilesHTML(p){
+  var rfp=p.rfp||{};
+  var rfpRow=rfp.sourceAttachmentId?'<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--page-bg);border-radius:6px;font-size:12px"><a href="/api/attachments/'+esc(rfp.sourceAttachmentId)+'" target="_blank" style="color:var(--navy);font-weight:600;text-decoration:none">📄 '+esc(rfp.sourceFile||'RFP source')+'</a><span style="font-size:11px;color:var(--text-muted)">RFP source file</span></div>':'<div style="font-size:11px;color:var(--text-muted);padding:8px 0">No RFP file attached.</div>';
+  return '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">All files attached to this proposal. The RFP source PDF is always preserved.</div>'+rfpRow;
+}
+
+function _pdSettingsHTML(p){
+  var llmProv=p.llmProvider||'';
+  var llmModel=p.llmModel||'';
+  var myAcc=ME?(D.accounts||[]).find(function(a){return a.id===ME.id;}):null;
+  var defProv=(myAcc&&myAcc.defaultLlmProvider)||'anthropic';
+  var defModel=(myAcc&&myAcc.defaultLlmModel)||'(provider default)';
+  var provOpts='<option value="">— use my account default ('+esc(defProv)+') —</option>'+llmProvOpts(llmProv||'').replace(/ selected/g,'').replace('value="'+llmProv+'"','value="'+llmProv+'" selected');
+  var modelOpts='<option value="">— use my account default ('+esc(defModel||'provider default')+') —</option>'+(llmProv?llmModelOpts(llmProv,llmModel):'<option value="">(pick provider first)</option>');
+  return '<span class="fld-section-hdr" style="margin-top:0">Per-Proposal LLM Override</span>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Choose a different provider/model just for this proposal. Leave both as "use my account default" to fall back to your Settings → Integrations preference.</div>'
+    +'<div style="display:flex;gap:10px"><div class="fld" style="flex:1"><label class="fld-l">Provider</label><select class="fld-sel" id="pd_llm_prov" onchange="_pdLlmProvChange(\''+p.id+'\')">'+provOpts+'</select></div>'
+    +'<div class="fld" style="flex:1"><label class="fld-l">Model</label><select class="fld-sel" id="pd_llm_model">'+modelOpts+'</select></div></div>'
+    +'<div class="btn-row"><button class="btn btn-navy" onclick="pdSaveSettings(\''+p.id+'\')">Save Settings</button></div>'
+    +'<span class="fld-section-hdr">Activity Log</span>'
+    +'<div class="cand-events">'+((p.events||[]).slice().reverse().map(function(e){return '<div class="cand-event-row"><span class="cand-event-ts">'+new Date(e.ts).toLocaleString()+'</span> · <b>'+esc(e.actorName||'—')+'</b> · '+esc(e.type)+(e.payload&&Object.keys(e.payload).length?' <span style="color:var(--text-muted)">'+esc(JSON.stringify(e.payload))+'</span>':'')+'</div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted)">No events yet.</div>')+'</div>';
+}
+function _pdLlmProvChange(id){
+  var prov=gv('pd_llm_prov');
+  var sel=document.getElementById('pd_llm_model');if(!sel)return;
+  sel.innerHTML='<option value="">— use my account default —</option>'+(prov?llmModelOpts(prov,''):'<option value="">(pick provider first)</option>');
+}
+function pdSaveSettings(id){
+  var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
+  p.llmProvider=gv('pd_llm_prov')||'';
+  p.llmModel=gv('pd_llm_model')||'';
+  save();alert('Settings saved.');
 }
 
 /* ── NOTIFICATIONS ── */
