@@ -520,6 +520,37 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .email-pre{background:#F8FAFC;border:1px solid var(--border);border-radius:6px;padding:12px 14px;font-family:Consolas,Menlo,monospace;font-size:12px;color:var(--text-primary);white-space:pre-wrap;line-height:1.55;max-height:50vh;overflow-y:auto;}
 .iv-summ-btn{background:transparent;border:1px solid rgba(124,58,237,0.35);color:#7C3AED;padding:2px 7px;font-size:10px;border-radius:4px;cursor:pointer;font-family:inherit;font-weight:700;}
 .iv-summ-btn:hover{background:rgba(124,58,237,0.08);}
+.prop-hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:16px;}
+.prop-hero-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;box-shadow:var(--shadow-sm);cursor:pointer;transition:transform 0.1s,box-shadow 0.15s;border-left:4px solid var(--navy);}
+.prop-hero-card:hover{transform:translateY(-1px);box-shadow:var(--shadow-md);}
+.prop-hero-ttl{font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:var(--text-secondary);margin-bottom:4px;}
+.prop-hero-n{font-size:22px;font-weight:800;color:var(--navy);line-height:1.1;margin-bottom:2px;}
+.prop-hero-sub{font-size:11px;color:var(--text-muted);}
+.cp-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.cp-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;box-shadow:var(--shadow-sm);}
+.cp-card-hdr{font-size:11px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:var(--text-secondary);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;}
+.cp-row{padding:7px 0;border-bottom:1px solid #F1F5F9;font-size:12px;display:flex;justify-content:space-between;gap:8px;align-items:flex-start;}
+.cp-row:last-child{border-bottom:none;}
+.cp-tag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.4px;padding:2px 7px;border-radius:3px;background:var(--page-bg);color:var(--text-secondary);margin-right:4px;text-transform:uppercase;}
+.cp-tag-on{background:var(--gold);color:var(--navy);}
+.cs-card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;border-left:3px solid #0d9488;}
+.cs-card-ttl{font-size:13px;font-weight:700;margin-bottom:2px;}
+.cs-card-sub{font-size:10px;color:var(--text-muted);margin-bottom:6px;}
+.cs-card-met{font-size:11px;color:var(--text-secondary);}
+.cert-card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;}
+.cert-card-info{flex:1;}
+.cert-card-name{font-size:13px;font-weight:700;}
+.cert-card-num{font-size:11px;color:var(--text-muted);font-family:Consolas,Menlo,monospace;}
+.cert-exp-ok{color:var(--green);font-size:10px;font-weight:700;}
+.cert-exp-warn{color:var(--warn-text);font-size:10px;font-weight:700;}
+.cert-exp-bad{color:var(--red);font-size:10px;font-weight:700;}
+.tpl-card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px;border-left:3px solid #7C3AED;}
+.tpl-card-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;}
+.tpl-card-name{font-size:13px;font-weight:700;}
+.tpl-card-sl{font-size:10px;font-weight:700;color:#7C3AED;text-transform:uppercase;letter-spacing:.4px;}
+.tpl-card-meta{font-size:11px;color:var(--text-muted);margin-top:4px;}
+.tpl-sec-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+.tpl-sec-chip{display:inline-block;padding:2px 7px;font-size:10px;font-weight:600;border-radius:3px;background:var(--page-bg);color:var(--text-secondary);}
 </style>
 </head>
 <body>
@@ -586,6 +617,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
       <button class="tab" id="tabRecruit" onclick="switchTab('recruit')">Recruiting</button>
       <button class="tab" id="tabInit" onclick="switchTab('init')">Initiatives</button>
       <button class="tab" id="tabOpp" onclick="switchTab('opp')">Opportunities</button>
+      <button class="tab" id="tabProp" onclick="switchTab('prop')">Proposals</button>
       <button class="tab" id="tabOver" onclick="switchTab('over')">Overhead</button>
       <button class="tab" id="tabRes" onclick="switchTab('res')">Resources View</button>
       <button class="tab" id="tabClass" onclick="switchTab('class')">Classification View</button>
@@ -608,6 +640,9 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 <div class="ov" id="ovRecruit" onclick="closeModal('ovRecruit')"><div class="mdl" id="mdlRecruit" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
 <div class="ov" id="ovIntg" onclick="closeModal('ovIntg')"><div class="mdl" id="mdlIntg" onclick="event.stopPropagation()" style="max-width:560px"></div></div>
 <div class="ov" id="ovCand" onclick="closeModal('ovCand')"><div class="mdl" id="mdlCand" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
+<div class="ov" id="ovCP" onclick="closeModal('ovCP')"><div class="mdl" id="mdlCP" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
+<div class="ov" id="ovCert" onclick="closeModal('ovCert')"><div class="mdl" id="mdlCert" onclick="event.stopPropagation()" style="max-width:720px"></div></div>
+<div class="ov" id="ovTplProp" onclick="closeModal('ovTplProp')"><div class="mdl" id="mdlTplProp" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
 <div class="ov" id="ovNotif" onclick="closeModal('ovNotif')"><div class="mdl" id="mdlNotif" onclick="event.stopPropagation()" style="max-width:520px;padding:0;overflow:hidden"></div></div>
 <div class="ov" id="ovAIPrev" onclick="closeModal('ovAIPrev')"><div class="mdl" id="mdlAIPrev" onclick="event.stopPropagation()" style="max-width:760px"></div></div>
 <script>
@@ -805,7 +840,29 @@ function migrate(){
   });});
   var REV={'p_bclm':{revenue:212756,revenueNote:'→ $265,945/mo Aug 15 · BCLM +25% extension'},'p_fams':{revenue:76944,revenueNote:'Ends Sep 24, 2026 · 85.2% margin'},'p_c1fams':{revenue:25984,revenueNote:'→ $100,000/mo target Oct 2026 · 61% margin at maturity'},'p_software':{revenue:50000,revenueNote:'$550K ARR floor · 7.65% margin — needs intervention'},'p_marines':{revenue:0,revenueNote:'Active pursuit · SBIR Phase III via ForwardEdge-AI · $1.2M'},'p_salesforce':{revenue:0,revenueNote:'Build phase · 3 engagements seeding'},'p_afosi':{revenue:0,revenueNote:'Proposal due Jun 8 · $1.0M opportunity'},'p_phoenix':{revenue:0,revenueNote:'Software play · repricing initiative'},'p_tableau':{revenue:0,revenueNote:'Internal capability build'}};
   D.projects.forEach(function(p){if(!('revenue' in p)){var d=REV[p.id];p.revenue=d?d.revenue:0;p.revenueNote=d?d.revenueNote:'';}if(!('revenueNote' in p))p.revenueNote='';if(!p.clins)p.clins=[];});
-  planMigrate();authMigrate();oppMigrate();tplMigrate();recruitMigrate();}
+  planMigrate();authMigrate();oppMigrate();tplMigrate();recruitMigrate();proposalsMigrate();}
+function proposalsMigrate(){
+  if(!D.proposals)D.proposals=[];
+  if(!D.proposalTemplates)D.proposalTemplates=[];
+  if(!D.corporateCertifications)D.corporateCertifications=[];
+  if(!D.companyProfile)D.companyProfile={};
+  var p=D.companyProfile;
+  if(!p.identity)p.identity={legalName:'CommunityForce',dba:'',duns:'',uei:'',cage:'',naics:[],hq:{addr:'',city:'',state:'',zip:''},foundedYear:'',ownershipType:'',employeeCount:''};
+  if(!p.voice)p.voice={primaryTone:'',toneTags:[],samples:[],do:[],dont:[]};
+  if(!Array.isArray(p.boilerplate))p.boilerplate=[];
+  if(!Array.isArray(p.services))p.services=[];
+  if(!Array.isArray(p.caseStudies))p.caseStudies=[];
+  if(!Array.isArray(p.winThemes))p.winThemes=[];
+  if(!Array.isArray(p.keyPersonnel))p.keyPersonnel=[];
+  if(!Array.isArray(p.teamingPartners))p.teamingPartners=[];
+  if(!p.governance)p.governance={ownerId:'',lastReviewedAt:0,version:1};
+}
+function canProposal(){
+  if(!ME)return false;
+  if(ME.role==='admin'||ME.role==='editor')return true;
+  if(ME.memberId){var f=findMember(ME.memberId);if(f&&f.m&&f.m.proposal)return true;}
+  return false;
+}
 function recruitMigrate(){
   if(!D.recruitings)D.recruitings=[];
   if(!D.candidates)D.candidates=[];
@@ -1372,7 +1429,7 @@ document.getElementById('statsBar').innerHTML=[
 {l:'Skills',v:D.skillsets.length,u:'defined'},{l:'Reassess',v:fl,u:'flagged',w:fl>0},{l:'Over-alloc',v:oa,u:'people',w:oa>0}
 ].map(function(s){return '<div class="st'+(s.w?' warn':'')+'"><div class="st-l">'+s.l+'</div><div class="st-v'+(s.w?' wv':'')+'">'+s.v+'<span class="st-u">'+s.u+'</span></div></div>';}).join('');}
 
-function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',recruit:'tabRecruit',init:'tabInit',opp:'tabOpp',over:'tabOver',orgchart:'tabChart',res:'tabRes',class:'tabClass',plan:'tabPlan',ptask:'tabPTask'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
+function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',recruit:'tabRecruit',init:'tabInit',opp:'tabOpp',prop:'tabProp',over:'tabOver',orgchart:'tabChart',res:'tabRes',class:'tabClass',plan:'tabPlan',ptask:'tabPTask'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
 
 function cardHTML(m,did){
 var dept=D.departments.find(function(d){return d.id===did;});
@@ -1748,6 +1805,7 @@ function renderView(){
   else if(viewMode==='plan'||viewMode==='ptask')html=renderPlanView(q);
   else if(viewMode==='class')html=renderClassificationView(q);
   else if(viewMode==='recruit')html=renderRecruitView(q);
+  else if(viewMode==='prop')html=renderProposalsView(q);
   else html=renderResourcesView(q);
   document.getElementById('mainContent').innerHTML=html;
 }
@@ -2479,6 +2537,327 @@ function candHire(id){
     }
   }
   save();openCandModal(c.recruitingId,id);
+}
+
+/* ── PROPOSALS MODULE (Phase A: foundation) ── */
+var PROP_STATUSES=[
+  {k:'draft',l:'Draft',c:'#64748B'},
+  {k:'in-review',l:'In Review',c:'#0EA5E9'},
+  {k:'red-team',l:'Red Team',c:'#D97706'},
+  {k:'submitted',l:'Submitted',c:'#7C3AED'},
+  {k:'won',l:'Won',c:'#16A34A'},
+  {k:'lost',l:'Lost',c:'#DC2626'},
+  {k:'no-bid',l:'No Bid',c:'#94A3B8'}
+];
+var TONE_TAGS=['authoritative','plainspoken','mission-driven','technical','consultative','confident','approachable'];
+function renderProposalsView(q){
+  if(!canProposal())return '<div class="empty-msg">You don\'t have access to the Proposals module.</div>';
+  var props=(D.proposals||[]).slice();
+  var cp=D.companyProfile||{};
+  var tpls=D.proposalTemplates||[];
+  var certs=D.corporateCertifications||[];
+  var openProps=props.filter(function(p){return p.status==='draft'||p.status==='in-review'||p.status==='red-team';}).length;
+  var submitted=props.filter(function(p){return p.status==='submitted';}).length;
+  var won=props.filter(function(p){return p.status==='won';}).length;
+  var lost=props.filter(function(p){return p.status==='lost';}).length;
+  var winRate=(won+lost)?Math.round(won/(won+lost)*100):0;
+  var hasProfile=cp.identity&&cp.identity.legalName;
+  var profileBadges=(cp.services||[]).length+(cp.caseStudies||[]).length+(cp.boilerplate||[]).length;
+  var certActive=certs.filter(function(c){return !c.expiresAt||new Date(c.expiresAt)>Date.now();}).length;
+  var certExpSoon=certs.filter(function(c){if(!c.expiresAt)return false;var d=new Date(c.expiresAt);return d>Date.now()&&d<Date.now()+60*86400000;}).length;
+  return '<div style="max-width:1280px;margin:0 auto">'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:6px">'
+      +'<div><div style="font-size:18px;font-weight:800">Proposals</div>'
+      +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Author RFP responses, manage templates, and keep the corporate profile current. RFP intake and AI drafting arrive in Phase B.</div></div>'
+      +(canProposal()?'<button class="btn btn-gold btn-sm" disabled title="RFP intake coming in Phase B">+ New Proposal</button>':'')
+    +'</div>'
+    +'<div class="prop-hero">'
+      +'<div class="prop-hero-card" onclick="openCompanyProfileManager()" style="border-left-color:#0d9488"><div class="prop-hero-ttl">&#127970; Company Profile</div><div class="prop-hero-n">'+(hasProfile?'Set':'—')+'</div><div class="prop-hero-sub">'+profileBadges+' items &middot; '+(cp.services||[]).length+' services &middot; '+(cp.caseStudies||[]).length+' case studies</div></div>'
+      +'<div class="prop-hero-card" onclick="openProposalTemplatesManager()" style="border-left-color:#7C3AED"><div class="prop-hero-ttl">&#128196; Proposal Templates</div><div class="prop-hero-n">'+tpls.length+'</div><div class="prop-hero-sub">'+(tpls.length===1?'template':'templates')+' &middot; click to manage</div></div>'
+      +'<div class="prop-hero-card" onclick="openCorporateCertsManager()" style="border-left-color:#0EA5E9"><div class="prop-hero-ttl">&#127942; Corporate Certifications</div><div class="prop-hero-n">'+certActive+'</div><div class="prop-hero-sub">'+(certExpSoon?'<span style="color:var(--warn-text)">'+certExpSoon+' expiring &lt;60d</span> &middot; ':'')+certs.length+' total</div></div>'
+      +'<div class="prop-hero-card" style="border-left-color:var(--gold);cursor:default"><div class="prop-hero-ttl">&#128202; Pipeline</div><div class="prop-hero-n">'+openProps+'</div><div class="prop-hero-sub">'+submitted+' submitted &middot; '+won+' won ('+winRate+'%)</div></div>'
+    +'</div>'
+    +(props.length?'<div class="rq-section-lbl">Recent Proposals</div>':'<div class="empty-recruit"><div style="font-size:14px;margin-bottom:6px">No proposals yet</div><div style="font-size:12px">In Phase B you\'ll upload an RFP (PDF/DOCX) and Atlas will parse it into structured fields, seed an opportunity, generate JDs into Recruiting, and draft each proposal section. Meanwhile, use the cards above to set up your Company Profile, Templates, and Corporate Certifications — these are the inputs Claude will use during proposal drafting.</div></div>')
+    +'</div>';
+}
+
+/* ── COMPANY PROFILE MANAGER ── */
+function openCompanyProfileManager(){
+  if(!canProposal()){alert('You don\'t have permission.');return;}
+  var p=D.companyProfile;var i=p.identity||{};var v=p.voice||{};
+  var naicsList=(i.naics||[]).join(', ');
+  var toneChecks=TONE_TAGS.map(function(t){var on=(v.toneTags||[]).indexOf(t)>-1;return '<label class="cp-tag '+(on?'cp-tag-on':'')+'" style="cursor:pointer;user-select:none"><input type="checkbox" '+(on?'checked':'')+' value="'+t+'" data-tone="1" style="display:none">'+esc(t)+'</label>';}).join(' ');
+  var samplesHTML=(v.samples||[]).map(function(s,i){return '<div class="cp-row"><div style="flex:1"><div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">'+esc(s.sectionType||'sample')+'</div><div style="font-size:12px;color:var(--text-secondary);line-height:1.5">'+esc(s.text||'').slice(0,300)+(s.text&&s.text.length>300?'…':'')+'</div></div><button class="btn btn-danger-sm btn-sm" onclick="cpDelVoiceSample('+i+')">&times;</button></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:8px 4px">No voice samples yet. Add 3-5 short paragraphs of CF-approved prose so AI can match your tone.</div>';
+  var doList=(v.do||[]).map(function(s,i){return '<div class="cp-row"><span style="color:var(--green);font-weight:700">&#10003;</span><span style="flex:1">'+esc(s)+'</span><button class="btn btn-danger-sm btn-sm" onclick="cpDelDo('+i+')">&times;</button></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 4px">No do-rules yet.</div>';
+  var dontList=(v.dont||[]).map(function(s,i){return '<div class="cp-row"><span style="color:var(--red);font-weight:700">&times;</span><span style="flex:1">'+esc(s)+'</span><button class="btn btn-danger-sm btn-sm" onclick="cpDelDont('+i+')">&times;</button></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 4px">No don\'t-rules yet.</div>';
+  var boilerHTML=(p.boilerplate||[]).map(function(b,i){return '<div class="cp-row"><div style="flex:1"><strong style="font-size:12px">'+esc(b.name)+'</strong><div style="font-size:11px;color:var(--text-secondary);margin-top:2px">'+esc((b.text||'').slice(0,140)+(b.text&&b.text.length>140?'…':''))+'</div></div><div style="display:flex;gap:4px"><button class="btn btn-sec btn-sm" onclick="cpEditBoiler('+i+')">Edit</button><button class="btn btn-danger-sm btn-sm" onclick="cpDelBoiler('+i+')">&times;</button></div></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 4px">No boilerplate snippets yet.</div>';
+  var serviceHTML=(p.services||[]).map(function(s,i){return '<div class="cp-row"><div style="flex:1"><strong style="font-size:12px">'+esc(s.name)+'</strong> <span style="font-size:10px;color:var(--text-muted)">'+esc(s.pricingModel||'')+'</span><div style="font-size:11px;color:var(--text-secondary);margin-top:2px">'+esc((s.shortDesc||'').slice(0,140))+'</div></div><div style="display:flex;gap:4px"><button class="btn btn-sec btn-sm" onclick="cpEditService('+i+')">Edit</button><button class="btn btn-danger-sm btn-sm" onclick="cpDelService('+i+')">&times;</button></div></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 4px">No services yet.</div>';
+  var caseStudyHTML=(p.caseStudies||[]).map(function(c,i){return '<div class="cs-card"><div class="cs-card-ttl">'+esc(c.title||c.customer||'(untitled)')+'</div><div class="cs-card-sub">'+esc(c.customer||'')+(c.value?' &middot; '+fmt(c.value):'')+(c.period?' &middot; '+esc(c.period):'')+'</div><div class="cs-card-met">'+esc((c.outcomes||[]).slice(0,2).join(' &middot; '))+'</div><div style="margin-top:6px;display:flex;gap:4px"><button class="btn btn-sec btn-sm" onclick="cpEditCaseStudy('+i+')">Edit</button><button class="btn btn-danger-sm btn-sm" onclick="cpDelCaseStudy('+i+')">&times;</button></div></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 4px">No case studies yet — Claude will use these for past-performance matching during proposal drafting.</div>';
+  document.getElementById('mdlCP').innerHTML=
+    '<div class="mdl-over">Administration</div><div class="mdl-title">Company Profile</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Everything below feeds Claude during proposal generation. Brand voice, services, and case studies are the most impactful — keep them current.</div>'
+    +'<span class="fld-section-hdr">Corporate Identity</span>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'
+      +'<div class="fld"><label class="fld-l">Legal Name</label><input class="fld-i" id="cp_legal" value="'+esc(i.legalName||'')+'"></div>'
+      +'<div class="fld"><label class="fld-l">DBA</label><input class="fld-i" id="cp_dba" value="'+esc(i.dba||'')+'"></div>'
+      +'<div class="fld"><label class="fld-l">Founded</label><input class="fld-i" id="cp_founded" value="'+esc(i.foundedYear||'')+'" placeholder="2010"></div>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">'
+      +'<div class="fld"><label class="fld-l">DUNS</label><input class="fld-i" id="cp_duns" value="'+esc(i.duns||'')+'"></div>'
+      +'<div class="fld"><label class="fld-l">UEI</label><input class="fld-i" id="cp_uei" value="'+esc(i.uei||'')+'"></div>'
+      +'<div class="fld"><label class="fld-l">CAGE</label><input class="fld-i" id="cp_cage" value="'+esc(i.cage||'')+'"></div>'
+      +'<div class="fld"><label class="fld-l">Employees</label><input class="fld-i" id="cp_emp" value="'+esc(i.employeeCount||'')+'" placeholder="50-100"></div>'
+    +'</div>'
+    +'<div class="fld"><label class="fld-l">NAICS Codes (comma-separated)</label><input class="fld-i" id="cp_naics" value="'+esc(naicsList)+'" placeholder="541512, 541611, 611420"></div>'
+    +'<div class="fld"><label class="fld-l">Ownership Type</label><input class="fld-i" id="cp_owner" value="'+esc(i.ownershipType||'')+'" placeholder="Small Business / 8(a) / WOSB / etc."></div>'
+    +'<span class="fld-section-hdr">Brand Voice</span>'
+    +'<div class="fld"><label class="fld-l">Tone Tags (click to toggle)</label><div id="cp_tones" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px" onclick="cpToggleTone(event)">'+toneChecks+'</div></div>'
+    +'<div class="fld"><label class="fld-l">Voice Samples (3-5 short paragraphs of CF-approved prose, tagged by section type)</label><div>'+samplesHTML+'</div>'
+    +'<div style="display:flex;gap:6px;margin-top:6px"><select class="fld-sel" id="cp_smp_kind" style="flex:0 0 180px"><option value="executive-summary">Executive Summary</option><option value="technical-approach">Technical Approach</option><option value="past-performance">Past Performance</option><option value="staffing-plan">Staffing Plan</option><option value="general">General</option></select><input class="fld-i" id="cp_smp_text" placeholder="Paste an approved sample paragraph..."><button class="btn btn-sec btn-sm" onclick="cpAddVoiceSample()">+ Add</button></div></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+      +'<div class="fld"><label class="fld-l">Do List</label><div>'+doList+'</div><div style="display:flex;gap:6px;margin-top:4px"><input class="fld-i" id="cp_do_inp" placeholder="e.g. use active voice"><button class="btn btn-sec btn-sm" onclick="cpAddDo()">+</button></div></div>'
+      +'<div class="fld"><label class="fld-l">Don\'t List</label><div>'+dontList+'</div><div style="display:flex;gap:6px;margin-top:4px"><input class="fld-i" id="cp_dont_inp" placeholder="e.g. never say world-class"><button class="btn btn-sec btn-sm" onclick="cpAddDont()">+</button></div></div>'
+    +'</div>'
+    +'<span class="fld-section-hdr">Boilerplate Snippets</span>'
+    +'<div>'+boilerHTML+'</div>'
+    +'<div style="display:flex;gap:6px;margin-top:6px"><input class="fld-i" id="cp_bp_name" placeholder="Name (e.g. Company Overview — Short)" style="flex:0 0 240px"><input class="fld-i" id="cp_bp_text" placeholder="Snippet text..."><button class="btn btn-sec btn-sm" onclick="cpAddBoiler()">+ Add</button></div>'
+    +'<span class="fld-section-hdr">Products &amp; Services</span>'
+    +'<div>'+serviceHTML+'</div>'
+    +'<button class="btn btn-sec btn-sm" style="margin-top:6px" onclick="cpEditService(-1)">+ Add Service</button>'
+    +'<span class="fld-section-hdr">Client Experience / Case Studies</span>'
+    +'<div>'+caseStudyHTML+'</div>'
+    +'<button class="btn btn-sec btn-sm" style="margin-top:6px" onclick="cpEditCaseStudy(-1)">+ Add Case Study</button>'
+    +'<div class="btn-row" style="margin-top:18px">'
+      +'<button class="btn btn-navy" style="flex:1" onclick="cpSaveIdentity()">Save Identity &amp; Voice</button>'
+      +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovCP\')">Close</button>'
+    +'</div>';
+  openModal('ovCP');
+}
+function cpToggleTone(e){
+  var t=e.target;if(t.tagName!=='LABEL'&&!t.dataset)t=t.closest('label');if(!t)return;
+  var input=t.querySelector('input[data-tone]');if(!input)return;
+  input.checked=!input.checked;t.classList.toggle('cp-tag-on',input.checked);
+}
+function cpSaveIdentity(){
+  var p=D.companyProfile;p.identity=p.identity||{};
+  p.identity.legalName=gv('cp_legal').trim();
+  p.identity.dba=gv('cp_dba').trim();
+  p.identity.foundedYear=gv('cp_founded').trim();
+  p.identity.duns=gv('cp_duns').trim();
+  p.identity.uei=gv('cp_uei').trim();
+  p.identity.cage=gv('cp_cage').trim();
+  p.identity.employeeCount=gv('cp_emp').trim();
+  p.identity.naics=gv('cp_naics').split(',').map(function(s){return s.trim();}).filter(Boolean);
+  p.identity.ownershipType=gv('cp_owner').trim();
+  // Tones
+  var tones=[];document.querySelectorAll('#cp_tones input[data-tone]').forEach(function(i){if(i.checked)tones.push(i.value);});
+  p.voice=p.voice||{};p.voice.toneTags=tones;
+  p.governance=p.governance||{};p.governance.lastReviewedAt=Date.now();p.governance.ownerId=ME?ME.id:'';
+  save();closeModal('ovCP');renderView();
+}
+function cpAddVoiceSample(){var p=D.companyProfile;p.voice=p.voice||{};p.voice.samples=p.voice.samples||[];var t=gv('cp_smp_text').trim();if(!t)return;p.voice.samples.push({id:uid(),sectionType:gv('cp_smp_kind'),text:t});save();openCompanyProfileManager();}
+function cpDelVoiceSample(i){var p=D.companyProfile;p.voice.samples.splice(i,1);save();openCompanyProfileManager();}
+function cpAddDo(){var p=D.companyProfile;p.voice=p.voice||{};p.voice.do=p.voice.do||[];var t=gv('cp_do_inp').trim();if(!t)return;p.voice.do.push(t);save();openCompanyProfileManager();}
+function cpDelDo(i){D.companyProfile.voice.do.splice(i,1);save();openCompanyProfileManager();}
+function cpAddDont(){var p=D.companyProfile;p.voice=p.voice||{};p.voice.dont=p.voice.dont||[];var t=gv('cp_dont_inp').trim();if(!t)return;p.voice.dont.push(t);save();openCompanyProfileManager();}
+function cpDelDont(i){D.companyProfile.voice.dont.splice(i,1);save();openCompanyProfileManager();}
+function cpAddBoiler(){var p=D.companyProfile;p.boilerplate=p.boilerplate||[];var n=gv('cp_bp_name').trim(),t=gv('cp_bp_text').trim();if(!n||!t)return;p.boilerplate.push({id:uid(),name:n,text:t,lastReviewedAt:Date.now(),ownerId:ME?ME.id:''});save();openCompanyProfileManager();}
+function cpDelBoiler(i){if(!confirm('Delete this boilerplate snippet?'))return;D.companyProfile.boilerplate.splice(i,1);save();openCompanyProfileManager();}
+function cpEditBoiler(i){
+  var b=D.companyProfile.boilerplate[i];if(!b)return;
+  var nm=prompt('Snippet name:',b.name);if(nm===null)return;
+  var tx=prompt('Snippet text:',b.text);if(tx===null)return;
+  b.name=nm.trim()||b.name;b.text=tx;b.lastReviewedAt=Date.now();save();openCompanyProfileManager();
+}
+function cpEditService(idx){
+  var p=D.companyProfile;p.services=p.services||[];
+  var s=idx<0?{id:uid(),name:'',shortDesc:'',longDesc:'',targetBuyer:'',differentiators:[],pricingModel:'',dealSizeBand:'',naicsCodes:[]}:p.services[idx];
+  if(idx>=0&&!s)return;
+  // Inline prompt-based for simplicity in Phase A
+  var nm=prompt('Service name:',s.name);if(nm===null)return;
+  var sd=prompt('Short description:',s.shortDesc);if(sd===null)return;
+  var pm=prompt('Pricing model (T&M / FFP / Subscription / Outcome-based):',s.pricingModel);if(pm===null)return;
+  var df=prompt('Key differentiators (one per line):',(s.differentiators||[]).join('\n'));if(df===null)return;
+  s.name=nm.trim();s.shortDesc=sd;s.pricingModel=pm;
+  s.differentiators=df.split('\n').map(function(x){return x.trim();}).filter(Boolean);
+  if(idx<0)p.services.push(s);
+  save();openCompanyProfileManager();
+}
+function cpDelService(i){if(!confirm('Delete this service?'))return;D.companyProfile.services.splice(i,1);save();openCompanyProfileManager();}
+function cpEditCaseStudy(idx){
+  var p=D.companyProfile;p.caseStudies=p.caseStudies||[];
+  var c=idx<0?{id:uid(),title:'',customer:'',customerReferenceable:false,contractVehicle:'',period:'',value:0,role:'',scope:'',tech:[],outcomes:[],challenges:'',testimonial:'',pocName:'',pocPermission:false,attachments:[]}:p.caseStudies[idx];
+  if(idx>=0&&!c)return;
+  var ti=prompt('Title:',c.title);if(ti===null)return;
+  var cu=prompt('Customer:',c.customer);if(cu===null)return;
+  var pe=prompt('Period (e.g. "Jul 2024 — Sep 2026"):',c.period);if(pe===null)return;
+  var va=prompt('Contract value ($, integer):',String(c.value||''));if(va===null)return;
+  var sc=prompt('Scope summary:',c.scope);if(sc===null)return;
+  var ou=prompt('Outcomes (one per line, with metrics):',(c.outcomes||[]).join('\n'));if(ou===null)return;
+  c.title=ti.trim();c.customer=cu.trim();c.period=pe;c.value=Number(va)||0;c.scope=sc;
+  c.outcomes=ou.split('\n').map(function(x){return x.trim();}).filter(Boolean);
+  if(idx<0)p.caseStudies.push(c);
+  save();openCompanyProfileManager();
+}
+function cpDelCaseStudy(i){if(!confirm('Delete this case study?'))return;D.companyProfile.caseStudies.splice(i,1);save();openCompanyProfileManager();}
+
+/* ── CORPORATE CERTIFICATIONS MANAGER ── */
+function openCorporateCertsManager(){
+  if(!canProposal()){alert('You don\'t have permission.');return;}
+  var certs=D.corporateCertifications||[];
+  var rows=certs.length?certs.map(function(c,i){
+    var ex='';
+    if(c.expiresAt){
+      var d=new Date(c.expiresAt);var days=Math.round((d-Date.now())/86400000);
+      if(days<0)ex='<span class="cert-exp-bad">EXPIRED '+Math.abs(days)+'d ago</span>';
+      else if(days<60)ex='<span class="cert-exp-warn">expires in '+days+'d</span>';
+      else ex='<span class="cert-exp-ok">valid '+days+'d</span>';
+    } else { ex='<span class="cert-exp-ok">no expiry</span>'; }
+    return '<div class="cert-card"><div class="cert-card-info"><div class="cert-card-name">'+esc(c.name)+'</div>'
+      +'<div class="cert-card-num">'+esc(c.number||'(no number)')+(c.issuer?' &middot; '+esc(c.issuer):'')+'</div>'
+      +'<div style="margin-top:3px">'+ex+'</div></div>'
+      +'<div style="display:flex;gap:4px;flex-shrink:0"><button class="btn btn-sec btn-sm" onclick="certEdit('+i+')">Edit</button><button class="btn btn-danger-sm btn-sm" onclick="certDel('+i+')">&times;</button></div></div>';
+  }).join(''):'<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:24px">No corporate certifications yet. Add SBIR, 8(a), GSA STARS, FedRAMP, ISO, CMMC, DHS Trusted Tester, etc.</div>';
+  document.getElementById('mdlCert').innerHTML=
+    '<div class="mdl-over">Administration</div><div class="mdl-title">Corporate Certifications &amp; Designations</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Active certifications auto-populate the cover sheet of every proposal. Atlas warns you 60 days before expiration.</div>'
+    +'<div>'+rows+'</div>'
+    +'<div class="btn-row" style="margin-top:14px">'
+    +'<button class="btn btn-gold" style="flex:1" onclick="certEdit(-1)">+ Add Certification</button>'
+    +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovCert\')">Close</button>'
+    +'</div>';
+  openModal('ovCert');
+}
+function certEdit(idx){
+  var certs=D.corporateCertifications=D.corporateCertifications||[];
+  var c=idx<0?{id:uid(),name:'',number:'',issuer:'',issuedAt:'',expiresAt:'',logoUrl:'',supportingDocId:''}:certs[idx];
+  if(idx>=0&&!c)return;
+  var nm=prompt('Certification name (e.g. "GSA STARS III"):',c.name);if(nm===null)return;
+  var num=prompt('Number / Contract / ID (optional):',c.number);if(num===null)return;
+  var iss=prompt('Issuer (e.g. "GSA", "ANAB", "FedRAMP PMO"):',c.issuer);if(iss===null)return;
+  var issued=prompt('Issued date (YYYY-MM-DD, optional):',c.issuedAt);if(issued===null)return;
+  var exp=prompt('Expires date (YYYY-MM-DD, optional):',c.expiresAt);if(exp===null)return;
+  c.name=nm.trim();c.number=num.trim();c.issuer=iss.trim();c.issuedAt=issued.trim();c.expiresAt=exp.trim();
+  if(idx<0)certs.push(c);
+  save();openCorporateCertsManager();
+}
+function certDel(i){if(!confirm('Delete this certification?'))return;D.corporateCertifications.splice(i,1);save();openCorporateCertsManager();}
+
+/* ── PROPOSAL TEMPLATES MANAGER ── */
+function openProposalTemplatesManager(){
+  if(!canProposal()){alert('You don\'t have permission.');return;}
+  var tpls=D.proposalTemplates||[];
+  var rows=tpls.length?tpls.map(function(t,i){
+    var secCount=(t.sections||[]).length;
+    var aiCount=(t.sections||[]).filter(function(s){return s.source==='ai'||s.source==='hybrid';}).length;
+    return '<div class="tpl-card">'
+      +'<div class="tpl-card-hdr"><div><div class="tpl-card-name">'+esc(t.name)+'</div><div class="tpl-card-sl">'+esc(t.serviceLine||'No service line')+'</div></div>'
+      +'<div style="display:flex;gap:4px"><button class="btn btn-sec btn-sm" onclick="propTplEdit(\''+t.id+'\')">Edit Sections</button><button class="btn btn-sec btn-sm" onclick="propTplRename(\''+t.id+'\')">Rename</button><button class="btn btn-danger-sm btn-sm" onclick="propTplDel(\''+t.id+'\')">&times;</button></div></div>'
+      +'<div class="tpl-card-meta">'+secCount+' section'+(secCount===1?'':'s')+' &middot; '+aiCount+' AI-fillable &middot; '+esc(t.complianceFramework||'no compliance default')+' &middot; '+(t.pageLimit?t.pageLimit+'pg limit':'no page limit')+'</div>'
+      +((t.sections||[]).length?'<div class="tpl-sec-list">'+(t.sections||[]).slice(0,8).map(function(s){return '<span class="tpl-sec-chip" style="'+(s.source==='ai'?'background:rgba(124,58,237,0.12);color:#7C3AED':s.source==='hybrid'?'background:rgba(14,165,233,0.12);color:#0EA5E9':'')+'">'+esc(s.title||'(section)')+'</span>';}).join('')+(t.sections.length>8?'<span class="tpl-sec-chip">+'+(t.sections.length-8)+' more</span>':'')+'</div>':'')
+      +'</div>';
+  }).join(''):'<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:24px">No templates yet. Click <b>+ Add Template</b> to create one for each major service line (Federal Services / Awards Software / Salesforce-Tableau Practice / ATO-as-a-Service / etc.).</div>';
+  document.getElementById('mdlTplProp').innerHTML=
+    '<div class="mdl-over">Administration</div><div class="mdl-title">Proposal Templates</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Templates are the section-by-section recipe for a proposal. In Phase B, Claude reads the Company Profile + RFP + chosen template and drafts each AI-fillable section.</div>'
+    +'<div>'+rows+'</div>'
+    +'<div class="btn-row" style="margin-top:14px">'
+    +'<button class="btn btn-gold" style="flex:1" onclick="propTplAdd()">+ Add Template</button>'
+    +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovTplProp\')">Close</button>'
+    +'</div>';
+  openModal('ovTplProp');
+}
+function propTplAdd(){
+  var name=prompt('Template name (e.g. "Federal Services — Task Order Response"):');
+  if(!name||!name.trim())return;
+  var sl=prompt('Service line (Federal Services / Awards Software / Salesforce-Tableau / ATO-as-a-Service / Other):','Federal Services');
+  if(sl===null)return;
+  var fw=prompt('Default compliance framework (FAR Part 12 / FAR Part 15 / OTA / Commercial / N/A):','FAR Part 15');
+  if(fw===null)return;
+  var pl=prompt('Default page limit (number or blank):','');
+  if(pl===null)return;
+  // Seed common sections
+  var seed=[
+    {id:uid(),title:'Cover Sheet',order:0,required:true,source:'computed',pageBudget:1,prompt:'',evidence:[]},
+    {id:uid(),title:'Executive Summary',order:1,required:true,source:'ai',pageBudget:2,prompt:'Write the executive summary tailored to this RFP. Open with the customer mission, state CF\'s win themes, summarize the technical approach in 3-4 lines, and close with proof points (relevant past performance + key differentiators).',evidence:['>=1 case study','>=1 win theme']},
+    {id:uid(),title:'Technical Approach',order:2,required:true,source:'ai',pageBudget:8,prompt:'Draft the technical approach section against the RFP scope. Include a Solution Architecture overview, a Risk + Mitigation table, a Quality Approach paragraph, and Innovation Highlights.',evidence:['>=2 case studies','RFP scope coverage']},
+    {id:uid(),title:'Past Performance',order:3,required:true,source:'hybrid',pageBudget:4,prompt:'Generate the Past Performance narrative using the 3-5 most-relevant CF case studies. Each citation must include customer, contract vehicle, period, $ value, scope, outcomes (with hard metrics), and relevance to this RFP.',evidence:['>=3 case studies']},
+    {id:uid(),title:'Staffing Plan',order:4,required:true,source:'ai',pageBudget:3,prompt:'Draft the staffing plan tied to the LCAT structure required by the RFP. Map CF roles + bench candidates + open requisitions. Include the key personnel bios as sub-elements.',evidence:['>=1 key personnel bio','LCAT coverage']},
+    {id:uid(),title:'Management Approach',order:5,required:false,source:'ai',pageBudget:2,prompt:'Draft the Management Approach: governance, communications cadence, schedule management, risk reviews, performance metrics.',evidence:[]},
+    {id:uid(),title:'Pricing Narrative',order:6,required:true,source:'ai',pageBudget:2,prompt:'Draft the pricing narrative and basis-of-estimate (BoE). Numbers stay user-entered; this section explains the methodology, assumptions, and exceptions.',evidence:[]},
+    {id:uid(),title:'Assumptions & Exceptions',order:7,required:false,source:'hybrid',pageBudget:1,prompt:'Generate the explicit assumptions and exceptions list tied to the RFP language.',evidence:[]},
+    {id:uid(),title:'Corporate Capabilities & Certifications',order:8,required:true,source:'computed',pageBudget:1,prompt:'',evidence:[]},
+    {id:uid(),title:'Resumes (Appendix)',order:9,required:false,source:'computed',pageBudget:0,prompt:'',evidence:[]}
+  ];
+  D.proposalTemplates=D.proposalTemplates||[];
+  D.proposalTemplates.push({
+    id:uid(),name:name.trim(),serviceLine:sl.trim(),complianceFramework:fw.trim(),pageLimit:Number(pl)||0,
+    sections:seed,version:1,createdAt:Date.now(),createdBy:ME?ME.id:''
+  });
+  save();openProposalTemplatesManager();
+}
+function propTplDel(id){
+  if(!confirm('Delete this template? In-flight proposals using it stay pinned to their captured version.'))return;
+  D.proposalTemplates=(D.proposalTemplates||[]).filter(function(t){return t.id!==id;});
+  save();openProposalTemplatesManager();
+}
+function propTplRename(id){
+  var t=(D.proposalTemplates||[]).find(function(x){return x.id===id;});if(!t)return;
+  var nm=prompt('Template name:',t.name);if(!nm)return;
+  var sl=prompt('Service line:',t.serviceLine);if(sl===null)return;
+  var fw=prompt('Compliance framework:',t.complianceFramework);if(fw===null)return;
+  var pl=prompt('Page limit:',String(t.pageLimit||''));if(pl===null)return;
+  t.name=nm.trim();t.serviceLine=sl.trim();t.complianceFramework=fw.trim();t.pageLimit=Number(pl)||0;t.version=(t.version||1)+1;
+  save();openProposalTemplatesManager();
+}
+function propTplEdit(id){
+  var t=(D.proposalTemplates||[]).find(function(x){return x.id===id;});if(!t)return;
+  // Section list editor — minimal table inline. Phase B will deepen this.
+  var rows=(t.sections||[]).map(function(s,i){
+    var srcOpts=['static','ai','hybrid','user-only','computed'].map(function(k){return '<option value="'+k+'"'+(s.source===k?' selected':'')+'>'+k+'</option>';}).join('');
+    return '<tr><td><input class="fld-i" style="font-size:11px" value="'+esc(s.title||'')+'" onchange="propTplSecField(\''+id+'\',\''+s.id+'\',\'title\',this.value)"></td>'
+      +'<td><select class="fld-sel" style="font-size:11px;width:auto" onchange="propTplSecField(\''+id+'\',\''+s.id+'\',\'source\',this.value)">'+srcOpts+'</select></td>'
+      +'<td><input class="fld-i" type="number" min="0" style="font-size:11px;width:60px" value="'+(s.pageBudget||0)+'" onchange="propTplSecField(\''+id+'\',\''+s.id+'\',\'pageBudget\',this.value)"></td>'
+      +'<td><label style="display:inline-flex;align-items:center;gap:4px;font-size:11px"><input type="checkbox" '+(s.required?'checked':'')+' onchange="propTplSecField(\''+id+'\',\''+s.id+'\',\'required\',this.checked?1:0)"> req</label></td>'
+      +'<td><button class="btn btn-sec btn-sm" onclick="propTplSecPrompt(\''+id+'\',\''+s.id+'\')">Prompt</button> <button class="btn btn-danger-sm btn-sm" onclick="propTplSecDel(\''+id+'\',\''+s.id+'\')">&times;</button></td>'
+      +'</tr>';
+  }).join('');
+  document.getElementById('mdlTplProp').innerHTML=
+    '<div class="mdl-over">Template</div><div class="mdl-title">'+esc(t.name)+' <span style="font-size:11px;color:var(--text-muted);font-weight:400">&middot; '+esc(t.serviceLine||'')+'</span></div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Each row is a section in the rendered proposal. Source: <b>static</b>=fixed text · <b>ai</b>=Claude drafts · <b>hybrid</b>=template seed + Claude rewrite · <b>user-only</b>=writer fills · <b>computed</b>=auto from Atlas data (e.g. certs cover sheet, resumes).</div>'
+    +'<table class="wf-tbl"><thead><tr><th>Title</th><th>Source</th><th>Page</th><th>Req</th><th>Actions</th></tr></thead><tbody>'+rows+'</tbody></table>'
+    +'<button class="btn btn-sec btn-sm" style="margin-top:8px" onclick="propTplSecAdd(\''+id+'\')">+ Add Section</button>'
+    +'<div class="btn-row" style="margin-top:14px">'
+    +'<button class="btn btn-navy" style="flex:1" onclick="openProposalTemplatesManager()">&larr; Back to all templates</button>'
+    +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovTplProp\')">Close</button>'
+    +'</div>';
+}
+function propTplSecField(tid,sid,field,val){
+  var t=(D.proposalTemplates||[]).find(function(x){return x.id===tid;});if(!t)return;
+  var s=(t.sections||[]).find(function(x){return x.id===sid;});if(!s)return;
+  if(field==='pageBudget')s[field]=Number(val)||0;
+  else if(field==='required')s[field]=!!Number(val);
+  else s[field]=val;
+  save();
+}
+function propTplSecPrompt(tid,sid){
+  var t=(D.proposalTemplates||[]).find(function(x){return x.id===tid;});if(!t)return;
+  var s=(t.sections||[]).find(function(x){return x.id===sid;});if(!s)return;
+  var p=prompt('Section AI prompt (used when source=ai or hybrid):',s.prompt||'');
+  if(p===null)return;s.prompt=p;save();
+}
+function propTplSecDel(tid,sid){
+  if(!confirm('Delete this section?'))return;
+  var t=(D.proposalTemplates||[]).find(function(x){return x.id===tid;});if(!t)return;
+  t.sections=(t.sections||[]).filter(function(x){return x.id!==sid;});
+  save();propTplEdit(tid);
+}
+function propTplSecAdd(tid){
+  var t=(D.proposalTemplates||[]).find(function(x){return x.id===tid;});if(!t)return;
+  var ttl=prompt('Section title:');if(!ttl)return;
+  t.sections=t.sections||[];
+  t.sections.push({id:uid(),title:ttl.trim(),order:t.sections.length,required:false,source:'user-only',pageBudget:1,prompt:'',evidence:[]});
+  save();propTplEdit(tid);
 }
 
 /* ── NOTIFICATIONS ── */
@@ -3464,8 +3843,15 @@ function openAdmin(){
       +'<button class="btn btn-outline btn-sm admin-mi" onclick="openVisibilityManager()">Section visibility</button>'
       +'</div></div>';
   }
+  if(canProposal()){
+    html+='<div class="admin-menu-sec"><div class="admin-menu-lbl">Proposals</div><div class="admin-menu-row">'
+      +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openCompanyProfileManager()">&#127970; Company Profile</button>'
+      +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openProposalTemplatesManager()">&#128196; Proposal Templates</button>'
+      +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openCorporateCertsManager()">&#127942; Corporate Certifications</button>'
+      +'</div></div>';
+  }
   html+='<div class="admin-menu-sec"><div class="admin-menu-lbl">Integrations</div><div class="admin-menu-row">'
-    +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openIntegrationsManager()">&#128274; Anthropic API Key</button>'
+    +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openIntegrationsManager()">&#128274; LLM Providers &amp; API Keys</button>'
     +'</div></div>';
   html+='<div class="admin-menu-sec"><div class="admin-menu-lbl">Data</div><div class="admin-menu-row">'
     +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');exportData()" title="Download backup JSON">&#8595; Export</button>'
@@ -3594,7 +3980,7 @@ function delAccount(id){if(!can('accounts'))return;if(ME&&ME.id===id){alert('You
 /* ── AUTH & PERMISSIONS (client-side roles only — not API security) ── */
 var AUTH_USER='khaja@communityforce.com',AUTH_PASS='Namtra_CF27',DEFAULT_PW='CommunityForce2026';
 var ME=null;
-var SECTIONS=[{k:'org',tab:'tabOrg',l:'Department View'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources View'},{k:'class',tab:'tabClass',l:'Classification View'},{k:'plan',tab:'tabPlan',l:'COE Plan'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'}];
+var SECTIONS=[{k:'org',tab:'tabOrg',l:'Department View'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources View'},{k:'class',tab:'tabClass',l:'Classification View'},{k:'plan',tab:'tabPlan',l:'COE Plan'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'}];
 function emailFromName(name){var clean=(name||'').replace(/\(.*?\)/g,'').replace(/[^A-Za-z .\-]/g,'').trim();var parts=clean.split(/\s+/).filter(Boolean);var local=parts.length>=2?(parts[0]+'.'+parts[parts.length-1]):(parts[0]||'user');return local.toLowerCase().replace(/[^a-z0-9.]/g,'')+'@communityforce.com';}
 function authMigrate(){
   if(!D.accounts)D.accounts=[];
@@ -3613,7 +3999,7 @@ function authMigrate(){
   D.accounts.forEach(function(a){if(!('active' in a))a.active=true;if(!a.programIds)a.programIds=[];if(!a.role)a.role='viewer';});
   if(!D.sectionVis)D.sectionVis={};['owner','editor','viewer'].forEach(function(r){if(!D.sectionVis[r])D.sectionVis[r]={};});
 }
-function canSee(k){if(!ME)return false;if(ME.role==='admin')return true;if(k==='recruit')return canRecruit();var rv=D.sectionVis&&D.sectionVis[ME.role];return rv?rv[k]!==false:true;}
+function canSee(k){if(!ME)return false;if(ME.role==='admin')return true;if(k==='recruit')return canRecruit();if(k==='prop')return canProposal();var rv=D.sectionVis&&D.sectionVis[ME.role];return rv?rv[k]!==false:true;}
 function canRecruit(){
   if(!ME)return false;
   if(ME.role==='admin'||ME.role==='editor')return true;
