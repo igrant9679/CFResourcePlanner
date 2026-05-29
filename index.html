@@ -617,6 +617,25 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .gap-no{background:rgba(220,38,38,0.15);color:#dc2626;}
 .gap-row-body{flex:1;line-height:1.5;}
 .gap-row-evidence{font-size:11px;color:var(--text-muted);margin-top:3px;font-style:italic;}
+.price-mode{display:flex;gap:10px;margin-bottom:12px;}
+.price-mode-card{flex:1;background:#fff;border:2px solid var(--border);border-radius:8px;padding:12px 14px;cursor:pointer;transition:border-color 0.15s;}
+.price-mode-card.selected{border-color:var(--gold);background:rgba(197,165,90,0.06);}
+.price-mode-card:hover{border-color:rgba(197,165,90,0.4);}
+.price-mode-ttl{font-size:13px;font-weight:800;margin-bottom:3px;}
+.price-mode-sub{font-size:11px;color:var(--text-muted);line-height:1.5;}
+.price-tbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px;background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+.price-tbl th{background:var(--page-bg);text-align:left;padding:8px 10px;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-secondary);border-bottom:1px solid var(--border);}
+.price-tbl td{padding:6px 8px;border-bottom:1px solid #F1F5F9;vertical-align:middle;}
+.price-tbl td input{width:100%;padding:5px 7px;border:1px solid transparent;border-radius:4px;font-size:12px;font-family:inherit;background:transparent;}
+.price-tbl td input:hover{border-color:var(--border);background:#fff;}
+.price-tbl td input:focus{border-color:var(--gold);background:#fff;outline:none;}
+.price-tbl td input.num{text-align:right;font-variant-numeric:tabular-nums;}
+.price-totals{display:flex;justify-content:space-between;align-items:center;background:var(--navy);color:#fff;padding:11px 14px;font-size:13px;font-weight:700;border-radius:0 0 8px 8px;}
+.price-totals .v{font-variant-numeric:tabular-nums;}
+.price-source-pill{display:inline-block;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(13,148,136,.15);color:#0d9488;text-transform:uppercase;letter-spacing:.3px;margin-left:4px;}
+.price-source-ai{background:rgba(124,58,237,.15);color:#7C3AED;}
+.price-source-manual{display:none;}
+.price-addon{display:flex;gap:8px;align-items:center;padding:6px 10px;border-bottom:1px solid #F1F5F9;font-size:12px;}
 </style>
 </head>
 <body>
@@ -3258,6 +3277,7 @@ function renderProposalDetail(id){
     {k:'rfp',l:'RFP Details'},
     {k:'sections',l:'Sections'},
     {k:'pp',l:'Past Performance'},
+    {k:'pricing',l:'Pricing'},
     {k:'cover',l:'Cover Sheet'},
     {k:'files',l:'Files'},
     {k:'settings',l:'Settings'}
@@ -3274,6 +3294,7 @@ function renderProposalDetail(id){
   else if(_pdTab==='rfp')body+=_pdRFPHTML(p);
   else if(_pdTab==='sections')body+=_pdSectionsHTML(p,tpl);
   else if(_pdTab==='pp')body+=_pdPastPerfHTML(p);
+  else if(_pdTab==='pricing')body+=_pdPricingHTML(p);
   else if(_pdTab==='cover')body+=_pdCoverSheetHTML(p);
   else if(_pdTab==='files')body+=_pdFilesHTML(p);
   else if(_pdTab==='settings')body+=_pdSettingsHTML(p);
@@ -3311,6 +3332,7 @@ function _pdOverviewHTML(p,opp,tpl){
     +'<div class="prop-hero-card" style="cursor:default"><div class="prop-hero-ttl">📋 Requirements</div><div class="prop-hero-n">'+((rfp.requirements||[]).length)+'</div><div class="prop-hero-sub">tap RFP Details to review</div></div>'
     +'<div class="prop-hero-card" style="cursor:pointer" onclick="pdSetTab(\''+p.id+'\',\'sections\')"><div class="prop-hero-ttl">📝 Sections</div><div class="prop-hero-n">'+(p.sections||[]).filter(function(s){return (s.html||'').trim();}).length+'/'+(p.sections||[]).length+'</div><div class="prop-hero-sub">drafted · click to write</div></div>'
     +'<div class="prop-hero-card" style="cursor:pointer" onclick="pdSetTab(\''+p.id+'\',\'pp\')"><div class="prop-hero-ttl">🎯 Past Performance</div><div class="prop-hero-n">'+((p.pastPerformance&&p.pastPerformance.matches)?p.pastPerformance.matches.length:0)+'</div><div class="prop-hero-sub">'+(p.pastPerformance&&p.pastPerformance.generatedAt?'matched · click to view':'not run yet · click to find')+'</div></div>'
+    +'<div class="prop-hero-card" style="cursor:pointer" onclick="pdSetTab(\''+p.id+'\',\'pricing\')"><div class="prop-hero-ttl">💰 Pricing</div><div class="prop-hero-n">'+fmt(_propPricingTotal(p))+'</div><div class="prop-hero-sub">'+((p.pricing&&p.pricing.items)||[]).length+' line items &middot; '+((p.pricing&&p.pricing.mode)==='project-clins'?'from CLINs':'manual')+'</div></div>'
     +'<div class="prop-hero-card" style="cursor:pointer" onclick="pdSetTab(\''+p.id+'\',\'cover\')"><div class="prop-hero-ttl">🏆 Cover Sheet</div><div class="prop-hero-n">'+((p.coverSheet&&p.coverSheet.certIds)?p.coverSheet.certIds.length:0)+'</div><div class="prop-hero-sub">certifications selected</div></div>'
     +'</div>';
 }
@@ -3742,6 +3764,206 @@ function _pdShowGapResults(propId){
     +'<div style="background:#fff;border:1px solid var(--border);border-radius:8px;max-height:60vh;overflow-y:auto">'+rows+'</div>'
     +'<div class="btn-row" style="margin-top:14px"><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovGap\')">Close</button></div>';
   openModal('ovGap');
+}
+
+/* ── PRICING TAB (Phase D) ── */
+function _propPricingTotal(p){
+  var items=(p.pricing&&p.pricing.items)||[];
+  return items.reduce(function(s,i){return s+(Number(i.fee)||0);},0);
+}
+function _propPricingHours(p){
+  var items=(p.pricing&&p.pricing.items)||[];
+  return items.reduce(function(s,i){return s+(Number(i.hours)||0);},0);
+}
+function _pdPricingHTML(p){
+  if(!p.pricing)p.pricing={mode:'manual',linkedProjectId:'',items:[],currency:'USD',paymentTerms:'',optionalAddons:[],assumptionsHtml:''};
+  var pr=p.pricing;
+  var mode=pr.mode||'manual';
+  var modeCards='<div class="price-mode">'
+    +'<div class="price-mode-card'+(mode==='manual'?' selected':'')+'" onclick="pdPricingSetMode(\''+p.id+'\',\'manual\')"><div class="price-mode-ttl">&#9999;&#65039; Manual</div><div class="price-mode-sub">Add line items by hand — phase, LCAT, description, hours, rate, fee.</div></div>'
+    +'<div class="price-mode-card'+(mode==='project-clins'?' selected':'')+'" onclick="pdPricingSetMode(\''+p.id+'\',\'project-clins\')"><div class="price-mode-ttl">&#128202; Project CLINs</div><div class="price-mode-sub">Pull starter rows from a linked project\'s CLIN structure. Edit freely after.</div></div>'
+    +'</div>';
+  // Linked project picker
+  var linkBlock='';
+  if(mode==='project-clins'){
+    var contractProjs=D.projects.filter(function(x){return projCat(x)==='project'&&Array.isArray(x.clins)&&x.clins.length;});
+    var oppLinked=p.opportunityId?D.projects.find(function(x){return x.id===p.opportunityId;}):null;
+    var projOpts='<option value="">— pick a contract project with CLINs —</option>'+contractProjs.map(function(x){return '<option value="'+x.id+'"'+(pr.linkedProjectId===x.id?' selected':'')+'>'+esc(x.name)+' &middot; '+(x.clins||[]).length+' CLIN'+((x.clins||[]).length===1?'':'s')+'</option>';}).join('');
+    var linked=pr.linkedProjectId?D.projects.find(function(x){return x.id===pr.linkedProjectId;}):null;
+    linkBlock='<div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:10px;flex-wrap:wrap">'
+      +'<div class="fld" style="flex:1;min-width:300px;margin:0"><label class="fld-l">Source project (with CLINs)</label><select class="fld-sel" id="pd_pr_link" onchange="pdPricingSetLink(\''+p.id+'\',this.value)">'+projOpts+'</select></div>'
+      +(linked?'<button type="button" class="btn btn-gold btn-sm" onclick="pdPricingPullCLINs(\''+p.id+'\')">&darr; Pull CLINs as rows</button>':'')
+      +(oppLinked?'<div style="font-size:11px;color:var(--text-muted)">Tip: this proposal is linked to opportunity <b>'+esc(oppLinked.name)+'</b>; once it\'s awarded and a contract project is created with CLINs, link that here.</div>':'')
+      +'</div>';
+    if(linked){
+      linkBlock+='<div style="font-size:11px;color:var(--text-muted);margin:-4px 0 8px">Linked: <b>'+esc(linked.name)+'</b> with '+(linked.clins||[]).length+' CLIN'+((linked.clins||[]).length===1?'':'s')+'. Pull adds any CLIN not already on this proposal as a new row. Rows pinned to a CLIN show a green pill.</div>';
+    }
+  }
+  // Table
+  var items=pr.items||[];
+  var rows=items.map(function(it,i){
+    var srcPill=it.source==='clin'?'<span class="price-source-pill">CLIN</span>':it.source==='ai'?'<span class="price-source-pill price-source-ai">AI</span>':'';
+    return '<tr>'
+      +'<td style="width:90px"><input value="'+esc(it.phase||'')+'" placeholder="e.g. 0001" oninput="pdPricingItemSet(\''+p.id+'\','+i+',\'phase\',this.value)"></td>'
+      +'<td style="width:180px"><input value="'+esc(it.lcat||'')+'" placeholder="LCAT / role" oninput="pdPricingItemSet(\''+p.id+'\','+i+',\'lcat\',this.value)"></td>'
+      +'<td><input value="'+esc(it.description||'')+'" placeholder="Description" oninput="pdPricingItemSet(\''+p.id+'\','+i+',\'description\',this.value)">'+srcPill+'</td>'
+      +'<td style="width:80px"><input class="num" type="number" step="0.5" min="0" value="'+(Number(it.hours)||0)+'" oninput="pdPricingItemSet(\''+p.id+'\','+i+',\'hours\',this.value)"></td>'
+      +'<td style="width:90px"><input class="num" type="number" step="0.01" min="0" value="'+(Number(it.rate)||0)+'" oninput="pdPricingItemSet(\''+p.id+'\','+i+',\'rate\',this.value)"></td>'
+      +'<td style="width:110px"><input class="num" type="number" step="1" min="0" value="'+(Number(it.fee)||0)+'" oninput="pdPricingItemSet(\''+p.id+'\','+i+',\'fee\',this.value)"></td>'
+      +'<td style="width:34px"><button class="btn btn-danger-sm btn-sm" onclick="pdPricingItemDel(\''+p.id+'\','+i+')">&times;</button></td>'
+      +'</tr>';
+  }).join('');
+  var emptyRow=items.length?'':'<tr><td colspan="7" style="text-align:center;color:var(--text-muted);font-size:11px;padding:14px">No pricing items yet. Click <b>+ Row</b> below, or switch to <b>Project CLINs</b> mode and pull a CLIN structure.</td></tr>';
+  var total=_propPricingTotal(p),hours=_propPricingHours(p);
+  var table='<table class="price-tbl">'
+    +'<thead><tr><th>Phase / CLIN #</th><th>LCAT / Role</th><th>Description</th><th style="text-align:right">Hours</th><th style="text-align:right">Rate $</th><th style="text-align:right">Fee $</th><th></th></tr></thead>'
+    +'<tbody>'+rows+emptyRow+'</tbody></table>'
+    +'<div class="price-totals"><div>Totals'+(hours?' &middot; '+hours.toLocaleString()+' hrs':'')+'</div><div class="v">'+fmt(total)+'</div></div>';
+  // Terms + addons
+  var terms='<div style="display:grid;grid-template-columns:140px 1fr;gap:10px;margin-top:14px">'
+    +'<div class="fld"><label class="fld-l">Currency</label><input class="fld-i" id="pd_pr_cur" value="'+esc(pr.currency||'USD')+'" onchange="pdPricingTerm(\''+p.id+'\',\'currency\',this.value)"></div>'
+    +'<div class="fld"><label class="fld-l">Payment Terms</label><input class="fld-i" id="pd_pr_terms" value="'+esc(pr.paymentTerms||'')+'" placeholder="e.g. Net 30, monthly invoicing in arrears" onchange="pdPricingTerm(\''+p.id+'\',\'paymentTerms\',this.value)"></div>'
+    +'</div>';
+  // Optional add-ons
+  var addons=(pr.optionalAddons||[]).map(function(a,i){return '<div class="price-addon">'
+    +'<input style="flex:1;border:none;background:transparent;font-size:12px" value="'+esc(a.label||'')+'" onchange="pdPricingAddonSet(\''+p.id+'\','+i+',\'label\',this.value)" placeholder="Optional add-on">'
+    +'<input class="num" type="number" min="0" step="1" style="width:110px;border:none;background:transparent;font-size:12px;text-align:right" value="'+(Number(a.fee)||0)+'" onchange="pdPricingAddonSet(\''+p.id+'\','+i+',\'fee\',this.value)">'
+    +'<button class="btn btn-danger-sm btn-sm" onclick="pdPricingAddonDel(\''+p.id+'\','+i+')">&times;</button>'
+    +'</div>';}).join('');
+  var addonBlock='<div style="margin-top:14px"><div class="fld-section-hdr" style="margin-top:0">Optional Add-Ons (not included in totals)</div>'
+    +'<div style="background:#fff;border:1px solid var(--border);border-radius:8px">'+(addons||'<div style="font-size:11px;color:var(--text-muted);padding:10px;text-align:center">No optional add-ons. Click below to add one (e.g. "Annual maintenance — $25k").</div>')+'</div>'
+    +'<button type="button" class="btn btn-sec btn-sm" style="margin-top:6px" onclick="pdPricingAddonAdd(\''+p.id+'\')">+ Add-on</button></div>';
+  // AI assumptions assist
+  var asBlock='<div style="margin-top:14px"><div class="fld-section-hdr" style="margin-top:0;display:flex;justify-content:space-between;align-items:center"><span>Pricing Assumptions &amp; Basis of Estimate</span>'
+    +'<button type="button" class="ai-btn" onclick="pdPricingDraftAssumptions(\''+p.id+'\')">&#10024; Draft Assumptions</button></div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Claude reads the RFP scope + your pricing items + Company Profile voice, then drafts the basis-of-estimate, assumptions, and exceptions narrative. Numbers stay yours; this is the prose around them.</div>'
+    +richEditor('pd_pr_assume',pr.assumptionsHtml||'',{placeholder:'Assumptions and exceptions...',tall:false})
+    +'<div class="btn-row" style="margin-top:6px"><button class="btn btn-navy btn-sm" onclick="pdPricingSaveAssumptions(\''+p.id+'\')">Save Assumptions</button></div></div>';
+  return '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Build the pricing table for this proposal. Numbers are user-entered. The Pricing Narrative section (in the Sections tab) renders the prose; this tab holds the structured line items.</div>'
+    +modeCards
+    +linkBlock
+    +table
+    +'<button type="button" class="btn btn-sec btn-sm" style="margin-top:6px" onclick="pdPricingItemAdd(\''+p.id+'\')">+ Row</button>'
+    +terms
+    +addonBlock
+    +asBlock;
+}
+function pdPricingSetMode(propId,mode){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  p.pricing=p.pricing||{};p.pricing.mode=mode;
+  save();renderProposalDetail(propId);
+}
+function pdPricingSetLink(propId,projId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  p.pricing=p.pricing||{};p.pricing.linkedProjectId=projId;
+  save();renderProposalDetail(propId);
+}
+function pdPricingPullCLINs(propId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p||!p.pricing||!p.pricing.linkedProjectId)return;
+  var proj=D.projects.find(function(x){return x.id===p.pricing.linkedProjectId;});
+  if(!proj||!Array.isArray(proj.clins)||!proj.clins.length){alert('Linked project has no CLINs.');return;}
+  p.pricing.items=p.pricing.items||[];
+  var existingClinIds={};p.pricing.items.forEach(function(i){if(i.clinId)existingClinIds[i.clinId]=true;});
+  var added=0;
+  proj.clins.forEach(function(c){
+    if(existingClinIds[c.id])return;
+    // Use the project's CLIN cost-to-bill model: monthly revenue × 12 as an order-of-magnitude starter for fee.
+    var monthlyRev=Number(c.revenue)||0;
+    p.pricing.items.push({
+      id:uid(),clinId:c.id,
+      phase:c.number||'',lcat:c.title||'',description:c.notes||'',
+      hours:0,rate:0,fee:monthlyRev*12,
+      source:'clin',locked:false
+    });
+    added++;
+  });
+  if(!added){alert('All CLINs from this project are already on the proposal.');return;}
+  p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'pricing.clins-pulled',payload:{added:added,projectId:proj.id}});
+  save();renderProposalDetail(propId);
+}
+function pdPricingItemAdd(propId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  p.pricing=p.pricing||{items:[]};p.pricing.items=p.pricing.items||[];
+  p.pricing.items.push({id:uid(),phase:'',lcat:'',description:'',hours:0,rate:0,fee:0,source:'manual'});
+  save();renderProposalDetail(propId);
+}
+function pdPricingItemSet(propId,idx,field,val){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p||!p.pricing||!p.pricing.items)return;
+  var it=p.pricing.items[idx];if(!it)return;
+  if(field==='hours'||field==='rate'||field==='fee'){
+    it[field]=Number(val)||0;
+    if(field==='hours'||field==='rate'){
+      var h=Number(it.hours)||0,r=Number(it.rate)||0;
+      if(h&&r)it.fee=Math.round(h*r);
+    }
+  } else { it[field]=val; }
+  save();
+  // Update totals row in place without full re-render
+  var totalEl=document.querySelector('.price-totals .v');
+  if(totalEl)totalEl.textContent=fmt(_propPricingTotal(p));
+}
+function pdPricingItemDel(propId,idx){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p||!p.pricing||!p.pricing.items)return;
+  if(!confirm('Delete this line item?'))return;
+  p.pricing.items.splice(idx,1);
+  save();renderProposalDetail(propId);
+}
+function pdPricingTerm(propId,field,val){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  p.pricing=p.pricing||{};p.pricing[field]=val;save();
+}
+function pdPricingAddonAdd(propId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  p.pricing=p.pricing||{optionalAddons:[]};p.pricing.optionalAddons=p.pricing.optionalAddons||[];
+  p.pricing.optionalAddons.push({id:uid(),label:'',fee:0});
+  save();renderProposalDetail(propId);
+}
+function pdPricingAddonSet(propId,idx,field,val){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p||!p.pricing||!p.pricing.optionalAddons)return;
+  var a=p.pricing.optionalAddons[idx];if(!a)return;
+  if(field==='fee')a.fee=Number(val)||0; else a[field]=val;
+  save();
+}
+function pdPricingAddonDel(propId,idx){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p||!p.pricing||!p.pricing.optionalAddons)return;
+  p.pricing.optionalAddons.splice(idx,1);save();renderProposalDetail(propId);
+}
+function pdPricingSaveAssumptions(propId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  p.pricing=p.pricing||{};p.pricing.assumptionsHtml=rtGet('pd_pr_assume');save();alert('Assumptions saved.');
+}
+function pdPricingDraftAssumptions(propId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  var pr=p.pricing||{};
+  if(!(pr.items||[]).length){alert('Add at least one pricing line item first.');return;}
+  var itemsSummary=(pr.items||[]).map(function(i){return '- '+(i.phase?i.phase+' / ':'')+(i.lcat||i.description||'item')+(i.hours?' · '+i.hours+'h':'')+(i.rate?' @ $'+i.rate:'')+' = $'+(i.fee||0);}).join('\n');
+  var total=_propPricingTotal(p);
+  var sys='You draft the Pricing Assumptions / Basis-of-Estimate / Exceptions narrative for a federal proposal. Output ONLY clean HTML (use <p>, <ul>/<li>, <strong>; no markdown, no code fences, no commentary outside HTML). Keep dollar figures and quantities exactly as given; do NOT invent rates or hours.';
+  var instruction='Draft the assumptions, basis-of-estimate, and exceptions narrative for the following proposal pricing.\n\n'
+    +'RFP CONTEXT:\n'+_propBuildRFPCtx(p)
+    +'\n\nBRAND VOICE:\n'+_propBuildVoiceCtx()
+    +'\n\nPRICING LINE ITEMS (total: $'+total.toLocaleString()+', currency '+(pr.currency||'USD')+'):\n'+itemsSummary
+    +(pr.paymentTerms?'\n\nPAYMENT TERMS: '+pr.paymentTerms:'')
+    +(pr.mode==='project-clins'?'\n\nThis pricing is structured around the linked project\'s CLIN model.':'')
+    +'\n\nProduce 3 sections in HTML:\n<h3>Basis of Estimate</h3> — how rates/hours were derived (labor categories, productivity assumptions, supporting infrastructure)\n<h3>Assumptions</h3> — bulleted list of what we assumed (PoP, kickoff, facilities/access, government-furnished items, key personnel availability, escalation, travel)\n<h3>Exceptions</h3> — bulleted list of things expressly NOT included (or "None" if nothing material). Keep it sober and defensible; no marketing fluff.';
+  var llm=_propLLMOpts(p);
+  var btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent='✨ Drafting…';}
+  llmComplete({provider:llm.provider,model:llm.model,system:sys,messages:[{role:'user',content:instruction}],max_tokens:2500})
+    .then(function(j){
+      var html=llmExtractText(j).trim().replace(/^```html\s*/i,'').replace(/```$/,'').trim();
+      openAIPreview({
+        title:'AI Draft · Pricing Assumptions',
+        html:html,
+        onApply:function(final){
+          p.pricing.assumptionsHtml=final;
+          p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'pricing.assumptions-drafted',payload:{provider:llm.provider}});
+          save();renderProposalDetail(propId);
+        },
+        onAppend:(pr.assumptionsHtml||'').trim()?function(final){p.pricing.assumptionsHtml=(p.pricing.assumptionsHtml||'')+'<p>'+final+'</p>';save();renderProposalDetail(propId);}:null
+      });
+    })
+    .catch(function(e){alert('Assumptions draft failed: '+(e&&e.message||e));})
+    .finally(function(){if(btn){btn.disabled=false;btn.textContent='✨ Draft Assumptions';}});
 }
 
 /* ── NOTIFICATIONS ── */
