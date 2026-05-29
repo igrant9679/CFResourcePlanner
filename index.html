@@ -660,6 +660,36 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .req-link-box{background:rgba(124,58,237,0.06);border:1px solid rgba(124,58,237,0.25);border-radius:6px;padding:9px 12px;font-size:12px;margin-top:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;}
 .req-link-box a{color:var(--navy);font-weight:700;text-decoration:none;}
 .req-pending-badge{background:rgba(217,119,6,0.15);color:#d97706;padding:2px 7px;font-size:10px;font-weight:700;border-radius:3px;letter-spacing:.3px;text-transform:uppercase;}
+.rt-card{background:#fff;border:1px solid var(--border);border-left:4px solid #DC2626;border-radius:8px;padding:14px 16px;margin-bottom:10px;}
+.rt-card-hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px;}
+.rt-card-ttl{font-size:14px;font-weight:800;}
+.rt-criterion{padding:8px 0;border-top:1px solid #F1F5F9;}
+.rt-criterion-hdr{display:flex;justify-content:space-between;align-items:center;}
+.rt-criterion-name{font-size:12px;font-weight:700;color:var(--text-primary);}
+.rt-criterion-anchors{font-size:11px;color:var(--text-muted);margin-top:3px;line-height:1.45;}
+.rt-criterion-anchors b{color:var(--text-secondary);}
+.rt-score-row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;}
+.rt-score-btn{width:30px;height:30px;border:2px solid var(--border);background:#fff;border-radius:50%;cursor:pointer;font-weight:800;font-size:12px;font-family:inherit;color:var(--text-secondary);transition:border-color .15s,background .15s;}
+.rt-score-btn:hover{border-color:var(--gold);}
+.rt-score-btn.active{background:var(--navy);color:#fff;border-color:var(--navy);}
+.rt-score-summary{font-weight:700;font-variant-numeric:tabular-nums;}
+.rt-score-avg-good{color:#16a34a;}
+.rt-score-avg-mid{color:#d97706;}
+.rt-score-avg-bad{color:#dc2626;}
+.print-frame{position:fixed;inset:0;background:#fff;z-index:2000;display:flex;flex-direction:column;}
+.print-frame-bar{padding:10px 16px;background:var(--navy);color:#fff;display:flex;gap:10px;justify-content:space-between;align-items:center;}
+.print-frame-doc{flex:1;overflow:auto;padding:30px;background:#e2e8f0;}
+.print-page{background:#fff;max-width:850px;margin:0 auto 14px;padding:60px 70px;box-shadow:0 2px 14px rgba(0,0,0,.1);font-family:Georgia,serif;color:#1f2937;line-height:1.55;}
+.print-page h1{font-family:inherit;font-size:28px;color:var(--navy);margin:0 0 8px;}
+.print-page h2{font-family:inherit;font-size:18px;color:var(--navy);margin:18px 0 10px;border-bottom:1px solid #cbd5e1;padding-bottom:5px;}
+.print-page h3{font-family:inherit;font-size:14px;color:#1f2937;margin:14px 0 6px;}
+.print-page table{width:100%;border-collapse:collapse;font-size:11px;margin:8px 0;}
+.print-page table th,.print-page table td{border:1px solid #cbd5e1;padding:5px 8px;text-align:left;}
+.print-page table th{background:#f1f5f9;font-weight:700;}
+.print-cover{text-align:center;page-break-after:always;}
+.print-cover-meta{font-size:11px;letter-spacing:.5px;color:#64748b;margin-top:18px;}
+@media print {.print-frame-bar{display:none;}.print-frame-doc{padding:0;background:#fff;}.print-page{box-shadow:none;margin:0 auto;page-break-after:always;}}
+.wl-action{padding:10px 12px;background:#fff;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;}
 </style>
 </head>
 <body>
@@ -755,6 +785,8 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 <div class="ov" id="ovNewProp" onclick="closeModal('ovNewProp')"><div class="mdl" id="mdlNewProp" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
 <div class="ov" id="ovProp" onclick="closeModal('ovProp')"><div class="mdl" id="mdlProp" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
 <div class="ov" id="ovGap" onclick="closeModal('ovGap')"><div class="mdl" id="mdlGap" onclick="event.stopPropagation()" style="max-width:820px"></div></div>
+<div class="ov" id="ovWinLoss" onclick="closeModal('ovWinLoss')"><div class="mdl" id="mdlWinLoss" onclick="event.stopPropagation()" style="max-width:680px"></div></div>
+<div id="propPrintFrame" style="display:none"></div>
 <div class="ov" id="ovNotif" onclick="closeModal('ovNotif')"><div class="mdl" id="mdlNotif" onclick="event.stopPropagation()" style="max-width:520px;padding:0;overflow:hidden"></div></div>
 <div class="ov" id="ovAIPrev" onclick="closeModal('ovAIPrev')"><div class="mdl" id="mdlAIPrev" onclick="event.stopPropagation()" style="max-width:760px"></div></div>
 <script>
@@ -966,6 +998,8 @@ function proposalsMigrate(){
     if(!p.coverSheet)p.coverSheet={certIds:[],generatedAt:0};
     if(!p.pricing)p.pricing={mode:'manual',linkedProjectId:'',items:[]};
     if(!p.staffing)p.staffing={generatedAt:0,roleMatches:[]};
+    if(!p.redTeam)p.redTeam={rubric:[],reviews:[],createdTaskId:'',generatedAt:0};
+    if(!p.winLoss)p.winLoss=null;
     if(!('llmProvider' in p))p.llmProvider='';
     if(!('llmModel' in p))p.llmModel='';
     if(!('createdAt' in p))p.createdAt=Date.now();
@@ -3308,6 +3342,8 @@ function renderProposalDetail(id){
     {k:'pp',l:'Past Performance'},
     {k:'pricing',l:'Pricing'},
     {k:'cover',l:'Cover Sheet'},
+    {k:'redteam',l:'Red Team'},
+    {k:'export',l:'Export'},
     {k:'files',l:'Files'},
     {k:'settings',l:'Settings'}
   ];
@@ -3326,6 +3362,8 @@ function renderProposalDetail(id){
   else if(_pdTab==='pp')body+=_pdPastPerfHTML(p);
   else if(_pdTab==='pricing')body+=_pdPricingHTML(p);
   else if(_pdTab==='cover')body+=_pdCoverSheetHTML(p);
+  else if(_pdTab==='redteam')body+=_pdRedTeamHTML(p);
+  else if(_pdTab==='export')body+=_pdExportHTML(p);
   else if(_pdTab==='files')body+=_pdFilesHTML(p);
   else if(_pdTab==='settings')body+=_pdSettingsHTML(p);
   body+='<div class="btn-row" style="margin-top:14px">'
@@ -3337,8 +3375,11 @@ function renderProposalDetail(id){
 function pdSetStatus(id,k){
   var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
   if(p.status===k)return;
-  p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'status.changed',payload:{from:p.status,to:k}});
+  var from=p.status;
+  p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'status.changed',payload:{from:from,to:k}});
   p.status=k;save();renderProposalDetail(id);renderView();
+  // Win/Loss workflow trigger
+  if(k==='won'||k==='lost')openWinLossModal(id,k);
 }
 function pdDelete(id){
   if(!confirm('Delete this proposal? Linked opportunity (if any) is not removed.'))return;
@@ -4220,6 +4261,296 @@ function pdStaffingDraftReq(propId,idx){
     })
     .catch(function(e){alert('JD draft failed: '+(e&&e.message||e));})
     .finally(function(){if(btn){btn.disabled=false;btn.textContent='✨ Draft JD & Create Req';}});
+}
+
+/* ── PHASE F: RED TEAM WORKFLOW ── */
+function _pdRedTeamHTML(p){
+  var rt=p.redTeam||{rubric:[],reviews:[],createdTaskId:'',generatedAt:0};
+  var hasSections=(p.sections||[]).filter(function(s){return (s.html||'').trim();}).length>0;
+  if(!rt.rubric.length){
+    return '<div class="empty-recruit"><div style="font-size:13px;margin-bottom:6px">Red Team review not set up yet</div>'
+      +'<div style="font-size:11px;margin-bottom:12px">Claude will generate a section-by-section scoring rubric (Compliance · Win Themes · Clarity · Risk) tailored to this RFP. Reviewers then score each section 1-5. A Project Task on the linked opportunity ties the review to the broader workflow.</div>'
+      +(hasSections?'<button class="ai-btn" onclick="pdGenerateRedTeamRubric(\''+p.id+'\')">✨ Generate Red-Team Rubric</button>':'<div style="font-size:11px;color:var(--warn-text)">Draft at least one section first.</div>')
+      +'</div>';
+  }
+  // Render rubric + reviews
+  var members=allM();
+  var myReview=rt.reviews.find(function(r){return r.reviewerId===(ME?ME.id:'');})||{reviewerId:ME?ME.id:'',reviewerName:ME?ME.name:'',scores:{}};
+  var taskInfo='';
+  if(rt.createdTaskId){
+    var task=(D.activities||[]).find(function(a){return a.id===rt.createdTaskId;});
+    if(task)taskInfo='<div style="font-size:11px;color:var(--text-muted);margin-left:8px">Linked task: <a href="#" onclick="event.preventDefault();closeModal(\'ovProp\');switchTab(\'ptask\');setTimeout(function(){openPlanModal(\''+task.id+'\');},150)">'+esc(task.subtask||'red-team task')+'</a></div>';
+  }
+  var sectionsHTML=rt.rubric.map(function(sr){
+    var sec=(p.sections||[]).find(function(s){return s.id===sr.sectionId;});
+    var secTitle=sec?sec.title:sr.sectionTitle||'?';
+    var criteriaHTML=(sr.criteria||[]).map(function(c){
+      var key=sr.sectionId+'|'+c.name;
+      var myScore=myReview.scores[key]||0;
+      // All reviews collected
+      var allScores=rt.reviews.map(function(r){return Number(r.scores[key])||0;}).filter(function(n){return n>0;});
+      var avg=allScores.length?(allScores.reduce(function(s,n){return s+n;},0)/allScores.length).toFixed(1):'—';
+      var avgCls=avg==='—'?'':(avg>=4?'rt-score-avg-good':avg>=2.5?'rt-score-avg-mid':'rt-score-avg-bad');
+      var scoreBtns=[1,2,3,4,5].map(function(n){return '<button type="button" class="rt-score-btn'+(myScore===n?' active':'')+'" onclick="pdRedTeamScore(\''+p.id+'\',\''+sr.sectionId+'\',\''+esc(c.name)+'\','+n+')">'+n+'</button>';}).join('');
+      return '<div class="rt-criterion">'
+        +'<div class="rt-criterion-hdr"><span class="rt-criterion-name">'+esc(c.name)+'</span><span class="rt-score-summary '+avgCls+'">'+(avg!=='—'?'avg '+avg+' ('+allScores.length+')':'no reviews')+'</span></div>'
+        +'<div class="rt-criterion-anchors"><b>1:</b> '+esc(c.one||'')+' &middot; <b>3:</b> '+esc(c.three||'')+' &middot; <b>5:</b> '+esc(c.five||'')+'</div>'
+        +'<div class="rt-score-row"><span style="font-size:10px;color:var(--text-muted);margin-right:4px">Your score:</span>'+scoreBtns+'</div>'
+        +'</div>';
+    }).join('');
+    return '<div class="rt-card">'
+      +'<div class="rt-card-hdr"><div><div class="rt-card-ttl">'+esc(secTitle)+'</div></div></div>'
+      +criteriaHTML
+      +'</div>';
+  }).join('');
+  var totReviews=rt.reviews.length;
+  return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">'
+    +'<div style="font-size:12px;color:var(--text-muted)">Section-by-section rubric. Each reviewer scores 1-5 across Compliance, Win Themes, Clarity, Risk. Averages show across all reviewers.</div>'
+    +'<div>'+(rt.createdTaskId?'':'<button class="btn btn-gold btn-sm" onclick="pdAssignRedTeam(\''+p.id+'\')">+ Assign Reviewers (create Project Task)</button>')
+    +'<button class="ai-btn" style="margin-left:6px" onclick="pdGenerateRedTeamRubric(\''+p.id+'\')">↻ Regenerate Rubric</button></div>'
+    +'</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">'+totReviews+' reviewer'+(totReviews===1?'':'s')+' have submitted · last rubric generated '+(rt.generatedAt?new Date(rt.generatedAt).toLocaleString():'unknown')+taskInfo+'</div>'
+    +sectionsHTML;
+}
+function pdGenerateRedTeamRubric(propId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  var drafted=(p.sections||[]).filter(function(s){return (s.html||'').trim()&&s.source!=='computed';});
+  if(!drafted.length){alert('Draft at least one section first.');return;}
+  var sys='You are a senior federal-proposal red-team lead. For each section, design a scoring rubric with FOUR criteria: Compliance, Win Themes, Clarity, Risk. Each criterion gets 1/3/5 anchor descriptions. Output ONLY JSON in a ```json``` block.';
+  var rfpCtx=_propBuildRFPCtx(p);
+  var sectionList=drafted.map(function(s){return {id:s.id,title:s.title,wordCount:(s.html||'').replace(/<[^>]+>/g,' ').split(/\s+/).filter(Boolean).length};});
+  var prompt='RFP CONTEXT:\n'+rfpCtx.slice(0,3000)+'\n\nPROPOSAL SECTIONS:\n'+JSON.stringify(sectionList)
+    +'\n\nReturn:\n{"rubric":[{"sectionId":"...","sectionTitle":"...","criteria":[{"name":"Compliance","one":"what 1 looks like","three":"what 3 looks like","five":"what 5 looks like"},{...3 more criteria}]}]}';
+  var llm=_propLLMOpts(p);
+  var btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent='✨ Generating…';}
+  llmComplete({provider:llm.provider,model:llm.model,system:sys,messages:[{role:'user',content:prompt}],max_tokens:5000})
+    .then(function(j){
+      var parsed=llmExtractJSON(j);if(!parsed||!parsed.rubric)throw new Error('Could not parse rubric response.');
+      p.redTeam=p.redTeam||{rubric:[],reviews:[],createdTaskId:'',generatedAt:0};
+      p.redTeam.rubric=parsed.rubric.filter(function(r){return drafted.find(function(s){return s.id===r.sectionId;});});
+      p.redTeam.generatedAt=Date.now();
+      p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'redteam.rubric-generated',payload:{sections:p.redTeam.rubric.length}});
+      save();renderProposalDetail(propId);
+    })
+    .catch(function(e){alert('Rubric generation failed: '+(e&&e.message||e));})
+    .finally(function(){if(btn){btn.disabled=false;btn.textContent='✨ Generate Red-Team Rubric';}});
+}
+function pdRedTeamScore(propId,sectionId,criterion,score){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  p.redTeam=p.redTeam||{reviews:[]};p.redTeam.reviews=p.redTeam.reviews||[];
+  var myReview=p.redTeam.reviews.find(function(r){return r.reviewerId===(ME?ME.id:'');});
+  if(!myReview){myReview={reviewerId:ME?ME.id:'',reviewerName:ME?ME.name:'',scores:{},submittedAt:Date.now()};p.redTeam.reviews.push(myReview);}
+  var key=sectionId+'|'+criterion;
+  myReview.scores[key]=score;
+  myReview.submittedAt=Date.now();
+  save();renderProposalDetail(propId);
+}
+function pdAssignRedTeam(propId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  if(!p.opportunityId){alert('Link this proposal to an opportunity first — the red-team review task attaches to the opportunity.');return;}
+  var who=prompt('Reviewer names (comma-separated). Members will be auto-linked when their names match the org chart.','');
+  if(!who)return;
+  var dueDate=prompt('Due date (YYYY-MM-DD, optional):','');
+  var opp=D.projects.find(function(x){return x.id===p.opportunityId;});
+  var newAct={
+    id:uid(),kind:'project',projectId:p.opportunityId,programId:'',
+    task:'Task_'+((opp&&opp.name)||'').replace(/[^A-Za-z0-9]+/g,'').slice(0,40)+'_RedTeam',
+    subtask:'Red-Team Review · '+esc(p.title),
+    outline:'AI-generated section-by-section rubric is on the proposal\'s Red Team tab. Each reviewer scores Compliance/Win Themes/Clarity/Risk 1-5 per section.',
+    objective:'Submit scored rubric before submission.',phase:'Month 1',status:'todo',
+    start:'',dueDate:(dueDate||'').trim(),isMilestone:true,parentId:null,
+    pm:(opp&&opp.pm)||'',ownerText:who,owners:planResolveOwners(who),
+    updates:[],attachments:[],order:(D.activities||[]).length
+  };
+  D.activities=D.activities||[];D.activities.push(newAct);
+  p.redTeam.createdTaskId=newAct.id;
+  // Notify assigned reviewers
+  (newAct.owners||[]).forEach(function(mid){pushNotif(mid,'redteam-assigned','recruiting',p.opportunityId,'Red-team review assigned: '+p.title);});
+  p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'redteam.assigned',payload:{taskId:newAct.id,reviewers:who}});
+  save();renderProposalDetail(propId);
+}
+
+/* ── PHASE F: EXPORT TO PRINT/PDF ── */
+function _pdExportHTML(p){
+  var rt=p.redTeam||{reviews:[]};
+  var totReviews=(rt.reviews||[]).length;
+  var drafted=(p.sections||[]).filter(function(s){return (s.html||'').trim();}).length;
+  var totSections=(p.sections||[]).length;
+  var ready=drafted>0&&!!(p.coverSheet&&(p.coverSheet.certIds||[]).length);
+  var readiness=[
+    {ok:drafted===totSections&&totSections>0,l:'All sections drafted',v:drafted+'/'+totSections},
+    {ok:!!(p.rfp&&p.rfp.customer),l:'Customer set',v:(p.rfp&&p.rfp.customer)||'—'},
+    {ok:!!(p.coverSheet&&(p.coverSheet.certIds||[]).length),l:'Cover-sheet certifications selected',v:(p.coverSheet&&(p.coverSheet.certIds||[]).length||0)+' picked'},
+    {ok:!!(p.pastPerformance&&(p.pastPerformance.matches||[]).length),l:'Past performance matched',v:(p.pastPerformance&&(p.pastPerformance.matches||[]).length||0)+' matches'},
+    {ok:!!(p.pricing&&(p.pricing.items||[]).length),l:'Pricing items entered',v:(p.pricing&&(p.pricing.items||[]).length||0)+' items'},
+    {ok:totReviews>0,l:'At least one red-team review submitted',v:totReviews+' reviewer(s)'}
+  ];
+  var readyHTML=readiness.map(function(r){return '<div class="wl-action"><div>'+(r.ok?'<span style="color:var(--green)">✓</span>':'<span style="color:var(--warn-text)">⚠</span>')+' '+esc(r.l)+'</div><div style="font-size:11px;color:var(--text-muted)">'+esc(r.v)+'</div></div>';}).join('');
+  return '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Assemble the full proposal package (cover sheet · table of contents · sections in order · past performance appendix · pricing table) into a single printable document. Open it in a new tab and use your browser\'s "Save as PDF" option.</div>'
+    +'<div class="fld-section-hdr" style="margin-top:0">Pre-flight Checklist</div>'
+    +readyHTML
+    +'<div class="btn-row" style="margin-top:14px">'
+    +'<button class="btn btn-gold" style="flex:1" onclick="pdExportPrint(\''+p.id+'\')">📄 Open Print Preview / PDF</button>'
+    +'</div>';
+}
+function pdExportPrint(propId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  var html=_buildProposalPrintHTML(p);
+  var w=window.open('','_blank');
+  if(!w){alert('Pop-up blocked. Allow pop-ups for Atlas and try again.');return;}
+  w.document.open();w.document.write(html);w.document.close();
+  setTimeout(function(){try{w.focus();w.print();}catch(_){}}, 800);
+}
+function _buildProposalPrintHTML(p){
+  var rfp=p.rfp||{};
+  var cp=D.companyProfile||{};
+  var ident=cp.identity||{};
+  var certs=(D.corporateCertifications||[]).filter(function(c){return ((p.coverSheet&&p.coverSheet.certIds)||[]).indexOf(c.id)>-1&&(!c.expiresAt||new Date(c.expiresAt)>Date.now());});
+  var includedCS=(p.coverSheet&&p.coverSheet.includedCaseStudyIds)||[];
+  var pickedCases=(cp.caseStudies||[]).filter(function(c){return includedCS.indexOf(c.id)>-1;});
+  var sections=(p.sections||[]).slice().sort(function(a,b){return ((p.proposalTemplates||{})[a.id]||0)-0;});
+  var sectionsHTML=sections.map(function(s){
+    var html=s.html||'';
+    if(s.source==='computed'){
+      // Render computed sections from data
+      if(/cover|capabilit/i.test(s.title))html='<p>Active corporate certifications and designations: '+(certs.length?certs.map(function(c){return c.name;}).join(' · '):'(none on file)')+'</p>';
+      else if(/resume/i.test(s.title))html='<p><i>Resumes appendix — populate from D.members in a future build.</i></p>';
+    }
+    return '<div class="print-page"><h2>'+esc(s.title)+'</h2>'+(html||'<p><i>(empty)</i></p>')+'</div>';
+  }).join('');
+  var ppHTML=pickedCases.length?'<div class="print-page"><h2>Past Performance</h2>'+pickedCases.map(function(c){return '<div style="margin-bottom:14px;page-break-inside:avoid"><h3>'+esc(c.title||c.customer||'?')+'</h3><div style="font-size:11px;color:#64748b">'+esc(c.customer||'')+(c.period?' · '+esc(c.period):'')+(c.value?' · $'+Number(c.value).toLocaleString():'')+'</div><p>'+esc(c.scope||'')+'</p>'+(c.outcomes&&c.outcomes.length?'<p><b>Outcomes:</b></p><ul>'+c.outcomes.map(function(o){return '<li>'+esc(o)+'</li>';}).join('')+'</ul>':'')+'</div>';}).join('')+'</div>':'';
+  var pr=p.pricing||{};
+  var items=pr.items||[];
+  var total=_propPricingTotal(p);
+  var pricingHTML=items.length?'<div class="print-page"><h2>Pricing</h2><table><thead><tr><th>Phase</th><th>LCAT / Role</th><th>Description</th><th style="text-align:right">Hours</th><th style="text-align:right">Rate</th><th style="text-align:right">Fee</th></tr></thead><tbody>'
+    +items.map(function(i){return '<tr><td>'+esc(i.phase||'')+'</td><td>'+esc(i.lcat||'')+'</td><td>'+esc(i.description||'')+'</td><td style="text-align:right">'+(i.hours||0)+'</td><td style="text-align:right">$'+(Number(i.rate)||0)+'</td><td style="text-align:right">$'+(Number(i.fee)||0).toLocaleString()+'</td></tr>';}).join('')
+    +'<tr style="background:#f1f5f9;font-weight:700"><td colspan="5" style="text-align:right">TOTAL</td><td style="text-align:right">$'+total.toLocaleString()+'</td></tr></tbody></table>'
+    +(pr.paymentTerms?'<p><b>Payment Terms:</b> '+esc(pr.paymentTerms)+'</p>':'')
+    +(pr.assumptionsHtml?'<h3>Basis of Estimate &amp; Assumptions</h3>'+pr.assumptionsHtml:'')
+    +'</div>':'';
+  var toc=sections.length?'<div class="print-page"><h2>Table of Contents</h2><ol>'+sections.map(function(s){return '<li>'+esc(s.title)+'</li>';}).join('')+(pickedCases.length?'<li>Past Performance</li>':'')+(items.length?'<li>Pricing</li>':'')+'</ol></div>':'';
+  var cover='<div class="print-page print-cover">'
+    +'<div style="font-size:11px;letter-spacing:.4px;color:#64748b">PROPOSAL FOR</div>'
+    +'<h1 style="margin:12px 0 8px">'+esc(p.title)+'</h1>'
+    +(rfp.customer?'<div style="font-size:14px">Submitted to <b>'+esc(rfp.customer)+'</b></div>':'')
+    +(rfp.dueDate?'<div style="font-size:12px;color:#64748b;margin-top:4px">Due '+esc(rfp.dueDate)+'</div>':'')
+    +'<div class="print-cover-meta">'+esc(ident.legalName||'CommunityForce')+(ident.duns?' · DUNS '+esc(ident.duns):'')+(ident.uei?' · UEI '+esc(ident.uei):'')+(ident.cage?' · CAGE '+esc(ident.cage):'')+'</div>'
+    +(certs.length?'<div style="margin-top:30px"><h2 style="font-size:14px">Corporate Certifications</h2><div style="font-size:12px">'+certs.map(function(c){return '<div>• '+esc(c.name)+(c.number?' — '+esc(c.number):'')+'</div>';}).join('')+'</div></div>':'')
+    +'<div class="print-cover-meta" style="margin-top:40px">© '+new Date().getFullYear()+' '+esc(ident.legalName||'CommunityForce')+' · Proprietary &amp; Confidential</div>'
+    +'</div>';
+  return '<!doctype html><html><head><meta charset="utf-8"><title>'+esc(p.title)+'</title>'
+    +'<style>'
+    +'body{margin:0;background:#e2e8f0;font-family:Georgia,serif;color:#1f2937;}'
+    +'.print-page{background:#fff;max-width:850px;margin:0 auto 14px;padding:60px 70px;box-shadow:0 2px 14px rgba(0,0,0,.1);line-height:1.55;}'
+    +'.print-page h1{font-size:28px;color:#1B2A4A;margin:0 0 8px;}'
+    +'.print-page h2{font-size:18px;color:#1B2A4A;margin:0 0 12px;border-bottom:1px solid #cbd5e1;padding-bottom:6px;}'
+    +'.print-page h3{font-size:14px;margin:14px 0 6px;}'
+    +'.print-page ol,.print-page ul{padding-left:24px;}'
+    +'.print-page table{width:100%;border-collapse:collapse;font-size:11px;margin:8px 0;}'
+    +'.print-page table th,.print-page table td{border:1px solid #cbd5e1;padding:5px 8px;text-align:left;}'
+    +'.print-page table th{background:#f1f5f9;font-weight:700;}'
+    +'.print-cover{text-align:center;}'
+    +'.print-cover-meta{font-size:11px;letter-spacing:.5px;color:#64748b;margin-top:18px;}'
+    +'@media print{body{background:#fff;}.print-page{box-shadow:none;margin:0 auto;page-break-after:always;padding:50px 60px;}}'
+    +'</style></head><body>'
+    +cover+toc+sectionsHTML+ppHTML+pricingHTML
+    +'</body></html>';
+}
+
+/* ── PHASE F: WIN/LOSS WORKFLOW ── */
+function openWinLossModal(propId,status){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  var linkedReqs=(D.recruitings||[]).filter(function(r){return r.proposalId===propId;});
+  var pendingContingent=linkedReqs.filter(function(r){return r.proposalContingent;});
+  var sectionsCt=(p.sections||[]).filter(function(s){return (s.html||'').trim()&&(s.source==='ai'||s.source==='hybrid');}).length;
+  var won=status==='won';
+  var heading=won?'🎉 Proposal Won — Wrap-Up Workflow':'❌ Proposal Lost — Wrap-Up Workflow';
+  var intro=won
+    ?'Congrats! Let\'s flip the proposal-contingent requisitions to active hires, capture the win details, and (optionally) promote winning sections back to the template library.'
+    :'Let\'s capture the loss reasons for future learning, decide what to do with linked requisitions, and (optionally) update the Company Profile case-study library.';
+  var reqRows=pendingContingent.length?pendingContingent.map(function(r){
+    return '<div class="wl-action"><div><b>'+esc(r.jdTitle||'(unnamed req)')+'</b><div style="font-size:10px;color:var(--text-muted)">status: '+esc(r.status||'open')+'</div></div>'
+      +(won
+        ?'<button class="btn btn-gold btn-sm" onclick="wlReqAction(\''+propId+'\',\''+r.id+'\',\'activate\')">Flip to active hire</button>'
+        :'<div style="display:flex;gap:4px"><button class="btn btn-sec btn-sm" onclick="wlReqAction(\''+propId+'\',\''+r.id+'\',\'keep\')">Keep open</button><button class="btn btn-danger-sm btn-sm" onclick="wlReqAction(\''+propId+'\',\''+r.id+'\',\'cancel\')">Cancel</button></div>')
+      +'</div>';
+  }).join(''):'<div style="font-size:11px;color:var(--text-muted);padding:10px;text-align:center">No proposal-contingent requisitions linked to this proposal.</div>';
+  var sectionsPromo=won&&sectionsCt
+    ?'<div class="wl-action"><div><b>Promote winning sections to Template library</b><div style="font-size:10px;color:var(--text-muted)">'+sectionsCt+' AI-drafted section'+(sectionsCt===1?'':'s')+' could become reusable boilerplate.</div></div><button class="btn btn-sec btn-sm" onclick="wlPromoteSections(\''+propId+'\')">Pick &amp; Promote</button></div>'
+    :'';
+  var caseStudyPromo=won
+    ?'<div class="wl-action"><div><b>Add to Company Profile case studies</b><div style="font-size:10px;color:var(--text-muted)">Quick add — outcomes can be filled in later.</div></div><button class="btn btn-sec btn-sm" onclick="wlAddCaseStudy(\''+propId+'\')">Add Case Study</button></div>'
+    :'';
+  document.getElementById('mdlWinLoss').innerHTML=
+    '<div class="mdl-over">Wrap-Up Workflow</div><div class="mdl-title">'+heading+'</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">'+esc(intro)+'</div>'
+    +'<span class="fld-section-hdr" style="margin-top:0">Debrief Notes</span>'
+    +'<div class="fld"><textarea class="fld-i" id="wl_notes" rows="4" placeholder="'+(won?'Why did we win? What worked? Key personnel? Pricing strategy?':'Why did we lose? Was it scope/price/team/clearance/relationship? Anything to do differently?')+'">'+esc(((p.winLoss&&p.winLoss.notes)||''))+'</textarea></div>'
+    +'<span class="fld-section-hdr">Linked Requisitions ('+pendingContingent.length+')</span>'
+    +reqRows
+    +(sectionsPromo||caseStudyPromo?'<span class="fld-section-hdr">Library Feedback</span>'+sectionsPromo+caseStudyPromo:'')
+    +'<div class="btn-row" style="margin-top:14px">'
+    +'<button class="btn btn-navy" style="flex:1" onclick="wlSave(\''+propId+'\',\''+status+'\')">Save Debrief &amp; Close</button>'
+    +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovWinLoss\')">Close without saving</button>'
+    +'</div>';
+  openModal('ovWinLoss');
+}
+function wlReqAction(propId,reqId,action){
+  var req=(D.recruitings||[]).find(function(r){return r.id===reqId;});if(!req)return;
+  if(action==='activate'){req.proposalContingent=false;req.status='open';alert('Requisition flipped to standard active hire.');}
+  else if(action==='cancel'){if(!confirm('Cancel this requisition? (Status will be set to cancelled; the req row stays for the audit trail.)'))return;req.status='cancelled';}
+  else if(action==='keep'){alert('Requisition kept open as-is.');}
+  save();openWinLossModal(propId,(D.proposals.find(function(x){return x.id===propId;})||{}).status);
+}
+function wlSave(propId,status){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  p.winLoss={status:status,decidedAt:Date.now(),decidedBy:ME?ME.id:'',notes:gv('wl_notes').trim()};
+  p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'winloss.recorded',payload:{status:status}});
+  save();closeModal('ovWinLoss');renderProposalDetail(propId);
+}
+function wlPromoteSections(propId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  var tpl=(D.proposalTemplates||[]).find(function(t){return t.id===p.templateId;});
+  if(!tpl){alert('No template linked — can\'t promote.');return;}
+  var sections=(p.sections||[]).filter(function(s){return (s.html||'').trim()&&(s.source==='ai'||s.source==='hybrid');});
+  if(!sections.length){alert('No AI-drafted sections to promote.');return;}
+  var picks=sections.map(function(s,i){return (i+1)+'. '+s.title;}).join('\n');
+  var input=prompt('Enter the numbers of sections to promote as winning examples in the template (e.g. "1,3,5"):\n\n'+picks);
+  if(!input)return;
+  var nums=input.split(',').map(function(s){return parseInt(s.trim(),10)-1;}).filter(function(n){return !isNaN(n)&&n>=0&&n<sections.length;});
+  if(!nums.length)return;
+  tpl.winningExamples=tpl.winningExamples||[];
+  nums.forEach(function(idx){
+    var s=sections[idx];
+    tpl.winningExamples.push({id:uid(),fromProposalId:propId,fromProposalTitle:p.title,sectionTitle:s.title,html:s.html,promotedAt:Date.now()});
+  });
+  save();alert('Promoted '+nums.length+' section(s) to template "'+tpl.name+'" as winning examples. Future drafts of those sections will reference them.');
+}
+function wlAddCaseStudy(propId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  var cp=D.companyProfile;cp.caseStudies=cp.caseStudies||[];
+  var rfp=p.rfp||{};
+  var cs={
+    id:uid(),
+    title:p.title,
+    customer:rfp.customer||'',
+    customerReferenceable:false,
+    contractVehicle:rfp.contractVehicle||'',
+    period:rfp.pop||'',
+    value:rfp.potentialValue||0,
+    role:'',
+    scope:rfp.scope||'',
+    tech:[],
+    outcomes:[],
+    challenges:'',
+    testimonial:'',
+    pocName:'',
+    pocPermission:false,
+    attachments:[],
+    fromProposalId:propId
+  };
+  cp.caseStudies.push(cs);
+  save();alert('Case study added to Company Profile (with proposal data pre-filled). Open Company Profile to enrich outcomes/metrics.');
 }
 
 /* ── NOTIFICATIONS ── */
