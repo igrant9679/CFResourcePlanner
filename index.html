@@ -1057,7 +1057,10 @@ function recruitMigrate(){
 function tplMigrate(){
   if(!D.taskTemplates)D.taskTemplates=[];
   if(!D.tplSeeded){
-    D.taskTemplates=[
+    // Production-safe: never replace D.taskTemplates wholesale. Only add the
+    // seed templates that are MISSING by id. Preserves user-added templates
+    // even if D.tplSeeded somehow gets unset (partial import, manual edit).
+    var seedTemplates=[
       {id:'tpl_leadgen',name:'Perform Lead Generation'},
       {id:'tpl_bd',name:'Perform Business Development'},
       {id:'tpl_scoping',name:'Perform Scoping'},
@@ -1065,6 +1068,9 @@ function tplMigrate(){
       {id:'tpl_recruit',name:'Perform Recruiting'},
       {id:'tpl_delivery',name:'Oversee Delivery'}
     ];
+    seedTemplates.forEach(function(s){
+      if(!D.taskTemplates.some(function(t){return t.id===s.id;}))D.taskTemplates.push(s);
+    });
     D.tplSeeded=true;
   }
   D.departments.forEach(function(d){d.members.forEach(function(m){
@@ -1088,7 +1094,11 @@ function progColorOf(a){var p=progById(a.programId);return p?(p.color||'#546478'
 function planMigrate(){
   if(!D.activities)D.activities=[];
   if(!D.programs)D.programs=[];
-  if(!D.planSeeded){PLAN_SEED.forEach(function(s){D.activities.push({id:uid(),program:s.pr,task:s.tk,subtask:s.st,outline:s.ol,objective:s.ob,phase:s.ph,due:s.due||'',status:s.sts,pm:s.pm||'',ownerText:s.ow||'',owners:planResolveOwners(s.ow||''),projectId:planAutoProject(s.pr),order:D.activities.length});});D.planSeeded=true;}
+  // Production-safe: only seed PLAN_SEED if D.activities is genuinely empty.
+  // Stops a missing/stale planSeeded flag from creating 58 duplicate seed
+  // tasks alongside user-authored ones.
+  if(!D.planSeeded&&D.activities.length===0){PLAN_SEED.forEach(function(s){D.activities.push({id:uid(),program:s.pr,task:s.tk,subtask:s.st,outline:s.ol,objective:s.ob,phase:s.ph,due:s.due||'',status:s.sts,pm:s.pm||'',ownerText:s.ow||'',owners:planResolveOwners(s.ow||''),projectId:planAutoProject(s.pr),order:D.activities.length});});D.planSeeded=true;}
+  else if(!D.planSeeded){D.planSeeded=true;}  // mark as seeded so the auto-save bootstrap check doesn't keep re-firing
   if(!D.programs.length){var seen=[];D.activities.forEach(function(a){var nm=a.program||'Uncategorized';if(seen.indexOf(nm)===-1)seen.push(nm);});seen.forEach(function(nm,i){D.programs.push({id:'prog_'+(i+1),name:nm,color:PALETTE[i%PALETTE.length],order:i,lead:''});});}
   D.activities.forEach(function(a){if(!a.programId){var p=(D.programs||[]).find(function(pr){return pr.name===(a.program||'Uncategorized');});if(!p){p={id:uid(),name:a.program||'Uncategorized',color:PALETTE[D.programs.length%PALETTE.length],order:D.programs.length,lead:''};D.programs.push(p);}a.programId=p.id;}});
   if(!('planStart' in D))D.planStart='2026-06-01';
@@ -1864,8 +1874,17 @@ var oppMode='board',oppCalRef=null,oppDrag=null;
 function oppStageCfg(k){return OPP_STAGES.find(function(s){return s.k===k;})||OPP_STAGES[0];}
 function oppDeriveStage(p){var gates=[['delivery','Delivery'],['sales','Sales'],['presales','Presales'],['leadGen','Lead Gen']];for(var i=0;i<gates.length;i++){var v=p[gates[i][0]];if(v&&String(v).trim()&&!/^n\/?a$/i.test(String(v).trim()))return gates[i][1];}return 'Lead Gen';}
 function oppMigrate(){
-  if(!D.oppSeeded){PIPELINE_SEED.forEach(function(s){var o={id:uid(),category:'opportunity',name:(s.program||s.customer||'Opportunity'),customer:s.customer||'',leadGen:s.leadGen||'',presales:s.presales||'',sales:s.sales||'',delivery:s.delivery||'',opr:s.opr||'',team:s.team||'',comment:s.comment||'',changeRequested:s.changeRequested||'',closeDate:'',targetRevenue:0,revenue:0,revenueNote:'',description:s.comment||'',attachments:[],parentId:null,pm:'',potential:0,status:''};var ex=OPP_ENRICH[o.name]||{};o.pm=ex.pm||'';o.potential=ex.potential||0;o.status=ex.status||'';o.closeDate=ex.closeDate||'';o.stage=oppDeriveStage(o);D.projects.push(o);});D.oppSeeded=true;}
+  // Production-safe: only seed PIPELINE_SEED if NO opportunities exist yet.
+  // Stops a missing/stale oppSeeded flag from creating 19 duplicate seed
+  // opportunities alongside user-authored ones.
+  var hasOpps=D.projects.some(function(p){return projCat(p)==='opportunity';});
+  if(!D.oppSeeded&&!hasOpps){PIPELINE_SEED.forEach(function(s){var o={id:uid(),category:'opportunity',name:(s.program||s.customer||'Opportunity'),customer:s.customer||'',leadGen:s.leadGen||'',presales:s.presales||'',sales:s.sales||'',delivery:s.delivery||'',opr:s.opr||'',team:s.team||'',comment:s.comment||'',changeRequested:s.changeRequested||'',closeDate:'',targetRevenue:0,revenue:0,revenueNote:'',description:s.comment||'',attachments:[],parentId:null,pm:'',potential:0,status:''};var ex=OPP_ENRICH[o.name]||{};o.pm=ex.pm||'';o.potential=ex.potential||0;o.status=ex.status||'';o.closeDate=ex.closeDate||'';o.stage=oppDeriveStage(o);D.projects.push(o);});D.oppSeeded=true;}
+  else if(!D.oppSeeded){D.oppSeeded=true;}  // mark as seeded so bootstrap auto-save doesn't keep firing
   D.projects.forEach(function(p){if(projCat(p)==='opportunity'){['customer','leadGen','presales','sales','delivery','opr','team','comment','changeRequested','closeDate','pm','status'].forEach(function(k){if(!(k in p))p[k]='';});if(!('potential' in p))p.potential=0;if(!p.stage)p.stage=oppDeriveStage(p);if(!p.attachments)p.attachments=[];}});
+  // OPP_ENRICH already only fills MISSING fields (!p.closeDate, !p.potential
+  // etc. all use falsy checks so set values are preserved). Once the flag is
+  // set the block is skipped entirely. Marking the flag if missing so the
+  // bootstrap auto-save doesn't keep firing for new accounts.
   if(!D.oppEnriched){D.projects.forEach(function(p){if(projCat(p)==='opportunity'){var ex=OPP_ENRICH[p.name];if(ex){if(!p.closeDate)p.closeDate=ex.closeDate||'';if(!p.potential)p.potential=ex.potential||0;if(!p.pm)p.pm=ex.pm||'';if(!p.status)p.status=ex.status||'';}}});D.oppEnriched=true;}
 }
 function oppList(){return D.projects.filter(function(p){return projCat(p)==='opportunity';});}
