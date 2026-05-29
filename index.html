@@ -588,6 +588,35 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .cs-cover-preview .cs-cert-list b{color:var(--navy);}
 .cs-cert-toggle{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-bottom:1px solid #F1F5F9;font-size:12px;}
 .cs-cert-toggle:last-child{border-bottom:none;}
+.sec-layout{display:grid;grid-template-columns:280px 1fr;gap:14px;min-height:480px;}
+.sec-list{background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 0;max-height:70vh;overflow-y:auto;}
+.sec-list-row{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:9px 12px;cursor:pointer;border-left:3px solid transparent;font-size:12px;}
+.sec-list-row:hover{background:var(--page-bg);}
+.sec-list-row.active{background:rgba(197,165,90,0.1);border-left-color:var(--gold);}
+.sec-list-row-info{flex:1;min-width:0;}
+.sec-list-row-ttl{font-weight:700;color:var(--text-primary);}
+.sec-list-row-meta{font-size:10px;color:var(--text-muted);margin-top:2px;}
+.sec-status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px;}
+.sec-status-empty{background:#cbd5e1;}
+.sec-status-draft{background:#7C3AED;}
+.sec-status-edited{background:#16a34a;}
+.sec-status-computed{background:#0EA5E9;}
+.sec-editor{background:#fff;border:1px solid var(--border);border-radius:8px;padding:14px 16px;}
+.sec-editor-hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
+.sec-source-pill{display:inline-block;padding:2px 7px;font-size:9px;font-weight:700;border-radius:3px;letter-spacing:.4px;text-transform:uppercase;margin-left:6px;}
+.sec-source-ai{background:rgba(124,58,237,0.15);color:#7C3AED;}
+.sec-source-hybrid{background:rgba(14,165,233,0.15);color:#0EA5E9;}
+.sec-source-static{background:rgba(100,116,139,0.15);color:#64748B;}
+.sec-source-user{background:rgba(217,119,6,0.15);color:#D97706;}
+.sec-source-computed{background:rgba(5,150,105,0.15);color:#059669;}
+.gap-row{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border-bottom:1px solid #F1F5F9;font-size:12px;}
+.gap-row:last-child{border-bottom:none;}
+.gap-status{flex-shrink:0;width:60px;font-size:10px;font-weight:800;letter-spacing:.4px;padding:3px 6px;border-radius:3px;text-align:center;text-transform:uppercase;}
+.gap-yes{background:rgba(22,163,74,0.15);color:#16a34a;}
+.gap-partial{background:rgba(217,119,6,0.15);color:#d97706;}
+.gap-no{background:rgba(220,38,38,0.15);color:#dc2626;}
+.gap-row-body{flex:1;line-height:1.5;}
+.gap-row-evidence{font-size:11px;color:var(--text-muted);margin-top:3px;font-style:italic;}
 </style>
 </head>
 <body>
@@ -682,6 +711,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 <div class="ov" id="ovTplProp" onclick="closeModal('ovTplProp')"><div class="mdl" id="mdlTplProp" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
 <div class="ov" id="ovNewProp" onclick="closeModal('ovNewProp')"><div class="mdl" id="mdlNewProp" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
 <div class="ov" id="ovProp" onclick="closeModal('ovProp')"><div class="mdl" id="mdlProp" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
+<div class="ov" id="ovGap" onclick="closeModal('ovGap')"><div class="mdl" id="mdlGap" onclick="event.stopPropagation()" style="max-width:820px"></div></div>
 <div class="ov" id="ovNotif" onclick="closeModal('ovNotif')"><div class="mdl" id="mdlNotif" onclick="event.stopPropagation()" style="max-width:520px;padding:0;overflow:hidden"></div></div>
 <div class="ov" id="ovAIPrev" onclick="closeModal('ovAIPrev')"><div class="mdl" id="mdlAIPrev" onclick="event.stopPropagation()" style="max-width:760px"></div></div>
 <script>
@@ -3226,6 +3256,7 @@ function renderProposalDetail(id){
   var tabs=[
     {k:'overview',l:'Overview'},
     {k:'rfp',l:'RFP Details'},
+    {k:'sections',l:'Sections'},
     {k:'pp',l:'Past Performance'},
     {k:'cover',l:'Cover Sheet'},
     {k:'files',l:'Files'},
@@ -3241,6 +3272,7 @@ function renderProposalDetail(id){
   var body=hdr+tabBar;
   if(_pdTab==='overview')body+=_pdOverviewHTML(p,opp,tpl);
   else if(_pdTab==='rfp')body+=_pdRFPHTML(p);
+  else if(_pdTab==='sections')body+=_pdSectionsHTML(p,tpl);
   else if(_pdTab==='pp')body+=_pdPastPerfHTML(p);
   else if(_pdTab==='cover')body+=_pdCoverSheetHTML(p);
   else if(_pdTab==='files')body+=_pdFilesHTML(p);
@@ -3277,7 +3309,7 @@ function _pdOverviewHTML(p,opp,tpl){
     +(rfp.summary?'<div class="np-extract-fld" style="margin-top:8px"><div class="np-extract-lbl">Summary</div><div class="np-extract-val">'+esc(rfp.summary)+'</div></div>':'')
     +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-top:8px">'
     +'<div class="prop-hero-card" style="cursor:default"><div class="prop-hero-ttl">📋 Requirements</div><div class="prop-hero-n">'+((rfp.requirements||[]).length)+'</div><div class="prop-hero-sub">tap RFP Details to review</div></div>'
-    +'<div class="prop-hero-card" style="cursor:default"><div class="prop-hero-ttl">👥 Required Roles</div><div class="prop-hero-n">'+((rfp.requiredRoles||[]).length)+'</div><div class="prop-hero-sub">'+(rfp.requiredRoles&&rfp.requiredRoles.length?'positions to staff':'none specified')+'</div></div>'
+    +'<div class="prop-hero-card" style="cursor:pointer" onclick="pdSetTab(\''+p.id+'\',\'sections\')"><div class="prop-hero-ttl">📝 Sections</div><div class="prop-hero-n">'+(p.sections||[]).filter(function(s){return (s.html||'').trim();}).length+'/'+(p.sections||[]).length+'</div><div class="prop-hero-sub">drafted · click to write</div></div>'
     +'<div class="prop-hero-card" style="cursor:pointer" onclick="pdSetTab(\''+p.id+'\',\'pp\')"><div class="prop-hero-ttl">🎯 Past Performance</div><div class="prop-hero-n">'+((p.pastPerformance&&p.pastPerformance.matches)?p.pastPerformance.matches.length:0)+'</div><div class="prop-hero-sub">'+(p.pastPerformance&&p.pastPerformance.generatedAt?'matched · click to view':'not run yet · click to find')+'</div></div>'
     +'<div class="prop-hero-card" style="cursor:pointer" onclick="pdSetTab(\''+p.id+'\',\'cover\')"><div class="prop-hero-ttl">🏆 Cover Sheet</div><div class="prop-hero-n">'+((p.coverSheet&&p.coverSheet.certIds)?p.coverSheet.certIds.length:0)+'</div><div class="prop-hero-sub">certifications selected</div></div>'
     +'</div>';
@@ -3458,6 +3490,258 @@ function pdSaveSettings(id){
   p.llmProvider=gv('pd_llm_prov')||'';
   p.llmModel=gv('pd_llm_model')||'';
   save();alert('Settings saved.');
+}
+
+/* ── SECTIONS TAB (Workflows 6 / 7 / 8: drafting, gap analysis, voice rewrite) ── */
+var _pdActiveSection='';
+function _propInitSections(p){
+  if(!p.templateId)return;
+  var t=(D.proposalTemplates||[]).find(function(x){return x.id===p.templateId;});
+  if(!t||!t.sections)return;
+  p.sections=t.sections.slice().sort(function(a,b){return (a.order||0)-(b.order||0);}).map(function(s){
+    return {id:s.id,title:s.title,source:s.source||'user-only',pageBudget:s.pageBudget||0,html:'',draftedAt:0,draftedBy:'',draftedWith:{provider:'',model:''},templatePrompt:s.prompt||'',evidence:s.evidence||[]};
+  });
+}
+function _pdSectionsHTML(p,tpl){
+  if(!p.sections||!p.sections.length){
+    if(!p.templateId){
+      return '<div class="empty-recruit"><div style="font-size:13px;margin-bottom:6px">No template linked</div><div style="font-size:11px">Pick a template in Settings (or create the proposal again with a template) to populate the section list.</div></div>';
+    }
+    return '<div class="empty-recruit"><div style="font-size:13px;margin-bottom:8px">Sections not initialized yet</div><div style="font-size:11px;margin-bottom:10px">Initialize this proposal\'s sections from the linked template (<b>'+esc((tpl&&tpl.name)||'unknown')+'</b>). You can edit each section after.</div><button class="btn btn-gold" onclick="pdInitSectionsFromTemplate(\''+p.id+'\')">Initialize Sections from Template</button></div>';
+  }
+  if(!_pdActiveSection||!p.sections.find(function(s){return s.id===_pdActiveSection;}))_pdActiveSection=p.sections[0].id;
+  var activeSec=p.sections.find(function(s){return s.id===_pdActiveSection;});
+  // Sidebar
+  var sidebar=p.sections.map(function(s){
+    var dotCls='sec-status-empty';
+    if(s.source==='computed')dotCls='sec-status-computed';
+    else if(s.draftedAt)dotCls='sec-status-draft';
+    else if((s.html||'').trim())dotCls='sec-status-edited';
+    var srcCls='sec-source-'+(s.source==='user-only'?'user':s.source);
+    return '<div class="sec-list-row'+(s.id===_pdActiveSection?' active':'')+'" onclick="_pdSetSection(\''+p.id+'\',\''+s.id+'\')">'
+      +'<div class="sec-list-row-info"><div class="sec-list-row-ttl">'+esc(s.title)+'</div>'
+      +'<div class="sec-list-row-meta"><span class="sec-source-pill '+srcCls+'">'+esc(s.source||'user')+'</span>'+(s.pageBudget?' · '+s.pageBudget+'pg':'')+'</div></div>'
+      +'<div class="sec-status-dot '+dotCls+'"></div>'
+      +'</div>';
+  }).join('');
+  // Section editor — only render if a section is active
+  var editor='';
+  if(activeSec){
+    var canDraft=activeSec.source==='ai'||activeSec.source==='hybrid';
+    var draftedMeta=activeSec.draftedAt?'<span style="font-size:10px;color:var(--text-muted)">Last AI draft: '+new Date(activeSec.draftedAt).toLocaleString()+(activeSec.draftedWith&&activeSec.draftedWith.provider?' · '+esc(activeSec.draftedWith.provider)+'/'+esc(activeSec.draftedWith.model||'default'):'')+'</span>':'';
+    var computedNote=activeSec.source==='computed'?'<div style="font-size:11px;color:var(--text-muted);background:rgba(5,150,105,0.06);border:1px solid rgba(5,150,105,0.2);padding:8px 10px;border-radius:6px;margin-bottom:8px">This section is <b>computed</b> — it auto-builds from Atlas data at render time (e.g. cover sheet from Corporate Certifications, resumes appendix from member records). No manual editing needed.</div>':'';
+    var srcCls2='sec-source-'+(activeSec.source==='user-only'?'user':activeSec.source);
+    editor='<div class="sec-editor">'
+      +'<div class="sec-editor-hdr">'
+      +'<div><div style="font-size:15px;font-weight:800">'+esc(activeSec.title)+'<span class="sec-source-pill '+srcCls2+'">'+esc(activeSec.source||'user')+'</span></div>'+draftedMeta+'</div>'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+      +(canDraft?'<button type="button" class="ai-btn" onclick="pdSectionAIDraft(\''+p.id+'\',\''+activeSec.id+'\')">&#10024; '+(activeSec.draftedAt?'Re-draft':'Draft with AI')+'</button>':'')
+      +'<button type="button" class="ai-btn" onclick="pdSectionVoiceRewrite(\''+p.id+'\',\''+activeSec.id+'\')" '+((activeSec.html||'').trim()?'':'disabled title="Write or draft something first"')+'>&#127912; Voice Rewrite</button>'
+      +'<button type="button" class="btn btn-navy btn-sm" onclick="pdSaveSection(\''+p.id+'\',\''+activeSec.id+'\')">&#128190; Save</button>'
+      +'</div></div>'
+      +computedNote
+      +(activeSec.templatePrompt?'<div style="font-size:10px;color:var(--text-muted);background:var(--page-bg);padding:7px 10px;border-radius:6px;margin-bottom:8px"><b>Template prompt:</b> '+esc(activeSec.templatePrompt.slice(0,260)+(activeSec.templatePrompt.length>260?'…':''))+'</div>':'')
+      +(activeSec.evidence&&activeSec.evidence.length?'<div style="font-size:10px;color:var(--text-muted);margin-bottom:8px"><b>Required evidence:</b> '+activeSec.evidence.map(esc).join(' · ')+'</div>':'')
+      +richEditor('pd_sec_html',activeSec.html||'',{disabled:activeSec.source==='computed',placeholder:'Section content. Use the AI Draft button above to generate a first draft, then edit freely.',tall:true})
+      +'</div>';
+  }
+  // Gap analysis chip
+  var gap=p.gapAnalysis||null;
+  var gapBtn='<button type="button" class="ai-btn" onclick="pdRunGapAnalysis(\''+p.id+'\')">&#9888; Run Gap Analysis</button>';
+  var gapSummary='';
+  if(gap&&gap.results){
+    var n=gap.results.length,addr=gap.results.filter(function(r){return r.status==='addressed';}).length,part=gap.results.filter(function(r){return r.status==='partial';}).length,miss=gap.results.filter(function(r){return r.status==='missing';}).length;
+    gapSummary=' <span style="margin-left:8px;font-size:11px"><span class="gap-status gap-yes">'+addr+' addr</span> <span class="gap-status gap-partial">'+part+' partial</span> <span class="gap-status gap-no">'+miss+' missing</span> <a href="#" onclick="event.preventDefault();_pdShowGapResults(\''+p.id+'\')">view</a></span>';
+  }
+  return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">'
+    +'<div style="font-size:12px;color:var(--text-muted)">Section-by-section authoring. Pick a section, draft with AI, edit in place, rewrite in CF voice, then run Gap Analysis to verify every RFP requirement is covered.</div>'
+    +'<div>'+gapBtn+gapSummary+'</div>'
+    +'</div>'
+    +'<div class="sec-layout">'
+    +'<div class="sec-list">'+sidebar+'</div>'
+    +editor
+    +'</div>';
+}
+function pdInitSectionsFromTemplate(id){
+  var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
+  _propInitSections(p);
+  p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'sections.initialized',payload:{count:(p.sections||[]).length}});
+  save();renderProposalDetail(id);
+}
+function _pdSetSection(propId,secId){
+  // Auto-save current section content before switching
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  var cur=p.sections.find(function(s){return s.id===_pdActiveSection;});
+  if(cur&&cur.source!=='computed'){var el=document.getElementById('pd_sec_html');if(el){cur.html=el.innerHTML;}}
+  _pdActiveSection=secId;
+  save();renderProposalDetail(propId);
+}
+function pdSaveSection(propId,secId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  var s=p.sections.find(function(x){return x.id===secId;});if(!s)return;
+  var el=document.getElementById('pd_sec_html');if(el)s.html=el.innerHTML;
+  save();renderProposalDetail(propId);
+}
+function _propBuildRFPCtx(p){
+  var rfp=p.rfp||{};
+  return [
+    rfp.customer?'Customer: '+rfp.customer:'',
+    rfp.contractVehicle?'Vehicle: '+rfp.contractVehicle:'',
+    rfp.setAsideType?'Set-aside: '+rfp.setAsideType:'',
+    rfp.pop?'Period of Performance: '+rfp.pop:'',
+    rfp.dueDate?'Due: '+rfp.dueDate:'',
+    rfp.potentialValue?'Potential: $'+rfp.potentialValue:'',
+    rfp.summary?'\nSummary: '+rfp.summary:'',
+    rfp.scope?'\nScope: '+rfp.scope:'',
+    (rfp.requirements||[]).length?'\nRequirements:\n- '+(rfp.requirements||[]).join('\n- '):'',
+    (rfp.requiredCerts||[]).length?'\nRequired Certs:\n- '+(rfp.requiredCerts||[]).join('\n- '):'',
+    (rfp.requiredClearances||[]).length?'\nRequired Clearances: '+(rfp.requiredClearances||[]).join(', '):'',
+    (rfp.requiredRoles||[]).length?'\nRequired Roles:\n'+(rfp.requiredRoles||[]).map(function(r){return '- '+r.title+' x'+(r.count||1)+(r.clearance?' ('+r.clearance+')':'');}).join('\n'):'',
+    (rfp.deliverables||[]).length?'\nDeliverables:\n- '+(rfp.deliverables||[]).join('\n- '):'',
+    (rfp.evaluationCriteria||[]).length?'\nEvaluation Criteria:\n- '+(rfp.evaluationCriteria||[]).join('\n- '):''
+  ].filter(Boolean).join('\n');
+}
+function _propBuildVoiceCtx(){
+  var cp=D.companyProfile||{};
+  var v=cp.voice||{};
+  var i=cp.identity||{};
+  var parts=[];
+  if(i.legalName)parts.push('Company: '+i.legalName+(i.ownershipType?' ('+i.ownershipType+')':''));
+  if(v.toneTags&&v.toneTags.length)parts.push('Tone: '+v.toneTags.join(', '));
+  if(v.do&&v.do.length)parts.push('DO:\n- '+v.do.join('\n- '));
+  if(v.dont&&v.dont.length)parts.push('DON\'T:\n- '+v.dont.join('\n- '));
+  if(v.samples&&v.samples.length){
+    parts.push('Voice Samples (match this style/cadence):');
+    v.samples.slice(0,4).forEach(function(s){parts.push('['+(s.sectionType||'general')+'] '+(s.text||'').slice(0,500));});
+  }
+  return parts.join('\n\n');
+}
+function _propBuildPPCtx(p){
+  var inc=(p.coverSheet&&p.coverSheet.includedCaseStudyIds)||[];
+  if(!inc.length)return '';
+  var lib=(D.companyProfile&&D.companyProfile.caseStudies)||[];
+  var picked=lib.filter(function(c){return inc.indexOf(c.id)>-1;});
+  if(!picked.length)return '';
+  return picked.map(function(c){return '- '+(c.title||c.customer||'')+(c.customer?' ('+c.customer+')':'')+(c.period?' / '+c.period:'')+(c.value?' / $'+c.value:'')+': '+(c.scope||'').slice(0,300)+(c.outcomes&&c.outcomes.length?' | Outcomes: '+c.outcomes.slice(0,3).join('; '):'');}).join('\n');
+}
+function _propBuildCertCtx(p){
+  var inc=(p.coverSheet&&p.coverSheet.certIds)||[];
+  if(!inc.length)return '';
+  return (D.corporateCertifications||[]).filter(function(c){return inc.indexOf(c.id)>-1;}).map(function(c){return '- '+c.name+(c.number?' ('+c.number+')':'');}).join('\n');
+}
+function pdSectionAIDraft(propId,secId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  var s=p.sections.find(function(x){return x.id===secId;});if(!s)return;
+  // Auto-save current editor first to avoid data loss
+  var el=document.getElementById('pd_sec_html');if(el&&s.source!=='computed')s.html=el.innerHTML;
+  var sys='You are an expert federal proposal writer drafting a single section of a US government RFP response. Output ONLY clean HTML (use <p>, <ul>/<li>, <strong>, <em>, <h3> for subsection headers; no markdown, no code fences, no commentary before or after). Match the brand voice exactly. Cite past performance accurately — never invent customers, contract values, dates, or metrics that aren\'t in the provided library.';
+  var instruction='SECTION TO DRAFT: "'+s.title+'"\n\nPER-SECTION INSTRUCTION (from the proposal template — primary guidance):\n'+(s.templatePrompt||'(no template instruction; write a strong default '+s.title+' section)')
+    +'\n\nRFP CONTEXT:\n'+_propBuildRFPCtx(p)
+    +'\n\nBRAND VOICE:\n'+_propBuildVoiceCtx()
+    +(s.title.toLowerCase().indexOf('past')>-1||s.title.toLowerCase().indexOf('experience')>-1?'\n\nPAST PERFORMANCE LIBRARY (use ONLY these — do not invent):\n'+(_propBuildPPCtx(p)||'(none selected; flag this in your output)'):'')
+    +(s.title.toLowerCase().indexOf('cert')>-1||s.title.toLowerCase().indexOf('capabilit')>-1?'\n\nACTIVE CERTIFICATIONS:\n'+(_propBuildCertCtx(p)||'(none selected)'):'')
+    +(s.evidence&&s.evidence.length?'\n\nREQUIRED EVIDENCE: '+s.evidence.join(', ')+'.':'')
+    +(s.pageBudget?'\n\nTARGET LENGTH: roughly '+s.pageBudget+' page'+(s.pageBudget===1?'':'s')+' of professional prose.':'')
+    +(s.html&&s.html.trim()?'\n\nEXISTING DRAFT (rewrite/improve this rather than starting fresh):\n'+s.html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').slice(0,2000):'');
+  var llm=_propLLMOpts(p);
+  var btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent='✨ Drafting…';}
+  llmComplete({provider:llm.provider,model:llm.model,system:sys,messages:[{role:'user',content:instruction}],max_tokens:4000})
+    .then(function(j){
+      var html=llmExtractText(j).trim().replace(/^```html\s*/i,'').replace(/```$/,'').trim();
+      if(!html)throw new Error('Empty response from LLM.');
+      openAIPreview({
+        title:'AI Draft · '+s.title,
+        html:html,
+        onApply:function(finalHtml){
+          s.html=finalHtml;
+          s.draftedAt=Date.now();s.draftedBy=ME?ME.id:'';
+          s.draftedWith={provider:llm.provider,model:llm.model||j.model||''};
+          p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'section.drafted',payload:{section:s.title,provider:llm.provider}});
+          save();renderProposalDetail(propId);
+        },
+        onAppend:s.html&&s.html.trim()?function(finalHtml){s.html=(s.html||'')+'<p>'+finalHtml+'</p>';save();renderProposalDetail(propId);}:null
+      });
+    })
+    .catch(function(e){alert('Section draft failed: '+(e&&e.message||e));})
+    .finally(function(){if(btn){btn.disabled=false;btn.textContent='✨ '+(s.draftedAt?'Re-draft':'Draft with AI');}});
+}
+function pdSectionVoiceRewrite(propId,secId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  var s=p.sections.find(function(x){return x.id===secId;});if(!s)return;
+  var el=document.getElementById('pd_sec_html');var cur=el?el.innerHTML:(s.html||'');
+  var stripped=cur.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  if(!stripped){alert('Nothing to rewrite. Add some text first or use Draft with AI.');return;}
+  var sys='You rewrite the user\'s text to match the company\'s brand voice exactly. Preserve every fact, number, customer name, and citation as-is. Output ONLY clean HTML — same structural shape (paragraphs, lists, headers) as input, just retoned. No markdown, no code fences.';
+  var voiceCtx=_propBuildVoiceCtx();
+  var instruction='Rewrite the following text to match the brand voice below. Keep all facts intact.\n\nBRAND VOICE:\n'+(voiceCtx||'(no voice samples — apply general professional federal-proposal tone)')+'\n\nCURRENT TEXT (HTML, preserve structure):\n'+cur;
+  var llm=_propLLMOpts(p);
+  var btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent='🎨 Rewriting…';}
+  llmComplete({provider:llm.provider,model:llm.model,system:sys,messages:[{role:'user',content:instruction}],max_tokens:4000})
+    .then(function(j){
+      var html=llmExtractText(j).trim().replace(/^```html\s*/i,'').replace(/```$/,'').trim();
+      openAIPreview({
+        title:'Voice Rewrite · '+s.title,
+        html:html,
+        onApply:function(finalHtml){
+          s.html=finalHtml;
+          p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'section.voice-rewrite',payload:{section:s.title}});
+          save();renderProposalDetail(propId);
+        }
+      });
+    })
+    .catch(function(e){alert('Voice rewrite failed: '+(e&&e.message||e));})
+    .finally(function(){if(btn){btn.disabled=false;btn.textContent='🎨 Voice Rewrite';}});
+}
+function pdRunGapAnalysis(propId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  // Save current editor before running
+  var el=document.getElementById('pd_sec_html');if(el&&_pdActiveSection){var sNow=p.sections.find(function(x){return x.id===_pdActiveSection;});if(sNow&&sNow.source!=='computed')sNow.html=el.innerHTML;}
+  var rfp=p.rfp||{};
+  var allReqs=[].concat(rfp.requirements||[],rfp.requiredCerts||[],rfp.requiredClearances||[],rfp.deliverables||[],rfp.evaluationCriteria||[]);
+  if(!allReqs.length){alert('No RFP requirements / certs / clearances / deliverables / evaluation criteria to check. Add some in the RFP Details tab.');return;}
+  var sections=(p.sections||[]).map(function(s){return {id:s.id,title:s.title,text:(s.html||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').slice(0,3000)};}).filter(function(s){return s.text.trim();});
+  if(!sections.length){alert('No drafted sections yet. Draft at least one section first.');return;}
+  var sys='You verify proposal compliance: for each RFP item, decide whether the current draft addresses it. Be strict — partial mentions are NOT addressed. Output ONLY JSON inside a ```json``` block.';
+  var prompt='RFP ITEMS (requirements + certs + clearances + deliverables + evaluation criteria):\n'+allReqs.map(function(r,i){return (i+1)+'. '+r;}).join('\n')
+    +'\n\nDRAFTED SECTIONS:\n'+sections.map(function(s){return '['+s.title+']\n'+s.text;}).join('\n\n---\n\n')
+    +'\n\nFor each RFP item, return:\n'
+    +'{"results":[{"item":"the RFP item text","status":"addressed"|"partial"|"missing","sectionId":"id of section that addresses it (or empty)","sectionTitle":"section title (or empty)","evidence":"brief quote from the section, max 120 chars"}]}'
+    +'\nReturn ALL '+allReqs.length+' items in order.';
+  var llm=_propLLMOpts(p);
+  var btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent='⚠ Running…';}
+  llmComplete({provider:llm.provider,model:llm.model,system:sys,messages:[{role:'user',content:prompt}],max_tokens:6000})
+    .then(function(j){
+      var parsed=llmExtractJSON(j);
+      if(!parsed||!parsed.results)throw new Error('Could not parse gap-analysis response.');
+      p.gapAnalysis={results:parsed.results,generatedAt:Date.now()};
+      p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'gap.analyzed',payload:{addressed:parsed.results.filter(function(r){return r.status==='addressed';}).length,total:parsed.results.length}});
+      save();renderProposalDetail(propId);_pdShowGapResults(propId);
+    })
+    .catch(function(e){alert('Gap analysis failed: '+(e&&e.message||e));})
+    .finally(function(){if(btn){btn.disabled=false;btn.textContent='⚠ Run Gap Analysis';}});
+}
+function _pdShowGapResults(propId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p||!p.gapAnalysis)return;
+  var r=p.gapAnalysis.results||[];
+  var addr=r.filter(function(x){return x.status==='addressed';}).length;
+  var part=r.filter(function(x){return x.status==='partial';}).length;
+  var miss=r.filter(function(x){return x.status==='missing';}).length;
+  var rows=r.map(function(g,i){
+    var cls=g.status==='addressed'?'gap-yes':g.status==='partial'?'gap-partial':'gap-no';
+    var jump=g.sectionId?' <a href="#" onclick="event.preventDefault();closeModal(\'ovGap\');_pdSetSection(\''+propId+'\',\''+g.sectionId+'\');pdSetTab(\''+propId+'\',\'sections\')" style="font-size:11px;color:var(--navy)">→ jump to '+esc(g.sectionTitle||'section')+'</a>':'';
+    return '<div class="gap-row"><span class="gap-status '+cls+'">'+g.status+'</span><div class="gap-row-body">'+esc(g.item||'')+jump+(g.evidence?'<div class="gap-row-evidence">"'+esc(g.evidence)+'"</div>':'')+'</div></div>';
+  }).join('');
+  document.getElementById('mdlGap').innerHTML=
+    '<div class="mdl-over">Anthropic Claude</div><div class="mdl-title">Gap Analysis · '+esc(p.title)+'</div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">'
+    +'<span class="gap-status gap-yes">'+addr+' addressed</span>'
+    +'<span class="gap-status gap-partial">'+part+' partial</span>'
+    +'<span class="gap-status gap-no">'+miss+' missing</span>'
+    +'<span style="font-size:11px;color:var(--text-muted);margin-left:8px;align-self:center">generated '+new Date(p.gapAnalysis.generatedAt).toLocaleString()+'</span>'
+    +'</div>'
+    +'<div style="background:#fff;border:1px solid var(--border);border-radius:8px;max-height:60vh;overflow-y:auto">'+rows+'</div>'
+    +'<div class="btn-row" style="margin-top:14px"><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovGap\')">Close</button></div>';
+  openModal('ovGap');
 }
 
 /* ── NOTIFICATIONS ── */
