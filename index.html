@@ -636,6 +636,30 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .price-source-ai{background:rgba(124,58,237,.15);color:#7C3AED;}
 .price-source-manual{display:none;}
 .price-addon{display:flex;gap:8px;align-items:center;padding:6px 10px;border-bottom:1px solid #F1F5F9;font-size:12px;}
+.staff-role{background:#fff;border:1px solid var(--border);border-left:4px solid #7C3AED;border-radius:8px;padding:14px 16px;margin-bottom:10px;}
+.staff-role-hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px;flex-wrap:wrap;}
+.staff-role-ttl{font-size:14px;font-weight:800;}
+.staff-role-meta{font-size:11px;color:var(--text-muted);margin-top:2px;}
+.staff-role-skills{font-size:11px;color:var(--text-secondary);margin-top:4px;}
+.staff-intent{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid #F1F5F9;}
+.staff-intent-btn{padding:5px 11px;font-size:11px;font-weight:700;border:1.5px solid var(--border);background:#fff;border-radius:5px;cursor:pointer;font-family:inherit;color:var(--text-secondary);}
+.staff-intent-btn:hover{border-color:var(--gold);}
+.staff-intent-btn.active{border-color:var(--gold);background:rgba(197,165,90,0.12);color:var(--navy);}
+.bench-list{margin:10px 0 4px;border-top:1px solid #F1F5F9;padding-top:10px;}
+.bench-row{display:flex;align-items:flex-start;gap:8px;padding:7px 8px;border-radius:6px;font-size:12px;transition:background 0.1s;cursor:pointer;}
+.bench-row:hover{background:var(--page-bg);}
+.bench-row.assigned{background:rgba(22,163,74,0.06);border:1px solid rgba(22,163,74,0.25);}
+.bench-row-info{flex:1;min-width:0;}
+.bench-row-name{font-weight:700;}
+.bench-row-meta{font-size:10px;color:var(--text-muted);margin-top:2px;}
+.bench-row-rationale{font-size:11px;color:var(--text-secondary);margin-top:3px;line-height:1.4;font-style:italic;}
+.bench-score{display:inline-block;padding:3px 8px;font-size:12px;font-weight:800;border-radius:4px;background:rgba(13,148,136,.12);color:#0d9488;font-variant-numeric:tabular-nums;}
+.bench-score-high{background:rgba(22,163,74,.15);color:#16a34a;}
+.bench-score-med{background:rgba(217,119,6,.15);color:#d97706;}
+.bench-score-low{background:rgba(100,116,139,.15);color:#64748b;}
+.req-link-box{background:rgba(124,58,237,0.06);border:1px solid rgba(124,58,237,0.25);border-radius:6px;padding:9px 12px;font-size:12px;margin-top:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.req-link-box a{color:var(--navy);font-weight:700;text-decoration:none;}
+.req-pending-badge{background:rgba(217,119,6,0.15);color:#d97706;padding:2px 7px;font-size:10px;font-weight:700;border-radius:3px;letter-spacing:.3px;text-transform:uppercase;}
 </style>
 </head>
 <body>
@@ -941,6 +965,7 @@ function proposalsMigrate(){
     if(!p.pastPerformance)p.pastPerformance={matches:[],generatedAt:0};
     if(!p.coverSheet)p.coverSheet={certIds:[],generatedAt:0};
     if(!p.pricing)p.pricing={mode:'manual',linkedProjectId:'',items:[]};
+    if(!p.staffing)p.staffing={generatedAt:0,roleMatches:[]};
     if(!('llmProvider' in p))p.llmProvider='';
     if(!('llmModel' in p))p.llmModel='';
     if(!('createdAt' in p))p.createdAt=Date.now();
@@ -979,6 +1004,9 @@ function recruitMigrate(){
     if(!r.jdAttachments)r.jdAttachments=[];
     if(!('createdAt' in r))r.createdAt=Date.now();
     if(!('updatedAt' in r))r.updatedAt=r.createdAt||Date.now();
+    if(!('proposalContingent' in r))r.proposalContingent=false;
+    if(!('proposalId' in r))r.proposalId='';
+    if(!('rfpRoleSnapshot' in r))r.rfpRoleSnapshot=null;  // captured at bridge time
   });
   D.candidates.forEach(function(c){
     if(!c.status)c.status='new';
@@ -3276,6 +3304,7 @@ function renderProposalDetail(id){
     {k:'overview',l:'Overview'},
     {k:'rfp',l:'RFP Details'},
     {k:'sections',l:'Sections'},
+    {k:'staffing',l:'Staffing'},
     {k:'pp',l:'Past Performance'},
     {k:'pricing',l:'Pricing'},
     {k:'cover',l:'Cover Sheet'},
@@ -3293,6 +3322,7 @@ function renderProposalDetail(id){
   if(_pdTab==='overview')body+=_pdOverviewHTML(p,opp,tpl);
   else if(_pdTab==='rfp')body+=_pdRFPHTML(p);
   else if(_pdTab==='sections')body+=_pdSectionsHTML(p,tpl);
+  else if(_pdTab==='staffing')body+=_pdStaffingHTML(p);
   else if(_pdTab==='pp')body+=_pdPastPerfHTML(p);
   else if(_pdTab==='pricing')body+=_pdPricingHTML(p);
   else if(_pdTab==='cover')body+=_pdCoverSheetHTML(p);
@@ -3331,6 +3361,7 @@ function _pdOverviewHTML(p,opp,tpl){
     +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-top:8px">'
     +'<div class="prop-hero-card" style="cursor:default"><div class="prop-hero-ttl">📋 Requirements</div><div class="prop-hero-n">'+((rfp.requirements||[]).length)+'</div><div class="prop-hero-sub">tap RFP Details to review</div></div>'
     +'<div class="prop-hero-card" style="cursor:pointer" onclick="pdSetTab(\''+p.id+'\',\'sections\')"><div class="prop-hero-ttl">📝 Sections</div><div class="prop-hero-n">'+(p.sections||[]).filter(function(s){return (s.html||'').trim();}).length+'/'+(p.sections||[]).length+'</div><div class="prop-hero-sub">drafted · click to write</div></div>'
+    +'<div class="prop-hero-card" style="cursor:pointer" onclick="pdSetTab(\''+p.id+'\',\'staffing\')"><div class="prop-hero-ttl">👥 Staffing</div><div class="prop-hero-n">'+(((p.rfp&&p.rfp.requiredRoles)||[]).length)+'</div><div class="prop-hero-sub">'+_pdStaffingSummary(p)+'</div></div>'
     +'<div class="prop-hero-card" style="cursor:pointer" onclick="pdSetTab(\''+p.id+'\',\'pp\')"><div class="prop-hero-ttl">🎯 Past Performance</div><div class="prop-hero-n">'+((p.pastPerformance&&p.pastPerformance.matches)?p.pastPerformance.matches.length:0)+'</div><div class="prop-hero-sub">'+(p.pastPerformance&&p.pastPerformance.generatedAt?'matched · click to view':'not run yet · click to find')+'</div></div>'
     +'<div class="prop-hero-card" style="cursor:pointer" onclick="pdSetTab(\''+p.id+'\',\'pricing\')"><div class="prop-hero-ttl">💰 Pricing</div><div class="prop-hero-n">'+fmt(_propPricingTotal(p))+'</div><div class="prop-hero-sub">'+((p.pricing&&p.pricing.items)||[]).length+' line items &middot; '+((p.pricing&&p.pricing.mode)==='project-clins'?'from CLINs':'manual')+'</div></div>'
     +'<div class="prop-hero-card" style="cursor:pointer" onclick="pdSetTab(\''+p.id+'\',\'cover\')"><div class="prop-hero-ttl">🏆 Cover Sheet</div><div class="prop-hero-n">'+((p.coverSheet&&p.coverSheet.certIds)?p.coverSheet.certIds.length:0)+'</div><div class="prop-hero-sub">certifications selected</div></div>'
@@ -3964,6 +3995,231 @@ function pdPricingDraftAssumptions(propId){
     })
     .catch(function(e){alert('Assumptions draft failed: '+(e&&e.message||e));})
     .finally(function(){if(btn){btn.disabled=false;btn.textContent='✨ Draft Assumptions';}});
+}
+
+/* ── STAFFING TAB / RFP → RECRUITING BRIDGE (Phase E, Workflows 3+4) ── */
+function _pdStaffingSummary(p){
+  var st=p.staffing||{};var rm=st.roleMatches||[];
+  if(!rm.length)return 'fit-score not run yet';
+  var bench=rm.filter(function(r){return r.intent==='bench';}).length;
+  var req=rm.filter(function(r){return r.intent==='req';}).length;
+  var sub=rm.filter(function(r){return r.intent==='sub';}).length;
+  var open=rm.filter(function(r){return r.requisitionId;}).length;
+  var bits=[];if(bench)bits.push(bench+' bench');if(req)bits.push(req+' req');if(sub)bits.push(sub+' sub');if(open)bits.push(open+' linked');
+  return bits.length?bits.join(' · '):'fit-score run · pick intents';
+}
+function _resolveSkillsetNames(ids){return (ids||[]).map(function(id){var x=(D.skillsets||[]).find(function(s){return s.id===id;});return x?x.name:'';}).filter(Boolean);}
+function _resolveCertNames(ids){return (ids||[]).map(function(id){var x=(D.certifications||[]).find(function(c){return c.id===id;});return x?x.name:'';}).filter(Boolean);}
+function _resolveLocName(id){var x=(D.locations||[]).find(function(l){return l.id===id;});return x?x.name:'';}
+function _resolveClrName(id){var x=(D.clearances||[]).find(function(c){return c.id===id;});return x?x.name:'';}
+function _pdStaffingHTML(p){
+  var roles=(p.rfp&&p.rfp.requiredRoles)||[];
+  var st=p.staffing||{generatedAt:0,roleMatches:[]};
+  if(!roles.length){
+    return '<div class="empty-recruit"><div style="font-size:13px;margin-bottom:6px">No required roles extracted</div><div style="font-size:11px;margin-bottom:10px">The Staffing tab works off the <b>Required Roles</b> Claude pulled from your RFP. Either re-run the RFP extraction, or add roles manually in the RFP Details tab.</div></div>';
+  }
+  // Ensure roleMatches array matches roles length
+  if(st.roleMatches.length<roles.length){while(st.roleMatches.length<roles.length)st.roleMatches.push({intent:'',candidates:[],requisitionId:'',assignedMemberIds:[]});}
+  var btn='<button type="button" class="ai-btn" onclick="pdScoreBench(\''+p.id+'\')">'+(st.generatedAt?'↻ Re-score bench':'✨ Score Bench Against All Roles')+'</button>';
+  var meta=st.generatedAt?'<span style="font-size:11px;color:var(--text-muted);margin-left:8px">last run '+new Date(st.generatedAt).toLocaleString()+'</span>':'';
+  var oppHint=p.opportunityId?'':'<div style="font-size:11px;color:var(--warn-text);background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);padding:8px 10px;border-radius:6px;margin-bottom:10px">⚠ This proposal isn\'t linked to an opportunity yet. Open Req intent needs an opportunity to attach the requisition to. Set one in the Overview tab.</div>';
+  var rolesHTML=roles.map(function(role,idx){
+    var rm=st.roleMatches[idx];if(!rm)rm={intent:'',candidates:[],requisitionId:'',assignedMemberIds:[]};
+    var cands=(rm.candidates||[]).slice().sort(function(a,b){return (b.fitScore||0)-(a.fitScore||0);}).slice(0,5);
+    var benchListHTML=cands.length?'<div class="bench-list"><div style="font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px">Internal Bench (top '+cands.length+')</div>'
+      +cands.map(function(c){
+        var m=allM().find(function(x){return x.id===c.memberId;});
+        if(!m)return '';
+        var s=c.fitScore||0;
+        var cls=s>=75?'bench-score-high':s>=50?'bench-score-med':'bench-score-low';
+        var assigned=(rm.assignedMemberIds||[]).indexOf(c.memberId)>-1;
+        var assignBtn=rm.intent==='bench'?'<button type="button" class="btn '+(assigned?'btn-sec':'btn-gold')+' btn-sm" onclick="pdStaffingToggleAssign(\''+p.id+'\','+idx+',\''+c.memberId+'\')">'+(assigned?'Unassign':'Assign')+'</button>':'';
+        return '<div class="bench-row'+(assigned?' assigned':'')+'">'
+          +'<div class="bench-row-info"><div class="bench-row-name">'+esc(m.name)+'</div><div class="bench-row-meta">'+esc(m.role||'')+(m.location?' · '+esc(_resolveLocName(m.location)||m.location):'')+(m.clearance?' · '+esc(_resolveClrName(m.clearance)||m.clearance):'')+'</div><div class="bench-row-rationale">'+esc(c.rationale||'')+'</div></div>'
+          +'<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><span class="bench-score '+cls+'">'+s+'%</span>'+assignBtn+'</div>'
+          +'</div>';
+      }).join('')+'</div>':'';
+    var intentBtns='<div class="staff-intent">'
+      +'<span style="font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--text-muted);margin-right:4px">Fulfill via:</span>'
+      +['bench','req','sub'].map(function(k){
+        var labels={bench:'🏢 Internal Bench',req:'📋 Open Requisition',sub:'🤝 Sub / Teaming'};
+        return '<button type="button" class="staff-intent-btn'+(rm.intent===k?' active':'')+'" onclick="pdStaffingSetIntent(\''+p.id+'\','+idx+',\''+k+'\')">'+labels[k]+'</button>';
+      }).join('')+'</div>';
+    // Linked requisition
+    var reqBlock='';
+    if(rm.requisitionId){
+      var req=(D.recruitings||[]).find(function(r){return r.id===rm.requisitionId;});
+      if(req){
+        reqBlock='<div class="req-link-box"><div>✓ Linked to requisition: <a href="#" onclick="event.preventDefault();closeModal(\'ovProp\');switchTab(\'recruit\');setTimeout(function(){openRecruitModal(\''+req.id+'\');},200)">'+esc(req.jdTitle||'(unnamed)')+'</a><div style="font-size:10px;color:var(--text-muted);margin-top:2px">'+esc(req.status||'open')+(req.proposalContingent?' · proposal-contingent':'')+'</div></div><button class="btn btn-danger-sm btn-sm" onclick="pdStaffingUnlinkReq(\''+p.id+'\','+idx+')">Unlink</button></div>';
+      } else {
+        reqBlock='<div class="req-link-box"><div style="color:var(--text-muted);font-size:11px">Linked requisition was deleted.</div><button class="btn btn-danger-sm btn-sm" onclick="pdStaffingUnlinkReq(\''+p.id+'\','+idx+')">Clear</button></div>';
+      }
+    } else if(rm.intent==='req'){
+      reqBlock='<div class="req-link-box"><div><span class="req-pending-badge">No requisition yet</span> <span style="font-size:11px;color:var(--text-muted);margin-left:6px">Draft a JD with Claude and create the open requisition.</span></div><button class="btn btn-gold btn-sm" '+(p.opportunityId?'':'disabled title="Link this proposal to an opportunity first"')+' onclick="pdStaffingDraftReq(\''+p.id+'\','+idx+')">✨ Draft JD &amp; Create Req</button></div>';
+    }
+    return '<div class="staff-role">'
+      +'<div class="staff-role-hdr"><div><div class="staff-role-ttl">'+esc(role.title||'(untitled role)')+' × '+(role.count||1)+'</div>'
+      +'<div class="staff-role-meta">'+(role.clearance?'🔒 '+esc(role.clearance)+' · ':'')+(role.location?'📍 '+esc(role.location):'remote/unspecified')+'</div>'
+      +(role.skills&&role.skills.length?'<div class="staff-role-skills"><b>Skills:</b> '+esc(role.skills.join(', '))+'</div>':'')
+      +'</div></div>'
+      +benchListHTML
+      +intentBtns
+      +reqBlock
+      +'</div>';
+  }).join('');
+  return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">'
+    +'<div style="font-size:12px;color:var(--text-muted);max-width:560px">For each required role from the RFP: score CF\'s bench, pick a fulfillment intent, and (for "Open Req" roles) auto-draft a JD and seed a Recruiting requisition on the linked opportunity. Sourcing can start before award.</div>'
+    +'<div>'+btn+meta+'</div></div>'
+    +oppHint
+    +rolesHTML;
+}
+function pdScoreBench(propId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  var roles=(p.rfp&&p.rfp.requiredRoles)||[];
+  if(!roles.length){alert('No required roles to score against.');return;}
+  // Build compact member roster (cap at 60 to stay within token budget)
+  var members=allM().slice(0,60).map(function(m){
+    return {
+      id:m.id,name:m.name,role:m.role||'',
+      skills:_resolveSkillsetNames(m.skillsets),
+      certs:_resolveCertNames(m.certifications),
+      location:_resolveLocName(m.location)||m.location||'',
+      clearance:_resolveClrName(m.clearance)||m.clearance||'',
+      tags:[m.sme?'SME':'',m.hub?'Hub':'',m.associate?'Associate':'',m.proposal?'Proposal':'',m.recruiter?'Recruiter':''].filter(Boolean)
+    };
+  });
+  if(!members.length){alert('No people in the org chart to score against.');return;}
+  var sys='You are a federal-services capture analyst matching a company\'s internal bench to required RFP roles. Output ONLY a JSON object inside a ```json``` block. Score 0-100 per member per role (0 = no fit; 100 = exact match on skills + cert + clearance + location). Be strict — partial overlap is not high fit. Give a 1-sentence rationale citing specific skills/certs/clearance.';
+  var prompt='REQUIRED ROLES (in order; use roleIndex 0,1,...):\n'+roles.map(function(r,i){return i+'. '+r.title+' × '+(r.count||1)+' — skills: '+((r.skills||[]).join(', ')||'(any)')+' · clearance: '+(r.clearance||'none')+' · location: '+(r.location||'any');}).join('\n')
+    +'\n\nINTERNAL BENCH:\n'+JSON.stringify(members)
+    +'\n\nFor EACH role, return the top 5 members ranked by fit. Return ONLY this JSON:\n'
+    +'{"matches":[{"roleIndex":number,"candidates":[{"memberId":"...","fitScore":number,"rationale":"why"}]}]}';
+  var llm=_propLLMOpts(p);
+  var btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent='✨ Scoring…';}
+  llmComplete({provider:llm.provider,model:llm.model,system:sys,messages:[{role:'user',content:prompt}],max_tokens:6000})
+    .then(function(j){
+      var parsed=llmExtractJSON(j);
+      if(!parsed||!parsed.matches)throw new Error('Could not parse bench-score response.');
+      p.staffing=p.staffing||{roleMatches:[]};
+      // Initialize roleMatches to length of roles
+      while(p.staffing.roleMatches.length<roles.length)p.staffing.roleMatches.push({intent:'',candidates:[],requisitionId:'',assignedMemberIds:[]});
+      // Apply candidate scores per role, preserving intent/requisitionId/assigned
+      parsed.matches.forEach(function(m){
+        var idx=m.roleIndex;if(typeof idx!=='number'||idx<0||idx>=roles.length)return;
+        if(!p.staffing.roleMatches[idx])p.staffing.roleMatches[idx]={intent:'',candidates:[],requisitionId:'',assignedMemberIds:[]};
+        p.staffing.roleMatches[idx].candidates=(m.candidates||[]).filter(function(c){return allM().find(function(mm){return mm.id===c.memberId;});});
+      });
+      p.staffing.generatedAt=Date.now();
+      p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'staffing.scored',payload:{roles:roles.length}});
+      save();renderProposalDetail(propId);
+    })
+    .catch(function(e){alert('Bench scoring failed: '+(e&&e.message||e));})
+    .finally(function(){if(btn){btn.disabled=false;btn.textContent='↻ Re-score bench';}});
+}
+function pdStaffingSetIntent(propId,idx,intent){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  p.staffing=p.staffing||{roleMatches:[]};
+  while(p.staffing.roleMatches.length<=idx)p.staffing.roleMatches.push({intent:'',candidates:[],requisitionId:'',assignedMemberIds:[]});
+  p.staffing.roleMatches[idx].intent=p.staffing.roleMatches[idx].intent===intent?'':intent;
+  save();renderProposalDetail(propId);
+}
+function pdStaffingToggleAssign(propId,idx,memberId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  var rm=p.staffing.roleMatches[idx];if(!rm)return;
+  rm.assignedMemberIds=rm.assignedMemberIds||[];
+  var i=rm.assignedMemberIds.indexOf(memberId);
+  if(i<0)rm.assignedMemberIds.push(memberId);else rm.assignedMemberIds.splice(i,1);
+  save();renderProposalDetail(propId);
+}
+function pdStaffingUnlinkReq(propId,idx){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  var rm=p.staffing.roleMatches[idx];if(!rm)return;
+  if(!confirm('Unlink the requisition from this role? The requisition itself stays in the Recruiting module.'))return;
+  // Clear back-references on the requisition too
+  var req=(D.recruitings||[]).find(function(r){return r.id===rm.requisitionId;});
+  if(req&&req.proposalId===propId)req.proposalId='';
+  rm.requisitionId='';
+  save();renderProposalDetail(propId);
+}
+function _propEnsureRecruitTask(p){
+  // Find or create a Perform Recruiting task on the opportunity for this proposal.
+  if(!p.opportunityId)return '';
+  var tpl=(D.taskTemplates||[]).find(function(t){return /recruit/i.test(t.name);});
+  if(!tpl)return '';
+  var existing=(D.activities||[]).find(function(a){return a.projectId===p.opportunityId&&a.templateId===tpl.id;});
+  if(existing)return existing.id;
+  var opp=D.projects.find(function(x){return x.id===p.opportunityId;});
+  var newAct={
+    id:uid(),kind:'project',projectId:p.opportunityId,templateId:tpl.id,programId:'',
+    task:'Task_'+((opp&&opp.name)||'Pursuit').replace(/[^A-Za-z0-9]+/g,'').slice(0,40),
+    subtask:tpl.name,outline:'',objective:'',phase:'Month 1',status:'todo',
+    start:'',dueDate:(p.rfp&&p.rfp.dueDate)||'',isMilestone:false,parentId:null,
+    pm:(opp&&opp.pm)||'',ownerText:'',owners:[],
+    updates:[],attachments:[],order:(D.activities||[]).length
+  };
+  D.activities=D.activities||[];D.activities.push(newAct);
+  return newAct.id;
+}
+function pdStaffingDraftReq(propId,idx){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  if(!p.opportunityId){alert('Link this proposal to an opportunity first (Overview tab → set Linked Opportunity).');return;}
+  var role=(p.rfp&&p.rfp.requiredRoles&&p.rfp.requiredRoles[idx])||null;
+  if(!role){alert('Role not found.');return;}
+  var opp=D.projects.find(function(x){return x.id===p.opportunityId;});
+  var rfp=p.rfp||{};
+  // Build the JD with Claude — RFP role text + Company Profile voice
+  var sys='You are an expert recruiter writing a federal-services job description. Output ONLY clean HTML (use <p>, <ul>/<li>, <strong>, <h3>; no markdown, no code fences, no commentary). Use the RFP\'s required text as the authoritative source for must-have skills/qualifications. Tone matches the brand voice.';
+  var instruction='Write the Job Description for this role tied to the following RFP. Sections: Role Overview · Key Responsibilities · Required Qualifications · Nice-to-Haves · About the Engagement.\n\n'
+    +'ROLE FROM RFP:\n'+JSON.stringify(role)
+    +'\n\nRFP CONTEXT:\nCustomer: '+(rfp.customer||'')+' · Vehicle: '+(rfp.contractVehicle||'')+' · PoP: '+(rfp.pop||'')+'\nScope: '+(rfp.scope||'').slice(0,1000)
+    +'\n\nBRAND VOICE:\n'+_propBuildVoiceCtx()
+    +'\n\nIMPORTANT: This is a proposal-contingent hire (we open the req before award). The JD should acknowledge that without being alarming — say "anticipated award" or similar.';
+  var llm=_propLLMOpts(p);
+  var btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent='✨ Drafting JD…';}
+  llmComplete({provider:llm.provider,model:llm.model,system:sys,messages:[{role:'user',content:instruction}],max_tokens:2500})
+    .then(function(j){
+      var html=llmExtractText(j).trim().replace(/^```html\s*/i,'').replace(/```$/,'').trim();
+      openAIPreview({
+        title:'JD Draft · '+(role.title||'role'),
+        html:html,
+        onApply:function(finalHtml){
+          // Create the requisition
+          var taskId=_propEnsureRecruitTask(p);
+          var newReq={
+            id:uid(),
+            taskId:taskId,
+            projectId:p.opportunityId,
+            departmentId:'',
+            busDevId:'',pmId:'',
+            jdTitle:(role.title||'Role')+' — '+((opp&&opp.customer)||(opp&&opp.name)||'').slice(0,40),
+            jdDescription:finalHtml,
+            jdAttachments:[],
+            status:'open',
+            createdAt:Date.now(),
+            updatedAt:Date.now(),
+            createdBy:ME?ME.id:'',
+            proposalContingent:true,
+            proposalId:propId,
+            rfpRoleSnapshot:{title:role.title,count:role.count,skills:role.skills,clearance:role.clearance,location:role.location}
+          };
+          D.recruitings=D.recruitings||[];D.recruitings.push(newReq);
+          // Link back on the staffing matrix
+          p.staffing.roleMatches[idx].requisitionId=newReq.id;
+          p.staffing.roleMatches[idx].intent='req';
+          p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'staffing.req-created',payload:{roleIdx:idx,reqId:newReq.id,proposalContingent:true}});
+          // Notify opp PM + OPR
+          if(opp){
+            var pm=allM().find(function(m){return m.name===opp.pm;});
+            var opr=allM().find(function(m){return m.name===opp.opr;});
+            if(pm)pushNotif(pm.id,'proposal-req-created','recruiting',newReq.id,'New proposal-contingent requisition: '+newReq.jdTitle);
+            if(opr)pushNotif(opr.id,'proposal-req-created','recruiting',newReq.id,'New proposal-contingent requisition: '+newReq.jdTitle);
+          }
+          save();renderProposalDetail(propId);
+        }
+      });
+    })
+    .catch(function(e){alert('JD draft failed: '+(e&&e.message||e));})
+    .finally(function(){if(btn){btn.disabled=false;btn.textContent='✨ Draft JD & Create Req';}});
 }
 
 /* ── NOTIFICATIONS ── */
