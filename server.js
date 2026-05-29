@@ -142,6 +142,55 @@ app.post('/api/llm/complete', async (req, res) => {
   }
 });
 
+// LLM with attachment (e.g. resume PDF as a `document` content block)
+app.post('/api/llm/with-attachment', async (req, res) => {
+  try {
+    const { accountId, attachmentId, system: systemPrompt, instruction, model, max_tokens } = req.body || {};
+    if (!attachmentId) return res.status(400).json({ error: 'attachmentId required' });
+    if (!instruction) return res.status(400).json({ error: 'instruction required' });
+    let apiKey = process.env.ANTHROPIC_API_KEY || '';
+    if (accountId) {
+      const r = await pool.query('SELECT data FROM app_state WHERE id = 1');
+      const data = r.rows[0] && r.rows[0].data;
+      const acc = data && Array.isArray(data.accounts) && data.accounts.find((a) => a.id === accountId);
+      if (acc && acc.apiKey) apiKey = acc.apiKey;
+    }
+    if (!apiKey) return res.status(400).json({ error: 'No API key configured. See Admin → Integrations.' });
+    const ar = await pool.query('SELECT name, mime, data FROM attachments WHERE id = $1', [attachmentId]);
+    if (!ar.rows.length) return res.status(404).json({ error: 'Attachment not found' });
+    const att = ar.rows[0];
+    const mime = att.mime || 'application/octet-stream';
+    const isPdf = /pdf$/i.test(mime) || /\.pdf$/i.test(att.name || '');
+    // Build user content: PDFs go as document blocks, anything else gets a fallback text note
+    const userContent = [];
+    if (isPdf) {
+      userContent.push({
+        type: 'document',
+        source: { type: 'base64', media_type: 'application/pdf', data: Buffer.from(att.data).toString('base64') },
+      });
+    } else {
+      userContent.push({ type: 'text', text: `[Attachment "${att.name}" is type ${mime}; Claude cannot read it directly. Proceed using only the instruction below.]` });
+    }
+    userContent.push({ type: 'text', text: instruction });
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: model || 'claude-sonnet-4-5',
+        max_tokens: max_tokens || 4096,
+        system: systemPrompt || '',
+        messages: [{ role: 'user', content: userContent }],
+      }),
+    });
+    const json = await resp.json();
+    if (!resp.ok) return res.status(resp.status).json(json);
+    res.json(json);
+  } catch (e) {
+    console.error('LLM with-attachment failed:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
 initDb()
