@@ -40,6 +40,9 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .search{flex:1;min-width:200px;max-width:380px;padding:9px 13px;border:1px solid rgba(255,255,255,0.12);border-radius:7px;background:rgba(255,255,255,0.06);color:#fff;font-size:13px;font-family:inherit;outline:none;}
 .search::placeholder{color:rgba(255,255,255,0.28);}
 .search:focus{border-color:var(--gold);}
+.search-hdr{flex:0 0 auto;width:240px;max-width:240px;min-width:140px;padding:7px 11px;font-size:12px;align-self:center;}
+@media (max-width: 1280px){.search-hdr{width:180px;}}
+@media (max-width: 1024px){.search-hdr{flex:1 1 100%;width:auto;max-width:none;margin-top:6px;order:99;}}
 .tab-bar{display:flex;gap:2px;background:rgba(255,255,255,0.06);border-radius:7px;padding:3px;}
 .tab{padding:7px 16px;border-radius:5px;font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);cursor:pointer;border:none;background:none;font-family:inherit;transition:all 0.15s;}
 .tab.active{background:rgba(255,255,255,0.14);color:#fff;}
@@ -740,6 +743,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
       </div>
     </div>
     <div class="hdr-actions">
+      <input type="text" class="search search-hdr" id="searchInput" placeholder="🔍 Search name, role, project, skill..." oninput="renderView()">
       <span class="user-badge" id="userBadge"></span>
       <button class="hdr-bell" id="hb_bell" onclick="openNotifications()" title="Notifications" style="display:none">&#128276;<span class="hdr-bell-badge" id="hb_bell_badge" style="display:none">0</span></button>
       <button class="btn btn-gold" id="hb_admin" onclick="openAdmin()" title="People, items, library, access, data">&#9881; Admin</button>
@@ -748,7 +752,6 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
   </div>
   <div class="stats" id="statsBar"></div>
   <div class="toolbar">
-    <input type="text" class="search" id="searchInput" placeholder="Search name, role, project, skill..." oninput="renderView()">
     <div class="tab-bar">
       <button class="tab active" id="tabOrg" onclick="switchTab('org')">Department View</button>
       <button class="tab" id="tabChart" onclick="switchTab('orgchart')">Org Chart</button>
