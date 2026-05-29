@@ -191,6 +191,136 @@ app.post('/api/llm/with-attachment', async (req, res) => {
   }
 });
 
+// ── ATLAS SNAPSHOT (one-way sync feed for LevelUp / other consumers) ──
+// Returns a sanitized read-only view of the Atlas dataset.
+// Optional bearer auth: if ATLAS_SYNC_TOKEN env var is set, callers must send
+//   Authorization: Bearer <token>. If unset, the endpoint is open.
+// Deliberately EXCLUDED for safety: accounts, notifications, recruitings,
+// candidates (PII / sensitive workflow data).
+app.get('/api/atlas-snapshot', async (req, res) => {
+  try {
+    const token = process.env.ATLAS_SYNC_TOKEN || '';
+    if (token) {
+      const auth = req.get('Authorization') || '';
+      const got = auth.replace(/^Bearer\s+/i, '').trim();
+      if (got !== token) return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const r = await pool.query('SELECT data, updated_at FROM app_state WHERE id = 1');
+    if (!r.rows.length) return res.json({ version: null, generatedAt: new Date().toISOString(), source: 'atlas', empty: true });
+    const data = r.rows[0].data || {};
+    const updatedAt = r.rows[0].updated_at;
+
+    // Strip sensitive fields off the members (resume URLs are OK; cost is OK; notes/badge/etc. are OK)
+    const departments = (data.departments || []).map((d) => ({
+      id: d.id,
+      name: d.name,
+      subtitle: d.subtitle || '',
+      accent: d.accent || '',
+      parentId: d.parentId || null,
+      members: (d.members || []).map((m) => ({
+        id: m.id,
+        name: m.name,
+        role: m.role || '',
+        cost: m.cost || 0,
+        badge: m.badge || '',
+        reportsTo: m.reportsTo || '',
+        projects: m.projects || [],
+        skillsets: m.skillsets || [],
+        certifications: m.certifications || [],
+        location: m.location || '',
+        clearance: m.clearance || '',
+        hub: !!m.hub,
+        sme: !!m.sme,
+        associate: !!m.associate,
+        proposal: !!m.proposal,
+        recruiter: !!m.recruiter,
+        note: m.note || '',
+        reassess: !!m.reassess,
+        pastProjects: m.pastProjects || [],
+        pastClients: m.pastClients || [],
+        resumeLink: m.resumeLink || '',
+        attachments: m.attachments || [],
+      })),
+    }));
+
+    // Projects — pass through with CLINs intact, drop nothing
+    const projects = (data.projects || []).map((p) => ({
+      id: p.id,
+      name: p.name,
+      category: p.category || 'project',
+      revenue: p.revenue || 0,
+      targetRevenue: p.targetRevenue || 0,
+      revenueNote: p.revenueNote || '',
+      description: p.description || '',
+      parentId: p.parentId || null,
+      attachments: p.attachments || [],
+      clins: p.clins || [],
+      // Opportunity-specific
+      customer: p.customer || '',
+      stage: p.stage || '',
+      status: p.status || '',
+      leadGen: p.leadGen || '',
+      presales: p.presales || '',
+      sales: p.sales || '',
+      delivery: p.delivery || '',
+      opr: p.opr || '',
+      pm: p.pm || '',
+      team: p.team || '',
+      potential: p.potential || 0,
+      closeDate: p.closeDate || '',
+      changeRequested: p.changeRequested || '',
+    }));
+
+    // Activities — exclude any tied to recruitings (workflow-internal) by templateId; include COE + project kinds
+    const activities = (data.activities || []).map((a) => ({
+      id: a.id,
+      kind: a.kind || 'coe',
+      programId: a.programId || '',
+      program: a.program || '',
+      task: a.task || '',
+      subtask: a.subtask || '',
+      outline: a.outline || '',
+      objective: a.objective || '',
+      phase: a.phase || '',
+      start: a.start || '',
+      dueDate: a.dueDate || '',
+      isMilestone: !!a.isMilestone,
+      status: a.status || 'todo',
+      parentId: a.parentId || null,
+      owners: a.owners || [],
+      ownerText: a.ownerText || '',
+      projectId: a.projectId || null,
+      pm: a.pm || '',
+      order: a.order || 0,
+      templateId: a.templateId || '',
+      updates: (a.updates || []).map((u) => ({ id: u.id, ts: u.ts, author: u.author, text: u.text })),
+      attachments: a.attachments || [],
+    }));
+
+    res.json({
+      version: '1',
+      source: 'atlas',
+      generatedAt: new Date().toISOString(),
+      updatedAt: updatedAt ? updatedAt.toISOString() : null,
+      planStart: data.planStart || null,
+      departments,
+      projects,
+      activities,
+      programs: data.programs || [],
+      taskTemplates: data.taskTemplates || [],
+      locations: data.locations || [],
+      skillsets: data.skillsets || [],
+      certifications: data.certifications || [],
+      clearances: data.clearances || [],
+      pastProjects: data.pastProjects || [],
+      pastClients: data.pastClients || [],
+    });
+  } catch (e) {
+    console.error('GET /api/atlas-snapshot failed:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
 initDb()
