@@ -499,6 +499,27 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .ai-preview-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
 .ai-preview-ttl{font-size:11px;font-weight:800;color:#7C3AED;letter-spacing:0.4px;text-transform:uppercase;}
 .ai-preview-body{font-size:13px;color:var(--text-primary);line-height:1.55;max-height:300px;overflow-y:auto;padding:8px 10px;background:var(--page-bg);border-radius:6px;}
+.ai-row{background:linear-gradient(135deg,rgba(124,58,237,0.06),rgba(14,165,233,0.06));border:1px solid rgba(124,58,237,0.2);border-radius:8px;padding:10px 12px;margin:8px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.ai-row-lbl{font-size:10px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;color:#7C3AED;margin-right:4px;}
+.fit-bar-wrap{display:flex;align-items:center;gap:10px;}
+.fit-bar{flex:1;height:8px;background:#E5E7EB;border-radius:4px;overflow:hidden;max-width:160px;}
+.fit-bar-fill{height:100%;background:linear-gradient(90deg,#DC2626,#D97706,#16A34A);transition:width 0.3s;}
+.fit-score-n{font-size:20px;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums;}
+.fit-detail{font-size:11px;color:var(--text-secondary);line-height:1.5;}
+.fit-detail strong{color:var(--text-primary);}
+.fld-extract{display:grid;grid-template-columns:120px 1fr 1fr auto;gap:8px;align-items:center;padding:7px 8px;border-bottom:1px solid #F1F5F9;font-size:12px;}
+.fld-extract:last-child{border-bottom:none;}
+.fld-extract-l{font-weight:700;color:var(--text-secondary);font-size:11px;}
+.fld-extract-cur{color:var(--text-muted);font-style:italic;}
+.fld-extract-cur.empty{color:var(--text-muted);opacity:0.5;}
+.fld-extract-new{color:var(--text-primary);font-weight:600;}
+.kit-q{background:#fff;border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:6px;}
+.kit-q-n{font-size:10px;font-weight:800;color:var(--gold);letter-spacing:0.4px;text-transform:uppercase;margin-bottom:2px;}
+.kit-q-txt{font-size:13px;color:var(--text-primary);font-weight:600;margin-bottom:4px;line-height:1.5;}
+.kit-q-why{font-size:11px;color:var(--text-muted);font-style:italic;line-height:1.4;}
+.email-pre{background:#F8FAFC;border:1px solid var(--border);border-radius:6px;padding:12px 14px;font-family:Consolas,Menlo,monospace;font-size:12px;color:var(--text-primary);white-space:pre-wrap;line-height:1.55;max-height:50vh;overflow-y:auto;}
+.iv-summ-btn{background:transparent;border:1px solid rgba(124,58,237,0.35);color:#7C3AED;padding:2px 7px;font-size:10px;border-radius:4px;cursor:pointer;font-family:inherit;font-weight:700;}
+.iv-summ-btn:hover{background:rgba(124,58,237,0.08);}
 </style>
 </head>
 <body>
@@ -2203,6 +2224,7 @@ function openCandModal(reqId,candId){
       +(iv.notes?'<div style="font-size:11px;margin-top:4px;color:var(--text-secondary)">'+esc(iv.notes)+'</div>':'')+'</div>'
       +'<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0">'
       +'<select class="fld-sel '+outCls+'" style="font-size:11px;padding:3px 6px;width:auto" onchange="candUpdInterview(\''+v.id+'\',\''+iv.id+'\',\'outcome\',this.value)">'+outOpts+'</select>'
+      +'<button type="button" class="iv-summ-btn" onclick="candSummInterview(\''+v.id+'\',\''+iv.id+'\')" title="AI-summarize notes &amp; suggest outcome">&#10024; Summarize</button>'
       +'<button class="btn btn-danger-sm btn-sm" onclick="candDelInterview(\''+v.id+'\',\''+iv.id+'\')" title="Delete">&times;</button></div>'
       +'</div>';
   }).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:8px 0">No interviews scheduled yet.</div>';
@@ -2231,11 +2253,35 @@ function openCandModal(reqId,candId){
   var evHTML=ev.length?ev.map(function(e){return '<div class="cand-event-row"><span class="cand-event-ts">'+new Date(e.ts).toLocaleString()+'</span> · <b>'+esc(e.actorName||'—')+'</b> · '+esc(e.type)+(e.payload&&Object.keys(e.payload).length?' <span style="color:var(--text-muted)">'+esc(JSON.stringify(e.payload))+'</span>':'')+'</div>';}).join(''):'<div style="font-size:11px;color:var(--text-muted)">No events yet.</div>';
   var dup=nu?null:candFindDup(v.name,v.id);
   var dupWarn=nu?'':(dup?'<div class="dup-warn">⚠ Duplicate-name candidate: <b>'+esc(dup.name)+'</b> already exists on '+(dup.recruitingId===v.recruitingId?'this requisition.':'requisition <b>'+esc((D.recruitings.find(function(r){return r.id===dup.recruitingId;})||{jdTitle:'?'}).jdTitle)+'</b>.')+'</div>':'');
+  // AI assistant row (only for saved candidates)
+  var aiRow='';
+  if(!nu){
+    var hasResume=!!(v.resume&&v.resume.id);
+    var fitChip=v.fitScore?'<div class="fit-bar-wrap" title="'+esc(v.fitSummary||'')+'"><span class="fit-score-n">'+v.fitScore+'</span><div class="fit-bar"><div class="fit-bar-fill" style="width:'+Math.min(100,Math.max(0,v.fitScore))+'%"></div></div></div>':'';
+    aiRow='<div class="ai-row">'
+      +'<span class="ai-row-lbl">&#10024; AI</span>'
+      +'<button type="button" class="ai-btn" '+(hasResume?'':'disabled title="Upload a PDF resume first"')+' onclick="candExtractResume(\''+v.id+'\')">Extract fields from resume</button>'
+      +'<button type="button" class="ai-btn" onclick="candComputeFit(\''+v.id+'\')">Compute fit score</button>'
+      +'<button type="button" class="ai-btn" onclick="candGenKit(\''+v.id+'\')">Generate interview kit</button>'
+      +'<span class="aiasst-wrap"><button type="button" class="ai-btn" onclick="event.stopPropagation();candEmailMenuToggle()">Draft email &#9662;</button>'
+        +'<div class="aiasst-pop" id="cand_em_pop" onclick="event.stopPropagation()">'
+          +'<button type="button" onclick="candDraftEmail(\''+v.id+'\',\'outreach\')">Initial outreach</button>'
+          +'<button type="button" onclick="candDraftEmail(\''+v.id+'\',\'schedule\')">Schedule interview</button>'
+          +'<button type="button" onclick="candDraftEmail(\''+v.id+'\',\'offer\')">Offer letter</button>'
+          +'<button type="button" onclick="candDraftEmail(\''+v.id+'\',\'reject\')">Polite rejection</button>'
+          +'<button type="button" onclick="candDraftEmail(\''+v.id+'\',\'followup\')">Follow-up nudge</button>'
+        +'</div></span>'
+      +(fitChip?'<div style="margin-left:auto">'+fitChip+'</div>':'')
+      +'</div>'
+      +(v.interviewKit?'<div style="font-size:11px;color:var(--text-muted);margin:-4px 0 8px">Last interview kit generated '+new Date(v.interviewKit.generatedAt||0).toLocaleString()+' &middot; <a href="#" onclick="event.preventDefault();candShowKit(\''+v.id+'\')">view</a></div>':'')
+      +(v.fitSummary?'<div class="fit-detail" style="margin:-4px 0 8px"><strong>Fit:</strong> '+esc(v.fitSummary)+'</div>':'');
+  }
   // Hire button — only when status===offer & not yet hired
   var hireBlock=(v.status==='offer'||v.offer&&v.offer.state==='Accepted')&&v.status!=='hired'?'<button class="btn btn-gold" onclick="candHire(\''+v.id+'\')" style="margin-right:6px">&#127881; Hire (create member)</button>':'';
   document.getElementById('mdlCand').innerHTML=
     '<div class="mdl-over">Recruiting · '+esc(req.jdTitle||'Requisition')+'</div><div class="mdl-title">'+(nu?'New Candidate':'Candidate · '+esc(v.name||'unnamed'))+'</div>'
     +dupWarn
+    +aiRow
     +'<div style="display:flex;gap:10px;flex-wrap:wrap">'
       +'<div class="fld" style="flex:2;min-width:200px"><label class="fld-l">Candidate Name</label><input class="fld-i" id="cand_name" value="'+esc(v.name)+'" placeholder="Full name"></div>'
       +'<div class="fld" style="flex:1;min-width:140px"><label class="fld-l">Status</label><select class="fld-sel" id="cand_status">'+stsOpts+'</select></div>'
@@ -2542,6 +2588,219 @@ function openAIPreview(opts){
 }
 function aiPreviewApply(){if(window._aiPreviewApply)window._aiPreviewApply();}
 function aiPreviewAppend(){if(window._aiPreviewAppend)window._aiPreviewAppend();}
+
+/* ── CANDIDATE AI FEATURES ── */
+function candCtx(c){
+  // Build a compact context string for prompts
+  var req=(D.recruitings||[]).find(function(r){return r.id===c.recruitingId;})||{};
+  var jd=(req.jdDescription||'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();
+  var parent=rqParent(req);
+  return {
+    jd:{title:req.jdTitle||'',description:jd,parent:parent?parent.name:''},
+    candidate:{
+      name:c.name||'',location:c.location||'',workAuth:c.workAuth||'',
+      salaryK:c.salaryK||0,clearance:c.clearance||'',availability:c.availability||'',
+      source:(c.source&&c.source.kind)||'',agency:(c.source&&c.source.agency)||'',
+      status:c.status||''
+    }
+  };
+}
+function candAIBusy(label){var ev=event;if(!ev)return null;var b=ev.target;if(!b||!b.disabled===undefined)return null;b.disabled=true;var prev=b.textContent;b.textContent='✨ '+(label||'Thinking…');return function(){b.disabled=false;b.textContent=prev;};}
+
+// 1) Extract fields from resume
+function candExtractResume(id){
+  var c=D.candidates.find(function(x){return x.id===id;});if(!c||!c.resume||!c.resume.id)return;
+  var restore=candAIBusy('Reading resume…');
+  var sys='You are extracting structured fields from a candidate resume for an Applicant Tracking System. Output ONLY a JSON object inside a ```json``` block. Use null for any field you cannot determine. Do not invent data.';
+  var schema='{"name":"Full name","location":"City, State","workAuth":"USC|Green Card|EAD|H1B|TN|Other","salaryK":number_in_thousands_or_null,"clearance":"None|Position of Public Trust|Secret|Top Secret|TS/SCI|Other","availability":"Immediate or date or phrase","summary":"one-sentence summary of background"}';
+  llmDocComplete({
+    system:sys,
+    attachmentId:c.resume.id,
+    instruction:'Read the attached resume PDF. Extract these fields and return ONLY this JSON shape:\n\n'+schema+'\n\nNo prose, no markdown headers — just the JSON object inside a ```json``` code block.',
+    max_tokens:1200
+  }).then(function(j){
+    if(restore)restore();
+    var parsed=llmExtractJSON(j);
+    if(!parsed){alert('Could not parse resume extraction. Try a clearer PDF.');return;}
+    candShowExtractPreview(id,c,parsed);
+  }).catch(function(e){if(restore)restore();alert('Resume extraction failed: '+e.message);});
+}
+function candShowExtractPreview(id,c,parsed){
+  var fields=[
+    {k:'name',l:'Name'},{k:'location',l:'Location'},{k:'workAuth',l:'Work Auth'},
+    {k:'salaryK',l:'Salary ($k)'},{k:'clearance',l:'Clearance'},{k:'availability',l:'Availability'}
+  ];
+  var rows=fields.map(function(f){
+    var cur=c[f.k];var nw=parsed[f.k];
+    var curDisp=(cur===null||cur===undefined||cur==='')?'<span class="empty">— empty —</span>':esc(String(cur));
+    var nwDisp=(nw===null||nw===undefined||nw==='')?'<span class="fld-extract-cur empty">— not found —</span>':'<span class="fld-extract-new">'+esc(String(nw))+'</span>';
+    var hasNew=!(nw===null||nw===undefined||nw==='');
+    return '<div class="fld-extract">'
+      +'<span class="fld-extract-l">'+esc(f.l)+'</span>'
+      +'<span class="fld-extract-cur">'+curDisp+'</span>'
+      +nwDisp
+      +(hasNew?'<button class="btn btn-sec btn-sm" onclick="candApplyExtract(\''+id+'\',\''+f.k+'\','+JSON.stringify(nw).replace(/"/g,'&quot;')+')">Apply</button>':'<span></span>')
+      +'</div>';
+  }).join('');
+  var allBtn='<button class="btn btn-navy" style="flex:1" onclick="candApplyExtractAll(\''+id+'\','+JSON.stringify(parsed).replace(/"/g,'&quot;').replace(/'/g,'&#39;')+')">Apply all suggested</button>';
+  document.getElementById('mdlAIPrev').innerHTML=
+    '<div class="mdl-over">Anthropic Claude</div><div class="mdl-title">Extracted Fields from Resume</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Review what Claude found. Nothing changes until you click Apply on individual fields or Apply All. Existing values are never overwritten without your confirmation here.</div>'
+    +(parsed.summary?'<div style="font-size:12px;background:var(--page-bg);padding:8px 12px;border-radius:6px;margin-bottom:10px"><b>Summary:</b> '+esc(parsed.summary)+'</div>':'')
+    +'<div style="background:#fff;border:1px solid var(--border);border-radius:8px">'+rows+'</div>'
+    +'<div class="btn-row" style="margin-top:14px">'+allBtn
+    +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovAIPrev\')">Close</button></div>';
+  openModal('ovAIPrev');
+}
+function candApplyExtract(id,field,value){
+  var c=D.candidates.find(function(x){return x.id===id;});if(!c)return;
+  // Don't overwrite existing values silently — confirm
+  var cur=c[field];
+  if(cur!==undefined&&cur!==null&&cur!==''&&cur!==0){
+    if(!confirm(field+' already has a value ("'+cur+'"). Overwrite with "'+value+'"?'))return;
+  }
+  c[field]=value;candLog(id,'ai.extract.applied',{field:field,value:value});save();
+  // Refresh the underlying modal without closing the preview
+  openCandModal(c.recruitingId,id);
+}
+function candApplyExtractAll(id,parsed){
+  var c=D.candidates.find(function(x){return x.id===id;});if(!c)return;
+  var applied=[],skipped=[];
+  ['name','location','workAuth','salaryK','clearance','availability'].forEach(function(k){
+    var v=parsed[k];if(v===null||v===undefined||v==='')return;
+    var cur=c[k];
+    if(cur!==undefined&&cur!==null&&cur!==''&&cur!==0){skipped.push(k);return;}
+    c[k]=v;applied.push(k);
+  });
+  if(skipped.length){
+    if(confirm('Applied '+applied.length+' empty fields. Also overwrite these '+skipped.length+' existing fields?\n\n'+skipped.join(', ')))skipped.forEach(function(k){c[k]=parsed[k];applied.push(k);});
+  }
+  candLog(id,'ai.extract.applied-all',{applied:applied});save();closeModal('ovAIPrev');openCandModal(c.recruitingId,id);
+}
+
+// 2) Fit score
+function candComputeFit(id){
+  var c=D.candidates.find(function(x){return x.id===id;});if(!c)return;
+  var ctx=candCtx(c);
+  var restore=candAIBusy('Scoring…');
+  var sys='You are a technical recruiter scoring how well a candidate matches a job description. Output ONLY a JSON object inside a ```json``` block.';
+  var prompt='Score this candidate against the job description from 0-100 (higher is better fit). Then list 3 specific strengths and 3 specific gaps. Then a one-line summary.\n\nJob Description (title: '+ctx.jd.title+'):\n'+ctx.jd.description.slice(0,4000)+'\n\nCandidate:\n'+JSON.stringify(ctx.candidate)+'\n\nReturn this JSON:\n{"score":number,"strengths":["...","...","..."],"gaps":["...","...","..."],"summary":"one line"}';
+  fetch('/api/llm/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    accountId:ME?ME.id:'',system:sys,messages:[{role:'user',content:prompt}],max_tokens:1000
+  })}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||('HTTP '+r.status));return j;});}).then(function(j){
+    if(restore)restore();
+    var parsed=llmExtractJSON(j);
+    if(!parsed||typeof parsed.score!=='number'){alert('Could not parse fit score response.');return;}
+    c.fitScore=Math.max(0,Math.min(100,Math.round(parsed.score)));
+    c.fitSummary=parsed.summary||'';
+    c.fitStrengths=parsed.strengths||[];
+    c.fitGaps=parsed.gaps||[];
+    c.fitGeneratedAt=Date.now();
+    candLog(id,'ai.fit.scored',{score:c.fitScore});save();openCandModal(c.recruitingId,id);
+  }).catch(function(e){if(restore)restore();alert('Fit score failed: '+e.message);});
+}
+
+// 3) Interview kit
+function candGenKit(id){
+  var c=D.candidates.find(function(x){return x.id===id;});if(!c)return;
+  var ctx=candCtx(c);
+  var restore=candAIBusy('Generating kit…');
+  var sys='You are a senior interviewer designing a tailored interview kit. Output ONLY a JSON object inside a ```json``` block.';
+  var prompt='Generate an interview kit for this candidate against this JD. Include 6-8 tailored questions (mix behavioral + technical + scenario) and a 5-criterion scoring rubric (each criterion: name + what 1/3/5 means).\n\nJD title: '+ctx.jd.title+'\nJD: '+ctx.jd.description.slice(0,4000)+'\n\nCandidate: '+JSON.stringify(ctx.candidate)+'\n\nReturn:\n{"questions":[{"q":"...","why":"why this question matters for this role/candidate"}],"rubric":[{"criterion":"name","one":"what 1 looks like","three":"what 3 looks like","five":"what 5 looks like"}]}';
+  fetch('/api/llm/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    accountId:ME?ME.id:'',system:sys,messages:[{role:'user',content:prompt}],max_tokens:3000
+  })}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||('HTTP '+r.status));return j;});}).then(function(j){
+    if(restore)restore();
+    var parsed=llmExtractJSON(j);
+    if(!parsed||!parsed.questions){alert('Could not parse interview kit response.');return;}
+    c.interviewKit={questions:parsed.questions,rubric:parsed.rubric||[],generatedAt:Date.now()};
+    candLog(id,'ai.kit.generated',{n:parsed.questions.length});save();candShowKit(id);
+  }).catch(function(e){if(restore)restore();alert('Interview kit failed: '+e.message);});
+}
+function candShowKit(id){
+  var c=D.candidates.find(function(x){return x.id===id;});if(!c||!c.interviewKit)return;
+  var qs=(c.interviewKit.questions||[]).map(function(q,i){return '<div class="kit-q"><div class="kit-q-n">Q'+(i+1)+'</div><div class="kit-q-txt">'+esc(q.q||'')+'</div><div class="kit-q-why">'+esc(q.why||'')+'</div></div>';}).join('');
+  var ru=(c.interviewKit.rubric||[]).map(function(r){return '<div style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:5px;font-size:11px"><b>'+esc(r.criterion||'')+'</b><div style="margin-top:3px;color:var(--text-secondary);line-height:1.5"><b>1:</b> '+esc(r.one||'')+'<br><b>3:</b> '+esc(r.three||'')+'<br><b>5:</b> '+esc(r.five||'')+'</div></div>';}).join('');
+  document.getElementById('mdlAIPrev').innerHTML=
+    '<div class="mdl-over">Anthropic Claude</div><div class="mdl-title">Interview Kit · '+esc(c.name)+'</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Generated '+new Date(c.interviewKit.generatedAt||0).toLocaleString()+'. Saved to this candidate.</div>'
+    +'<div class="fld-section-hdr" style="margin-top:0">Questions</div>'+qs
+    +(ru?'<div class="fld-section-hdr">Scoring Rubric</div>'+ru:'')
+    +'<div class="btn-row" style="margin-top:14px">'
+    +'<button class="btn btn-sec" onclick="candCopyKit(\''+id+'\')">Copy to clipboard</button>'
+    +'<button class="btn btn-navy" onclick="candGenKit(\''+id+'\')">Regenerate</button>'
+    +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovAIPrev\')">Close</button></div>';
+  openModal('ovAIPrev');
+}
+function candCopyKit(id){
+  var c=D.candidates.find(function(x){return x.id===id;});if(!c||!c.interviewKit)return;
+  var txt='Interview Kit for '+c.name+'\n\nQuestions:\n'+(c.interviewKit.questions||[]).map(function(q,i){return (i+1)+'. '+q.q+'\n   Why: '+(q.why||'');}).join('\n\n');
+  if(c.interviewKit.rubric)txt+='\n\nRubric:\n'+c.interviewKit.rubric.map(function(r){return r.criterion+'\n  1: '+r.one+'\n  3: '+r.three+'\n  5: '+r.five;}).join('\n');
+  navigator.clipboard.writeText(txt).then(function(){alert('Copied to clipboard.');},function(){alert('Could not copy.');});
+}
+
+// 4) Per-interview outcome summarizer
+function candSummInterview(candId,ivId){
+  var c=D.candidates.find(function(x){return x.id===candId;});if(!c)return;
+  var iv=(c.interviews||[]).find(function(x){return x.id===ivId;});if(!iv)return;
+  var raw=prompt('Paste your raw interview notes (Claude will summarize and suggest an outcome).\n\nLeave blank to use the existing notes field.',iv.notes||'');
+  if(raw===null)return;
+  var notes=(raw||iv.notes||'').trim();if(!notes){alert('No notes to summarize.');return;}
+  var ctx=candCtx(c);
+  var sys='You summarize raw interview notes into a structured outcome. Output ONLY a JSON object inside a ```json``` block.';
+  var prompt='Summarize these interview notes for '+ctx.candidate.name+' on role "'+ctx.jd.title+'". Suggest an outcome: reject/consider/accept, with brief rationale. Be honest, not flattering.\n\nRaw notes:\n'+notes+'\n\nReturn:\n{"summary":"clean 2-4 sentence summary","suggestedOutcome":"reject|consider|accept","rationale":"one sentence","redFlags":["..."],"greenFlags":["..."]}';
+  fetch('/api/llm/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    accountId:ME?ME.id:'',system:sys,messages:[{role:'user',content:prompt}],max_tokens:1500
+  })}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||('HTTP '+r.status));return j;});}).then(function(j){
+    var parsed=llmExtractJSON(j);
+    if(!parsed){alert('Could not parse summary.');return;}
+    var msg='AI Summary:\n\n'+parsed.summary+'\n\nSuggested outcome: '+parsed.suggestedOutcome+'\nRationale: '+parsed.rationale+'\n\nApply this summary to the interview notes (and optionally set the outcome to '+parsed.suggestedOutcome+')?';
+    if(confirm(msg)){
+      iv.notes=parsed.summary+'\n\n— suggested: '+parsed.suggestedOutcome+' · '+parsed.rationale;
+      if(['reject','consider','accept'].indexOf(parsed.suggestedOutcome)>-1){
+        if(!iv.outcome||confirm('Set outcome to "'+parsed.suggestedOutcome+'"?'))iv.outcome=parsed.suggestedOutcome;
+      }
+      candLog(candId,'ai.iv.summary',{ivId:ivId,outcome:parsed.suggestedOutcome});save();openCandModal(c.recruitingId,candId);
+    }
+  }).catch(function(e){alert('Summary failed: '+e.message);});
+}
+
+// 5) Email drafts
+function candEmailMenuToggle(){
+  var p=document.getElementById('cand_em_pop');if(p)p.classList.toggle('show');
+}
+function candDraftEmail(id,kind){
+  var p=document.getElementById('cand_em_pop');if(p)p.classList.remove('show');
+  var c=D.candidates.find(function(x){return x.id===id;});if(!c)return;
+  var ctx=candCtx(c);
+  var prompts={
+    outreach:'Draft a warm, professional outreach email to a candidate to gauge interest in the role. Brief intro of the company (US federal/commercial consulting firm), the role, why we thought of them, and a soft CTA to chat. Keep under 180 words.',
+    schedule:'Draft a professional email to a candidate proposing interview times. Mention what to expect (~45 min, who they\'ll meet) and propose 3 specific slot options as placeholders the recruiter will fill in. Keep under 150 words.',
+    offer:'Draft a verbal-offer congratulations email summarizing the role, salary ($'+(ctx.candidate.salaryK||'TBD')+'k), and next steps (formal offer letter to follow). Warm, enthusiastic, professional. Keep under 200 words.',
+    reject:'Draft a polite, respectful rejection email. Thank them for their time, keep it positive, offer to stay in touch. No specific reason — generic. Keep under 120 words.',
+    followup:'Draft a brief follow-up nudge email after no response in 5+ days. Friendly, low pressure, easy to reply to. Keep under 100 words.'
+  };
+  var sys='You are a recruiter drafting candidate emails. Output ONLY the email text (no subject lines unless explicitly requested, no commentary, no markdown). Start the body directly. Use placeholders in brackets for things you don\'t know (e.g. [recruiter name], [specific date]).';
+  var prompt=prompts[kind]+'\n\nContext:\nRole: '+ctx.jd.title+'\nCompany line of business: '+(ctx.jd.parent||'CommunityForce')+'\nCandidate: '+JSON.stringify(ctx.candidate);
+  fetch('/api/llm/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    accountId:ME?ME.id:'',system:sys,messages:[{role:'user',content:prompt}],max_tokens:1200
+  })}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||('HTTP '+r.status));return j;});}).then(function(j){
+    var txt=llmExtractText(j).trim();
+    document.getElementById('mdlAIPrev').innerHTML=
+      '<div class="mdl-over">Anthropic Claude</div><div class="mdl-title">Email Draft · '+kind.charAt(0).toUpperCase()+kind.slice(1)+'</div>'
+      +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Edit anything in the box below, then copy.</div>'
+      +'<div class="email-pre" id="emaildraft_txt" contenteditable="true">'+esc(txt)+'</div>'
+      +'<div class="btn-row" style="margin-top:14px">'
+      +'<button class="btn btn-navy" style="flex:1" onclick="candCopyEmail()">Copy to clipboard</button>'
+      +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovAIPrev\')">Close</button></div>';
+    openModal('ovAIPrev');
+  }).catch(function(e){alert('Email draft failed: '+e.message);});
+}
+function candCopyEmail(){
+  var el=document.getElementById('emaildraft_txt');if(!el)return;
+  var txt=el.innerText||el.textContent||'';
+  navigator.clipboard.writeText(txt).then(function(){alert('Copied to clipboard.');},function(){alert('Could not copy.');});
+}
 
 /* ── INTEGRATIONS (Claude API key) ── */
 function openIntegrationsManager(){
