@@ -1154,7 +1154,7 @@ function openPlanModal(id,presetParent){
     :'';
   var h='<div class="mdl-over">'+modalKindLabel+(editable?'':' · read-only')+'</div><div class="mdl-title">'+(a?'Edit Task':(presetParent?'New Subtask':'New Task'))+'</div>'
     +'<div style="display:flex;gap:10px">'
-      +'<div class="fld" style="flex:1"><label class="fld-l">PM</label><input class="fld-i" id="pl_pm" value="'+esc(v.pm)+'"'+dis+'></div>'
+      +'<div class="fld" style="flex:1"><label class="fld-l">PM</label><select class="fld-sel" id="pl_pm"'+dis+'>'+memberNameOpts(v.pm||'')+'</select></div>'
       +'<div class="fld" style="flex:1"><label class="fld-l">Related item — filter</label><select class="fld-sel" id="pl_relcat" onchange="planUpdateRelOpts()"'+dis+'>'+relCatOpts+'</select></div>'
     +'</div>'
     +'<div class="fld"><label class="fld-l">Related item'+(isProjKind?' <span style="color:var(--red)">*</span>':'')+'</label><select class="fld-sel" id="pl_project"'+dis+'>'+projOpts+'</select></div>'
@@ -1716,8 +1716,8 @@ function oppEditFields(p){
     +'<div class="fld"><label class="fld-l">Presales</label><input class="fld-i" id="ep_ps" value="'+esc(p.presales||'')+'"></div></div>'
     +'<div class="fld-row2"><div class="fld"><label class="fld-l">Sales</label><input class="fld-i" id="ep_sales" value="'+esc(p.sales||'')+'"></div>'
     +'<div class="fld"><label class="fld-l">Delivery</label><input class="fld-i" id="ep_deliv" value="'+esc(p.delivery||'')+'"></div></div>'
-    +'<div class="fld-row2"><div class="fld"><label class="fld-l">OPR (owner)</label><input class="fld-i" id="ep_opr" value="'+esc(p.opr||'')+'"></div>'
-    +'<div class="fld"><label class="fld-l">PM</label><input class="fld-i" id="ep_pm" value="'+esc(p.pm||'')+'"></div></div>'
+    +'<div class="fld-row2"><div class="fld"><label class="fld-l">OPR (owner)</label><select class="fld-sel" id="ep_opr">'+memberNameOpts(p.opr||'')+'</select></div>'
+    +'<div class="fld"><label class="fld-l">PM</label><select class="fld-sel" id="ep_pm">'+memberNameOpts(p.pm||'')+'</select></div></div>'
     +'<div class="fld"><label class="fld-l">Exp Close / Decision date</label><input class="fld-i" type="date" id="ep_close" value="'+esc(p.closeDate||'')+'"></div>'
     +'<div class="fld"><label class="fld-l">Team</label><input class="fld-i" id="ep_team" value="'+esc(p.team||'')+'"></div>'
     +'<div class="fld"><label class="fld-l">Change Requested</label><textarea class="fld-i" id="ep_change" rows="2">'+esc(p.changeRequested||'')+'</textarea></div>'
@@ -1996,6 +1996,18 @@ function rqClearFilter(){rqFilter.taskId='';renderView();}
 function rqMemberOpts(selId,placeholderLabel){
   var opts='<option value="">'+(placeholderLabel||'— none —')+'</option>';
   allM().forEach(function(m){opts+='<option value="'+m.id+'"'+(selId===m.id?' selected':'')+'>'+esc(m.name)+(m.role?' · '+esc(m.role):'')+'</option>';});
+  return opts;
+}
+// Member dropdown that stores NAMES (for backward compatibility with legacy fields like p.pm / p.opr / a.pm).
+// If the current value is non-empty but no member has that name (legacy/external data), keep it as a
+// "(legacy)" option so saving doesn't drop it.
+function memberNameOpts(currentName){
+  var members=allM();
+  var names={};members.forEach(function(m){names[m.name]=true;});
+  var legacy=currentName&&!names[currentName];
+  var opts='<option value="">— none —</option>';
+  if(legacy)opts+='<option value="'+esc(currentName)+'" selected>'+esc(currentName)+' (legacy)</option>';
+  members.forEach(function(m){opts+='<option value="'+esc(m.name)+'"'+(m.name===currentName?' selected':'')+'>'+esc(m.name)+(m.role?' · '+esc(m.role):'')+'</option>';});
   return opts;
 }
 function rqRelatedOpts(cat,sel){
