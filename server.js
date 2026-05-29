@@ -102,6 +102,46 @@ app.delete('/api/attachments/:id', async (req, res) => {
   }
 });
 
+// ── LLM PROXY (Claude API) ──
+app.get('/api/llm/status', (req, res) => {
+  res.json({ orgKeyConfigured: !!process.env.ANTHROPIC_API_KEY });
+});
+
+app.post('/api/llm/complete', async (req, res) => {
+  try {
+    const { accountId, system: systemPrompt, messages, model, max_tokens } = req.body || {};
+    if (!Array.isArray(messages) || !messages.length) return res.status(400).json({ error: 'messages required' });
+    let apiKey = process.env.ANTHROPIC_API_KEY || '';
+    if (accountId) {
+      const r = await pool.query('SELECT data FROM app_state WHERE id = 1');
+      const data = r.rows[0] && r.rows[0].data;
+      const acc = data && Array.isArray(data.accounts) && data.accounts.find((a) => a.id === accountId);
+      if (acc && acc.apiKey) apiKey = acc.apiKey;
+    }
+    if (!apiKey) return res.status(400).json({ error: 'No API key configured. Set ANTHROPIC_API_KEY env var or your personal override in Admin → Integrations.' });
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: model || 'claude-sonnet-4-5',
+        max_tokens: max_tokens || 4096,
+        system: systemPrompt || '',
+        messages,
+      }),
+    });
+    const json = await resp.json();
+    if (!resp.ok) return res.status(resp.status).json(json);
+    res.json(json);
+  } catch (e) {
+    console.error('LLM completion failed:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
 initDb()

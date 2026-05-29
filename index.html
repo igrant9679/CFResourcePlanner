@@ -425,6 +425,27 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .plan-row-drag .plan-grip:active{cursor:grabbing;}
 .plan-row-dragging{opacity:0.35;}
 .plan-row-over{box-shadow:inset 0 3px 0 var(--gold);}
+.rq-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-top:14px;}
+.rq-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px;box-shadow:var(--shadow-sm);cursor:pointer;transition:transform 0.1s,box-shadow 0.15s;border-left:4px solid var(--gold);}
+.rq-card:hover{transform:translateY(-1px);box-shadow:var(--shadow-md);}
+.rq-card-title{font-size:14px;font-weight:800;color:var(--text-primary);margin-bottom:4px;}
+.rq-card-sub{font-size:11px;color:var(--text-muted);margin-bottom:8px;}
+.rq-card-meta{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--text-secondary);margin-top:8px;}
+.rq-status{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;font-size:10px;font-weight:700;border-radius:4px;letter-spacing:0.5px;text-transform:uppercase;}
+.rq-status-open{background:var(--green-dim);color:var(--green);}
+.rq-status-hold{background:rgba(245,158,11,0.18);color:var(--warn-text);}
+.rq-status-filled{background:rgba(13,148,136,0.15);color:#0D9488;}
+.rq-status-cancel{background:#F1F5F9;color:#64748B;}
+.rq-sla{display:inline-block;padding:2px 6px;font-size:10px;font-weight:800;border-radius:3px;background:var(--slate-dim);color:var(--text-secondary);}
+.rq-sla-warn{background:rgba(245,158,11,0.18);color:var(--warn-text);}
+.rq-sla-red{background:rgba(220,38,38,0.1);color:var(--red);}
+.rq-funnel{display:flex;gap:14px;flex-wrap:wrap;align-items:center;background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:14px;box-shadow:var(--shadow-sm);}
+.rq-funnel-item{display:flex;flex-direction:column;}
+.rq-funnel-n{font-size:18px;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums;}
+.rq-funnel-l{font-size:9px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;color:var(--text-muted);}
+.rq-section-lbl{font-size:11px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;color:var(--text-secondary);margin:18px 0 6px;display:flex;align-items:center;gap:8px;}
+.rq-section-lbl::before{content:'';flex:0 0 4px;height:14px;background:var(--gold);border-radius:2px;}
+.empty-recruit{padding:32px 18px;text-align:center;background:#fff;border:1.5px dashed var(--border);border-radius:10px;color:var(--text-muted);font-size:13px;}
 </style>
 </head>
 <body>
@@ -487,6 +508,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
       <button class="tab active" id="tabOrg" onclick="switchTab('org')">Department View</button>
       <button class="tab" id="tabChart" onclick="switchTab('orgchart')">Org Chart</button>
       <button class="tab" id="tabProj" onclick="switchTab('proj')">Projects</button>
+      <button class="tab" id="tabRecruit" onclick="switchTab('recruit')">Recruiting</button>
       <button class="tab" id="tabInit" onclick="switchTab('init')">Initiatives</button>
       <button class="tab" id="tabOpp" onclick="switchTab('opp')">Opportunities</button>
       <button class="tab" id="tabOver" onclick="switchTab('over')">Overhead</button>
@@ -508,6 +530,8 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 <div class="ov" id="ovProfile" onclick="closeModal('ovProfile')"><div class="mdl" id="mdlProfile" onclick="event.stopPropagation()" style="max-width:460px"></div></div>
 <div class="ov" id="ovPlan" onclick="closeModal('ovPlan')"><div class="mdl" id="mdlPlan" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
 <div class="ov" id="ovTpl" onclick="closeModal('ovTpl')"><div class="mdl" id="mdlTpl" onclick="event.stopPropagation()" style="max-width:680px"></div></div>
+<div class="ov" id="ovRecruit" onclick="closeModal('ovRecruit')"><div class="mdl" id="mdlRecruit" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
+<div class="ov" id="ovIntg" onclick="closeModal('ovIntg')"><div class="mdl" id="mdlIntg" onclick="event.stopPropagation()" style="max-width:560px"></div></div>
 <script>
 (function(){var svg="<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><rect width='40' height='40' rx='9' fill='#16223C'/><line x1='20' y1='12.5' x2='11' y2='27' stroke='#C5A55A' stroke-width='2.2' stroke-linecap='round'/><line x1='20' y1='12.5' x2='20' y2='27' stroke='#C5A55A' stroke-width='2.2' stroke-linecap='round'/><line x1='20' y1='12.5' x2='29' y2='27' stroke='#C5A55A' stroke-width='2.2' stroke-linecap='round'/><circle cx='20' cy='12' r='5' fill='#C5A55A'/><circle cx='11' cy='28' r='3.7' fill='#fff'/><circle cx='20' cy='28' r='3.7' fill='#fff'/><circle cx='29' cy='28' r='3.7' fill='#fff'/></svg>";var l=document.createElement('link');l.rel='icon';l.type='image/svg+xml';l.href='data:image/svg+xml,'+encodeURIComponent(svg);document.head.appendChild(l);})();
 var STORE_KEY='cf_orgchart_v2';
@@ -703,7 +727,27 @@ function migrate(){
   });});
   var REV={'p_bclm':{revenue:212756,revenueNote:'→ $265,945/mo Aug 15 · BCLM +25% extension'},'p_fams':{revenue:76944,revenueNote:'Ends Sep 24, 2026 · 85.2% margin'},'p_c1fams':{revenue:25984,revenueNote:'→ $100,000/mo target Oct 2026 · 61% margin at maturity'},'p_software':{revenue:50000,revenueNote:'$550K ARR floor · 7.65% margin — needs intervention'},'p_marines':{revenue:0,revenueNote:'Active pursuit · SBIR Phase III via ForwardEdge-AI · $1.2M'},'p_salesforce':{revenue:0,revenueNote:'Build phase · 3 engagements seeding'},'p_afosi':{revenue:0,revenueNote:'Proposal due Jun 8 · $1.0M opportunity'},'p_phoenix':{revenue:0,revenueNote:'Software play · repricing initiative'},'p_tableau':{revenue:0,revenueNote:'Internal capability build'}};
   D.projects.forEach(function(p){if(!('revenue' in p)){var d=REV[p.id];p.revenue=d?d.revenue:0;p.revenueNote=d?d.revenueNote:'';}if(!('revenueNote' in p))p.revenueNote='';if(!p.clins)p.clins=[];});
-  planMigrate();authMigrate();oppMigrate();tplMigrate();}
+  planMigrate();authMigrate();oppMigrate();tplMigrate();recruitMigrate();}
+function recruitMigrate(){
+  if(!D.recruitings)D.recruitings=[];
+  if(!D.candidates)D.candidates=[];
+  if(!D.notifications)D.notifications=[];
+  (D.accounts||[]).forEach(function(a){if(!('apiKey' in a))a.apiKey='';});
+  D.recruitings.forEach(function(r){
+    if(!r.status)r.status='open';
+    if(!r.jdAttachments)r.jdAttachments=[];
+    if(!('createdAt' in r))r.createdAt=Date.now();
+    if(!('updatedAt' in r))r.updatedAt=r.createdAt||Date.now();
+  });
+  D.candidates.forEach(function(c){
+    if(!c.status)c.status='new';
+    if(!c.interviews)c.interviews=[];
+    if(!c.events)c.events=[];
+    if(!c.source)c.source={kind:'',agency:'',referrerId:''};
+    if(!c.offer)c.offer={amount:0,signingBonus:0,startDate:'',state:'',counterNotes:''};
+    if(!('createdAt' in c))c.createdAt=Date.now();
+  });
+}
 function tplMigrate(){
   if(!D.taskTemplates)D.taskTemplates=[];
   if(!D.tplSeeded){
@@ -1059,6 +1103,14 @@ function openPlanModal(id,presetParent){
       +(editable?'<div style="margin-top:6px"><input type="file" id="pl_attfile" style="font-size:11px;max-width:100%"> <button class="btn btn-navy btn-sm" onclick="planUploadAttachment(\''+a.id+'\')">↑ Upload</button></div>'
       +'<div style="display:flex;gap:6px;margin-top:6px"><input class="fld-i" id="pl_attname" placeholder="Link name"><input class="fld-i" id="pl_atturl" placeholder="https://…"><button class="btn btn-sec btn-sm" onclick="planAddLink(\''+a.id+'\')">+ Link</button></div>':'')+'</div>';
   }
+  if(a&&a.templateId==='tpl_recruit'&&canRecruit()){
+    var rqCount=(D.recruitings||[]).filter(function(rr){return rr.taskId===a.id;}).length;
+    h+='<div style="margin-top:10px;padding:10px 12px;background:rgba(197,165,90,0.1);border:1px solid rgba(197,165,90,0.3);border-radius:7px">'
+      +'<div style="font-size:11px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;color:var(--gold);margin-bottom:4px">Recruiting Workflow</div>'
+      +'<div style="font-size:12px;margin-bottom:6px">'+rqCount+' requisition'+(rqCount===1?'':'s')+' attached to this task.</div>'
+      +'<button class="btn btn-gold btn-sm" onclick="openRecruitForTask(\''+a.id+'\')">Open Recruiting</button>'
+      +'</div>';
+  }
   h+='<div class="btn-row">'
     +(editable?'<button class="btn btn-navy" style="flex:1" onclick="savePlan()">Save</button>':'')
     +(a&&editable?'<button class="btn btn-danger-sm" onclick="delPlan(\''+a.id+'\')">Delete</button>':'')
@@ -1236,7 +1288,7 @@ document.getElementById('statsBar').innerHTML=[
 {l:'Skills',v:D.skillsets.length,u:'defined'},{l:'Reassess',v:fl,u:'flagged',w:fl>0},{l:'Over-alloc',v:oa,u:'people',w:oa>0}
 ].map(function(s){return '<div class="st'+(s.w?' warn':'')+'"><div class="st-l">'+s.l+'</div><div class="st-v'+(s.w?' wv':'')+'">'+s.v+'<span class="st-u">'+s.u+'</span></div></div>';}).join('');}
 
-function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',init:'tabInit',opp:'tabOpp',over:'tabOver',orgchart:'tabChart',res:'tabRes',class:'tabClass',plan:'tabPlan',ptask:'tabPTask'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
+function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',recruit:'tabRecruit',init:'tabInit',opp:'tabOpp',over:'tabOver',orgchart:'tabChart',res:'tabRes',class:'tabClass',plan:'tabPlan',ptask:'tabPTask'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
 
 function cardHTML(m,did){
 var dept=D.departments.find(function(d){return d.id===did;});
@@ -1611,6 +1663,7 @@ function renderView(){
   else if(viewMode==='orgchart')html=renderOrgChartView(q);
   else if(viewMode==='plan'||viewMode==='ptask')html=renderPlanView(q);
   else if(viewMode==='class')html=renderClassificationView(q);
+  else if(viewMode==='recruit')html=renderRecruitView(q);
   else html=renderResourcesView(q);
   document.getElementById('mainContent').innerHTML=html;
 }
@@ -1788,6 +1841,219 @@ function oppRemoveTask(taskId,oppId){
   if(!confirm('Remove this workflow task? (This deletes the underlying Project Task.)'))return;
   D.activities=D.activities.filter(function(a){return a.id!==taskId;});
   save();openEditProject(oppId);
+}
+
+/* ── RECRUITING ── */
+var RQ_STATUSES=[
+  {k:'open',l:'Open',cls:'rq-status-open'},
+  {k:'on-hold',l:'On Hold',cls:'rq-status-hold'},
+  {k:'filled',l:'Filled',cls:'rq-status-filled'},
+  {k:'cancelled',l:'Cancelled',cls:'rq-status-cancel'}
+];
+var rqFilter={taskId:'',projectId:''};
+function rqDaysOpen(r){var t=r.createdAt||Date.now();return Math.max(0,Math.floor((Date.now()-t)/86400000));}
+function rqSLAchip(r){var d=rqDaysOpen(r);if(r.status!=='open')return '';var cls='rq-sla'+(d>=60?' rq-sla-red':(d>=30?' rq-sla-warn':''));return '<span class="'+cls+'" title="Days open">'+d+'d</span>';}
+function rqParent(r){if(r.projectId){var p=D.projects.find(function(x){return x.id===r.projectId;});if(p)return p;}if(r.departmentId){var d=D.departments.find(function(x){return x.id===r.departmentId;});if(d)return Object.assign({},d,{_dept:true});}return null;}
+function rqParentLabel(r){var p=rqParent(r);if(!p)return '<span style="color:var(--text-muted)">No parent</span>';if(p._dept)return esc(p.name)+' <span style="color:var(--text-muted);font-size:10px">(team)</span>';var cat=projCat(p);return esc(p.name)+' <span style="color:var(--text-muted);font-size:10px">('+(({project:'Project',initiative:'Initiative',opportunity:'Opportunity',overhead:'Overhead'})[cat]||'Item')+')</span>';}
+function rqCandidates(r){return (D.candidates||[]).filter(function(c){return c.recruitingId===r.id;});}
+function rqFunnelHTML(rs){
+  var open=rs.filter(function(r){return r.status==='open';}).length;
+  var hold=rs.filter(function(r){return r.status==='on-hold';}).length;
+  var filled=rs.filter(function(r){return r.status==='filled';}).length;
+  var cands=(D.candidates||[]).filter(function(c){return rs.some(function(r){return r.id===c.recruitingId;});});
+  var off=cands.filter(function(c){return c.status==='offer';}).length;
+  var hired=cands.filter(function(c){return c.status==='hired';}).length;
+  return '<div class="rq-funnel">'
+    +'<div class="rq-funnel-item"><span class="rq-funnel-n">'+open+'</span><span class="rq-funnel-l">Open Reqs</span></div>'
+    +'<div class="rq-funnel-item"><span class="rq-funnel-n">'+hold+'</span><span class="rq-funnel-l">On Hold</span></div>'
+    +'<div class="rq-funnel-item"><span class="rq-funnel-n">'+cands.length+'</span><span class="rq-funnel-l">Candidates</span></div>'
+    +'<div class="rq-funnel-item"><span class="rq-funnel-n">'+off+'</span><span class="rq-funnel-l">In Offer</span></div>'
+    +'<div class="rq-funnel-item"><span class="rq-funnel-n">'+hired+'</span><span class="rq-funnel-l">Hired</span></div>'
+    +'<div class="rq-funnel-item"><span class="rq-funnel-n">'+filled+'</span><span class="rq-funnel-l">Filled Reqs</span></div>'
+    +'</div>';
+}
+function rqCardHTML(r){
+  var st=RQ_STATUSES.find(function(s){return s.k===r.status;})||RQ_STATUSES[0];
+  var bd=r.busDevId?findMember(r.busDevId):null;
+  var pm=r.pmId?findMember(r.pmId):null;
+  var cnt=rqCandidates(r).length;
+  return '<div class="rq-card" onclick="openRecruitModal(\''+r.id+'\')">'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px">'
+    +'<span class="rq-status '+st.cls+'">'+st.l+'</span>'+rqSLAchip(r)
+    +'</div>'
+    +'<div class="rq-card-title">'+(r.jdTitle?esc(r.jdTitle):'<span style="color:var(--text-muted)">Untitled requisition</span>')+'</div>'
+    +'<div class="rq-card-sub">'+rqParentLabel(r)+'</div>'
+    +'<div class="rq-card-meta">'
+    +(bd?'<span title="BusDev">📋 '+esc(bd.m.name)+'</span>':'')
+    +(pm?'<span title="PM">👤 '+esc(pm.m.name)+'</span>':'')
+    +'<span>'+cnt+' candidate'+(cnt===1?'':'s')+'</span>'
+    +'</div></div>';
+}
+function renderRecruitView(q){
+  if(!canRecruit())return '<div class="empty-msg">You don\'t have access to the Recruiting module.</div>';
+  var rs=(D.recruitings||[]).slice();
+  if(rqFilter.taskId)rs=rs.filter(function(r){return r.taskId===rqFilter.taskId;});
+  if(q){var ql=q.toLowerCase();rs=rs.filter(function(r){var t=((r.jdTitle||'')+' '+(r.jdDescription||'')).toLowerCase();var pl=rqParentLabel(r).toLowerCase();return t.indexOf(ql)>-1||pl.indexOf(ql)>-1;});}
+  rs.sort(function(a,b){var ord={open:0,'on-hold':1,filled:2,cancelled:3};return (ord[a.status]||0)-(ord[b.status]||0)||((b.createdAt||0)-(a.createdAt||0));});
+  var filterChip=rqFilter.taskId?(function(){var t=D.activities.find(function(x){return x.id===rqFilter.taskId;});var lbl=t?esc(t.subtask||'task'):'task';return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px"><span style="color:var(--text-muted)">Filtered to task:</span><span class="plan-chip" style="border-color:var(--gold);color:var(--gold)">'+lbl+'</span><button class="btn btn-sec btn-sm" onclick="rqClearFilter()">Clear</button></div>';})():'';
+  var addBtn='<button class="btn btn-gold btn-sm" onclick="openRecruitModal()">+ New Requisition</button>';
+  var groups={};RQ_STATUSES.forEach(function(s){groups[s.k]=[];});rs.forEach(function(r){(groups[r.status]||groups.open).push(r);});
+  var body='';
+  RQ_STATUSES.forEach(function(s){
+    if(!groups[s.k].length)return;
+    body+='<div class="rq-section-lbl">'+s.l+'<span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);margin-left:6px">'+groups[s.k].length+'</span></div>'
+      +'<div class="rq-grid">'+groups[s.k].map(rqCardHTML).join('')+'</div>';
+  });
+  if(!rs.length)body='<div class="empty-recruit">No requisitions yet. Click <b>+ New Requisition</b> to create one — or open a <i>Perform Recruiting</i> task from any Opportunity and click <b>Open Recruiting</b>.</div>';
+  return '<div style="max-width:1280px;margin:0 auto">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    +'<div><div style="font-size:18px;font-weight:800">Recruiting</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Job requisitions tied to <i>Perform Recruiting</i> tasks. Multiple requisitions per task are supported.</div></div>'
+    +addBtn+'</div>'
+    +rqFunnelHTML(rs)
+    +filterChip
+    +body+'</div>';
+}
+function rqClearFilter(){rqFilter.taskId='';renderView();}
+function rqMemberOpts(selId,placeholderLabel){
+  var opts='<option value="">'+(placeholderLabel||'— none —')+'</option>';
+  allM().forEach(function(m){opts+='<option value="'+m.id+'"'+(selId===m.id?' selected':'')+'>'+esc(m.name)+(m.role?' · '+esc(m.role):'')+'</option>';});
+  return opts;
+}
+function rqRelatedOpts(cat,sel){
+  return D.projects.filter(function(p){return !cat||projCat(p)===cat;}).map(function(p){return '<option value="'+p.id+'"'+(sel===p.id?' selected':'')+'>'+esc(p.name)+'</option>';}).join('');
+}
+function openRecruitModal(id){
+  if(!canRecruit()){alert('You don\'t have permission to manage requisitions.');return;}
+  var existing=id?D.recruitings.find(function(r){return r.id===id;}):null;
+  var r=existing||{id:'',taskId:'',projectId:rqFilter.projectId||'',departmentId:'',busDevId:'',pmId:'',jdTitle:'',jdDescription:'',jdAttachments:[],status:'open',createdAt:Date.now()};
+  // Default BusDev/PM from related project if creating
+  if(!existing&&r.projectId){var pp=D.projects.find(function(x){return x.id===r.projectId;});if(pp&&pp.pm&&!r.pmId){var pmM=allM().find(function(m){return m.name===pp.pm;});if(pmM)r.pmId=pmM.id;}}
+  // Filter dropdown: parent category (project/init/opp/dept)
+  var parentKind=r.departmentId?'dept':(r.projectId?projCat(D.projects.find(function(x){return x.id===r.projectId;})||{}):'opportunity');
+  var KIND_OPTS=[{k:'project',l:'Project'},{k:'initiative',l:'Initiative'},{k:'opportunity',l:'Opportunity'},{k:'overhead',l:'Overhead'},{k:'dept',l:'Department'}];
+  var kindOpts=KIND_OPTS.map(function(k){return '<option value="'+k.k+'"'+(parentKind===k.k?' selected':'')+'>'+k.l+'</option>';}).join('');
+  var parentOpts=parentKind==='dept'
+    ?D.departments.map(function(d){return '<option value="'+d.id+'"'+(r.departmentId===d.id?' selected':'')+'>'+esc(d.name)+'</option>';}).join('')
+    :rqRelatedOpts(parentKind,r.projectId);
+  var taskOpts='<option value="">— none —</option>'+D.activities.filter(function(a){return a.templateId==='tpl_recruit';}).map(function(a){var pp=a.projectId?D.projects.find(function(x){return x.id===a.projectId;}):null;return '<option value="'+a.id+'"'+(r.taskId===a.id?' selected':'')+'>'+esc(a.subtask||'(untitled)')+(pp?' · '+esc(pp.name):'')+'</option>';}).join('');
+  var stsOpts=RQ_STATUSES.map(function(s){return '<option value="'+s.k+'"'+(r.status===s.k?' selected':'')+'>'+s.l+'</option>';}).join('');
+  var attHTML=(r.jdAttachments||[]).map(function(a,i){var isFile=a.type==='file';return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid #F1F5F9"><a href="'+esc(a.url)+'" target="_blank" rel="noopener" style="font-size:12px;color:var(--navy);font-weight:600;text-decoration:none">'+(isFile?'📄 ':'🔗 ')+esc(a.name||a.url)+'</a><button class="btn btn-danger-sm btn-sm" onclick="rqDelAtt(\''+r.id+'\','+i+')">&times;</button></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted)">No JD files yet</div>';
+  document.getElementById('mdlRecruit').innerHTML=
+    '<div class="mdl-over">Recruiting</div><div class="mdl-title">'+(existing?'Edit Requisition':'New Requisition')+'</div>'
+    +'<div style="display:flex;gap:10px">'
+      +'<div class="fld" style="flex:1"><label class="fld-l">Status</label><select class="fld-sel" id="rq_status">'+stsOpts+'</select></div>'
+      +'<div class="fld" style="flex:1"><label class="fld-l">Linked Task</label><select class="fld-sel" id="rq_task">'+taskOpts+'</select></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:10px">'
+      +'<div class="fld" style="flex:1"><label class="fld-l">Parent type</label><select class="fld-sel" id="rq_pkind" onchange="rqUpdateParentOpts()">'+kindOpts+'</select></div>'
+      +'<div class="fld" style="flex:2"><label class="fld-l">Parent</label><select class="fld-sel" id="rq_parent">'+parentOpts+'</select></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:10px">'
+      +'<div class="fld" style="flex:1"><label class="fld-l">BusDev (owns JD)</label><select class="fld-sel" id="rq_busdev">'+rqMemberOpts(r.busDevId)+'</select></div>'
+      +'<div class="fld" style="flex:1"><label class="fld-l">PM</label><select class="fld-sel" id="rq_pm">'+rqMemberOpts(r.pmId)+'</select></div>'
+    +'</div>'
+    +'<span class="fld-section-hdr">Job Description</span>'
+    +'<div class="fld"><label class="fld-l">Title</label><input class="fld-i" id="rq_jdtitle" value="'+esc(r.jdTitle)+'" placeholder="e.g. Senior Salesforce Developer"></div>'
+    +'<div class="fld"><label class="fld-l">Description (paste from a doc, or write it here)</label>'+richEditor('rq_jddesc',r.jdDescription||'',{placeholder:'Responsibilities, requirements, must-haves, nice-to-haves...',tall:true})+'</div>'
+    +'<div class="fld"><label class="fld-l">JD Files</label><div id="rq_attlist">'+attHTML+'</div>'
+    +(existing?'<div style="margin-top:6px"><input type="file" id="rq_attfile" style="font-size:11px"> <button class="btn btn-navy btn-sm" onclick="rqUploadAtt(\''+r.id+'\')">↑ Upload JD file</button></div>':'<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Save the requisition first to attach files.</div>')+'</div>'
+    +'<div class="btn-row">'
+      +'<button class="btn btn-navy" style="flex:1" onclick="saveRecruit(\''+(existing?r.id:'')+'\')">Save</button>'
+      +(existing?'<button class="btn btn-danger-sm" onclick="delRecruit(\''+r.id+'\')">Delete</button>':'')
+      +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovRecruit\')">Cancel</button>'
+    +'</div>';
+  openModal('ovRecruit');
+}
+function rqUpdateParentOpts(){
+  var kind=gv('rq_pkind');
+  var sel=document.getElementById('rq_parent');var cur=sel?sel.value:'';
+  if(kind==='dept'){sel.innerHTML=D.departments.map(function(d){return '<option value="'+d.id+'"'+(cur===d.id?' selected':'')+'>'+esc(d.name)+'</option>';}).join('');}
+  else{sel.innerHTML=rqRelatedOpts(kind,cur);}
+}
+function saveRecruit(id){
+  var data={
+    status:gv('rq_status')||'open',
+    taskId:gv('rq_task')||'',
+    jdTitle:gv('rq_jdtitle').trim(),
+    jdDescription:rtGet('rq_jddesc'),
+    busDevId:gv('rq_busdev')||'',
+    pmId:gv('rq_pm')||''
+  };
+  var kind=gv('rq_pkind'),parent=gv('rq_parent');
+  if(kind==='dept'){data.departmentId=parent;data.projectId='';}else{data.projectId=parent;data.departmentId='';}
+  if(!data.jdTitle){alert('Job title is required.');return;}
+  if(!data.projectId&&!data.departmentId){alert('Select a parent (project, opportunity, or department).');return;}
+  data.updatedAt=Date.now();
+  if(id){var r=D.recruitings.find(function(x){return x.id===id;});if(r)Object.assign(r,data);}
+  else{data.id=uid();data.createdAt=Date.now();data.createdBy=ME?ME.id:'';data.jdAttachments=[];D.recruitings.push(data);}
+  save();closeModal('ovRecruit');renderView();
+}
+function delRecruit(id){
+  var cands=(D.candidates||[]).filter(function(c){return c.recruitingId===id;}).length;
+  if(!confirm('Delete this requisition?'+(cands?'\n\n'+cands+' candidate(s) on this req will also be removed.':'')))return;
+  D.recruitings=D.recruitings.filter(function(r){return r.id!==id;});
+  D.candidates=(D.candidates||[]).filter(function(c){return c.recruitingId!==id;});
+  save();closeModal('ovRecruit');renderView();
+}
+function rqUploadAtt(id){
+  var r=D.recruitings.find(function(x){return x.id===id;});if(!r)return;
+  var inp=document.getElementById('rq_attfile');if(!inp||!inp.files||!inp.files[0])return;
+  var fd=new FormData();fd.append('file',inp.files[0]);
+  fetch('/api/attachments',{method:'POST',body:fd}).then(function(res){if(!res.ok)throw new Error('upload failed');return res.json();}).then(function(a){
+    if(!r.jdAttachments)r.jdAttachments=[];
+    r.jdAttachments.push({id:a.id,name:a.name,url:a.url,type:'file',size:a.size});
+    save();openRecruitModal(id);
+  }).catch(function(e){alert('Upload failed: '+e.message);});
+}
+function rqDelAtt(id,idx){
+  var r=D.recruitings.find(function(x){return x.id===id;});if(!r||!r.jdAttachments)return;
+  var a=r.jdAttachments[idx];
+  if(a&&a.type==='file'&&a.id){fetch('/api/attachments/'+a.id,{method:'DELETE'}).catch(function(){});}
+  r.jdAttachments.splice(idx,1);save();openRecruitModal(id);
+}
+function openRecruitForTask(taskId){
+  rqFilter.taskId=taskId||'';
+  closeModal('ovPlan');
+  switchTab('recruit');
+}
+
+/* ── INTEGRATIONS (Claude API key) ── */
+function openIntegrationsManager(){
+  if(!ME)return;
+  var myAcc=(D.accounts||[]).find(function(a){return a.id===ME.id;});
+  document.getElementById('mdlIntg').innerHTML=
+    '<div class="mdl-over">Administration</div><div class="mdl-title">Integrations</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Atlas uses the Anthropic Claude API for AI features (resume parsing, interview kits, outcome summaries — coming soon). Set up either an org-wide key on the server or a personal override here.</div>'
+    +'<span class="fld-section-hdr">Org-Wide Key</span>'
+    +'<div id="intg_org_status" style="font-size:12px;padding:8px 10px;background:var(--page-bg);border-radius:6px;color:var(--text-secondary);margin-bottom:6px">Checking…</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:14px">Set <code>ANTHROPIC_API_KEY</code> as an env var in your Railway deployment to enable AI features for everyone.</div>'
+    +'<span class="fld-section-hdr">Your Personal Override</span>'
+    +'<div class="fld"><label class="fld-l">Your Anthropic API Key (optional)</label>'
+    +'<input class="fld-i" id="intg_mykey" type="password" value="'+esc(myAcc?(myAcc.apiKey||''):'')+'" placeholder="sk-ant-..." autocomplete="off"></div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:14px">Used only for AI calls initiated by your account. Overrides the org-wide key when present. Stored in Postgres alongside your other account data.</div>'
+    +'<div class="btn-row">'
+      +'<button class="btn btn-navy" style="flex:1" onclick="saveIntegrations()">Save</button>'
+      +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovIntg\')">Close</button>'
+    +'</div>';
+  openModal('ovIntg');
+  // Async fetch org-wide key status
+  fetch('/api/llm/status').then(function(r){return r.json();}).then(function(j){
+    var el=document.getElementById('intg_org_status');if(!el)return;
+    el.innerHTML=j.orgKeyConfigured?'<span style="color:var(--green);font-weight:700">&#10003; Configured</span> — AI features available to all users by default.':'<span style="color:var(--text-muted);font-weight:700">Not configured</span> — AI features require a personal override key.';
+  }).catch(function(){var el=document.getElementById('intg_org_status');if(el)el.textContent='Could not check status.';});
+}
+function saveIntegrations(){
+  if(!ME)return;
+  var myAcc=(D.accounts||[]).find(function(a){return a.id===ME.id;});
+  if(myAcc){myAcc.apiKey=gv('intg_mykey').trim();save();}
+  closeModal('ovIntg');
+}
+function llmComplete(opts){
+  // Helper for future LLM features. opts: {system, messages, model, max_tokens}
+  var body=Object.assign({accountId:ME?ME.id:''},opts||{});
+  return fetch('/api/llm/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||('HTTP '+r.status));return j;});});
 }
 
 function togDept(id){collState[id]=!collState[id];renderView();}
@@ -2333,6 +2599,9 @@ function openAdmin(){
       +'<button class="btn btn-outline btn-sm admin-mi" onclick="openVisibilityManager()">Section visibility</button>'
       +'</div></div>';
   }
+  html+='<div class="admin-menu-sec"><div class="admin-menu-lbl">Integrations</div><div class="admin-menu-row">'
+    +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openIntegrationsManager()">&#128274; Anthropic API Key</button>'
+    +'</div></div>';
   html+='<div class="admin-menu-sec"><div class="admin-menu-lbl">Data</div><div class="admin-menu-row">'
     +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');exportData()" title="Download backup JSON">&#8595; Export</button>'
     +(canI?'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');importData()" title="Restore from JSON file">&#8593; Import</button>':'')
@@ -2460,7 +2729,7 @@ function delAccount(id){if(!can('accounts'))return;if(ME&&ME.id===id){alert('You
 /* ── AUTH & PERMISSIONS (client-side roles only — not API security) ── */
 var AUTH_USER='khaja@communityforce.com',AUTH_PASS='Namtra_CF27',DEFAULT_PW='CommunityForce2026';
 var ME=null;
-var SECTIONS=[{k:'org',tab:'tabOrg',l:'Department View'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources View'},{k:'class',tab:'tabClass',l:'Classification View'},{k:'plan',tab:'tabPlan',l:'COE Plan'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'}];
+var SECTIONS=[{k:'org',tab:'tabOrg',l:'Department View'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources View'},{k:'class',tab:'tabClass',l:'Classification View'},{k:'plan',tab:'tabPlan',l:'COE Plan'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'}];
 function emailFromName(name){var clean=(name||'').replace(/\(.*?\)/g,'').replace(/[^A-Za-z .\-]/g,'').trim();var parts=clean.split(/\s+/).filter(Boolean);var local=parts.length>=2?(parts[0]+'.'+parts[parts.length-1]):(parts[0]||'user');return local.toLowerCase().replace(/[^a-z0-9.]/g,'')+'@communityforce.com';}
 function authMigrate(){
   if(!D.accounts)D.accounts=[];
@@ -2479,7 +2748,13 @@ function authMigrate(){
   D.accounts.forEach(function(a){if(!('active' in a))a.active=true;if(!a.programIds)a.programIds=[];if(!a.role)a.role='viewer';});
   if(!D.sectionVis)D.sectionVis={};['owner','editor','viewer'].forEach(function(r){if(!D.sectionVis[r])D.sectionVis[r]={};});
 }
-function canSee(k){if(!ME)return false;if(ME.role==='admin')return true;var rv=D.sectionVis&&D.sectionVis[ME.role];return rv?rv[k]!==false:true;}
+function canSee(k){if(!ME)return false;if(ME.role==='admin')return true;if(k==='recruit')return canRecruit();var rv=D.sectionVis&&D.sectionVis[ME.role];return rv?rv[k]!==false:true;}
+function canRecruit(){
+  if(!ME)return false;
+  if(ME.role==='admin'||ME.role==='editor')return true;
+  if(ME.memberId){var f=findMember(ME.memberId);if(f&&f.m&&f.m.recruiter)return true;}
+  return false;
+}
 function can(act,ctx){
   if(!ME)return false;
   var r=ME.role;
