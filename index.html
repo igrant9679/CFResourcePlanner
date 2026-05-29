@@ -5121,8 +5121,20 @@ if(!m)return;
 var names=allM().filter(function(x){return x.id!==mid&&x.name!==m.name;}).map(function(x){return x.name;});
 names=names.filter(function(n,i){return names.indexOf(n)===i;});
 var dl=names.map(function(n){return '<option value="'+esc(n)+'">';}).join('');
-var locOpts='<option value="">— not set —</option>'+D.locations.map(function(l){return '<option value="'+l.id+'"'+(m.location===l.id?' selected':'')+'>'+esc(l.name)+'</option>';}).join('');
-var clrOpts='<option value="">— not set —</option>'+D.clearances.map(function(c){return '<option value="'+c.id+'"'+(m.clearance===c.id?' selected':'')+'>'+esc(c.name)+'</option>';}).join('');
+// Build lookup-id dropdowns that preserve unknown values. Without this,
+// a stale id that doesn't match any current D.locations row makes the
+// browser auto-select the first option ('— not set —', value '') —
+// then saveEdit unconditionally writes that empty back, silently
+// wiping the field. Fixes the Shameem/Educian location-reset bug.
+function _lookupOpts(currentId,list,emptyLabel){
+  var has=currentId&&list.some(function(x){return x.id===currentId;});
+  var opts='<option value="">'+(emptyLabel||'— not set —')+'</option>';
+  if(currentId&&!has)opts+='<option value="'+esc(currentId)+'" selected>'+esc(currentId)+' (unknown — keep)</option>';
+  opts+=list.map(function(x){return '<option value="'+x.id+'"'+(currentId===x.id?' selected':'')+'>'+esc(x.name)+'</option>';}).join('');
+  return opts;
+}
+var locOpts=_lookupOpts(m.location,D.locations);
+var clrOpts=_lookupOpts(m.clearance,D.clearances);
 var deptMvOpts=deptOptHTML(null,0,[]);
 document.getElementById('mdlEdit').innerHTML=
 '<div class="mdl-over">Edit Team Member</div><div class="mdl-title">'+esc(m.name)+'</div>'
