@@ -49,12 +49,52 @@ app.get('/api/data', async (req, res) => {
   }
 });
 
+// Guardrail: arrays of user-authored records that must never be wiped to 0 by
+// a save. If the incoming payload would shrink any of these from >0 to 0, the
+// save is rejected with 409. Stops a stale browser tab / botched migration
+// from silently clobbering live data. The client toasts the user to refresh.
+const PROTECTED_ARRAYS = [
+  'departments',          // org chart
+  'projects',             // projects + initiatives + opportunities + overhead
+  'activities',           // COE Plan + Project Tasks
+  'recruitings',          // job requisitions
+  'candidates',           // candidate submissions
+  'proposals',            // proposals authored
+  'proposalTemplates',
+  'corporateCertifications',
+  'taskTemplates',
+  'programs',
+  'accounts',
+];
+
 app.post('/api/data', async (req, res) => {
   try {
+    const newData = req.body || {};
+    // Optional bypass for explicit reset/import flows the user knowingly chose
+    const force = req.query.force === '1' || req.get('X-Atlas-Force') === '1';
+    if (!force) {
+      const existing = await pool.query('SELECT data FROM app_state WHERE id = 1');
+      const oldData = existing.rows.length ? existing.rows[0].data : null;
+      if (oldData) {
+        for (const key of PROTECTED_ARRAYS) {
+          const oldArr = Array.isArray(oldData[key]) ? oldData[key] : null;
+          const newArr = Array.isArray(newData[key]) ? newData[key] : null;
+          if (oldArr && oldArr.length > 0 && newArr && newArr.length === 0) {
+            console.warn(`[guardrail] REJECTED save: ${key} would shrink from ${oldArr.length} to 0`);
+            return res.status(409).json({
+              error: `Refused to save: '${key}' would shrink from ${oldArr.length} records to 0. This usually means a stale browser tab is overwriting live data. Refresh the page to reload from server, then try again. (Pass ?force=1 to override — destructive.)`,
+              protectedKey: key,
+              oldCount: oldArr.length,
+              newCount: 0,
+            });
+          }
+        }
+      }
+    }
     await pool.query(
       `INSERT INTO app_state (id, data, updated_at) VALUES (1, $1, now())
        ON CONFLICT (id) DO UPDATE SET data = $1, updated_at = now()`,
-      [JSON.stringify(req.body)]
+      [JSON.stringify(newData)]
     );
     res.json({ ok: true });
   } catch (e) {
