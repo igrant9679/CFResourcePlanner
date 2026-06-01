@@ -576,6 +576,15 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .kb-tags{margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;}
 .kb-tag{font-size:10px;background:#EEF2F7;color:#475569;padding:1px 7px;border-radius:10px;}
 .kb-meta{font-size:10px;color:var(--text-muted);margin-top:6px;}
+.doss-pick{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;font-size:12px;cursor:pointer;}
+.doss-pick.have{opacity:.6;}
+.doss-pick input{margin-top:2px;flex-shrink:0;}
+.cf-price-totals{margin-top:14px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;}
+.cf-price-totals>div{display:flex;flex-direction:column;font-size:12px;}
+.cf-price-totals>div>span{color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:.4px;}
+.cf-price-totals>div>b{font-size:15px;}
+.cf-price-totals .cf-grand{margin-left:auto;text-align:right;}
+.cf-price-totals .cf-grand>b{font-size:18px;color:var(--navy);}
 .tpl-card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px;border-left:3px solid #7C3AED;}
 .tpl-card-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;}
 .tpl-card-name{font-size:13px;font-weight:700;}
@@ -815,6 +824,8 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 <div class="ov" id="ovCert" onclick="closeModal('ovCert')"><div class="mdl" id="mdlCert" onclick="event.stopPropagation()" style="max-width:720px"></div></div>
 <div class="ov" id="ovTplProp" onclick="closeModal('ovTplProp')"><div class="mdl" id="mdlTplProp" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
 <div class="ov" id="ovKB" onclick="closeModal('ovKB')"><div class="mdl" id="mdlKB" onclick="event.stopPropagation()" style="width:90vw;max-width:900px"></div></div>
+<div class="ov" id="ovRB" onclick="closeModal('ovRB')"><div class="mdl" id="mdlRB" onclick="event.stopPropagation()" style="width:90vw;max-width:920px"></div></div>
+<div class="ov" id="ovDoss" onclick="closeModal('ovDoss')"><div class="mdl" id="mdlDoss" onclick="event.stopPropagation()" style="width:90vw;max-width:760px"></div></div>
 <div class="ov" id="ovNewProp" onclick="closeModal('ovNewProp')"><div class="mdl" id="mdlNewProp" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
 <div class="ov" id="ovProp" onclick="closeModal('ovProp')"><div class="mdl" id="mdlProp" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
 <div class="ov" id="ovGap" onclick="closeModal('ovGap')"><div class="mdl" id="mdlGap" onclick="event.stopPropagation()" style="max-width:820px"></div></div>
@@ -1042,10 +1053,12 @@ function proposalsMigrate(){
     if(!p.pastPerformance)p.pastPerformance={matches:[],generatedAt:0};
     if(!p.coverSheet)p.coverSheet={certIds:[],generatedAt:0};
     if(!p.pricing)p.pricing={mode:'manual',linkedProjectId:'',items:[]};
+    if(!p.pricing.cf)p.pricing.cf={monthlyRate:0,baseMonths:12,optionYears:2,escalationPct:0,resources:[],odcs:[],travel:0};   // Phase 5: CF resource×months model
     if(!p.staffing)p.staffing={generatedAt:0,roleMatches:[]};
     if(!p.redTeam)p.redTeam={rubric:[],reviews:[],createdTaskId:'',generatedAt:0};
     if(!p.winLoss)p.winLoss=null;
     if(!p.brief)p.brief={text:'',winThemes:'',differentiators:'',updatedAt:0,updatedBy:''};   // Phase 2: BusDev intake
+    if(!Array.isArray(p.dossiers))p.dossiers=[];   // Phase 4: key-personnel dossiers for the appendix
     if(!('llmProvider' in p))p.llmProvider='';
     if(!('llmModel' in p))p.llmModel='';
     if(!('createdAt' in p))p.createdAt=Date.now();
@@ -1107,6 +1120,7 @@ function recruitMigrate(){
   if(!D.recruitings)D.recruitings=[];
   if(!D.candidates)D.candidates=[];
   if(!D.notifications)D.notifications=[];
+  if(!Array.isArray(D.resumeBank))D.resumeBank=[];   // Phase 4: dedicated standalone resume uploads
   (D.accounts||[]).forEach(function(a){
     if(!('apiKey' in a))a.apiKey='';                           // Anthropic (legacy field name kept)
     if(!('apiKey_openai' in a))a.apiKey_openai='';
@@ -2376,7 +2390,7 @@ function renderRecruitView(q){
   if(q){var ql=q.toLowerCase();rs=rs.filter(function(r){var t=((r.jdTitle||'')+' '+(r.jdDescription||'')).toLowerCase();var pl=rqParentLabel(r).toLowerCase();return t.indexOf(ql)>-1||pl.indexOf(ql)>-1;});}
   rs.sort(function(a,b){var ord={open:0,'on-hold':1,filled:2,cancelled:3};return (ord[a.status]||0)-(ord[b.status]||0)||((b.createdAt||0)-(a.createdAt||0));});
   var filterChip=rqFilter.taskId?(function(){var t=D.activities.find(function(x){return x.id===rqFilter.taskId;});var lbl=t?esc(t.subtask||'task'):'task';return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px"><span style="color:var(--text-muted)">Filtered to task:</span><span class="plan-chip" style="border-color:var(--gold);color:var(--gold)">'+lbl+'</span><button class="btn btn-sec btn-sm" onclick="rqClearFilter()">Clear</button></div>';})():'';
-  var addBtn='<button class="btn btn-gold btn-sm" onclick="openRecruitModal()">+ New Requisition</button>';
+  var addBtn='<div style="display:flex;gap:6px"><button class="btn btn-outline btn-sm" onclick="openResumeBankManager()">&#128196; Resume Bank</button><button class="btn btn-gold btn-sm" onclick="openRecruitModal()">+ New Requisition</button></div>';
   var groups={};RQ_STATUSES.forEach(function(s){groups[s.k]=[];});rs.forEach(function(r){(groups[r.status]||groups.open).push(r);});
   var body='';
   RQ_STATUSES.forEach(function(s){
@@ -3237,6 +3251,168 @@ function kbBuildContext(contextStr,maxDocs,perDocChars,cb){
   });
 }
 
+/* ── RESUME BANK (Phase 4) ──
+   Unified resume library across recruiting candidates, department staff (via
+   resumeLink), and dedicated standalone uploads (D.resumeBank). Proposals pull
+   key-personnel dossiers from here. */
+function resumeBankAll(){
+  var out=[];
+  (D.resumeBank||[]).forEach(function(e){
+    out.push({key:'bank:'+e.id,kind:'bank',bankId:e.id,name:e.name||'(unnamed)',role:e.role||'',clearance:e.clearance||'',location:e.location||'',skills:e.skills||[],summary:e.summary||'',attachmentId:e.attachmentId||'',resumeHref:e.attachmentId?('/api/attachments/'+e.attachmentId):''});
+  });
+  (D.candidates||[]).forEach(function(c){
+    if(!c.resume||!c.resume.id)return;
+    var req=(D.recruitings||[]).find(function(r){return r.id===c.recruitingId;});
+    out.push({key:'cand:'+c.id,kind:'candidate',candidateId:c.id,name:c.name||'(unnamed)',role:(req&&req.jdTitle)||'',clearance:c.clearance||'',location:c.location||'',skills:Array.isArray(c.fitStrengths)?c.fitStrengths:[],summary:c.fitSummary||'',attachmentId:c.resume.id,resumeHref:c.resume.url||('/api/attachments/'+c.resume.id)});
+  });
+  allM().forEach(function(m){
+    if(!m.resumeLink)return;
+    out.push({key:'mem:'+m.id,kind:'member',memberId:m.id,name:m.name||'(unnamed)',role:m.role||'',clearance:_resolveClrName(m.clearance)||m.clearance||'',location:_resolveLocName(m.location)||m.location||'',skills:_resolveSkillsetNames(m.skillsets),summary:m.note||'',attachmentId:'',resumeHref:m.resumeLink});
+  });
+  return out;
+}
+function _rbFilter(list,q){
+  if(!q)return list;var ql=q.toLowerCase();
+  return list.filter(function(e){return ((e.name||'')+' '+(e.role||'')+' '+(e.clearance||'')+' '+(e.location||'')+' '+(e.skills||[]).join(' ')).toLowerCase().indexOf(ql)>-1;});
+}
+function rbStatus(m){var el=document.getElementById('rb_status');if(el)el.textContent=m||'';}
+var _rbQuery='';
+function openResumeBankManager(){
+  if(!canRecruit()&&!canProposal()){alert('You don\'t have permission.');return;}
+  var all=resumeBankAll();var list=_rbFilter(all,_rbQuery);
+  var kindBadge={candidate:'Candidate',member:'Staff',bank:'Bank'};
+  var rows=list.length?list.map(function(e){
+    var skills=(e.skills||[]).slice(0,8).map(function(s){return '<span class="kb-tag">'+esc(s)+'</span>';}).join('');
+    return '<div class="kb-card" style="border-left-color:#2D6A4F">'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="kb-name">'+esc(e.name)+'</span><span class="kb-type" style="color:#2D6A4F;background:rgba(45,106,79,0.1)">'+esc(kindBadge[e.kind]||e.kind)+'</span></div>'
+      +'<div class="kb-meta" style="margin-top:3px">'+(e.role?esc(e.role):'<i>no role</i>')+(e.clearance?' &middot; &#128274; '+esc(e.clearance):'')+(e.location?' &middot; &#128205; '+esc(e.location):'')+'</div>'
+      +(e.summary?'<div class="kb-sum">'+esc(e.summary.slice(0,200))+'</div>':'')
+      +(skills?'<div class="kb-tags">'+skills+'</div>':'')
+      +'</div>'
+      +'<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">'
+      +(e.resumeHref?'<a class="btn btn-sec btn-sm" href="'+esc(e.resumeHref)+'" target="_blank" rel="noopener">Open</a>':'<span style="font-size:10px;color:var(--text-muted);text-align:center">no file</span>')
+      +(e.kind==='bank'?'<button class="btn btn-danger-sm btn-sm" onclick="rbDelete(\''+e.bankId+'\')">Delete</button>':'')
+      +'</div></div>';
+  }).join(''):'<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:24px">No resumes found. Candidate resumes and staff resume links appear here automatically — use <b>+ Upload Resume</b> to add standalone dossiers.</div>';
+  document.getElementById('mdlRB').innerHTML=
+    '<div class="mdl-over">Recruiting</div><div class="mdl-title">Resume Bank</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">A unified library of resumes — recruiting candidates, department staff (via resume link), and standalone uploads. Proposals pull key-personnel dossiers from here for the Staffing appendix.</div>'
+    +'<div class="kb-upload-row">'
+    +'<input class="inp" id="rb_q" placeholder="Search name / role / skill / clearance…" style="flex:1;min-width:160px" value="'+esc(_rbQuery)+'" oninput="_rbQuery=this.value;openResumeBankManager()"/>'
+    +'<span style="font-size:11px;color:var(--text-muted)">'+all.length+' total</span>'
+    +'<button class="btn btn-gold btn-sm" onclick="rbUploadPrompt()">+ Upload Resume</button>'
+    +'</div>'
+    +'<div id="rb_status" style="font-size:11px;color:#7C3AED;min-height:14px;margin:4px 2px"></div>'
+    +'<div class="kb-list">'+rows+'</div>'
+    +'<div class="btn-row" style="margin-top:14px"><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovRB\')">Close</button></div>';
+  openModal('ovRB');
+  var qi=document.getElementById('rb_q');if(qi){qi.focus();try{qi.setSelectionRange(qi.value.length,qi.value.length);}catch(_){}}
+}
+function rbUploadPrompt(){
+  var inp=document.createElement('input');inp.type='file';inp.accept='.pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  inp.onchange=function(){
+    var f=inp.files&&inp.files[0];if(!f)return;
+    var name=prompt('Person name:',f.name.replace(/\.[^.]+$/,''));if(name===null)return;
+    var role=prompt('Role / title (e.g. "Senior Full-Stack Developer"):','');if(role===null)return;
+    var clearance=prompt('Clearance (optional):','');if(clearance===null)return;
+    var location=prompt('Location (optional):','');if(location===null)return;
+    var skills=prompt('Key skills, comma-separated (optional):','');if(skills===null)return;
+    rbStatus('Uploading '+f.name+'…');
+    var fd=new FormData();fd.append('file',f);
+    fetch('/api/attachments',{method:'POST',body:fd}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||'upload failed');return j;});}).then(function(a){
+      D.resumeBank=D.resumeBank||[];
+      D.resumeBank.unshift({id:uid(),name:name.trim()||a.name,role:role.trim(),clearance:clearance.trim(),location:location.trim(),skills:skills.split(',').map(function(s){return s.trim();}).filter(Boolean),summary:'',attachmentId:a.id,attachmentName:a.name,createdAt:Date.now(),createdBy:ME?ME.id:''});
+      save();rbStatus('Added '+(name.trim()||a.name)+'.');openResumeBankManager();
+    }).catch(function(e){rbStatus('');alert('Upload failed: '+e.message);});
+  };
+  inp.click();
+}
+function rbDelete(bankId){
+  if(!confirm('Remove this resume from the bank? The stored file is deleted.'))return;
+  var e=(D.resumeBank||[]).find(function(x){return x.id===bankId;});
+  if(e&&e.attachmentId)fetch('/api/attachments/'+e.attachmentId,{method:'DELETE'}).catch(function(){});
+  D.resumeBank=(D.resumeBank||[]).filter(function(x){return x.id!==bankId;});
+  save();openResumeBankManager();
+}
+/* ── KEY PERSONNEL DOSSIERS (Phase 4) ── */
+function _pdDossiersHTML(p){
+  var ds=p.dossiers||[];
+  var rows=ds.length?ds.map(function(d){
+    var preview=d.html?esc(d.html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').slice(0,160)):'';
+    return '<div class="kb-card" style="border-left-color:#C5A55A">'
+      +'<div style="flex:1;min-width:0"><div class="kb-name">'+esc(d.name)+(d.role?' <span style="font-weight:400;color:var(--text-muted)">— '+esc(d.role)+'</span>':'')+'</div>'
+      +'<div class="kb-meta">'+(d.generatedAt?'generated '+new Date(d.generatedAt).toLocaleDateString():'')+'</div>'
+      +(preview?'<div class="kb-sum">'+preview+'…</div>':'')+'</div>'
+      +'<div style="display:flex;flex-direction:column;gap:4px"><button class="btn btn-danger-sm btn-sm" onclick="dossRemove(\''+p.id+'\',\''+d.id+'\')">Remove</button></div>'
+      +'</div>';
+  }).join(''):'<div style="font-size:11px;color:var(--text-muted);padding:8px 0">No dossiers yet. Pick key personnel from the Resume Bank to include tailored one-page bios in the proposal appendix.</div>';
+  return '<div class="staff-role" style="border-left-color:#C5A55A;margin-top:14px">'
+    +'<div class="staff-role-hdr"><div><div class="staff-role-ttl">&#128196; Key Personnel Dossiers</div>'
+    +'<div class="staff-role-meta">Tailored one-page bios for the proposal appendix ('+(p.dossiers||[]).length+')</div></div>'
+    +'<button type="button" class="ai-btn" onclick="openDossierPicker(\''+p.id+'\')">+ Add &amp; Generate</button></div>'
+    +rows+'</div>';
+}
+function openDossierPicker(propId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  var all=resumeBankAll();
+  var existingKeys={};(p.dossiers||[]).forEach(function(d){if(d.sourceKey)existingKeys[d.sourceKey]=true;});
+  var rows=all.length?all.map(function(e){
+    var has=existingKeys[e.key];
+    return '<label class="doss-pick'+(has?' have':'')+'"><input type="checkbox" value="'+esc(e.key)+'" '+(has?'disabled checked':'')+'>'
+      +'<span><b>'+esc(e.name)+'</b>'+(e.role?' — '+esc(e.role):'')+(e.clearance?' &middot; &#128274; '+esc(e.clearance):'')+(e.attachmentId?'':' <span style="font-size:10px;color:var(--text-muted)">(no file — bio from profile)</span>')+(has?' <span style="font-size:10px;color:var(--green)">already added</span>':'')+'</span></label>';
+  }).join(''):'<div style="font-size:12px;color:var(--text-muted);padding:16px;text-align:center">Resume Bank is empty. Add resumes in Recruiting &rarr; Resume Bank first.</div>';
+  document.getElementById('mdlDoss').innerHTML=
+    '<div class="mdl-over">Staffing</div><div class="mdl-title">Add Key Personnel Dossiers</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Select people to include as tailored one-page dossiers in the proposal appendix. Atlas generates each bio from their resume (or profile) against this RFP\'s roles and the CF voice.</div>'
+    +'<div class="doss-list" style="max-height:46vh;overflow:auto">'+rows+'</div>'
+    +'<div id="doss_status" style="font-size:11px;color:#7C3AED;min-height:14px;margin:8px 2px"></div>'
+    +'<div class="btn-row" style="margin-top:12px">'
+    +'<button class="btn btn-gold" style="flex:1" onclick="dossGenerateSelected(\''+propId+'\')">&#10024; Generate Selected</button>'
+    +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovDoss\')">Close</button></div>';
+  openModal('ovDoss');
+}
+function _dossGenerateOne(p,e,cb){
+  var llm=_propLLMOpts(p);var rfp=p.rfp||{};
+  var roleCtx=(rfp.requiredRoles||[]).map(function(r){return r.title;}).filter(Boolean).join(', ');
+  var sys='You write concise one-page key-personnel dossiers for federal proposals. Output ONLY clean HTML (<p>, <ul>/<li>, <strong>, <h4>). No markdown, no code fences. Never invent clearances, degrees, employers, or dates that are not supported by the provided material.';
+  var profile='Name: '+e.name+'\nProposed role: '+(e.role||'(map to the best-fitting RFP role)')+'\nClearance: '+(e.clearance||'(unspecified)')+'\nLocation: '+(e.location||'(unspecified)')+'\nKnown skills: '+((e.skills||[]).join(', ')||'(none captured)')+(e.summary?'\nProfile note: '+e.summary:'');
+  var ask='Write a one-page dossier tailored to this proposal. Structure: a 2-3 sentence summary paragraph, then <h4>Relevant Experience</h4> (bullets), <h4>Key Skills</h4> (bullets), and a <h4>Education, Certifications &amp; Clearance</h4> block. Emphasize fit for the RFP role(s) ['+(roleCtx||'the required roles')+'] and customer ['+(rfp.customer||'the customer')+']. Factual and confident.';
+  var instr='RFP CONTEXT:\n'+_propBuildRFPCtx(p)+'\n\nCANDIDATE PROFILE:\n'+profile+'\n\n'+ask;
+  function finish(j){cb(llmExtractText(j).trim().replace(/^```html\s*/i,'').replace(/```$/,'').trim());}
+  function fail(){cb('');}
+  if(e.attachmentId&&(llm.provider==='anthropic'||llm.provider==='google')){
+    llmDocComplete({provider:llm.provider,model:llm.model,attachmentId:e.attachmentId,system:sys,instruction:instr+'\n\nUse the ATTACHED resume as the primary source of facts.',max_tokens:1800}).then(finish).catch(fail);
+  } else {
+    llmComplete({provider:llm.provider,model:llm.model,system:sys,messages:[{role:'user',content:instr}],max_tokens:1800}).then(finish).catch(fail);
+  }
+}
+function dossGenerateSelected(propId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  var boxes=document.querySelectorAll('#mdlDoss .doss-list input[type=checkbox]:checked:not([disabled])');
+  var keys=Array.prototype.map.call(boxes,function(b){return b.value;});
+  if(!keys.length){alert('Select at least one person.');return;}
+  var all=resumeBankAll();
+  var entries=keys.map(function(k){return all.find(function(e){return e.key===k;});}).filter(Boolean);
+  var st=document.getElementById('doss_status');function setS(m){if(st)st.innerHTML=m;}
+  var i=0,errs=0;p.dossiers=p.dossiers||[];
+  function next(){
+    if(i>=entries.length){save();setS('Done — added '+(entries.length-errs)+' dossier'+(entries.length-errs===1?'':'s')+(errs?' ('+errs+' failed)':'')+'.');setTimeout(function(){closeModal('ovDoss');renderProposalDetail(propId);},900);return;}
+    var e=entries[i];setS('Generating dossier '+(i+1)+'/'+entries.length+': <b>'+esc(e.name)+'</b>…');
+    _dossGenerateOne(p,e,function(html){
+      if(html)p.dossiers.push({id:uid(),name:e.name,role:e.role||'',sourceKey:e.key,sourceKind:e.kind,html:html,generatedAt:Date.now()});
+      else errs++;
+      i++;save();next();
+    });
+  }
+  next();
+}
+function dossRemove(propId,id){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  p.dossiers=(p.dossiers||[]).filter(function(d){return d.id!==id;});
+  save();renderProposalDetail(propId);
+}
+
 /* ── PROPOSAL TEMPLATES MANAGER ── */
 function openProposalTemplatesManager(){
   if(!canProposal()){alert('You don\'t have permission.');return;}
@@ -3714,7 +3890,7 @@ function _pdOverviewHTML(p,opp,tpl){
     +'<div class="prop-hero-card" style="cursor:pointer" onclick="pdSetTab(\''+p.id+'\',\'sections\')"><div class="prop-hero-ttl">📝 Sections</div><div class="prop-hero-n">'+(p.sections||[]).filter(function(s){return (s.html||'').trim();}).length+'/'+(p.sections||[]).length+'</div><div class="prop-hero-sub">drafted · click to write</div></div>'
     +'<div class="prop-hero-card" style="cursor:pointer" onclick="pdSetTab(\''+p.id+'\',\'staffing\')"><div class="prop-hero-ttl">👥 Staffing</div><div class="prop-hero-n">'+(((p.rfp&&p.rfp.requiredRoles)||[]).length)+'</div><div class="prop-hero-sub">'+_pdStaffingSummary(p)+'</div></div>'
     +'<div class="prop-hero-card" style="cursor:pointer" onclick="pdSetTab(\''+p.id+'\',\'pp\')"><div class="prop-hero-ttl">🎯 Past Performance</div><div class="prop-hero-n">'+((p.pastPerformance&&p.pastPerformance.matches)?p.pastPerformance.matches.length:0)+'</div><div class="prop-hero-sub">'+(p.pastPerformance&&p.pastPerformance.generatedAt?'matched · click to view':'not run yet · click to find')+'</div></div>'
-    +'<div class="prop-hero-card" style="cursor:pointer" onclick="pdSetTab(\''+p.id+'\',\'pricing\')"><div class="prop-hero-ttl">💰 Pricing</div><div class="prop-hero-n">'+fmt(_propPricingTotal(p))+'</div><div class="prop-hero-sub">'+((p.pricing&&p.pricing.items)||[]).length+' line items &middot; '+((p.pricing&&p.pricing.mode)==='project-clins'?'from CLINs':'manual')+'</div></div>'
+    +'<div class="prop-hero-card" style="cursor:pointer" onclick="pdSetTab(\''+p.id+'\',\'pricing\')"><div class="prop-hero-ttl">💰 Pricing</div><div class="prop-hero-n">'+fmt(_propPricingTotal(p))+'</div><div class="prop-hero-sub">'+((p.pricing&&p.pricing.mode)==='cf-monthly'?(((p.pricing.cf&&p.pricing.cf.resources)||[]).length+' resources &middot; CF monthly'):(((p.pricing&&p.pricing.items)||[]).length+' line items &middot; '+((p.pricing&&p.pricing.mode)==='project-clins'?'from CLINs':'manual')))+'</div></div>'
     +'<div class="prop-hero-card" style="cursor:pointer" onclick="pdSetTab(\''+p.id+'\',\'cover\')"><div class="prop-hero-ttl">🏆 Cover Sheet</div><div class="prop-hero-n">'+((p.coverSheet&&p.coverSheet.certIds)?p.coverSheet.certIds.length:0)+'</div><div class="prop-hero-sub">certifications selected</div></div>'
     +'</div>';
 }
@@ -4249,8 +4425,37 @@ function _pdShowGapResults(propId){
 
 /* ── PRICING TAB (Phase D) ── */
 function _propPricingTotal(p){
-  var items=(p.pricing&&p.pricing.items)||[];
+  var pr=p.pricing||{};
+  if(pr.mode==='cf-monthly')return _cfPricingTotals(p).grand;
+  var items=pr.items||[];
   return items.reduce(function(s,i){return s+(Number(i.fee)||0);},0);
+}
+// CF resource×months pricing roll-up (base year + option years + escalation),
+// plus ODCs and travel. Monthly burn = sum(FTE × monthly rate).
+function _cfPricingTotals(p){
+  var cf=(p.pricing&&p.pricing.cf)||{};
+  var rate0=Number(cf.monthlyRate)||0;
+  var baseMonths=Number(cf.baseMonths)||12;
+  var optYears=Math.max(0,Math.min(10,Number(cf.optionYears)||0));
+  var esc=(Number(cf.escalationPct)||0)/100;
+  var rows=(cf.resources||[]).map(function(r){
+    var rate=(r.monthlyRate===''||r.monthlyRate==null)?rate0:(Number(r.monthlyRate)||0);
+    var count=Number(r.count)||0;
+    var base=count*baseMonths*rate;
+    var yrTotals=[base];
+    for(var y=1;y<=optYears;y++)yrTotals.push(Math.round(base*Math.pow(1+esc,y)));
+    var total=yrTotals.reduce(function(s,v){return s+v;},0);
+    return {r:r,rate:rate,count:count,base:base,yrTotals:yrTotals,total:total};
+  });
+  var laborBase=rows.reduce(function(s,r){return s+r.base;},0);
+  var laborAll=rows.reduce(function(s,r){return s+r.total;},0);
+  var monthlyBurn=rows.reduce(function(s,r){return s+r.count*r.rate;},0);
+  var odcTotal=(cf.odcs||[]).reduce(function(s,o){return s+(Number(o.qty)||0)*(Number(o.unitCost)||0);},0);
+  var travel=Number(cf.travel)||0;
+  return {rate0:rate0,baseMonths:baseMonths,optYears:optYears,esc:esc,rows:rows,laborBase:laborBase,laborAll:laborAll,monthlyBurn:monthlyBurn,odcTotal:odcTotal,travel:travel,grand:laborAll+odcTotal+travel};
+}
+function _projMonthlyCost(pid){
+  return projAssignedMembers(pid).reduce(function(s,m){var e=memberProjEntry(m,pid);var pct=e?(e.pct||100):100;return s+Math.round((m.cost||0)*(pct/100));},0);
 }
 function _propPricingHours(p){
   var items=(p.pricing&&p.pricing.items)||[];
@@ -4261,9 +4466,18 @@ function _pdPricingHTML(p){
   var pr=p.pricing;
   var mode=pr.mode||'manual';
   var modeCards='<div class="price-mode">'
-    +'<div class="price-mode-card'+(mode==='manual'?' selected':'')+'" onclick="pdPricingSetMode(\''+p.id+'\',\'manual\')"><div class="price-mode-ttl">&#9999;&#65039; Manual</div><div class="price-mode-sub">Add line items by hand — phase, LCAT, description, hours, rate, fee.</div></div>'
+    +'<div class="price-mode-card'+(mode==='cf-monthly'?' selected':'')+'" onclick="pdPricingSetMode(\''+p.id+'\',\'cf-monthly\')"><div class="price-mode-ttl">&#128176; CF Monthly Rate</div><div class="price-mode-sub">Resource × months × fixed monthly rate, with base + option years. The CommunityForce house pricing sheet.</div></div>'
+    +'<div class="price-mode-card'+(mode==='manual'?' selected':'')+'" onclick="pdPricingSetMode(\''+p.id+'\',\'manual\')"><div class="price-mode-ttl">&#9999;&#65039; Manual (LCAT hrs)</div><div class="price-mode-sub">Add line items by hand — phase, LCAT, description, hours, rate, fee.</div></div>'
     +'<div class="price-mode-card'+(mode==='project-clins'?' selected':'')+'" onclick="pdPricingSetMode(\''+p.id+'\',\'project-clins\')"><div class="price-mode-ttl">&#128202; Project CLINs</div><div class="price-mode-sub">Pull starter rows from a linked project\'s CLIN structure. Edit freely after.</div></div>'
     +'</div>';
+  if(mode==='cf-monthly'){
+    return '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">The CommunityForce fixed-monthly-rate pricing sheet. Numbers are user-entered; totals, option years, and margin compute live.</div>'
+      +modeCards+_cfPricingEditorHTML(p)
+      +'<div style="margin-top:14px"><div class="fld-section-hdr" style="margin-top:0;display:flex;justify-content:space-between;align-items:center"><span>Pricing Assumptions &amp; Basis of Estimate</span>'
+      +'<button type="button" class="ai-btn" onclick="pdPricingDraftAssumptions(\''+p.id+'\')">&#10024; Draft Assumptions</button></div>'
+      +richEditor('pd_pr_assume',pr.assumptionsHtml||'',{placeholder:'Assumptions and exceptions...',tall:false})
+      +'<div class="btn-row" style="margin-top:6px"><button class="btn btn-navy btn-sm" onclick="pdPricingSaveAssumptions(\''+p.id+'\')">Save Assumptions</button></div></div>';
+  }
   // Linked project picker
   var linkBlock='';
   if(mode==='project-clins'){
@@ -4416,8 +4630,16 @@ function pdPricingSaveAssumptions(propId){
 function pdPricingDraftAssumptions(propId){
   var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
   var pr=p.pricing||{};
-  if(!(pr.items||[]).length){alert('Add at least one pricing line item first.');return;}
-  var itemsSummary=(pr.items||[]).map(function(i){return '- '+(i.phase?i.phase+' / ':'')+(i.lcat||i.description||'item')+(i.hours?' · '+i.hours+'h':'')+(i.rate?' @ $'+i.rate:'')+' = $'+(i.fee||0);}).join('\n');
+  var itemsSummary;
+  if(pr.mode==='cf-monthly'){
+    var t=_cfPricingTotals(p);
+    if(!t.rows.length){alert('Add at least one resource first.');return;}
+    itemsSummary=t.rows.map(function(r){return '- '+(r.r.role||'role')+': '+r.count+' FTE × '+t.baseMonths+' mo × $'+r.rate+'/mo = $'+r.base+' (base yr)';}).join('\n')
+      +'\nPricing model: firm-fixed-price, fixed monthly rate per resource. Base year '+t.baseMonths+' months + '+t.optYears+' option year(s)'+(t.esc?' with '+(t.esc*100)+'% annual escalation':' (flat, no escalation)')+'. Monthly burn $'+t.monthlyBurn+'/mo. ODCs $'+t.odcTotal+', travel $'+t.travel+'.';
+  } else {
+    if(!(pr.items||[]).length){alert('Add at least one pricing line item first.');return;}
+    itemsSummary=(pr.items||[]).map(function(i){return '- '+(i.phase?i.phase+' / ':'')+(i.lcat||i.description||'item')+(i.hours?' · '+i.hours+'h':'')+(i.rate?' @ $'+i.rate:'')+' = $'+(i.fee||0);}).join('\n');
+  }
   var total=_propPricingTotal(p);
   var sys='You draft the Pricing Assumptions / Basis-of-Estimate / Exceptions narrative for a federal proposal. Output ONLY clean HTML (use <p>, <ul>/<li>, <strong>; no markdown, no code fences, no commentary outside HTML). Keep dollar figures and quantities exactly as given; do NOT invent rates or hours.';
   var instruction='Draft the assumptions, basis-of-estimate, and exceptions narrative for the following proposal pricing.\n\n'
@@ -4445,6 +4667,138 @@ function pdPricingDraftAssumptions(propId){
     })
     .catch(function(e){alert('Assumptions draft failed: '+(e&&e.message||e));})
     .finally(function(){if(btn){btn.disabled=false;btn.textContent='✨ Draft Assumptions';}});
+}
+
+/* ── CF MONTHLY PRICING SHEET (Phase 5) ── */
+function _cfEnsure(p){
+  if(!p.pricing)p.pricing={mode:'cf-monthly',linkedProjectId:'',items:[]};
+  if(!p.pricing.cf)p.pricing.cf={monthlyRate:0,baseMonths:12,optionYears:2,escalationPct:0,resources:[],odcs:[],travel:0};
+  return p.pricing.cf;
+}
+function _cfPricingEditorHTML(p){
+  var pr=p.pricing;var cf=_cfEnsure(p);var t=_cfPricingTotals(p);
+  var cfg='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:12px">'
+    +'<div class="fld" style="margin:0"><label class="fld-l">Default Rate $/person/mo</label><input class="fld-i num" type="number" min="0" step="100" value="'+(Number(cf.monthlyRate)||0)+'" onchange="cfPrSet(\''+p.id+'\',\'monthlyRate\',this.value)"></div>'
+    +'<div class="fld" style="margin:0"><label class="fld-l">Base Year Months</label><input class="fld-i num" type="number" min="1" step="1" value="'+(Number(cf.baseMonths)||12)+'" onchange="cfPrSet(\''+p.id+'\',\'baseMonths\',this.value)"></div>'
+    +'<div class="fld" style="margin:0"><label class="fld-l">Option Years</label><input class="fld-i num" type="number" min="0" max="10" step="1" value="'+(Number(cf.optionYears)||0)+'" onchange="cfPrSet(\''+p.id+'\',\'optionYears\',this.value)"></div>'
+    +'<div class="fld" style="margin:0"><label class="fld-l">Escalation %/yr</label><input class="fld-i num" type="number" min="0" step="0.5" value="'+(Number(cf.escalationPct)||0)+'" onchange="cfPrSet(\''+p.id+'\',\'escalationPct\',this.value)"></div>'
+    +'</div>';
+  var yrHdrs='<th style="text-align:right">Base Yr</th>'+Array.apply(null,{length:t.optYears}).map(function(_,i){return '<th style="text-align:right">Opt Yr '+(i+1)+'</th>';}).join('')+'<th style="text-align:right">Total</th>';
+  var resRows=t.rows.map(function(row,i){
+    var r=row.r;
+    var yrCells='<td class="num">'+fmt(row.base)+'</td>'+row.yrTotals.slice(1).map(function(v){return '<td class="num">'+fmt(v)+'</td>';}).join('')+'<td class="num"><b>'+fmt(row.total)+'</b></td>';
+    return '<tr>'
+      +'<td><input value="'+esc(r.role||'')+'" placeholder="Role / LCAT" oninput="cfResSet(\''+p.id+'\','+i+',\'role\',this.value)"></td>'
+      +'<td style="width:64px"><input class="num" type="number" min="0" step="0.25" value="'+(Number(r.count)||0)+'" onchange="cfResSet(\''+p.id+'\','+i+',\'count\',this.value)"></td>'
+      +'<td style="width:104px"><input class="num" type="number" min="0" step="100" placeholder="'+(Number(cf.monthlyRate)||0)+'" value="'+((r.monthlyRate===''||r.monthlyRate==null)?'':Number(r.monthlyRate))+'" onchange="cfResSet(\''+p.id+'\','+i+',\'monthlyRate\',this.value)"></td>'
+      +yrCells
+      +'<td style="width:34px"><button class="btn btn-danger-sm btn-sm" onclick="cfResDel(\''+p.id+'\','+i+')">&times;</button></td>'
+      +'</tr>';
+  }).join('');
+  var emptyRes=t.rows.length?'':'<tr><td colspan="'+(4+t.optYears)+'" style="text-align:center;color:var(--text-muted);font-size:11px;padding:12px">No resources yet. Click <b>+ Resource</b>, <b>Seed from RFP Roles</b>, or <b>Seed from CLINs</b>.</td></tr>';
+  var subRow=t.rows.length?'<tr style="background:#f1f5f9;font-weight:700"><td>Section A Subtotal</td><td class="num">'+t.rows.reduce(function(s,r){return s+r.count;},0)+'</td><td></td><td class="num">'+fmt(t.laborBase)+'</td>'+Array.apply(null,{length:t.optYears}).map(function(_,i){var sum=t.rows.reduce(function(s,r){return s+(r.yrTotals[i+1]||0);},0);return '<td class="num">'+fmt(sum)+'</td>';}).join('')+'<td class="num">'+fmt(t.laborAll)+'</td><td></td></tr>':'';
+  var laborTbl='<div class="fld-section-hdr" style="margin-top:0">Section A — Developer Labor</div>'
+    +'<table class="price-tbl"><thead><tr><th>Role / LCAT</th><th style="text-align:right"># FTE</th><th style="text-align:right">Rate $/mo</th>'+yrHdrs+'<th></th></tr></thead>'
+    +'<tbody>'+resRows+emptyRes+subRow+'</tbody></table>'
+    +'<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><button class="btn btn-sec btn-sm" onclick="cfResAdd(\''+p.id+'\')">+ Resource</button>'
+    +'<button class="btn btn-sec btn-sm" onclick="cfSeedRoles(\''+p.id+'\')">&#8595; Seed from RFP Roles</button>'
+    +(pr.linkedProjectId?'<button class="btn btn-sec btn-sm" onclick="cfSeedCLINs(\''+p.id+'\')">&#8595; Seed from CLINs</button>':'')+'</div>';
+  // Section B — ODCs
+  var odcRows=(cf.odcs||[]).map(function(o,i){
+    var ext=(Number(o.qty)||0)*(Number(o.unitCost)||0);
+    return '<tr><td><input value="'+esc(o.item||'')+'" placeholder="Item / License" oninput="cfOdcSet(\''+p.id+'\','+i+',\'item\',this.value)"></td>'
+      +'<td><input value="'+esc(o.vendor||'')+'" placeholder="Vendor / PN" oninput="cfOdcSet(\''+p.id+'\','+i+',\'vendor\',this.value)"></td>'
+      +'<td style="width:60px"><input class="num" type="number" min="0" value="'+(Number(o.qty)||0)+'" onchange="cfOdcSet(\''+p.id+'\','+i+',\'qty\',this.value)"></td>'
+      +'<td style="width:104px"><input class="num" type="number" min="0" step="0.01" value="'+(Number(o.unitCost)||0)+'" onchange="cfOdcSet(\''+p.id+'\','+i+',\'unitCost\',this.value)"></td>'
+      +'<td class="num">'+fmt(ext)+'</td><td style="width:34px"><button class="btn btn-danger-sm btn-sm" onclick="cfOdcDel(\''+p.id+'\','+i+')">&times;</button></td></tr>';
+  }).join('');
+  var odcTbl='<div class="fld-section-hdr">Section B — Other Direct Costs (ODCs)</div>'
+    +'<table class="price-tbl"><thead><tr><th>Item / License</th><th>Vendor / PN</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit $</th><th style="text-align:right">Extended $</th><th></th></tr></thead>'
+    +'<tbody>'+(odcRows||'<tr><td colspan="6" style="text-align:center;color:var(--text-muted);font-size:11px;padding:10px">No ODCs. License renewals are often listed at $0 (invoiced at cost). Click + ODC.</td></tr>')+'</tbody></table>'
+    +'<button class="btn btn-sec btn-sm" style="margin-top:6px" onclick="cfOdcAdd(\''+p.id+'\')">+ ODC</button>';
+  // Section C — Travel
+  var travelBlock='<div class="fld-section-hdr">Section C — Contractor Travel</div>'
+    +'<div class="fld" style="max-width:220px"><label class="fld-l">Travel (one-time $)</label><input class="fld-i num" type="number" min="0" step="100" value="'+(Number(cf.travel)||0)+'" onchange="cfPrSet(\''+p.id+'\',\'travel\',this.value)"></div>';
+  // Cost basis & margin (link a contract project with CLINs)
+  var contractProjs=D.projects.filter(function(x){return projCat(x)==='project'&&Array.isArray(x.clins)&&x.clins.length;});
+  var projOpts='<option value="">— none —</option>'+contractProjs.map(function(x){return '<option value="'+x.id+'"'+(pr.linkedProjectId===x.id?' selected':'')+'>'+esc(x.name)+'</option>';}).join('');
+  var costBlock='<div class="fld-section-hdr">Cost Basis &amp; Margin</div>'
+    +'<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap"><div class="fld" style="flex:1;min-width:240px;margin:0"><label class="fld-l">Link a contract project (CLINs + assigned cost)</label><select class="fld-sel" onchange="pdPricingSetLink(\''+p.id+'\',this.value)">'+projOpts+'</select></div></div>';
+  if(pr.linkedProjectId){
+    var lp=D.projects.find(function(x){return x.id===pr.linkedProjectId;});
+    if(lp){
+      var rev=projClinRevenue(lp),mc=_projMonthlyCost(lp.id),margin=t.monthlyBurn-mc,mpct=t.monthlyBurn?Math.round(margin/t.monthlyBurn*100):0;
+      costBlock+='<div style="font-size:12px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:8px;display:flex;gap:18px;flex-wrap:wrap">'
+        +'<span>CLIN revenue: <b>'+fmt(rev)+'/mo</b></span>'
+        +'<span>Assigned cost: <b>'+fmt(mc)+'/mo</b></span>'
+        +'<span>Proposed price (burn): <b>'+fmt(t.monthlyBurn)+'/mo</b></span>'
+        +'<span>Margin vs cost: <b style="color:'+(margin>=0?'var(--green)':'var(--red)')+'">'+fmt(margin)+'/mo ('+mpct+'%)</b></span>'
+        +'</div>';
+    }
+  }
+  var totalsPanel='<div class="cf-price-totals">'
+    +'<div><span>Monthly burn</span><b>'+fmt(t.monthlyBurn)+'/mo</b></div>'
+    +'<div><span>Labor — base year</span><b>'+fmt(t.laborBase)+'</b></div>'
+    +'<div><span>Labor — all years</span><b>'+fmt(t.laborAll)+'</b></div>'
+    +'<div><span>ODCs</span><b>'+fmt(t.odcTotal)+'</b></div>'
+    +'<div><span>Travel</span><b>'+fmt(t.travel)+'</b></div>'
+    +'<div class="cf-grand"><span>Total Contract Price</span><b>'+fmt(t.grand)+'</b></div>'
+    +'</div>';
+  return cfg+laborTbl+odcTbl+travelBlock+costBlock+totalsPanel;
+}
+function cfPrSet(propId,field,val){var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;var cf=_cfEnsure(p);cf[field]=Number(val)||0;save();renderProposalDetail(propId);}
+function cfResAdd(propId){var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;var cf=_cfEnsure(p);cf.resources.push({id:uid(),role:'',count:1,monthlyRate:''});save();renderProposalDetail(propId);}
+function cfResSet(propId,idx,field,val){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;var cf=_cfEnsure(p);var r=cf.resources[idx];if(!r)return;
+  if(field==='count')r.count=Number(val)||0;
+  else if(field==='monthlyRate')r.monthlyRate=(val===''?'':(Number(val)||0));
+  else r[field]=val;
+  save();
+  if(field==='count'||field==='monthlyRate')renderProposalDetail(propId);   // recompute year columns; text fields keep focus
+}
+function cfResDel(propId,idx){var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;var cf=_cfEnsure(p);cf.resources.splice(idx,1);save();renderProposalDetail(propId);}
+function cfSeedRoles(propId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  var roles=(p.rfp&&p.rfp.requiredRoles)||[];if(!roles.length){alert('No required roles on the RFP. Add them in RFP Details first.');return;}
+  var cf=_cfEnsure(p);var existing={};cf.resources.forEach(function(r){existing[(r.role||'').toLowerCase()]=true;});var added=0;
+  roles.forEach(function(role){if(existing[(role.title||'').toLowerCase()])return;cf.resources.push({id:uid(),role:role.title||'',count:Number(role.count)||1,monthlyRate:''});added++;});
+  if(!added){alert('All RFP roles are already in the table.');return;}
+  save();renderProposalDetail(propId);
+}
+function cfSeedCLINs(propId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p||!p.pricing||!p.pricing.linkedProjectId)return;
+  var proj=D.projects.find(function(x){return x.id===p.pricing.linkedProjectId;});
+  if(!proj||!Array.isArray(proj.clins)||!proj.clins.length){alert('Linked project has no CLINs.');return;}
+  var cf=_cfEnsure(p);var existing={};cf.resources.forEach(function(r){existing[(r.role||'').toLowerCase()]=true;});var added=0;
+  proj.clins.forEach(function(c){if(existing[(c.title||'').toLowerCase()])return;cf.resources.push({id:uid(),role:c.title||c.number||'CLIN',count:1,monthlyRate:Number(c.revenue)||''});added++;});
+  if(!added){alert('All CLINs are already represented.');return;}
+  save();renderProposalDetail(propId);
+}
+function cfOdcAdd(propId){var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;var cf=_cfEnsure(p);cf.odcs.push({id:uid(),item:'',vendor:'',qty:1,unitCost:0});save();renderProposalDetail(propId);}
+function cfOdcSet(propId,idx,field,val){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;var cf=_cfEnsure(p);var o=cf.odcs[idx];if(!o)return;
+  if(field==='qty'||field==='unitCost')o[field]=Number(val)||0;else o[field]=val;
+  save();
+  if(field==='qty'||field==='unitCost')renderProposalDetail(propId);
+}
+function cfOdcDel(propId,idx){var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;var cf=_cfEnsure(p);cf.odcs.splice(idx,1);save();renderProposalDetail(propId);}
+// CF pricing table for the print/export document.
+function _cfPricingPrintHTML(p){
+  var t=_cfPricingTotals(p);
+  if(!t.rows.length&&!t.odcTotal&&!t.travel)return '';
+  var yrHdrs='<th style="text-align:right">Base Yr</th>'+Array.apply(null,{length:t.optYears}).map(function(_,i){return '<th style="text-align:right">Opt Yr '+(i+1)+'</th>';}).join('')+'<th style="text-align:right">Total</th>';
+  var rows=t.rows.map(function(row){
+    return '<tr><td>'+esc(row.r.role||'')+'</td><td style="text-align:right">'+row.count+'</td><td style="text-align:right">$'+row.rate.toLocaleString()+'</td>'
+      +'<td style="text-align:right">$'+row.base.toLocaleString()+'</td>'+row.yrTotals.slice(1).map(function(v){return '<td style="text-align:right">$'+v.toLocaleString()+'</td>';}).join('')+'<td style="text-align:right"><b>$'+row.total.toLocaleString()+'</b></td></tr>';
+  }).join('');
+  var subCols=Array.apply(null,{length:t.optYears}).map(function(_,i){var s=t.rows.reduce(function(a,r){return a+(r.yrTotals[i+1]||0);},0);return '<td style="text-align:right">$'+s.toLocaleString()+'</td>';}).join('');
+  var labor='<h3>Section A — Developer Labor</h3><table><thead><tr><th>Role / LCAT</th><th style="text-align:right">FTE</th><th style="text-align:right">Rate/mo</th>'+yrHdrs+'</tr></thead><tbody>'+rows
+    +'<tr style="background:#f1f5f9;font-weight:700"><td>Subtotal</td><td style="text-align:right">'+t.rows.reduce(function(s,r){return s+r.count;},0)+'</td><td></td><td style="text-align:right">$'+t.laborBase.toLocaleString()+'</td>'+subCols+'<td style="text-align:right">$'+t.laborAll.toLocaleString()+'</td></tr></tbody></table>';
+  var odc=(t.odcs&&t.odcs.length)?'<h3>Section B — Other Direct Costs</h3><table><thead><tr><th>Item</th><th>Vendor</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit</th><th style="text-align:right">Extended</th></tr></thead><tbody>'+t.odcs.map(function(o){var ext=(Number(o.qty)||0)*(Number(o.unitCost)||0);return '<tr><td>'+esc(o.item||'')+'</td><td>'+esc(o.vendor||'')+'</td><td style="text-align:right">'+(Number(o.qty)||0)+'</td><td style="text-align:right">$'+(Number(o.unitCost)||0).toLocaleString()+'</td><td style="text-align:right">$'+ext.toLocaleString()+'</td></tr>';}).join('')+'<tr style="background:#f1f5f9;font-weight:700"><td colspan="4" style="text-align:right">ODC Subtotal</td><td style="text-align:right">$'+t.odcTotal.toLocaleString()+'</td></tr></tbody></table>':'';
+  var travel=t.travel?'<h3>Section C — Contractor Travel</h3><p>$'+t.travel.toLocaleString()+'</p>':'';
+  var grand='<table style="margin-top:10px"><tbody><tr style="background:#16223C;color:#fff;font-weight:700"><td>TOTAL CONTRACT PRICE (all sections, all years)</td><td style="text-align:right">$'+t.grand.toLocaleString()+'</td></tr></tbody></table>'
+    +'<p style="font-size:11px;color:#64748b">Monthly burn: $'+t.monthlyBurn.toLocaleString()+'/month &middot; Base year '+t.baseMonths+' months + '+t.optYears+' option year'+(t.optYears===1?'':'s')+(t.esc?' &middot; '+(t.esc*100)+'% annual escalation':' &middot; flat rate, no escalation')+'.</p>';
+  return '<div class="print-page"><h2>Pricing</h2>'+labor+odc+travel+grand+'</div>';
 }
 
 /* ── STAFFING TAB / RFP → RECRUITING BRIDGE (Phase E, Workflows 3+4) ── */
@@ -4521,7 +4875,8 @@ function _pdStaffingHTML(p){
     +'<div style="font-size:12px;color:var(--text-muted);max-width:560px">For each required role from the RFP: score CF\'s bench, pick a fulfillment intent, and (for "Open Req" roles) auto-draft a JD and seed a Recruiting requisition on the linked opportunity. Sourcing can start before award.</div>'
     +'<div>'+btn+meta+'</div></div>'
     +oppHint
-    +rolesHTML;
+    +rolesHTML
+    +_pdDossiersHTML(p);
 }
 function pdScoreBench(propId){
   var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
@@ -4825,7 +5180,7 @@ function _buildProposalPrintHTML(p){
     var html=s.html||'';
     if(s.source==='computed'){
       if(/cert|capabilit/i.test(s.title))html='<p>CommunityForce holds the following active corporate certifications and designations:</p>'+(certs.length?'<ul>'+certs.map(function(c){return '<li>'+esc(c.name)+(c.number?' — '+esc(c.number):'')+(c.issuer?' ('+esc(c.issuer)+')':'')+'</li>';}).join('')+'</ul>':'<p><i>(none on file)</i></p>');
-      else if(/resume/i.test(s.title))html=(p.staffing&&p.staffing.generatedAt)?'<p><i>Key personnel resume dossiers follow.</i></p>':'<p><i>Key personnel resume dossiers are assembled from the Resume Bank in the Staffing workflow.</i></p>';
+      else if(/resume/i.test(s.title))html=(p.dossiers&&p.dossiers.length)?p.dossiers.map(function(d){return '<div style="page-break-inside:avoid;margin-bottom:18px"><h3>'+esc(d.name)+(d.role?' — '+esc(d.role):'')+'</h3>'+(d.html||'')+'</div>';}).join(''):'<p><i>No key-personnel dossiers selected. Add them in the Staffing tab → Key Personnel Dossiers.</i></p>';
     }
     num++;
     return '<div class="print-page"><h2><span class="sec-num">'+num+'.</span> '+esc(s.title)+'</h2>'+(html||'<p><i>(empty)</i></p>')+'</div>';
@@ -4834,15 +5189,22 @@ function _buildProposalPrintHTML(p){
   var pr=p.pricing||{};
   var items=pr.items||[];
   var total=_propPricingTotal(p);
-  var pricingHTML=items.length?'<div class="print-page"><h2>Pricing</h2><table><thead><tr><th>Phase</th><th>LCAT / Role</th><th>Description</th><th style="text-align:right">Hours</th><th style="text-align:right">Rate</th><th style="text-align:right">Fee</th></tr></thead><tbody>'
-    +items.map(function(i){return '<tr><td>'+esc(i.phase||'')+'</td><td>'+esc(i.lcat||'')+'</td><td>'+esc(i.description||'')+'</td><td style="text-align:right">'+(i.hours||0)+'</td><td style="text-align:right">$'+(Number(i.rate)||0)+'</td><td style="text-align:right">$'+(Number(i.fee)||0).toLocaleString()+'</td></tr>';}).join('')
-    +'<tr style="background:#f1f5f9;font-weight:700"><td colspan="5" style="text-align:right">TOTAL</td><td style="text-align:right">$'+total.toLocaleString()+'</td></tr></tbody></table>'
-    +(pr.paymentTerms?'<p><b>Payment Terms:</b> '+esc(pr.paymentTerms)+'</p>':'')
-    +(pr.assumptionsHtml?'<h3>Basis of Estimate &amp; Assumptions</h3>'+pr.assumptionsHtml:'')
-    +'</div>':'';
+  var pricingHTML;
+  if(pr.mode==='cf-monthly'){
+    pricingHTML=_cfPricingPrintHTML(p);
+    if(pricingHTML&&(pr.paymentTerms||pr.assumptionsHtml))pricingHTML=pricingHTML.replace('</div>',(pr.paymentTerms?'<p><b>Payment Terms:</b> '+esc(pr.paymentTerms)+'</p>':'')+(pr.assumptionsHtml?'<h3>Basis of Estimate &amp; Assumptions</h3>'+pr.assumptionsHtml:'')+'</div>');
+  } else {
+    pricingHTML=items.length?'<div class="print-page"><h2>Pricing</h2><table><thead><tr><th>Phase</th><th>LCAT / Role</th><th>Description</th><th style="text-align:right">Hours</th><th style="text-align:right">Rate</th><th style="text-align:right">Fee</th></tr></thead><tbody>'
+      +items.map(function(i){return '<tr><td>'+esc(i.phase||'')+'</td><td>'+esc(i.lcat||'')+'</td><td>'+esc(i.description||'')+'</td><td style="text-align:right">'+(i.hours||0)+'</td><td style="text-align:right">$'+(Number(i.rate)||0)+'</td><td style="text-align:right">$'+(Number(i.fee)||0).toLocaleString()+'</td></tr>';}).join('')
+      +'<tr style="background:#f1f5f9;font-weight:700"><td colspan="5" style="text-align:right">TOTAL</td><td style="text-align:right">$'+total.toLocaleString()+'</td></tr></tbody></table>'
+      +(pr.paymentTerms?'<p><b>Payment Terms:</b> '+esc(pr.paymentTerms)+'</p>':'')
+      +(pr.assumptionsHtml?'<h3>Basis of Estimate &amp; Assumptions</h3>'+pr.assumptionsHtml:'')
+      +'</div>':'';
+  }
+  var hasPricing=!!pricingHTML;
   var tocItems=sections.filter(function(s){return !isCoverSec(s);}).map(function(s){return '<li>'+esc(s.title)+'</li>';});
   if(pickedCases.length)tocItems.push('<li>Past Performance Citations</li>');
-  if(items.length)tocItems.push('<li>Pricing</li>');
+  if(hasPricing)tocItems.push('<li>Pricing</li>');
   var toc=tocItems.length?'<div class="print-page"><h2>Contents</h2><ol>'+tocItems.join('')+'</ol></div>':'';
   var nowStr=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
   var ids=[ident.cage?'CAGE '+esc(ident.cage):'',ident.uei?'UEI '+esc(ident.uei):'',ident.duns?'DUNS '+esc(ident.duns):''].filter(Boolean).join(' &middot; ');
