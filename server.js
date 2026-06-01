@@ -37,6 +37,51 @@ async function initDb() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `);
+  // Knowledge Bank: past proposals + capability/reference docs the Proposal
+  // Generator pulls from. The heavy extracted_text (and the original binary)
+  // live HERE, not in the app_state JSONB blob — only lightweight metadata
+  // (id, name, type, summary, tags) is mirrored into D.knowledgeBank so the
+  // autosaved single-row state and backups stay small.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS knowledge_docs (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      doc_type TEXT,
+      mime TEXT,
+      size INTEGER,
+      extracted_text TEXT,
+      data BYTEA,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+}
+
+// Extract plain text from an uploaded knowledge-bank document.
+// DOCX → mammoth, PDF → pdf-parse, text/markdown → utf8. Anything else (or a
+// scanned/image PDF) yields '' and the doc is still stored as a reference.
+// Requires are lazy + guarded so the server still boots if a dep is missing.
+async function extractDocText(buffer, mime, name) {
+  const lower = String(name || '').toLowerCase();
+  const m = String(mime || '').toLowerCase();
+  const isDocx = /wordprocessingml/.test(m) || lower.endsWith('.docx');
+  const isPdf = /pdf$/.test(m) || lower.endsWith('.pdf');
+  const isText = /^text\//.test(m) || lower.endsWith('.txt') || lower.endsWith('.md') || lower.endsWith('.csv');
+  try {
+    if (isDocx) {
+      const mammoth = require('mammoth');
+      const r = await mammoth.extractRawText({ buffer });
+      return String((r && r.value) || '').trim();
+    }
+    if (isPdf) {
+      const pdfParse = require('pdf-parse');
+      const r = await pdfParse(buffer);
+      return String((r && r.text) || '').trim();
+    }
+    if (isText) return buffer.toString('utf8').trim();
+  } catch (e) {
+    console.error('extractDocText failed for ' + name + ':', e.message);
+  }
+  return '';
 }
 
 app.get('/api/data', async (req, res) => {
@@ -136,6 +181,87 @@ app.get('/api/attachments/:id', async (req, res) => {
 app.delete('/api/attachments/:id', async (req, res) => {
   try {
     await pool.query('DELETE FROM attachments WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── KNOWLEDGE BANK ──
+// Upload a document (PDF/DOCX/TXT) → store binary + extracted text. Returns the
+// extracted text so the client can run its AI summary/tag pass and mirror
+// lightweight metadata into D.knowledgeBank.
+app.post('/api/knowledge', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file provided' });
+    const id = 'kb_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    const text = await extractDocText(req.file.buffer, req.file.mimetype, req.file.originalname);
+    await pool.query(
+      'INSERT INTO knowledge_docs (id, name, doc_type, mime, size, extracted_text, data) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+      [id, req.file.originalname, req.body.docType || 'other', req.file.mimetype, req.file.size, text, req.file.buffer]
+    );
+    res.json({ id, name: req.file.originalname, mime: req.file.mimetype, size: req.file.size, chars: text.length, text: text.slice(0, 200000) });
+  } catch (e) {
+    console.error('KB upload failed:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Add a knowledge-bank entry from pasted text (no file).
+app.post('/api/knowledge/text', async (req, res) => {
+  try {
+    const { name, docType, text } = req.body || {};
+    if (!text || !String(text).trim()) return res.status(400).json({ error: 'text required' });
+    const id = 'kb_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    await pool.query(
+      'INSERT INTO knowledge_docs (id, name, doc_type, mime, size, extracted_text, data) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+      [id, name || 'Pasted note', docType || 'other', 'text/plain', Buffer.byteLength(text, 'utf8'), text, null]
+    );
+    res.json({ id, name: name || 'Pasted note', chars: String(text).length });
+  } catch (e) {
+    console.error('KB text add failed:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// List knowledge-bank metadata (no text body) — for reconciliation/debug.
+app.get('/api/knowledge', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT id, name, doc_type, mime, size, length(extracted_text) AS chars, created_at FROM knowledge_docs ORDER BY created_at DESC');
+    res.json(r.rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Fetch one document's full extracted text (used at generation time).
+app.get('/api/knowledge/:id', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT id, name, doc_type, mime, size, extracted_text, created_at FROM knowledge_docs WHERE id = $1', [req.params.id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(r.rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Download/preview the original binary.
+app.get('/api/knowledge/:id/raw', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT name, mime, data FROM knowledge_docs WHERE id = $1', [req.params.id]);
+    if (!r.rows.length || !r.rows[0].data) return res.status(404).send('Not found');
+    const row = r.rows[0];
+    res.setHeader('Content-Type', row.mime || 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'inline; filename="' + String(row.name || 'file').replace(/[\r\n"]/g, '') + '"');
+    res.send(row.data);
+  } catch (e) {
+    res.status(500).send('error');
+  }
+});
+
+app.delete('/api/knowledge/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM knowledge_docs WHERE id = $1', [req.params.id]);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });

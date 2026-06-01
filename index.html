@@ -567,6 +567,15 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .cert-exp-ok{color:var(--green);font-size:10px;font-weight:700;}
 .cert-exp-warn{color:var(--warn-text);font-size:10px;font-weight:700;}
 .cert-exp-bad{color:var(--red);font-size:10px;font-weight:700;}
+.kb-upload-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#F8FAFC;border:1px solid var(--border);border-radius:8px;padding:10px;}
+.kb-list{max-height:52vh;overflow:auto;margin-top:8px;}
+.kb-card{background:#fff;border:1px solid var(--border);border-radius:8px;border-left:3px solid #0EA5E9;padding:11px 13px;margin-bottom:8px;display:flex;gap:12px;align-items:flex-start;}
+.kb-name{font-size:13px;font-weight:700;word-break:break-word;}
+.kb-type{font-size:10px;font-weight:700;color:#0EA5E9;text-transform:uppercase;letter-spacing:.4px;background:rgba(14,165,233,0.1);padding:1px 7px;border-radius:10px;}
+.kb-sum{font-size:12px;color:var(--text);margin-top:5px;line-height:1.45;}
+.kb-tags{margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;}
+.kb-tag{font-size:10px;background:#EEF2F7;color:#475569;padding:1px 7px;border-radius:10px;}
+.kb-meta{font-size:10px;color:var(--text-muted);margin-top:6px;}
 .tpl-card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px;border-left:3px solid #7C3AED;}
 .tpl-card-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;}
 .tpl-card-name{font-size:13px;font-weight:700;}
@@ -805,6 +814,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 <div class="ov" id="ovCP" onclick="closeModal('ovCP')"><div class="mdl" id="mdlCP" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
 <div class="ov" id="ovCert" onclick="closeModal('ovCert')"><div class="mdl" id="mdlCert" onclick="event.stopPropagation()" style="max-width:720px"></div></div>
 <div class="ov" id="ovTplProp" onclick="closeModal('ovTplProp')"><div class="mdl" id="mdlTplProp" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
+<div class="ov" id="ovKB" onclick="closeModal('ovKB')"><div class="mdl" id="mdlKB" onclick="event.stopPropagation()" style="width:90vw;max-width:900px"></div></div>
 <div class="ov" id="ovNewProp" onclick="closeModal('ovNewProp')"><div class="mdl" id="mdlNewProp" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
 <div class="ov" id="ovProp" onclick="closeModal('ovProp')"><div class="mdl" id="mdlProp" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
 <div class="ov" id="ovGap" onclick="closeModal('ovGap')"><div class="mdl" id="mdlGap" onclick="event.stopPropagation()" style="max-width:820px"></div></div>
@@ -1024,6 +1034,7 @@ function proposalsMigrate(){
   if(!D.proposalTemplates)D.proposalTemplates=[];
   if(!D.corporateCertifications)D.corporateCertifications=[];
   if(!D.companyProfile)D.companyProfile={};
+  if(!Array.isArray(D.knowledgeBank))D.knowledgeBank=[];   // Phase 1: proposal Knowledge Bank (metadata only; text lives in knowledge_docs table)
   D.proposals.forEach(function(p){
     if(!p.status)p.status='draft';
     if(!p.sections)p.sections=[];
@@ -1034,6 +1045,7 @@ function proposalsMigrate(){
     if(!p.staffing)p.staffing={generatedAt:0,roleMatches:[]};
     if(!p.redTeam)p.redTeam={rubric:[],reviews:[],createdTaskId:'',generatedAt:0};
     if(!p.winLoss)p.winLoss=null;
+    if(!p.brief)p.brief={text:'',winThemes:'',differentiators:'',updatedAt:0,updatedBy:''};   // Phase 2: BusDev intake
     if(!('llmProvider' in p))p.llmProvider='';
     if(!('llmModel' in p))p.llmModel='';
     if(!('createdAt' in p))p.createdAt=Date.now();
@@ -1049,6 +1061,41 @@ function proposalsMigrate(){
   if(!Array.isArray(p.keyPersonnel))p.keyPersonnel=[];
   if(!Array.isArray(p.teamingPartners))p.teamingPartners=[];
   if(!p.governance)p.governance={ownerId:'',lastReviewedAt:0,version:1};
+  // Phase 3: seed the CommunityForce house technical-proposal template (idempotent).
+  if(!D.cfTemplateSeeded){
+    D.proposalTemplates=D.proposalTemplates||[];
+    if(!D.proposalTemplates.some(function(t){return t.id==='tpl_cf_technical';}))D.proposalTemplates.push(_cfTechnicalTemplate());
+    D.cfTemplateSeeded=true;
+  }
+}
+// The CommunityForce house format, modeled on the DTMO PEIS technical proposal:
+// fielded DoD cover, ToC, and the standard 10-section body. Stable ids so it
+// upgrades in place rather than duplicating.
+function _cfTechnicalTemplate(){
+  return {
+    id:'tpl_cf_technical',
+    name:'CommunityForce — Federal Technical Proposal',
+    serviceLine:'Federal Services',
+    complianceFramework:'FAR Part 15 / PWS',
+    pageLimit:0,
+    version:1,createdAt:Date.now(),createdBy:'system',
+    sections:[
+      {id:'cfsec_cover',title:'Cover Sheet',order:0,required:true,source:'computed',pageBudget:1,prompt:'',evidence:[]},
+      {id:'cfsec_exec',title:'Executive Summary',order:1,required:true,source:'ai',pageBudget:1,prompt:'Open by stating that CommunityForce is pleased to present this technical proposal in response to the named customer\'s solicitation/PWS (cite the exact program name and PWS/section reference from the RFP context). In 1-2 paragraphs, describe the customer mission and why it matters, the proposed team composition (FTE mix / LCATs from the RFP), and the core of our approach. Then present CommunityForce\'s commitments as a short list of three named themes (e.g., Continuity, Compliance, Responsiveness) — each a bold lead word followed by one concrete sentence. Confident, specific, no fluff.',evidence:['>=1 win theme']},
+      {id:'cfsec_understanding',title:'Understanding of the Requirement',order:2,required:true,source:'ai',pageBudget:2,prompt:'Demonstrate deep understanding of the customer\'s environment, constraints, and scope. Use <h3> subsections: (1) Scope / work streams pulled from the RFP (e.g., sustainment, new development, modernization), (2) Key Technical Environment — list languages, infrastructure, security tools, and standards named in the RFP, and (3) Performance Standards We Must Meet — list the binding thresholds/SLAs from the RFP as accepted commitments. Be precise; reference the RFP\'s own terminology.',evidence:['RFP scope coverage']},
+      {id:'cfsec_technical',title:'Technical Approach',order:3,required:true,source:'ai',pageBudget:6,prompt:'Draft the technical approach against the RFP scope. Lead with the delivery methodology (e.g., the DevSecOps/Agile lifecycle as an explicit ordered sequence). Then use one <h3> subsection per major capability area in the SOW/PWS; for each, give CommunityForce\'s concrete approach, the tools/standards applied, and how it satisfies the requirement and its performance standard. Reference reusable accelerators and proof points from the Knowledge Bank where relevant, adapted to this customer.',evidence:['>=2 case studies','RFP scope coverage']},
+      {id:'cfsec_staffing',title:'Staffing Plan',order:4,required:true,source:'ai',pageBudget:2,prompt:'Propose the labor mix tied to the LCATs/roles the RFP requires. Include an HTML <table> with columns Position | FTE | Role Type | Primary Responsibilities. Add an <h3>Key Personnel Qualifications block with one bullet per role (degree + minimum years + the specific skills the RFP demands). Add an <h3>Continuity and Key Personnel Transition paragraph stating notice periods, replacement timelines, and bench depth. Tie clearances to the RFP\'s personnel-security requirements.',evidence:['LCAT coverage','>=1 key personnel bio']},
+      {id:'cfsec_deliverables',title:'Deliverables',order:5,required:true,source:'hybrid',pageBudget:1,prompt:'Open with one sentence on submission format and delivery to the COR (and weekend/holiday handling). Then produce an HTML <table> with columns Deliverable | Description | PWS/RFP Reference | Due Date / Frequency, populated from the RFP deliverables list. Do not invent deliverables beyond the RFP.',evidence:['RFP deliverables coverage']},
+      {id:'cfsec_compliance',title:'Compliance and Performance Summary',order:6,required:false,source:'hybrid',pageBudget:1,prompt:'Produce a single HTML <table> mapping Requirement Area | Our Approach | Performance Standard, with one row per major RFP requirement/threshold. Keep approaches one phrase each; keep performance standards quoted from the RFP where possible.',evidence:[]},
+      {id:'cfsec_security',title:'Security and Compliance Commitments',order:7,required:true,source:'ai',pageBudget:2,prompt:'Draft security & compliance commitments using <h3> subsections such as Personnel Security, Mandatory Training, and Records Management & Data Ownership. Reference the required clearances, background-investigation tiers, CAC/onboarding, training, and data-ownership clauses named in the RFP. State each commitment concretely (timelines, rosters, certificates to the COR).',evidence:['required clearances coverage']},
+      {id:'cfsec_pastperf',title:'Past Performance',order:8,required:true,source:'hybrid',pageBudget:4,prompt:'Generate the Past Performance narrative using the most-relevant CommunityForce contracts from the Knowledge Bank and Company Profile case studies. For EACH contract use a fielded header (Contract Number, Customer, Period of Performance, Contract Value, Status, POC) followed by a "Relevance to [this program]" bulleted list tying that prior work to THIS RFP\'s scope (mirror specific PWS elements). Close with a Past Performance Summary paragraph totaling combined contract value and emphasizing unbroken performance. Use ONLY real contracts from the provided materials — never invent customers, numbers, or POCs.',evidence:['>=3 case studies']},
+      {id:'cfsec_transition',title:'Transition-In Plan',order:9,required:true,source:'ai',pageBudget:1,prompt:'Draft a phased Transition-In Plan with explicit day ranges (e.g., Phase 1 Onboarding & Access Days 1–30, Phase 2 Knowledge Transfer Days 15–60, Phase 3 Full Operational Capability Days 45–60), each with concrete activities. Commit to a timeline for the initial Transition-In Plan deliverable and to zero service degradation alongside the incumbent.',evidence:[]},
+      {id:'cfsec_pricing',title:'Pricing Narrative',order:10,required:true,source:'ai',pageBudget:1,prompt:'Draft the pricing narrative / basis of estimate. The dollar figures stay user-entered in the Pricing tab; this section explains the pricing model (e.g., firm-fixed-price fixed monthly rate per resource), the assumptions, ODC/markup treatment, travel, and any exceptions. Keep it consistent with the RFP\'s contract type.',evidence:[]},
+      {id:'cfsec_conclusion',title:'Conclusion',order:11,required:true,source:'ai',pageBudget:1,prompt:'Write a confident closing: restate the mission stakes, the readiness and qualifications of the proposed team, and CommunityForce\'s commitment to secure, reliable delivery. Invite further discussion.',evidence:[]},
+      {id:'cfsec_certs',title:'Corporate Capabilities & Certifications',order:12,required:false,source:'computed',pageBudget:1,prompt:'',evidence:[]},
+      {id:'cfsec_resumes',title:'Key Personnel Resumes (Appendix)',order:13,required:false,source:'computed',pageBudget:0,prompt:'',evidence:[]}
+    ]
+  };
 }
 function canProposal(){
   if(!ME)return false;
@@ -3058,6 +3105,138 @@ function certEdit(idx){
 }
 function certDel(i){if(!confirm('Delete this certification?'))return;D.corporateCertifications.splice(i,1);save();openCorporateCertsManager();}
 
+/* ── KNOWLEDGE BANK (Phase 1) ──
+   Past proposals + capability/reference docs the Proposal Generator pulls from.
+   Heavy extracted text lives in the knowledge_docs Postgres table; D.knowledgeBank
+   holds only lightweight metadata {id,name,type,summary,tags,chars,...}. */
+var KB_TYPES=[
+  {k:'past-proposal',l:'Past Proposal'},
+  {k:'capability',l:'Capability / Cap Statement'},
+  {k:'case-study',l:'Case Study / Past Performance'},
+  {k:'pricing',l:'Pricing Reference'},
+  {k:'boilerplate',l:'Boilerplate / Reference'},
+  {k:'other',l:'Other'}
+];
+function kbTypeLabel(k){var t=KB_TYPES.find(function(x){return x.k===k;});return t?t.l:(k||'Other');}
+function kbStatus(msg){var el=document.getElementById('kb_status');if(el)el.textContent=msg||'';}
+function openKnowledgeBankManager(){
+  if(!canProposal()){alert('You don\'t have permission.');return;}
+  D.knowledgeBank=D.knowledgeBank||[];
+  var docs=D.knowledgeBank;
+  var typeOpts=KB_TYPES.map(function(t){return '<option value="'+t.k+'">'+esc(t.l)+'</option>';}).join('');
+  var rows=docs.length?docs.map(function(d){
+    var tags=(d.tags||[]).map(function(t){return '<span class="kb-tag">'+esc(t)+'</span>';}).join('');
+    var busy=d._busy?'<span style="font-size:11px;color:#7C3AED;margin-left:6px">&#8635; summarizing&hellip;</span>':'';
+    var sum=d.summary?esc(d.summary):'<i style="color:var(--text-muted)">No summary yet &mdash; click Re-summarize.</i>';
+    return '<div class="kb-card">'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="kb-name">'+esc(d.name)+'</span><span class="kb-type">'+esc(kbTypeLabel(d.type))+'</span>'+busy+'</div>'
+      +'<div class="kb-sum">'+sum+'</div>'
+      +(tags?'<div class="kb-tags">'+tags+'</div>':'')
+      +'<div class="kb-meta">'+(d.chars||0).toLocaleString()+' chars &middot; added '+(d.createdAt?new Date(d.createdAt).toLocaleDateString():'')+'</div>'
+      +'</div>'
+      +'<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">'
+      +'<a class="btn btn-sec btn-sm" href="/api/knowledge/'+esc(d.id)+'/raw" target="_blank" rel="noopener">Open</a>'
+      +'<button class="btn btn-sec btn-sm" onclick="kbResummarize(\''+d.id+'\')">Re-summarize</button>'
+      +'<button class="btn btn-danger-sm btn-sm" onclick="kbDelete(\''+d.id+'\')">Delete</button>'
+      +'</div></div>';
+  }).join(''):'<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:24px">Knowledge Bank is empty. Upload past proposals, capability statements, and reference docs (PDF / DOCX / TXT) or paste text. The Proposal Generator selects relevant sources from here when drafting.</div>';
+  document.getElementById('mdlKB').innerHTML=
+    '<div class="mdl-over">Proposals</div><div class="mdl-title">Knowledge Bank</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">CommunityForce history &amp; capabilities. Atlas extracts the text, summarizes it, and the Proposal Generator picks the relevant sources when drafting a new proposal. Original files and full text are stored server-side; only summaries sync in the app state.</div>'
+    +'<div class="kb-upload-row">'
+    +'<select id="kb_type" class="inp" style="max-width:230px">'+typeOpts+'</select>'
+    +'<input type="file" id="kb_file" class="inp" accept=".pdf,.docx,.txt,.md,.csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="flex:1;min-width:160px"/>'
+    +'<button class="btn btn-gold btn-sm" onclick="kbUpload()">Upload</button>'
+    +'<button class="btn btn-outline btn-sm" onclick="kbPasteText()">Paste Text&hellip;</button>'
+    +'</div>'
+    +'<div id="kb_status" style="font-size:11px;color:#7C3AED;min-height:16px;margin:6px 2px"></div>'
+    +'<div class="kb-list">'+rows+'</div>'
+    +'<div class="btn-row" style="margin-top:14px"><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovKB\')">Close</button></div>';
+  openModal('ovKB');
+}
+function kbUpload(){
+  var f=document.getElementById('kb_file');var type=gv('kb_type')||'other';
+  if(!f||!f.files||!f.files[0]){alert('Choose a file first.');return;}
+  var file=f.files[0];
+  kbStatus('Uploading & extracting text from '+file.name+'…');
+  var fd=new FormData();fd.append('file',file);fd.append('docType',type);
+  fetch('/api/knowledge',{method:'POST',body:fd}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||'upload failed');return j;});}).then(function(j){
+    var doc={id:j.id,name:j.name,type:type,summary:'',tags:[],chars:j.chars||0,mime:j.mime||'',createdAt:Date.now(),createdBy:ME?ME.id:''};
+    D.knowledgeBank=D.knowledgeBank||[];D.knowledgeBank.unshift(doc);save();
+    if(!j.chars){kbStatus('Uploaded "'+j.name+'", but no text could be extracted (unsupported format or scanned PDF). Kept as a reference.');openKnowledgeBankManager();return;}
+    kbSummarizeDoc(doc.id,j.text||'');
+  }).catch(function(e){kbStatus('');alert('Upload failed: '+e.message);});
+}
+function kbPasteText(){
+  var type=gv('kb_type')||'other';
+  var name=prompt('Title for this note:','Pasted note');if(name===null)return;
+  var text=prompt('Paste the text content:');if(text===null||!text.trim())return;
+  kbStatus('Saving text…');
+  fetch('/api/knowledge/text',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name.trim()||'Pasted note',docType:type,text:text})}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||'failed');return j;});}).then(function(j){
+    var doc={id:j.id,name:j.name,type:type,summary:'',tags:[],chars:j.chars||0,mime:'text/plain',createdAt:Date.now(),createdBy:ME?ME.id:''};
+    D.knowledgeBank=D.knowledgeBank||[];D.knowledgeBank.unshift(doc);save();
+    kbSummarizeDoc(doc.id,text);
+  }).catch(function(e){kbStatus('');alert('Failed: '+e.message);});
+}
+// AI summary + tag pass. If text isn't supplied, pull it back from the server.
+function kbSummarizeDoc(id,text){
+  var doc=(D.knowledgeBank||[]).find(function(x){return x.id===id;});if(!doc)return;
+  doc._busy=true;kbStatus('Summarizing "'+doc.name+'" with AI…');openKnowledgeBankManager();
+  function run(t){
+    var clipped=String(t||'').slice(0,16000);
+    if(!clipped){delete doc._busy;kbStatus('No text available to summarize for "'+doc.name+'".');save();openKnowledgeBankManager();return;}
+    var sys='You catalog documents for a proposal knowledge bank at a federal contractor (CommunityForce). Respond ONLY with JSON, no prose.';
+    var instr='Document name: '+doc.name+'\nType: '+kbTypeLabel(doc.type)+'\n\nContent (may be truncated):\n"""\n'+clipped+'\n"""\n\nReturn JSON exactly: {"summary":"2-4 sentences on what this document covers and why it is useful for writing future proposals — name the customers/agencies, capabilities, win themes, and scope","tags":["6-10 short lowercase keywords: customers, agencies, technologies, capabilities, contract vehicles"]}';
+    llmComplete({system:sys,messages:[{role:'user',content:instr}],max_tokens:700}).then(function(resp){
+      var j=llmExtractJSON(resp)||{};
+      doc.summary=j.summary||'';doc.tags=Array.isArray(j.tags)?j.tags.map(function(x){return String(x);}):[];
+      delete doc._busy;save();kbStatus('Summarized "'+doc.name+'".');openKnowledgeBankManager();
+    }).catch(function(e){delete doc._busy;save();kbStatus('Summarize failed: '+e.message+' — you can retry with Re-summarize.');openKnowledgeBankManager();});
+  }
+  if(text)run(text);
+  else fetch('/api/knowledge/'+id).then(function(r){return r.json();}).then(function(j){run(j&&j.extracted_text||'');}).catch(function(e){delete doc._busy;kbStatus('Could not load text: '+e.message);openKnowledgeBankManager();});
+}
+function kbResummarize(id){kbSummarizeDoc(id);}
+function kbDelete(id){
+  if(!confirm('Delete this document from the Knowledge Bank? This permanently removes the stored file and text.'))return;
+  fetch('/api/knowledge/'+id,{method:'DELETE'}).catch(function(){});
+  D.knowledgeBank=(D.knowledgeBank||[]).filter(function(x){return x.id!==id;});
+  save();openKnowledgeBankManager();
+}
+/* ── KNOWLEDGE BANK RETRIEVAL (consumed by the Phase 2 generator) ──
+   Two-stage select-then-inject: ask the LLM which docs are relevant given their
+   summaries, then fetch the full text of only those. No vector DB needed. */
+function kbSelectRelevant(contextStr,maxDocs,cb){
+  var docs=(D.knowledgeBank||[]).filter(function(d){return d.summary;});
+  if(!docs.length){cb([]);return;}
+  var n=maxDocs||5;
+  var list=docs.map(function(d,i){return (i+1)+'. ['+d.id+'] ('+kbTypeLabel(d.type)+') '+d.name+' — '+d.summary+((d.tags&&d.tags.length)?' [tags: '+d.tags.join(', ')+']':'');}).join('\n');
+  var sys='You select which knowledge-bank documents are most relevant to a new proposal. Respond ONLY with JSON.';
+  var instr='New proposal context:\n"""\n'+String(contextStr||'').slice(0,6000)+'\n"""\n\nAvailable documents:\n'+list+'\n\nReturn JSON: {"docIds":["up to '+n+' most relevant document ids, most relevant first"]}. Only include genuinely relevant documents.';
+  llmComplete({system:sys,messages:[{role:'user',content:instr}],max_tokens:400}).then(function(resp){
+    var j=llmExtractJSON(resp)||{};var ids=Array.isArray(j.docIds)?j.docIds:[];
+    ids=ids.filter(function(id){return docs.some(function(d){return d.id===id;});}).slice(0,n);
+    cb(ids);
+  }).catch(function(){cb([]);});
+}
+function kbFetchTexts(ids,cb){
+  if(!ids||!ids.length){cb([]);return;}
+  Promise.all(ids.map(function(id){return fetch('/api/knowledge/'+id).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});})).then(function(arr){
+    cb(arr.filter(Boolean).map(function(j){return {id:j.id,name:j.name,type:j.doc_type,text:j.extracted_text||''};}));
+  });
+}
+// Convenience: build an injectable knowledge-bank context block for a drafting prompt.
+function kbBuildContext(contextStr,maxDocs,perDocChars,cb){
+  kbSelectRelevant(contextStr,maxDocs||4,function(ids){
+    kbFetchTexts(ids,function(docs){
+      if(!docs.length){cb('',[]);return;}
+      var block=docs.map(function(d){return '### Source: '+d.name+' ('+kbTypeLabel(d.type)+')\n'+String(d.text||'').slice(0,perDocChars||4000);}).join('\n\n');
+      cb(block,ids);
+    });
+  });
+}
+
 /* ── PROPOSAL TEMPLATES MANAGER ── */
 function openProposalTemplatesManager(){
   if(!canProposal()){alert('You don\'t have permission.');return;}
@@ -3466,6 +3645,7 @@ function renderProposalDetail(id){
   var tabs=[
     {k:'overview',l:'Overview'},
     {k:'rfp',l:'RFP Details'},
+    {k:'brief',l:'BusDev Brief'},
     {k:'sections',l:'Sections'},
     {k:'staffing',l:'Staffing'},
     {k:'pp',l:'Past Performance'},
@@ -3486,6 +3666,7 @@ function renderProposalDetail(id){
   var body=hdr+tabBar;
   if(_pdTab==='overview')body+=_pdOverviewHTML(p,opp,tpl);
   else if(_pdTab==='rfp')body+=_pdRFPHTML(p);
+  else if(_pdTab==='brief')body+=_pdBriefHTML(p);
   else if(_pdTab==='sections')body+=_pdSectionsHTML(p,tpl);
   else if(_pdTab==='staffing')body+=_pdStaffingHTML(p);
   else if(_pdTab==='pp')body+=_pdPastPerfHTML(p);
@@ -3805,6 +3986,112 @@ function pdSaveSection(propId,secId){
   var el=document.getElementById('pd_sec_html');if(el)s.html=el.innerHTML;
   save();renderProposalDetail(propId);
 }
+/* ── PHASE 2: BUSDEV BRIEF + FULL-PROPOSAL GENERATION ── */
+function _propBuildBriefCtx(p){
+  var b=p.brief||{};var parts=[];
+  if(b.text){var t=b.text.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();if(t)parts.push('What we propose (raw capture notes):\n'+t);}
+  if(b.winThemes&&b.winThemes.trim())parts.push('Win themes:\n- '+b.winThemes.trim().split(/\n+/).join('\n- '));
+  if(b.differentiators&&b.differentiators.trim())parts.push('Differentiators:\n- '+b.differentiators.trim().split(/\n+/).join('\n- '));
+  return parts.join('\n\n');
+}
+// Shared section-drafting prompt. kbBlock is an optional Knowledge Bank excerpt
+// block injected by the full-proposal generator (empty for single-section draft).
+function _propSectionPrompt(p,s,kbBlock){
+  var sys='You are an expert federal proposal writer drafting a single section of a US government RFP response. Output ONLY clean HTML (use <p>, <ul>/<li>, <strong>, <em>, <h3> for subsection headers; no markdown, no code fences, no commentary before or after). Match the brand voice exactly. Develop and professionalize the BusDev brief — never contradict it. Cite past performance accurately — never invent customers, contract values, dates, or metrics that aren\'t in the provided materials.';
+  var t=(s.title||'').toLowerCase();
+  var briefCtx=_propBuildBriefCtx(p);
+  var instruction='SECTION TO DRAFT: "'+s.title+'"\n\nPER-SECTION INSTRUCTION (from the proposal template — primary guidance):\n'+(s.templatePrompt||'(no template instruction; write a strong default '+s.title+' section)')
+    +'\n\nRFP CONTEXT:\n'+_propBuildRFPCtx(p)
+    +(briefCtx?'\n\nBUSDEV BRIEF (the capture team\'s intent — expand, enhance, and professionalize this into full prose; honor every point):\n'+briefCtx:'')
+    +(kbBlock?'\n\nKNOWLEDGE BANK (excerpts from CommunityForce past proposals & capability docs — reuse relevant facts, proof points, and phrasing, but adapt to THIS customer; do not present another customer\'s work as this one\'s):\n'+kbBlock:'')
+    +'\n\nBRAND VOICE:\n'+_propBuildVoiceCtx()
+    +((t.indexOf('past')>-1||t.indexOf('experience')>-1)?'\n\nPAST PERFORMANCE LIBRARY (use ONLY these — do not invent):\n'+(_propBuildPPCtx(p)||'(none selected; flag this in your output)'):'')
+    +((t.indexOf('cert')>-1||t.indexOf('capabilit')>-1)?'\n\nACTIVE CERTIFICATIONS:\n'+(_propBuildCertCtx(p)||'(none selected)'):'')
+    +(s.evidence&&s.evidence.length?'\n\nREQUIRED EVIDENCE: '+s.evidence.join(', ')+'.':'')
+    +(s.pageBudget?'\n\nTARGET LENGTH: roughly '+s.pageBudget+' page'+(s.pageBudget===1?'':'s')+' of professional prose.':'')
+    +(s.html&&s.html.trim()?'\n\nEXISTING DRAFT (rewrite/improve this rather than starting fresh):\n'+s.html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').slice(0,2000):'');
+  return {sys:sys,instruction:instruction};
+}
+function _pdBriefHTML(p){
+  var b=p.brief||{};
+  var kbCount=(D.knowledgeBank||[]).filter(function(d){return d.summary;}).length;
+  var aiSecs=(p.sections||[]).filter(function(s){return s.source==='ai'||s.source==='hybrid';}).length;
+  var tplNote=p.templateId?'':'<div style="font-size:11px;color:#92400E;background:#FEF3C7;border:1px solid #FCD34D;padding:7px 10px;border-radius:6px;margin-bottom:10px">No template linked yet — set one in the <b>Settings</b> tab so Atlas knows which sections to generate.</div>';
+  var updated=b.updatedAt?'<span style="font-size:10px;color:var(--text-muted)">Last saved '+new Date(b.updatedAt).toLocaleString()+'</span>':'';
+  return '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Dump your raw thoughts on what CommunityForce proposes — bullet points, fragments, anything. Atlas develops, enhances, and professionalizes this into full proposal sections using the RFP requirements, the Knowledge Bank (<b>'+kbCount+'</b> source'+(kbCount===1?'':'s')+'), and the CommunityForce brand voice.</div>'
+    +tplNote
+    +'<div class="fld"><label class="fld-l">What we propose (stream of consciousness)</label>'
+    +richEditor('pd_brief_text',b.text||'',{placeholder:'e.g. Stand up a 4-person agile pod, reuse our DTMO Passport accelerators, lead with FedRAMP experience, phased 30/60/90 ramp, emphasize low-risk transition, cleared staff already on bench...',tall:true})+'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    +'<div class="fld"><label class="fld-l">Win themes (optional, one per line)</label><textarea class="fld-i" id="pd_brief_wt" rows="4" placeholder="Low-risk transition&#10;Deep DTMO domain knowledge&#10;Proven agile delivery">'+esc(b.winThemes||'')+'</textarea></div>'
+    +'<div class="fld"><label class="fld-l">Differentiators (optional, one per line)</label><textarea class="fld-i" id="pd_brief_df" rows="4" placeholder="Reusable accelerators&#10;Cleared staff on bench&#10;Prior work with this customer">'+esc(b.differentiators||'')+'</textarea></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">'
+    +'<button class="btn btn-navy btn-sm" onclick="pdSaveBrief(\''+p.id+'\')">&#128190; Save Brief</button>'
+    +'<span id="pd_brief_savemsg" style="font-size:11px;color:var(--green)"></span>'+updated
+    +'<span style="flex:1"></span>'
+    +'<button id="pd_gen_btn" class="btn btn-gold" onclick="pdGenerateFullProposal(\''+p.id+'\')">&#10024; Generate Full Proposal'+(aiSecs?' ('+aiSecs+' section'+(aiSecs===1?'':'s')+')':'')+'</button>'
+    +'</div>'
+    +'<div id="pd_gen_status" style="font-size:12px;color:#7C3AED;margin-top:10px;min-height:18px"></div>';
+}
+function pdCaptureBrief(p){
+  p.brief=p.brief||{text:'',winThemes:'',differentiators:'',updatedAt:0,updatedBy:''};
+  var el=document.getElementById('pd_brief_text');if(el)p.brief.text=el.innerHTML;
+  var wt=document.getElementById('pd_brief_wt');if(wt)p.brief.winThemes=wt.value;
+  var df=document.getElementById('pd_brief_df');if(df)p.brief.differentiators=df.value;
+  p.brief.updatedAt=Date.now();p.brief.updatedBy=ME?ME.id:'';
+}
+function pdSaveBrief(id){
+  var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
+  pdCaptureBrief(p);save();
+  var st=document.getElementById('pd_brief_savemsg');if(st){st.textContent='Saved ✓ ';setTimeout(function(){if(st)st.textContent='';},1600);}
+}
+// Full-proposal generator: capture brief → select relevant Knowledge Bank docs
+// once → draft every AI/hybrid section sequentially with live progress.
+function pdGenerateFullProposal(id){
+  var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
+  pdCaptureBrief(p);
+  if(!p.sections||!p.sections.length){
+    if(p.templateId)_propInitSections(p);
+    if(!p.sections||!p.sections.length){alert('Link a template in the Settings tab so Atlas knows which sections to generate.');return;}
+  }
+  var aiSecs=p.sections.filter(function(s){return s.source==='ai'||s.source==='hybrid';});
+  if(!aiSecs.length){alert('This template has no AI-fillable sections (mark sections as "ai" or "hybrid" in the template).');return;}
+  var already=aiSecs.filter(function(s){return (s.html||'').trim();}).length;
+  if(!confirm('Generate '+aiSecs.length+' section'+(aiSecs.length===1?'':'s')+' with AI from the BusDev brief, the RFP, and the Knowledge Bank?'+(already?'\n\n'+already+' section'+(already===1?'':'s')+' already have content — existing text will be used as a starting point and rewritten.':'')))return;
+  var llm=_propLLMOpts(p);
+  var btn=document.getElementById('pd_gen_btn');if(btn){btn.disabled=true;btn.textContent='Generating…';}
+  function setStatus(msg){var el=document.getElementById('pd_gen_status');if(el)el.innerHTML=msg;}
+  setStatus('Selecting relevant Knowledge Bank sources…');
+  var rfp=p.rfp||{};
+  var kbCtxStr=[rfp.customer,rfp.summary,rfp.scope,(rfp.requirements||[]).join('; '),_propBuildBriefCtx(p)].filter(Boolean).join('\n').slice(0,6000);
+  kbBuildContext(kbCtxStr,4,3500,function(kbBlock,kbIds){
+    kbIds=kbIds||[];
+    var i=0,errs=0;
+    function done(){
+      if(btn){btn.disabled=false;btn.textContent='✨ Generate Full Proposal';}
+      p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'proposal.generated',payload:{sections:aiSecs.length,errors:errs,kbSources:kbIds.length}});
+      save();
+      setStatus('Done — drafted '+(aiSecs.length-errs)+'/'+aiSecs.length+' section'+(aiSecs.length===1?'':'s')+(errs?' ('+errs+' failed — retry individually in Sections)':'')+'. Opening Sections…');
+      setTimeout(function(){_pdTab='sections';renderProposalDetail(id);},1000);
+    }
+    function next(){
+      if(i>=aiSecs.length){done();return;}
+      var s=aiSecs[i];
+      setStatus('Drafting '+(i+1)+'/'+aiSecs.length+': <b>'+esc(s.title)+'</b>…'+(kbIds.length?' <span style="color:var(--text-muted)">(using '+kbIds.length+' KB source'+(kbIds.length===1?'':'s')+')</span>':''));
+      var pr=_propSectionPrompt(p,s,kbBlock);
+      llmComplete({provider:llm.provider,model:llm.model,system:pr.sys,messages:[{role:'user',content:pr.instruction}],max_tokens:4000})
+        .then(function(j){
+          var html=llmExtractText(j).trim().replace(/^```html\s*/i,'').replace(/```$/,'').trim();
+          if(html){s.html=html;s.draftedAt=Date.now();s.draftedBy=ME?ME.id:'';s.draftedWith={provider:llm.provider,model:llm.model||j.model||''};}
+          else errs++;
+        })
+        .catch(function(){errs++;})
+        .finally(function(){i++;save();next();});
+    }
+    next();
+  });
+}
 function _propBuildRFPCtx(p){
   var rfp=p.rfp||{};
   return [
@@ -3857,15 +4144,8 @@ function pdSectionAIDraft(propId,secId){
   var s=p.sections.find(function(x){return x.id===secId;});if(!s)return;
   // Auto-save current editor first to avoid data loss
   var el=document.getElementById('pd_sec_html');if(el&&s.source!=='computed')s.html=el.innerHTML;
-  var sys='You are an expert federal proposal writer drafting a single section of a US government RFP response. Output ONLY clean HTML (use <p>, <ul>/<li>, <strong>, <em>, <h3> for subsection headers; no markdown, no code fences, no commentary before or after). Match the brand voice exactly. Cite past performance accurately — never invent customers, contract values, dates, or metrics that aren\'t in the provided library.';
-  var instruction='SECTION TO DRAFT: "'+s.title+'"\n\nPER-SECTION INSTRUCTION (from the proposal template — primary guidance):\n'+(s.templatePrompt||'(no template instruction; write a strong default '+s.title+' section)')
-    +'\n\nRFP CONTEXT:\n'+_propBuildRFPCtx(p)
-    +'\n\nBRAND VOICE:\n'+_propBuildVoiceCtx()
-    +(s.title.toLowerCase().indexOf('past')>-1||s.title.toLowerCase().indexOf('experience')>-1?'\n\nPAST PERFORMANCE LIBRARY (use ONLY these — do not invent):\n'+(_propBuildPPCtx(p)||'(none selected; flag this in your output)'):'')
-    +(s.title.toLowerCase().indexOf('cert')>-1||s.title.toLowerCase().indexOf('capabilit')>-1?'\n\nACTIVE CERTIFICATIONS:\n'+(_propBuildCertCtx(p)||'(none selected)'):'')
-    +(s.evidence&&s.evidence.length?'\n\nREQUIRED EVIDENCE: '+s.evidence.join(', ')+'.':'')
-    +(s.pageBudget?'\n\nTARGET LENGTH: roughly '+s.pageBudget+' page'+(s.pageBudget===1?'':'s')+' of professional prose.':'')
-    +(s.html&&s.html.trim()?'\n\nEXISTING DRAFT (rewrite/improve this rather than starting fresh):\n'+s.html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').slice(0,2000):'');
+  var pr=_propSectionPrompt(p,s,'');
+  var sys=pr.sys,instruction=pr.instruction;
   var llm=_propLLMOpts(p);
   var btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent='✨ Drafting…';}
   llmComplete({provider:llm.provider,model:llm.model,system:sys,messages:[{role:'user',content:instruction}],max_tokens:4000})
@@ -4537,15 +4817,18 @@ function _buildProposalPrintHTML(p){
   var certs=(D.corporateCertifications||[]).filter(function(c){return ((p.coverSheet&&p.coverSheet.certIds)||[]).indexOf(c.id)>-1&&(!c.expiresAt||new Date(c.expiresAt)>Date.now());});
   var includedCS=(p.coverSheet&&p.coverSheet.includedCaseStudyIds)||[];
   var pickedCases=(cp.caseStudies||[]).filter(function(c){return includedCS.indexOf(c.id)>-1;});
-  var sections=(p.sections||[]).slice().sort(function(a,b){return ((p.proposalTemplates||{})[a.id]||0)-0;});
+  var sections=(p.sections||[]).slice();
+  var isCoverSec=function(s){return s.source==='computed'&&/cover/i.test(s.title);};
+  var num=0;
   var sectionsHTML=sections.map(function(s){
+    if(isCoverSec(s))return '';   // represented by the generated cover page
     var html=s.html||'';
     if(s.source==='computed'){
-      // Render computed sections from data
-      if(/cover|capabilit/i.test(s.title))html='<p>Active corporate certifications and designations: '+(certs.length?certs.map(function(c){return c.name;}).join(' · '):'(none on file)')+'</p>';
-      else if(/resume/i.test(s.title))html='<p><i>Resumes appendix — populate from D.members in a future build.</i></p>';
+      if(/cert|capabilit/i.test(s.title))html='<p>CommunityForce holds the following active corporate certifications and designations:</p>'+(certs.length?'<ul>'+certs.map(function(c){return '<li>'+esc(c.name)+(c.number?' — '+esc(c.number):'')+(c.issuer?' ('+esc(c.issuer)+')':'')+'</li>';}).join('')+'</ul>':'<p><i>(none on file)</i></p>');
+      else if(/resume/i.test(s.title))html=(p.staffing&&p.staffing.generatedAt)?'<p><i>Key personnel resume dossiers follow.</i></p>':'<p><i>Key personnel resume dossiers are assembled from the Resume Bank in the Staffing workflow.</i></p>';
     }
-    return '<div class="print-page"><h2>'+esc(s.title)+'</h2>'+(html||'<p><i>(empty)</i></p>')+'</div>';
+    num++;
+    return '<div class="print-page"><h2><span class="sec-num">'+num+'.</span> '+esc(s.title)+'</h2>'+(html||'<p><i>(empty)</i></p>')+'</div>';
   }).join('');
   var ppHTML=pickedCases.length?'<div class="print-page"><h2>Past Performance</h2>'+pickedCases.map(function(c){return '<div style="margin-bottom:14px;page-break-inside:avoid"><h3>'+esc(c.title||c.customer||'?')+'</h3><div style="font-size:11px;color:#64748b">'+esc(c.customer||'')+(c.period?' · '+esc(c.period):'')+(c.value?' · $'+Number(c.value).toLocaleString():'')+'</div><p>'+esc(c.scope||'')+'</p>'+(c.outcomes&&c.outcomes.length?'<p><b>Outcomes:</b></p><ul>'+c.outcomes.map(function(o){return '<li>'+esc(o)+'</li>';}).join('')+'</ul>':'')+'</div>';}).join('')+'</div>':'';
   var pr=p.pricing||{};
@@ -4557,15 +4840,28 @@ function _buildProposalPrintHTML(p){
     +(pr.paymentTerms?'<p><b>Payment Terms:</b> '+esc(pr.paymentTerms)+'</p>':'')
     +(pr.assumptionsHtml?'<h3>Basis of Estimate &amp; Assumptions</h3>'+pr.assumptionsHtml:'')
     +'</div>':'';
-  var toc=sections.length?'<div class="print-page"><h2>Table of Contents</h2><ol>'+sections.map(function(s){return '<li>'+esc(s.title)+'</li>';}).join('')+(pickedCases.length?'<li>Past Performance</li>':'')+(items.length?'<li>Pricing</li>':'')+'</ol></div>':'';
+  var tocItems=sections.filter(function(s){return !isCoverSec(s);}).map(function(s){return '<li>'+esc(s.title)+'</li>';});
+  if(pickedCases.length)tocItems.push('<li>Past Performance Citations</li>');
+  if(items.length)tocItems.push('<li>Pricing</li>');
+  var toc=tocItems.length?'<div class="print-page"><h2>Contents</h2><ol>'+tocItems.join('')+'</ol></div>':'';
+  var nowStr=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  var ids=[ident.cage?'CAGE '+esc(ident.cage):'',ident.uei?'UEI '+esc(ident.uei):'',ident.duns?'DUNS '+esc(ident.duns):''].filter(Boolean).join(' &middot; ');
+  var coverMetaRows=[
+    ['Submitted by',esc(ident.legalName||'CommunityForce, Inc.')+(ids?'<div style="font-size:11px;color:#64748b;margin-top:2px">'+ids+'</div>':'')],
+    ['Date',nowStr],
+    rfp.contractVehicle?['Solicitation / Vehicle',esc(rfp.contractVehicle)]:null,
+    rfp.pop?['Period of Performance',esc(rfp.pop)]:null,
+    rfp.setAsideType?['Set-Aside',esc(rfp.setAsideType)]:null,
+    rfp.dueDate?['Due Date',esc(rfp.dueDate)]:null
+  ].filter(Boolean);
   var cover='<div class="print-page print-cover">'
-    +'<div style="font-size:11px;letter-spacing:.4px;color:#64748b">PROPOSAL FOR</div>'
-    +'<h1 style="margin:12px 0 8px">'+esc(p.title)+'</h1>'
-    +(rfp.customer?'<div style="font-size:14px">Submitted to <b>'+esc(rfp.customer)+'</b></div>':'')
-    +(rfp.dueDate?'<div style="font-size:12px;color:#64748b;margin-top:4px">Due '+esc(rfp.dueDate)+'</div>':'')
-    +'<div class="print-cover-meta">'+esc(ident.legalName||'CommunityForce')+(ident.duns?' · DUNS '+esc(ident.duns):'')+(ident.uei?' · UEI '+esc(ident.uei):'')+(ident.cage?' · CAGE '+esc(ident.cage):'')+'</div>'
-    +(certs.length?'<div style="margin-top:30px"><h2 style="font-size:14px">Corporate Certifications</h2><div style="font-size:12px">'+certs.map(function(c){return '<div>• '+esc(c.name)+(c.number?' — '+esc(c.number):'')+'</div>';}).join('')+'</div></div>':'')
-    +'<div class="print-cover-meta" style="margin-top:40px">© '+new Date().getFullYear()+' '+esc(ident.legalName||'CommunityForce')+' · Proprietary &amp; Confidential</div>'
+    +'<div class="cover-eyebrow">TECHNICAL PROPOSAL</div>'
+    +'<h1 class="cover-title">'+esc(p.title)+'</h1>'
+    +(rfp.customer?'<div class="cover-cust">Prepared for '+esc(rfp.customer)+'</div>':'')
+    +(rfp.summary?'<div class="cover-blurb">'+esc(rfp.summary.slice(0,360))+'</div>':'')
+    +'<table class="cover-meta-tbl">'+coverMetaRows.map(function(r){return '<tr><th>'+r[0]+'</th><td>'+r[1]+'</td></tr>';}).join('')+'</table>'
+    +(certs.length?'<div class="cover-certs"><div class="cover-certs-h">Corporate Certifications &amp; Designations</div>'+certs.map(function(c){return '<div>&bull; '+esc(c.name)+(c.number?' &mdash; '+esc(c.number):'')+'</div>';}).join('')+'</div>':'')
+    +'<div class="cover-footer">&copy; '+new Date().getFullYear()+' '+esc(ident.legalName||'CommunityForce, Inc.')+' &middot; Proprietary &amp; Confidential</div>'
     +'</div>';
   return '<!doctype html><html><head><meta charset="utf-8"><title>'+esc(p.title)+'</title>'
     +'<style>'
@@ -4578,8 +4874,19 @@ function _buildProposalPrintHTML(p){
     +'.print-page table{width:100%;border-collapse:collapse;font-size:11px;margin:8px 0;}'
     +'.print-page table th,.print-page table td{border:1px solid #cbd5e1;padding:5px 8px;text-align:left;}'
     +'.print-page table th{background:#f1f5f9;font-weight:700;}'
-    +'.print-cover{text-align:center;}'
+    +'.print-page h2 .sec-num{color:#C5A55A;font-weight:800;margin-right:6px;}'
+    +'.print-cover{text-align:center;display:flex;flex-direction:column;align-items:center;min-height:760px;}'
     +'.print-cover-meta{font-size:11px;letter-spacing:.5px;color:#64748b;margin-top:18px;}'
+    +'.cover-eyebrow{font-size:13px;letter-spacing:3px;color:#C5A55A;font-weight:700;margin-top:80px;}'
+    +'.cover-title{font-size:30px;color:#16223C;margin:18px 0 6px;max-width:640px;}'
+    +'.cover-cust{font-size:15px;color:#1f2937;margin-bottom:6px;}'
+    +'.cover-blurb{font-size:12px;color:#64748b;max-width:540px;line-height:1.5;margin:8px auto 0;}'
+    +'.cover-meta-tbl{margin:34px auto 0;border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;min-width:420px;}'
+    +'.cover-meta-tbl th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#64748b;padding:7px 16px 7px 0;vertical-align:top;font-weight:700;white-space:nowrap;}'
+    +'.cover-meta-tbl td{text-align:left;font-size:13px;color:#1f2937;padding:7px 0;border-bottom:1px solid #e2e8f0;}'
+    +'.cover-certs{margin-top:34px;font-size:12px;}'
+    +'.cover-certs-h{font-size:13px;font-weight:700;color:#16223C;margin-bottom:6px;}'
+    +'.cover-footer{margin-top:auto;font-size:10px;letter-spacing:.5px;color:#94a3b8;padding-top:40px;}'
     +'@media print{body{background:#fff;}.print-page{box-shadow:none;margin:0 auto;page-break-after:always;padding:50px 60px;}}'
     +'</style></head><body>'
     +cover+toc+sectionsHTML+ppHTML+pricingHTML
@@ -5682,6 +5989,7 @@ function openAdmin(){
       +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openCompanyProfileManager()">&#127970; Company Profile</button>'
       +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openProposalTemplatesManager()">&#128196; Proposal Templates</button>'
       +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openCorporateCertsManager()">&#127942; Corporate Certifications</button>'
+      +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openKnowledgeBankManager()">&#128218; Knowledge Bank</button>'
       +'</div></div>';
   }
   html+='<div class="admin-menu-sec"><div class="admin-menu-lbl">Integrations</div><div class="admin-menu-row">'
