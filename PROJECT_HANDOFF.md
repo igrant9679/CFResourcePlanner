@@ -68,7 +68,7 @@ call `processAtlasPull()` once per pass) and stores the snapshot in
 CFResourcePlanner/
 ├── index.html        ← THE ENTIRE FRONT-END APP (HTML + CSS + JS in one file)
 ├── server.js         ← Express backend (static serving + /api endpoints)
-├── package.json      ← deps: express, pg, multer
+├── package.json      ← deps: express, pg, multer, mammoth, pdf-parse, xlsx
 ├── package-lock.json
 ├── .gitignore        ← node_modules/, *.log
 ├── brand/            ← generated logo assets (atlas-logo-*.png, favicon.ico, favicon-256.png)
@@ -162,7 +162,25 @@ CREATE TABLE attachments (
   data BYTEA,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Knowledge Bank: past proposals + capability/reference docs the Proposal
+-- Generator pulls from. Heavy extracted_text + original binary live HERE, not
+-- in app_state — only lightweight metadata mirrors into D.knowledgeBank.
+CREATE TABLE knowledge_docs (
+  id TEXT PRIMARY KEY,
+  name TEXT,
+  doc_type TEXT,
+  mime TEXT,
+  size INTEGER,
+  extracted_text TEXT,
+  data BYTEA,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 ```
+
+Server-side text extraction (`extractDocText` in `server.js`): DOCX→`mammoth`,
+PDF→`pdf-parse`, XLSX/XLS→`xlsx` (SheetJS, per-sheet CSV), TXT/MD/CSV→utf8.
+Lazy/guarded requires so the server still boots if a dep is missing.
 
 - All app data lives in `app_state` row `id = 1` as one JSON document.
 - File attachments live in `attachments` (binary), referenced from items by
@@ -181,7 +199,7 @@ Reset/Import flows).
 
 Protected arrays: `departments`, `projects`, `activities`, `recruitings`,
 `candidates`, `proposals`, `proposalTemplates`, `corporateCertifications`,
-`taskTemplates`, `programs`, `accounts`.
+`taskTemplates`, `programs`, `accounts`, `knowledgeBank`, `resumeBank`.
 
 To get DB credentials on a new machine: Railway dashboard → **Postgres
 service** → **Variables** (or **Connect** tab) → copy `DATABASE_URL` /
@@ -200,6 +218,16 @@ service** → **Variables** (or **Connect** tab) → copy `DATABASE_URL` /
 | GET | `/api/attachments/:id` | Stream/download a stored file |
 | DELETE | `/api/attachments/:id` | Delete a stored file |
 | GET | `/` | Serves `index.html` |
+
+### Knowledge Bank (proposal sources)
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/knowledge` | Multipart upload (field `file`, body `docType`) → extract text → returns `{id,name,mime,size,chars,text}` |
+| POST | `/api/knowledge/text` | Add a pasted text source `{name,docType,text}` |
+| GET | `/api/knowledge` | List metadata (no text body) |
+| GET | `/api/knowledge/:id` | One doc's full `extracted_text` (used at generation time) |
+| GET | `/api/knowledge/:id/raw` | Download/preview the original binary |
+| DELETE | `/api/knowledge/:id` | Delete a knowledge doc |
 
 ### LLM proxy (multi-provider)
 | Method | Path | Purpose |
@@ -341,10 +369,24 @@ D = {
   corporateCertifications: [
     { id, name, number, issuer, issuedAt, expiresAt, logoUrl, supportingDocId } ],
 
+  /* ── Knowledge Bank (metadata only; text in knowledge_docs table) ── */
+  knowledgeBank: [{id, name, type, summary, tags:[], chars, mime, createdAt, createdBy}],
+
+  /* ── Resume Bank (dedicated standalone resume uploads; binary in attachments) ── */
+  resumeBank: [{id, name, role, attachmentId, attachmentName, clearance, location, skills:[], summary, createdAt, createdBy}],
+
   /* ── Migration flags ── */
   overheadSeeded, planSeeded, accountsSeeded,
-  oppSeeded, oppEnriched, tplSeeded
+  oppSeeded, oppEnriched, tplSeeded, cfTemplateSeeded
 }
+```
+
+**New proposal/profile fields (added this session):**
+- `proposal.brief` = `{text(html), winThemes, differentiators, updatedAt, updatedBy}` — BusDev intake.
+- `proposal.dossiers` = `[{id, name, role, sourceKey, sourceKind, html, generatedAt}]` — generated key-personnel bios for the appendix.
+- `proposal.pricing.cf` = `{monthlyRate, baseMonths, optionYears, escalationPct, resources:[{id,role,count,monthlyRate}], odcs:[{id,item,vendor,qty,unitCost}], travel}` — the CF resource×months pricing model (`pricing.mode='cf-monthly'`).
+- `companyProfile.differentiators` = `[string]` (company-wide); `companyProfile.services[i].differentiators` = `[string]`.
+- Seeded proposal template id `tpl_cf_technical` ("CommunityForce — Federal Technical Proposal").
 ```
 
 **Item categories** (`project.category`):
@@ -883,3 +925,91 @@ Material work done in the May 28–30, 2026 session:
 - **`_lookupOpts`** helper to prevent silent location/clearance wipes
 - **Modal stacking** z-index fix
 - **Migration hardening** — all seed blocks now defensive against re-running on populated data
+
+---
+
+## 14. Session log — Proposal Generator build-out + UX overhaul (June 2026)
+
+Large session. Everything below is live on `main`.
+
+### New capability: AI proposal generation pipeline
+- **Knowledge Bank** (Admin → Proposals → 📚 Knowledge Bank): upload past
+  proposals / capability docs (PDF/DOCX/XLSX/TXT) or paste text. Server extracts
+  text (`extractDocText`) into the new `knowledge_docs` table; an AI pass writes a
+  summary + tags. Retrieval is **select-then-inject** (no vector DB):
+  `kbSelectRelevant` asks the LLM which docs fit the RFP, `kbFetchTexts` pulls
+  their text, `kbBuildContext` returns an injectable block. Functions:
+  `openKnowledgeBankManager`, `kbUpload`, `kbPasteText`, `kbSummarizeDoc`,
+  `kbResummarize`, `kbDelete`, `kbSelectRelevant`, `kbFetchTexts`, `kbBuildContext`.
+- **BusDev Brief tab** (`_pdBriefHTML`): raw stream-of-consciousness intake +
+  win themes + differentiators → `p.brief`. `pdCaptureBrief` / `pdSaveBrief`.
+- **Generate Full Proposal** (`pdGenerateFullProposal`): captures brief → KB
+  retrieval once → drafts every AI/hybrid section sequentially with live progress.
+  Opt-in checkboxes also **seed CF pricing from RFP roles** (`_genSeedPricing`)
+  and **generate dossiers for assigned bench** (`_genDossiers`). Shared prompt
+  builder `_propSectionPrompt(p,s,kbBlock)` (brief + KB + voice + differentiators
+  + PP/certs aware) — also powers single-section "Draft with AI". Entry points on
+  both the Brief tab and Sections tab ("Generate All").
+- **CF house template** seeded idempotently (`_cfTechnicalTemplate`, id
+  `tpl_cf_technical`, gated by `cfTemplateSeeded`) — 14-section DoD structure
+  modeled on the DTMO PEIS proposal.
+- **CF-format export** (`_buildProposalPrintHTML`): fielded DoD cover
+  (CAGE/UEI/DUNS, vehicle, PoP, set-aside, due date), numbered sections + Contents.
+
+### Recruiting: Resume Bank + dossiers
+- **Resume Bank** (Recruiting → 📄 Resume Bank): `resumeBankAll()` unifies
+  recruiting candidates (with resumes), department staff (`resumeLink`), and
+  dedicated uploads (`D.resumeBank`). `openResumeBankManager`, `rbUploadPrompt`,
+  `rbDelete`.
+- **Key-personnel dossiers** (Staffing tab → `_pdDossiersHTML`): pick people from
+  the Resume Bank → `_dossGenerateOne` writes a tailored one-page bio (from the
+  resume PDF via `llmDocComplete` when on file, else structured profile) → stored
+  on `p.dossiers`, rendered into the export appendix. `openDossierPicker`,
+  `dossGenerateSelected`, `dossRemove`.
+
+### CF pricing model (Phase 5)
+- New `cf-monthly` pricing mode: resource × months × fixed monthly rate, base +
+  option years + escalation; Section A Labor / B ODCs / C Travel; live totals +
+  monthly burn. `_cfPricingTotals`, `_cfPricingEditorHTML`, `_cfPricingPrintHTML`,
+  `cfPrSet`/`cfResAdd`/`cfResSet`/`cfResDel`/`cfOdcAdd`/`cfOdcSet`/`cfOdcDel`,
+  `cfSeedRoles`/`cfSeedCLINs`. **CLIN/cost margin:** link a contract project to
+  compare `projClinRevenue` + `_projMonthlyCost` (assigned-member cost) vs the
+  proposed monthly burn. `_propPricingTotal` is cf-aware.
+
+### Differentiators
+- Service editor rebuilt as a form modal with an add/remove multi-differentiator
+  list (`_svcRender`/`cpSvcAddDiff`/`cpSvcDelDiff`/`cpSvcSave`); company-wide
+  `companyProfile.differentiators` list (`cpAddDiff`/`cpDelDiff`); injected into
+  drafting via `_propBuildDifferentiatorsCtx`.
+
+### UX foundation (applies app-wide)
+- **Modal a11y:** `openModal`/`closeModal` add `role=dialog`/`aria-modal`, focus
+  capture/restore + autofocus, and a global **Escape-to-close** (topmost).
+- **Toasts:** `toast(msg,kind,ms)` + `toastAction(msg,label,fn,ms)` (Undo); CSS
+  `#toastWrap`. `window.alert` is overridden to route notifications through toasts
+  (severity inferred from text); `confirm()`/`prompt()` stay blocking.
+- **Reusable form modal** `openFormModal({fields,onSubmit})` (ovForm) with text/
+  textarea/select/file/number/date/**checkboxes** field types — replaced the old
+  chained `prompt()` editors (Resume Bank, Corporate Certs, Proposal Templates +
+  rename + section add/prompt, KB paste, boilerplate, case studies, task templates,
+  candidate Hire→member, red-team assign, win/loss promote, interview summarizer).
+  Only the rich-text link-URL prompt remains.
+- **Tabbed long modals:** proposal detail's 12 tabs grouped into 4 clusters
+  (Content / Inputs / Business / Review & Output); Person edit + Add member split
+  into Core / Projects & Skills / Profile / Background panes (`meSetTab`, display-
+  toggled — field IDs unchanged so `saveEdit`/`saveAddMem` are untouched).
+- **Drag polish:** Undo toasts on task-status (`planSetStatus`) and opportunity-
+  stage (`oppDrop`) drops; grab cursors + dashed drop-zone highlight.
+- **Misc:** debounced header search (`_searchDebounced`, `type=search`); mobile
+  responsive pass (scrollable tab bar, 95vw modals, horizontal-scroll tables).
+
+### Known gaps / notes for next session
+- `xlsx`/SheetJS has low-severity npm audit advisories (functional; flagged).
+- Spreadsheet KB docs uploaded **before** the xlsx-extraction commit have 0 chars
+  stored — re-upload to extract + summarize.
+- AI features require an LLM key: org `ANTHROPIC_API_KEY` (now set on Railway) or a
+  per-user key in Admin → Integrations. `/api/llm/providers` reports org-key status.
+- Drag→Undo is code-complete but couldn't be exercised via the browser-automation
+  harness (synthetic mouse-drag doesn't fire HTML5 DnD events) — verify by hand.
+- Deferred: broader `confirm()` → styled-modal migration; richer Knowledge Bank
+  tag editing; server-side Puppeteer PDF export (still browser print-to-PDF).
