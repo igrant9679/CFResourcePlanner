@@ -692,6 +692,41 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .cap-stage-leg{font-size:11px;color:var(--text-muted);margin-top:2px;}
 .cap-stage-pill{display:inline-block;background:#eef2f7;color:var(--text-secondary);font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin:0 3px;}
 .cap-start{width:62px;border:1px solid var(--border);border-radius:3px;padding:0 3px;font-size:10px;}
+/* Proforma (confidential) */
+.tab.tab-confidential{color:#C5A55A;}
+.tab.tab-confidential.active{color:#fff;}
+.pf-banner{background:#16223C;color:#E2E8F0;font-size:11px;font-weight:600;padding:7px 12px;border-radius:8px;margin-bottom:12px;border-left:3px solid #C5A55A;}
+.pf-kpis{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
+.pf-kpi{flex:1;min-width:130px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:9px 12px;}
+.pf-kpi-l{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);font-weight:700;}
+.pf-kpi-v{font-size:16px;font-weight:800;color:var(--navy);margin-top:2px;}
+.pf-subtabs{display:flex;flex-wrap:wrap;gap:2px;background:#eef2f7;border-radius:8px;padding:3px;margin-bottom:14px;}
+.pf-subtab{border:none;background:transparent;font-size:12px;font-weight:700;color:var(--text-muted);padding:6px 12px;border-radius:6px;cursor:pointer;}
+.pf-subtab.active{background:#fff;color:var(--navy);box-shadow:0 1px 2px rgba(0,0,0,0.08);}
+.pf-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;}
+.pf-card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px;}
+.pf-card.pf-locked{border-left:3px solid #C5A55A;background:#fffdf7;}
+.pf-card-h{font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px;}
+.pf-mini{background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;}
+.pf-tbl{width:100%;border-collapse:collapse;font-size:12px;}
+.pf-tbl th,.pf-tbl td{border:1px solid #eef2f7;padding:5px 9px;text-align:left;vertical-align:top;}
+.pf-tbl thead th{background:#f1f5f9;font-size:10px;text-transform:uppercase;letter-spacing:.3px;color:var(--text-muted);}
+.pf-tbl tbody tr:nth-child(even){background:#fafbfd;}
+.pf-list{margin:4px 0 0;padding-left:18px;font-size:12px;color:var(--text-secondary);}
+.pf-list li{margin-bottom:3px;}
+.pf-kv{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:3px 0;}
+.pf-kv span:first-child{color:var(--text-muted);}
+.pf-note{font-size:11px;color:var(--text-muted);margin-top:6px;}
+.pf-big{font-size:24px;font-weight:800;color:var(--navy);}
+.pf-sub{font-size:11px;color:var(--text-muted);}
+.pf-gate-bar{height:10px;background:#eef2f7;border-radius:5px;overflow:hidden;}
+.pf-gate-fill{height:100%;background:linear-gradient(90deg,#2D6A4F,#C5A55A);}
+.pf-gate-lbl{font-size:11px;color:var(--text-secondary);margin-top:4px;}
+.pf-pill{display:inline-block;font-size:9px;font-weight:800;padding:1px 7px;border-radius:9px;background:#eef2f7;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.3px;}
+.pf-pill.pf-crit{background:#FEE2E2;color:#B91C1C;}
+.pf-pill.pf-high{background:#FEF3C7;color:#B45309;}
+.pf-pill.pf-med{background:#E0E7FF;color:#3730A3;}
+.pf-pill.pf-ok{background:#DCFCE7;color:#166534;}
 .cap-yr-cards{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
 .cap-yr{flex:1;min-width:240px;background:#fff;border:1px solid var(--border);border-top:3px solid var(--gold,#C5A55A);border-radius:8px;padding:12px 16px;}
 .cap-yr-yr{font-size:13px;font-weight:800;color:var(--navy);}
@@ -927,6 +962,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
       <button class="tab" id="tabClass" onclick="switchTab('class')">Classification View</button>
       <button class="tab" id="tabPlan" onclick="switchTab('plan')">COE Plan</button>
       <button class="tab" id="tabPTask" onclick="switchTab('ptask')">Project Tasks</button>
+      <button class="tab tab-confidential" id="tabProforma" onclick="switchTab('proforma')">&#128274; Proforma</button>
     </div>
   </div>
 </div></div>
@@ -967,6 +1003,7 @@ var PALETTE=['#2D6A4F','#C5A55A','#7C5CBF','#D97706','#546478','#0D9488','#DC262
 var D,viewMode='org',collState={},dragInfo=null,MS_REG={},adminTab='skills';
 var CAP=null;  /* Capacity Planning non-destructive sandbox: {name, roster:[...], baseline:{...}} */
 var capTab='sandbox';   /* 'sandbox' | 'proj' — Capacity Planning sub-tab */
+var proformaTab='overview';  /* active sub-tab in the confidential Proforma section */
 var _capProjMult=100;   /* pipeline confidence multiplier (%) applied to per-stage win odds in projections */
 /* Per-stage base win probability for the projections pipeline ramp. Effective
    odds for an opp = clamp(stageProb * _capProjMult/100, 0, 1). */
@@ -1172,7 +1209,203 @@ function migrate(){
   });});
   var REV={'p_bclm':{revenue:212756,revenueNote:'→ $265,945/mo Aug 15 · BCLM +25% extension'},'p_fams':{revenue:76944,revenueNote:'Ends Sep 24, 2026 · 85.2% margin'},'p_c1fams':{revenue:25984,revenueNote:'→ $100,000/mo target Oct 2026 · 61% margin at maturity'},'p_software':{revenue:50000,revenueNote:'$550K ARR floor · 7.65% margin — needs intervention'},'p_marines':{revenue:0,revenueNote:'Active pursuit · SBIR Phase III via ForwardEdge-AI · $1.2M'},'p_salesforce':{revenue:0,revenueNote:'Build phase · 3 engagements seeding'},'p_afosi':{revenue:0,revenueNote:'Proposal due Jun 8 · $1.0M opportunity'},'p_phoenix':{revenue:0,revenueNote:'Software play · repricing initiative'},'p_tableau':{revenue:0,revenueNote:'Internal capability build'}};
   D.projects.forEach(function(p){if(!('revenue' in p)){var d=REV[p.id];p.revenue=d?d.revenue:0;p.revenueNote=d?d.revenueNote:'';}if(!('revenueNote' in p))p.revenueNote='';if(!p.clins)p.clins=[];});
-  planMigrate();authMigrate();oppMigrate();tplMigrate();recruitMigrate();proposalsMigrate();}
+  planMigrate();authMigrate();oppMigrate();tplMigrate();recruitMigrate();proposalsMigrate();proformaMigrate();}
+/* ── PROFORMA (CEO second brain) — confidential, Admin-only ──
+   Tier B financial/strategic data seeded from the CommunityForce Knowledge Base
+   V4 workbook (May 31, 2026). Lives in D.proforma. Defensive: seeds only when
+   absent. Excluded from the LevelUp snapshot in server.js. */
+function proformaSeedV4(){
+  return {
+    meta:{version:'V4',asOf:'2026-05-31',supersedes:'V3 (May 20, 2026)',updatedAt:Date.now(),updatedBy:'seed'},
+    company:{founded:'~2010 (15+ years)',hq:'Ashburn, Virginia, USA',businessModel:'Dual: Federal Contracting + SaaS Software',
+      coreProduct:'Scholarship, Grant & Award Management Software',teamSize:'~50 people',activeClients:'~180',
+      arr:'$600,000 / year ($50,000/mo)',retention:'90%+',operatingStatus:'LATE-STAGE SURVIVAL MODE — exit ~June 2027',
+      cashPosition:1100000,monthlyRevenue:365684,monthlyProfit:13295,monthlyProfitOct:39650,
+      corporateDebt:4091319,ceoNetWorth:5200000,cashGate:1500000,gateDate:'~June 2027 (base case)',
+      fy27RevenueTarget:9250000,maRange:'$12–25M+ depending on wins',
+      competencies:['Scholarship, grant, and award management software platform',
+        'Federal contracting services (cybersecurity, PM, financial workflow automation)',
+        'Government-grade security credentials (FedRAMP-ready)',
+        'AI-powered platform capabilities (summarization, anomaly/fraud detection, intelligent matching)',
+        'Native Microsoft Azure architecture (fully CF-owned IP)',
+        'Active Air Force ATO (FAMS) — reciprocity advantage for new DoD customers'],
+      notableClients:[{name:'Harvard University',type:'University / Higher Ed'},{name:'Yale University',type:'University / Higher Ed'},
+        {name:'Michael and Susan Dell Foundation',type:'Philanthropy / Foundation'},{name:'USAF',type:'Federal Government'},
+        {name:'CISA',type:'Federal Government'},{name:'OPM',type:'Federal Government'},
+        {name:'~180 additional software clients',type:'Universities, foundations, nonprofits'}],
+      competitors:[{name:'Submittable',type:'Direct',note:'Grant/award mgmt software'},{name:'BlackBaud',type:'Broad competitor',note:'Nonprofit software suite'},
+        {name:'Fluxx',type:'Direct',note:'Grant management platform'},{name:'AwardSpring',type:'Direct',note:'Scholarship management'},
+        {name:'WizeHive',type:'Direct',note:'Grant/scholarship management'}]},
+    financials:{openingCash:1100000,cashGateTarget:1500000,
+      history:[{year:'2024 (Full Year)',revenue:11400000,netIncome:884781,opCashFlow:744636,endingCash:1783889},
+        {year:'2025 (Full Year Est.)',revenue:8000000,netIncome:null,opCashFlow:null,endingCash:584000},
+        {year:'2026 YTD (through May)',revenue:null,netIncome:null,opCashFlow:null,endingCash:1100000}],
+      cashTrajectory:[{date:'2025-12-31',cash:584000,delta:null,status:'Actual',notes:'FY2025 closing'},
+        {date:'2026-05-31',cash:1100000,delta:103000,status:'Actual',notes:'Confirmed cash position'},
+        {date:'2026-06-30',cash:1113295,delta:13295,status:'Projected',notes:'BCLM+FAMS+C1FAMS+Software'},
+        {date:'2026-09-30',cash:1153180,delta:13295,status:'Projected',notes:'End of FAMS contract'},
+        {date:'2026-12-31',cash:1272130,delta:39650,status:'Projected',notes:'C1FAMS at $100K target'},
+        {date:'2027-03-31',cash:1391080,delta:39650,status:'Projected',notes:'Approaching gate'},
+        {date:'2027-06-30',cash:1510030,delta:39650,status:'Projected',notes:'✅ CASH GATE MET ($1.5M)'},
+        {date:'2027-08-14',cash:1569505,delta:39650,status:'Projected',notes:'BCLM extension end'}],
+      gates:[{name:'Sterling debt restructured',status:'✅ COMPLETE',projectedClose:'Filed March 2026',notes:'2-yr extension to 6/30/29, quarterly NAV-indexed payments'},
+        {name:'Cash balance > $1.5M',status:'⏳ TRACKING',projectedClose:'~June 2027 (base case)',notes:'Currently $1.10M; Sterling payment quantification could shift timing'},
+        {name:'6 consecutive months positive cash flow',status:'⏳ ON TRACK',projectedClose:'Q3 2026',notes:'Monthly profit targets met through May 2026'}]},
+    scenarios:[{name:'Base Case',cashAtHorizon:1569505,gateTiming:'~June 2027',assumptions:'BCLM extended + C1FAMS at $100K + no Marines win'},
+      {name:'Marines Win Case',cashAtHorizon:1820000,gateTiming:'Earlier, larger cushion',assumptions:'Base + Marines at $500K ARR / 50% margin'},
+      {name:'Conservative Case',cashAtHorizon:1380000,gateTiming:'Likely missed',assumptions:'Base + C1FAMS only reaches $80K (not $100K)'},
+      {name:'Sterling Stress Case',cashAtHorizon:1420000,gateTiming:'Barely missed',assumptions:'Base + Sterling payments at $10K/mo equivalent'},
+      {name:'Overperformance Case',cashAtHorizon:2000000,gateTiming:'Well ahead',assumptions:'Marines win + C1FAMS reaches $120K/mo'}],
+    contractEconomics:[{contract:'FAMS (sunsetting Sep 24, 2026)',rev:76944,cost:11394,profit:65550,margin:0.852,role:'Highest margin — protect through Sep 24, 2026 end'},
+      {contract:'C1FAMS via Leidos (at $100K target)',rev:100000,cost:38700,profit:61300,margin:0.613,role:'Primary growth lever — execution to $100K critical'},
+      {contract:'BCLM Extended (+25% rate)',rev:265945,cost:172867,profit:93078,margin:0.35,role:'Anchor contract — Aug 15, 2026 – Aug 14, 2027'},
+      {contract:'BCLM Current (through Aug 14, 2026)',rev:212756,cost:146267,profit:66489,margin:0.313,role:'Bridge to extension rate'},
+      {contract:'C1FAMS Current (Jun–Sep 2026 ramp)',rev:25984,cost:25000,profit:984,margin:0.038,role:'Near breakeven during scale-up'},
+      {contract:'Software Platform (ARR)',rev:50000,cost:46175,profit:3825,margin:0.0765,role:'CRITICAL: 7.65% margin requires intervention'}],
+    debt:{total:4091319,monthlyRange:'$18,360–28,360/mo (excl. Sterling pending quantification)',
+      corporate:[{lender:'Sterling Management Group',balance:1750000,monthlyPayment:'~$7–10K/mo equiv.',rateTerm:'Quarterly, NAV-indexed',status:'⚠ RESTRUCTURED Mar 2026',notes:'2-yr extension through Jun 30, 2029. DATA GAP: quarterly amounts not quantified. At $10K/mo, gate could shift to late 2027.'},
+        {lender:'SBA Loan',balance:1934319,monthlyPayment:'$9,860/mo',rateTerm:'3.75%, 30-year',status:'ACTIVE',notes:'Secured by CEO residence ($6M value, $4.7M equity). Personally guaranteed. $650K life insurance on CEO.'},
+        {lender:'Fairfax Lending',balance:400000,monthlyPayment:'$5,500/mo',rateTerm:'Corporate term loan',status:'ACTIVE',notes:'Corporate loan — distinct from CEO residential mortgage at Northpoint Bank.'},
+        {lender:'Other Term Loans',balance:100000,monthlyPayment:'$3,000/mo',rateTerm:'Smaller obligations',status:'ACTIVE',notes:'Manageable within current operating cash flow.'}],
+      personal:{netWorth:5200000,
+        liquid:[{asset:'Interactive Brokers (liquid cash)',value:300000},{asset:'401(k)',value:59000}],liquidSubtotal:359000,
+        realEstate:[{property:'Primary Residence (secures SBA loan)',value:6000000,debt:1300000,equity:4700000,notes:'Northpoint Bank mortgage (personal). SBA coverage: 2.4x'},
+          {property:'Dallas Investment Property',value:150000,debt:0,equity:150000,notes:''}],realEstateEquity:4850000}},
+    pipeline:[{opportunity:'AFOSI Recompete',customer:'Air Force OSI',vehicle:'GSA 8a STARS via RDTS',value:1000000,pwin:0.5,ev:500000,owner:'Idris',next:'Proposal due Jun 8 · CF past perf 13/15 task areas'},
+      {opportunity:'IDOS ICBM',customer:'Air Force',vehicle:'Polaris via RDTS (ADERA Prime)',value:1000000,pwin:0.5,ev:500000,owner:'Idris',next:'Execute teaming agreement · ForwardEdge finding alt Polaris prime'},
+      {opportunity:'C1FAMS FY27',customer:'SAF/FMFS',vehicle:'POM-funded / SBIR 2',value:1200000,pwin:0.5,ev:600000,owner:'Khaja',next:'Awaiting Bobby Chung · follow-up week of May 26'},
+      {opportunity:'Marines DD577',customer:'USMC',vehicle:'SBIR Phase III via ForwardEdge-AI',value:1200000,pwin:0.5,ev:600000,owner:'Khaja',next:'Demo well-received · Response expected ~5 days · HIGH PRIORITY'},
+      {opportunity:'SpaceForce S&T',customer:'U.S. Space Force',vehicle:'SBIR 2',value:450000,pwin:0.5,ev:225000,owner:'Khaja / Norman lead',next:'Proposal submitted · Awaiting outcome'}],
+    pipelineTotals:{value:4850000,ev:2425000,range:'EV range: $1.25M (1-2 wins) to $3.75M (4 wins)'},
+    marines:{poc:'Sirron Evans (CIV) — Lead Audit Compliance Coordinator, Marine Forces Reserve / Marine Forces South',
+      contact:'Office: 504-697-8783 · Cell: 504-512-6219 · sirron.evans@usmc.mil',
+      status:'Strong technical fit ✅ · AF ATO under G6 review ✅ · SBIR Phase III pathway framed ✅',
+      strategy:'SBIR Phase III via ForwardEdge-AI (sole-source, no ceiling, no time limit, any agency can issue)',
+      advantage:'Active AF ATO provides reciprocity for Marines — compresses authorization timeline materially',
+      aiPositioning:'AI capabilities (anomaly/fraud detection, ML provisioning) DEVELOPED but NOT in AF ATO — Marines would be FIRST operational deployment (SBIR Phase III narrative)',
+      timeline:[{date:'2026-04-24',event:'Initial contact via SAF/FAMS support team referral'},{date:'2026-05-06',event:'First substantive outreach from CommunityForce'},
+        {date:'2026-05-13',event:'Solution demo — very well received'},{date:'2026-05-15',event:'AF ATO provided to Sirron Evans for G6 review'},
+        {date:'2026-05-19',event:'G6 meeting — product origin question raised (AF-grown vs COTS)'},{date:'2026-05-21',event:'Strategic response: frame as commercial IP + SBIR Phase III'}],
+      next:'Andrew Kirksey to send SBIR contracting summary; G6 follow-up call to be scheduled'},
+    strategy:{
+      pillars:[{name:'PILLAR 1: SUSTAIN',subtitle:'Protect & extend the federal anchor',initiatives:['BCLM Extended through Aug 2027','FAMS Rev 5 ATO (Sep 2026)','Software platform retention >95%','Cash discipline through gate']},
+        {name:'PILLAR 2: GROW',subtitle:'Win new federal vehicles',initiatives:['AFOSI Recompete ($1.0M)','IDOS ICBM via RDTS ($1.0M)','C1FAMS FY27 ($1.2M)','Marines DD577 ($1.2M)','SpaceForce S&T ($450K)']},
+        {name:'PILLAR 3: BUILD',subtitle:'Stand up Salesforce practice',initiatives:['AgentForce (AI agents)','Revenue Cloud','Tableau Next','Slack-native differentiator','3 live engagements seeding']},
+        {name:'PILLAR 4: SCALE',subtitle:'Software ARR 2X → 3X',initiatives:['$550K → $1.1M target ARR','3 plays: Reporting / AI / Phoenix 2.0','Lucayan/Expentor pipeline $430K','SupportAI inbound engine']}],
+      paths:[{name:'01 ORGANIC GROWTH',desc:'Build to $25M+ by 2030',strengths:['Maximize long-term equity value','Strategic control retained','Annual cash dividends as profits compound'],tradeoffs:['Continued personal guarantee exposure','5+ year time horizon','Concentrated personal net worth']},
+        {name:'02 M&A EXIT 2027',desc:'Sell at $12–25M depending on wins',strengths:['Immediate liquidity event','Risk transfer to acquirer','Diversify personal wealth'],tradeoffs:['Sub-optimal price if too early','Cultural fit risk for team','Earnout/transition obligations likely']},
+        {name:'03 STRATEGIC CAPITAL',desc:'PE/growth equity partner',strengths:['Partial liquidity + retained upside','Capital to accelerate growth','Professional governance overlay'],tradeoffs:['Dilution and board oversight','Pressure for exit timeline','Loss of complete autonomy']}],
+      recommendations:['Drive C1FAMS to $100K/month by Oct 2026 — single most important operating priority.',
+        'Close Marines DD577 by end of FY26 — SBIR Phase III via ForwardEdge-AI is the fastest path.',
+        'Hold the line on cash discipline through gate exit — don’t relax until cash >$1.5M is real and durable.',
+        'Address software margin at 7.65% in Q3 2026 — status quo unsustainable; needs ARR growth or cost rationalization.',
+        'Maintain AI/ATO precision in all external comms — Marines hinges on this nuance (AI NOT in AF ATO).',
+        'Defer M&A vs. ownership question to Q2 2027 — decide with BCLM renewal and C1FAMS run-rate in hand.'],
+      hardRules:['No new W2 hires until cash exceeds $1.5M','New contractor adds require revenue-generation justification',
+        'No new software development unless revenue-generating','No new federal proposals except Marines DD577 and >80% win + >$500K + <6 month award criteria',
+        'No conferences, marketing events, or discretionary travel','All expenditures >$5K require CEO approval','AR aging max 30 days'],
+      operatingModel:{coe:'Khaja (CEO) · Idris (PMO Lead/COO) · Ayesha (Federal Ops) · Anwer (CFO) — owns scope, staffing, performance, quality gates, strategic pivots.',
+        triad:['Idris (PMO Lead/COO) — Operating plan, Khaja’s schedule, ARR dashboard, daily scrum','Junaid (Product/Tech) — Productizes Reporting + AI modules; Phoenix 2.0','Anwer (Finance/CFO) — Margin model, pricing approval, unit economics, ARR-vs-cash','Khaja (CEO/Closer) — Sells to all 200 customers; 20% time to triad'],
+        cadence:['Daily Stand-up (15 min): pipeline movement, next call, blockers','Weekly Friday Review (30 min): pipeline, wins/losses, hit rates','Monthly Pillar Review: Sustain/Grow/Build/Scale vs FY27; CFO reports cash + margin'],
+        os:'ClickUp — 5 projects, 100+ tasks, owners and phases. Single system of record.'}},
+    technology:{architecture:[{category:'Foundation',desc:'Native Microsoft Core Azure Web Services — fully CF-owned IP. Rebuilt from AEM as native Azure. Clean acquisition profile.'},
+        {category:'Active AF ATO',desc:'Covered under active Air Force ATO (FAMS). ATO reciprocity advantage for Marines/new DoD — compresses authorization timeline.'},
+        {category:'IP Ownership',desc:'100% CF-owned. No third-party IP dependencies. AI co-developed with ForwardEdge-AI under SBIR framework.'},
+        {category:'Integrations',desc:'Deep Salesforce, Zapier, SSO. FedRAMP-ready. Native Azure Services.'}],
+      capabilityLayers:[{capability:'Workflow Automation',layer:'✅ IN AF PRODUCTION (ATO covered)',notes:''},{capability:'Forms Processing',layer:'✅ IN AF PRODUCTION (ATO covered)',notes:''},
+        {capability:'DAO/KS Appointment Management',layer:'✅ IN AF PRODUCTION (ATO covered)',notes:''},{capability:'SAAR Access Provisioning',layer:'✅ IN AF PRODUCTION (ATO covered)',notes:''},
+        {capability:'AI Anomaly Detection (DAO/KS)',layer:'⚠️ CF IP — NOT IN AF ATO',notes:'Co-developed w/ ForwardEdge-AI under SBIR. MARINES would be FIRST operational deployment.'},
+        {capability:'ML-Based Access Provisioning',layer:'⚠️ CF IP — NOT IN AF ATO',notes:'SBIR Phase III deployment scenario.'},
+        {capability:'Fraud Detection (Financial Workflows)',layer:'⚠️ CF IP — NOT IN AF ATO',notes:'Co-developed w/ ForwardEdge-AI under SBIR.'},
+        {capability:'AI Summarization & Predictive Matching',layer:'⚠️ CF IP — NOT IN AF ATO',notes:'Co-developed w/ ForwardEdge-AI under SBIR.'}],
+      sbir:{attributes:[{attr:'Sole-Source',explanation:'No competitive procurement required. Marines can award directly.'},{attr:'No Dollar Ceiling',explanation:'Scales to full operational deployment value, incl. multi-year scope.'},
+          {attr:'No Time Limit',explanation:'Supports long-term commercialization through full lifecycle.'},{attr:'Any Agency Can Issue',explanation:'Not limited to SBIR-issuing agency — Marines can act on AF-issued SBIR.'},
+          {attr:'Legal Requirement',explanation:'Phase III must derive from / extend / logically conclude prior SBIR Phase I/II R&D by the same small business (ForwardEdge-AI).'},
+          {attr:'How It Applies to DD577',explanation:'ForwardEdge-AI is Phase III prime (holds SBIR predicate); CF subcontracts. The developed-but-not-deployed AI is the Phase III extension.'}],
+        andrewKirksey:'Bridge between ForwardEdge-AI SBIR history and Marines DD577 team. No longer on CF payroll (Dec 2025); now ForwardEdge-AI employee. Retains CF email for coordination.'}},
+    costStructure:{overheadTotal:30996,subsTotal:7098,
+      overhead:[{category:'Rent',monthly:6000,notes:'Office space'},{category:'Office Expenses (Others)',monthly:3000,notes:''},{category:'Offshore Office G&A',monthly:3000,notes:''},
+        {category:'Offshore Office 5% Commission',monthly:2000,notes:''},{category:'Travel',monthly:2000,notes:''},{category:'Gratuity Provision',monthly:1875,notes:''},
+        {category:'Meals & Entertainment',monthly:1500,notes:''},{category:'Taxes',monthly:1500,notes:''},{category:'Microsoft Email Subscription',monthly:1350,notes:''},
+        {category:'Offit Kurman (Legal)',monthly:1000,notes:''},{category:'BA Cleaning LLC',monthly:1000,notes:''},{category:'Professional Liability Insurance',monthly:1000,notes:''},
+        {category:'Depreciation',monthly:1000,notes:''},{category:'Amafhha 2% Commission',monthly:900,notes:''},{category:'Verizon',monthly:650,notes:''},
+        {category:'Subscriptions (Others)',monthly:500,notes:''},{category:'Taxwise',monthly:417,notes:''},{category:'General Insurance',monthly:300,notes:''},
+        {category:'Adobe',monthly:300,notes:''},{category:'AT&T',monthly:250,notes:''},{category:'Seth Law Associates',monthly:250,notes:''},{category:'Intuit QuickBooks',monthly:190,notes:''},
+        {category:'Bitdefender',monthly:175,notes:''},{category:'Dominion Energy',monthly:170,notes:''},{category:'Zoom',monthly:151,notes:''},{category:'Automobile Expenses',monthly:150,notes:''},
+        {category:'INFOSEC IQ',monthly:100,notes:''},{category:'Loom',monthly:80,notes:''},{category:'Lucidchart',monthly:50,notes:''},{category:'GPT Zero',monthly:45,notes:''},
+        {category:'Iubenda',monthly:28,notes:''},{category:'Ease US',monthly:20,notes:''},{category:'Google AI Pro',monthly:20,notes:''},{category:'Chat2DB',monthly:20,notes:''},{category:'Yahoo Small Business',monthly:5,notes:''}],
+      softwareSubs:[{vendor:'Claude AI',monthly:1000},{vendor:'Salesforce integrations',monthly:1435},{vendor:'Salesforce',monthly:300},{vendor:'Salesforce Slack',monthly:250},
+        {vendor:'Supabase',monthly:350},{vendor:'SeamLessAI',monthly:333},{vendor:'SendGrid',monthly:331},{vendor:'Smartsheet',monthly:360},{vendor:'GoDaddy',monthly:355},
+        {vendor:'Cursor AI',monthly:270},{vendor:'ChatGPT Team Plan',monthly:160},{vendor:'HOSTGATOR',monthly:132},{vendor:'Zendesk',monthly:115},{vendor:'ClickUp',monthly:108},
+        {vendor:'Google Ads',monthly:500},{vendor:'Atlassian',monthly:500},{vendor:'Calendly',monthly:83},{vendor:'Grammarly',monthly:74},{vendor:'Quickbooks fee',monthly:65},
+        {vendor:'Open Phone',monthly:100},{vendor:'N8N',monthly:60},{vendor:'Zapier',monthly:49},{vendor:'GoToWebinar',monthly:49},{vendor:'CPanel',monthly:45},{vendor:'Bitly',monthly:29},
+        {vendor:'Open AI',monthly:20},{vendor:'Open Router',monthly:20},{vendor:'WP Rocket',monthly:5},{vendor:'Sales Commission',monthly:102}]},
+    risks:[{risk:'Software Margin Compression',level:'CRITICAL',status:'7.65% vs V3 estimate 33.1%. Platform near breakeven.',owner:'Idris / Junaid',mitigation:'ARR growth via 3 plays OR cost rationalization by Q3 2026'},
+      {risk:'Customer Concentration',level:'HIGH',status:'ForwardEdge-AI ~64% post-FAMS; Leidos ~24% at C1FAMS target. Both sub positions.',owner:'Khaja',mitigation:'Diversify via Marines DD577 + software ARR growth'},
+      {risk:'Sterling Payments Unquantified',level:'HIGH',status:'DATA GAP — $7–10K/mo equiv. At upper range, gate shifts to late 2027.',owner:'Anwer',mitigation:'Quantify quarterly amounts immediately — highest-priority gap'},
+      {risk:'C1FAMS Growth Execution',level:'HIGH',status:'Scale $26K→$100K/mo is single largest revenue lever. Team grows 2→6 Oct.',owner:'Khaja / Ande Bhasker',mitigation:'Quarterly checkpoints with Leidos; monitor weekly'},
+      {risk:'SBIR Phase III Defensibility',level:'MEDIUM-HIGH',status:'Marines win depends on ForwardEdge SBIR topic alignment with DD577 scope.',owner:'Andrew Kirksey / Khaja',mitigation:'Confirm SBIR contract numbers/titles immediately'},
+      {risk:'Related Party (Educian)',level:'MEDIUM',status:'$10K/$5K/mo to Educian (Khaja is CFO). No governance documentation.',owner:'Anwer / Khaja',mitigation:'Document arm’s-length pricing; complete before M&A diligence'},
+      {risk:'Cash Cushion Thin',level:'MEDIUM',status:'Base case ~$70K cushion above $1.5M gate at Aug 2027.',owner:'All',mitigation:'Win Marines DD577; execute C1FAMS to $100K or beyond'},
+      {risk:'Software Dev Concentration',level:'MEDIUM',status:'Only 1 W2 (Junaid Anwar). 13 contractors. Single point of technical risk.',owner:'Idris',mitigation:'Junaid retention secured (May 2026). Cross-training plan needed.'},
+      {risk:'CEO Personal Guarantee',level:'LOW',status:'SBA loan secured by residence. $4.7M equity provides 2.4x coverage.',owner:'Khaja',mitigation:'Well-covered. $650K life insurance additional mitigation.'},
+      {risk:'Sterling Debt (Corp)',level:'RESOLVED',status:'Restructured March 2026. 2-yr extension to 6/30/29.',owner:'Anwer',mitigation:'Monitor quarterly payments once quantified'},
+      {risk:'Team Morale',level:'LOW',status:'Improving. Sterling close + BCLM extension remove overhangs.',owner:'Khaja / Idris',mitigation:'Jul 30 US hub milestone is next morale anchor'}],
+    dates:[{date:'2026-06-08',event:'AFOSI proposal due',impact:'Submit via GSA 8a STARS through RDTS — CF past perf 13/15 task areas',status:'ACTION'},
+      {date:'2026-06-30',event:'Sterling original $500K payment (RESOLVED)',impact:'Resolved via March 2026 restructuring filing',status:'DONE'},
+      {date:'2026-07-30',event:'US Hub stands up; offshore → advisory',impact:'Gating dependency for federal seat release. If blocked, BCLM Pillar 1 expansion delayed.',status:'MILESTONE'},
+      {date:'2026-08-14',event:'Current BCLM contract rate ends',impact:'Transition to extended rate — prepare paperwork',status:'UPCOMING'},
+      {date:'2026-08-15',event:'BCLM Extension begins (+25%)',impact:'+$53,189/mo revenue lift ($26.6K additional profit)',status:'UPCOMING'},
+      {date:'2026-09-24',event:'FAMS contract ends',impact:'-$76,944/mo revenue; -$11,394/mo cost; net -$65,550/mo profit',status:'UPCOMING'},
+      {date:'2026-10-01',event:'C1FAMS scales toward $100K target',impact:'Team grows 2→6. Cost rises $25K→$38.7K/mo. Revenue target $100K.',status:'CRITICAL'},
+      {date:'2027-06-30',event:'$1.5M cash gate projected',impact:'SURVIVAL MODE EXIT. Base case per V4. Sterling payments could shift timing.',status:'GATE'},
+      {date:'2027-08-14',event:'BCLM extension ends',impact:'Renewal decision window. Also M&A timing trigger.',status:'STRATEGIC'},
+      {date:'2029-06-30',event:'Sterling restructured balance retired',impact:'Final corporate debt obligation cleared.',status:'FUTURE'}],
+    dataGaps:[{gap:'Sterling restructured payment schedule — quarterly amounts & NAV indexing',priority:'HIGHEST',owner:'Anwer Sheikh',impact:'Cash gate could shift to late 2027/early 2028 if payments $10K/mo'},
+      {gap:'Aziz compensation increase rationale — +$31,600/mo total Oct+',priority:'CRITICAL',owner:'Khaja Syed',impact:'Unexplained cost increase; governance / audit risk'},
+      {gap:'Educian related-party arrangement — services, arm’s length pricing, contract docs',priority:'CRITICAL',owner:'Khaja / Anwer',impact:'M&A due diligence blocker; governance risk'},
+      {gap:'ForwardEdge-AI SBIR Phase I/II contract numbers and titles',priority:'HIGH',owner:'Andrew Kirksey',impact:'Marines DD577 Phase III bridge cannot be validated without specifics'},
+      {gap:'C1FAMS ramp timeline — quarterly checkpoints from $25,984 to $100,000',priority:'HIGH',owner:'Khaja / Ande Bhasker',impact:'Primary growth lever has no milestone structure'},
+      {gap:'Leidos contract specifics — vehicle, period of performance, scope',priority:'MEDIUM',owner:'Khaja',impact:'Renewal cadence and growth capacity unknown'},
+      {gap:'Omar’s status — Senior Analyst $17K/mo in V3 BCLM, absent in V4 roster',priority:'MEDIUM',owner:'Khaja',impact:'Headcount / cost discrepancy between versions'},
+      {gap:'Fringe cost reduction — confirm composition of $18K (vs V3’s $24K)',priority:'MEDIUM',owner:'Anwer Sheikh',impact:'Cost structure accuracy; may affect projections'}],
+    actuals:{asOf:'May/Jun 2026',source:'CashFlow-05282026.xlsx',newCostsSubtotal:60362,reconciledSubtotal:204762,
+      newCosts:[{vendor:'LSI Media LLC',jun:15000,recurring:'Monthly',notes:'$15K/mo marketing/media vendor. Not in V4 overhead or subs.'},
+        {vendor:'Global Insights + Solutions, LLC',jun:12400,recurring:'Monthly',notes:'$12.4K/mo recurring; not in V4 roster or overhead.'},
+        {vendor:'Highbury / SIE',jun:7800,recurring:'Monthly',notes:'Recurring consulting; not in V4. May figure likely incl. catch-up.'},
+        {vendor:'CyberSecWave',jun:10000,recurring:'Monthly',notes:'Cybersecurity vendor; not in V4. Jun reflects full run-rate.'},
+        {vendor:'Deenah Associates Consulting',jun:10000,recurring:'Monthly',notes:'SEPARATE from $6K rent (also Deenah). Consulting fee not in V4.'},
+        {vendor:'Brown & Brown Insurance',jun:1300,recurring:'Periodic',notes:'V4 only lists Prof. Liability $1K + General $300.'},
+        {vendor:'Muhammad Awais Imran',jun:300,recurring:'Monthly',notes:'Contractor not in V4 roster (Feb-May catch-up in May).'},
+        {vendor:'Cerulaxis (A-Z Services / QB)',jun:500,recurring:'Monthly',notes:'QuickBooks/admin vendor; not in V4.'},
+        {vendor:'Bank Charges',jun:723.63,recurring:'Monthly',notes:'Overhead'},{vendor:'Travelers Ins.',jun:288.42,recurring:'Monthly',notes:'Overhead'},
+        {vendor:'Pest Control',jun:50,recurring:'Periodic',notes:'Overhead'},{vendor:'ADP (payroll processing)',jun:2000,recurring:'Monthly',notes:'Overhead'}]}
+  };
+}
+function proformaMigrate(){
+  if(!D.proforma)D.proforma=proformaSeedV4();
+  // ── Phase 1 Tier A enrichment: time-phased contract economics on operational projects ──
+  var TL={
+    p_bclm:[{from:'2026-06',to:'2026-08',revenue:212756,cost:146267,note:'Current rate (through Aug 14)'},{from:'2026-08',to:null,revenue:265945,cost:172867,note:'Extended +25% (Aug 15 – Aug 14, 2027)'}],
+    p_fams:[{from:'2026-06',to:'2026-09',revenue:76944,cost:11394,note:'85.2% margin — ends Sep 24, 2026'},{from:'2026-10',to:null,revenue:0,cost:0,note:'Contract ended'}],
+    p_c1fams:[{from:'2026-06',to:'2026-09',revenue:25984,cost:25000,note:'Ramp — near breakeven (2 resources)'},{from:'2026-10',to:null,revenue:100000,cost:38700,note:'At $100K target (6 resources) — 61.3% margin'}],
+    p_software:[{from:'2026-06',to:null,revenue:50000,cost:46175,note:'$600K ARR · 7.65% margin — needs intervention'}]
+  };
+  (D.projects||[]).forEach(function(p){ if(TL[p.id]&&!p.timeline)p.timeline=TL[p.id]; });
+  // ── Member cost schedules (only where Oct+ cost differs from Jun–Sep) — matched by name ──
+  var COST={'SpiritOne':[{from:'2026-06',cost:40194},{from:'2026-10',cost:66794}],
+    'Don Van Meter':[{from:'2026-06',cost:17640},{from:'2026-10',cost:22640}],
+    'Educian (related party)':[{from:'2026-06',cost:10000},{from:'2026-10',cost:5000}],
+    'Hashim Kalla':[{from:'2026-06',cost:2000}],'Ajaz Ahmed Beigh':[{from:'2026-06',cost:700}]};
+  (D.departments||[]).forEach(function(d){(d.members||[]).forEach(function(m){
+    if(COST[m.name]&&!m.costSchedule)m.costSchedule=COST[m.name];
+  });});
+  // ── Pwin / expected value / owner on the strategic federal pursuits (matched by opp name) ──
+  var PW={'AFOSI':{pwin:0.5,ev:500000,value:1000000,owner:'Idris'},'IDOS ICBM':{pwin:0.5,ev:500000,value:1000000,owner:'Idris'},
+    'C1FAMS FY27':{pwin:0.5,ev:600000,value:1200000,owner:'Khaja'},'DD577 or workforce Cert App':{pwin:0.5,ev:600000,value:1200000,owner:'Khaja'},
+    'SpaceForce S&T':{pwin:0.5,ev:225000,value:450000,owner:'Khaja / Norman'},'Marines DD577':{pwin:0.5,ev:600000,value:1200000,owner:'Khaja'}};
+  (D.projects||[]).forEach(function(p){ if(projCat(p)!=='opportunity')return; var k=PW[p.name]; if(k){ if(p.pwin==null)p.pwin=k.pwin; if(p.expectedValue==null)p.expectedValue=k.ev; if(!p.owner&&!p.opr)p.owner=k.owner; } });
+}
 function proposalsMigrate(){
   if(!D.proposals)D.proposals=[];
   if(!D.proposalTemplates)D.proposalTemplates=[];
@@ -1250,6 +1483,8 @@ function canProposal(){
   if(ME.memberId){var f=findMember(ME.memberId);if(f&&f.m&&f.m.proposal)return true;}
   return false;
 }
+/* Confidential Proforma section — Admin only (CEO second brain). */
+function canProforma(){ return !!(ME&&ME.role==='admin'); }
 function recruitMigrate(){
   if(!D.recruitings)D.recruitings=[];
   if(!D.candidates)D.candidates=[];
@@ -2379,6 +2614,7 @@ function renderView(){
   else if(viewMode==='recruit')html=renderRecruitView(q);
   else if(viewMode==='prop')html=renderProposalsView(q);
   else if(viewMode==='cap')html=renderCapacityView(q);
+  else if(viewMode==='proforma')html=renderProformaView(q);
   else html=renderResourcesView(q);
   document.getElementById('mainContent').innerHTML=html;
 }
@@ -2794,6 +3030,94 @@ function capApply(){
     var f=findMember(pn.id);if(f&&f.m){f.m.projects=(pn.projects||[]).filter(function(x){return (Number(x.pct)||0)>0;}).map(function(x){return {id:x.id,pct:Number(x.pct)||0,clinId:x.clinId};});}
   });
   save();CAP.baseline=capTotals(CAP.roster);renderView();renderStats();toast('Scenario applied to live allocations.','success');
+}
+
+/* ── PROFORMA SECTION (confidential, Admin-only) — read-only V1 ── */
+function pfSetTab(t){ proformaTab=t; renderView(); }
+function _pfMoney(v){ return (v==null||v==='')?'—':fmt(v); }
+function _pfTable(headers,rows){
+  return '<div style="overflow:auto"><table class="pf-tbl"><thead><tr>'+headers.map(function(h){return '<th>'+h+'</th>';}).join('')+'</tr></thead>'
+    +'<tbody>'+rows.map(function(r){return '<tr>'+r.map(function(c){return '<td>'+(c==null?'':c)+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>';
+}
+function renderProformaView(q){
+  if(!canProforma())return '<div class="empty-msg">No access. The Proforma section is restricted to Admin.</div>';
+  if(!D.proforma)proformaMigrate();
+  var P=D.proforma,c=P.company||{},f=P.financials||{};
+  var gateTarget=f.cashGateTarget||1500000,cash=f.openingCash||c.cashPosition||0,pct=Math.max(0,Math.min(100,Math.round(cash/gateTarget*100)));
+  var tabs=[['overview','Overview'],['financials','Financials & Cash'],['scenarios','Scenarios'],['contracts','Contracts'],['debt','Debt & Personal'],['pipeline','Pipeline'],['strategy','Strategy'],['technology','Technology'],['costs','Cost Structure'],['risks','Risks & Dates'],['actuals','Actuals']];
+  var nav='<div class="pf-subtabs">'+tabs.map(function(t){return '<button class="pf-subtab'+(proformaTab===t[0]?' active':'')+'" onclick="pfSetTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
+  var kpis=[['Cash position',_pfMoney(cash)],['Cash gate',_pfMoney(gateTarget)+' · '+pct+'%'],['Monthly profit',_pfMoney(c.monthlyProfit)+' → '+_pfMoney(c.monthlyProfitOct)],['Corporate debt',_pfMoney(c.corporateDebt)],['CEO net worth',_pfMoney(c.ceoNetWorth)],['Gate ETA',esc(c.gateDate||'—')]];
+  var kpiBar='<div class="pf-kpis">'+kpis.map(function(k){return '<div class="pf-kpi"><div class="pf-kpi-l">'+k[0]+'</div><div class="pf-kpi-v">'+k[1]+'</div></div>';}).join('')+'</div>';
+  var banner='<div class="pf-banner">&#128274; CONFIDENTIAL — CEO second brain. Restricted to Admin. Not synced externally. <span style="opacity:.8">Source: Knowledge Base '+esc((P.meta||{}).version||'')+' · as of '+esc((P.meta||{}).asOf||'')+'</span></div>';
+  var body='';
+  if(proformaTab==='overview'){
+    body='<div class="pf-grid">'
+      +'<div class="pf-card"><div class="pf-card-h">Identity</div>'+_pfTable(['Field','Value'],[
+        ['Founded',esc(c.founded)],['HQ',esc(c.hq)],['Business model',esc(c.businessModel)],['Core product',esc(c.coreProduct)],
+        ['Team size',esc(c.teamSize)],['Active clients',esc(c.activeClients)],['ARR',esc(c.arr)],['Retention',esc(c.retention)],
+        ['Operating status','<b>'+esc(c.operatingStatus)+'</b>'],['FY27 revenue target',_pfMoney(c.fy27RevenueTarget)],['M&A range',esc(c.maRange)]])+'</div>'
+      +'<div class="pf-card"><div class="pf-card-h">Cash gate progress</div><div class="pf-gate"><div class="pf-gate-bar"><div class="pf-gate-fill" style="width:'+pct+'%"></div></div>'
+        +'<div class="pf-gate-lbl">'+_pfMoney(cash)+' of '+_pfMoney(gateTarget)+' ('+pct+'%) · ETA '+esc(c.gateDate||'—')+'</div></div>'
+        +'<div class="pf-card-h" style="margin-top:14px">Core competencies</div><ul class="pf-list">'+(c.competencies||[]).map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul></div>'
+      +'<div class="pf-card"><div class="pf-card-h">Notable clients</div>'+_pfTable(['Client','Type'],(c.notableClients||[]).map(function(x){return [esc(x.name),esc(x.type)];}))+'</div>'
+      +'<div class="pf-card"><div class="pf-card-h">Competitive landscape</div>'+_pfTable(['Competitor','Type','Note'],(c.competitors||[]).map(function(x){return [esc(x.name),esc(x.type),esc(x.note)];}))+'</div>'
+      +'</div>';
+  } else if(proformaTab==='financials'){
+    body='<div class="pf-card"><div class="pf-card-h">Historical performance</div>'+_pfTable(['Year','Revenue','Net income','Op. cash flow','Ending cash'],(f.history||[]).map(function(h){return [esc(h.year),_pfMoney(h.revenue),_pfMoney(h.netIncome),_pfMoney(h.opCashFlow),_pfMoney(h.endingCash)];}))+'</div>'
+      +'<div class="pf-card"><div class="pf-card-h">Cash position trajectory (base case)</div>'+_pfTable(['Date','Cash','Monthly Δ','Status','Notes'],(f.cashTrajectory||[]).map(function(r){return [esc(r.date),_pfMoney(r.cash),_pfMoney(r.delta),esc(r.status),esc(r.notes)];}))+'</div>'
+      +'<div class="pf-card"><div class="pf-card-h">Survival-mode exit gates</div>'+_pfTable(['Gate','Status','Projected close','Notes'],(f.gates||[]).map(function(g){return [esc(g.name),esc(g.status),esc(g.projectedClose),esc(g.notes)];}))+'</div>';
+  } else if(proformaTab==='scenarios'){
+    body='<div class="pf-grid">'+(P.scenarios||[]).map(function(s){return '<div class="pf-card"><div class="pf-card-h">'+esc(s.name)+'</div>'
+      +'<div class="pf-big">'+_pfMoney(s.cashAtHorizon)+'</div><div class="pf-sub">cash at Aug 14, 2027</div>'
+      +'<div class="pf-kv"><span>Gate timing</span><b>'+esc(s.gateTiming)+'</b></div><div class="pf-note">'+esc(s.assumptions)+'</div></div>';}).join('')+'</div>'
+      +'<div class="pf-note" style="margin-top:8px">These map onto Capacity Planning scenarios (Phase 2): Base / Marines Win / Conservative / Sterling Stress / Overperformance.</div>';
+  } else if(proformaTab==='contracts'){
+    body='<div class="pf-card"><div class="pf-card-h">Contract profitability summary</div>'+_pfTable(['Contract','Monthly rev','Monthly cost','Monthly profit','Margin','Strategic role'],(P.contractEconomics||[]).map(function(x){return [esc(x.contract),_pfMoney(x.rev),_pfMoney(x.cost),_pfMoney(x.profit),Math.round((x.margin||0)*1000)/10+'%',esc(x.role)];}))+'</div>'
+      +'<div class="pf-note">Time-phasing (FAMS sunset, BCLM +25%, C1FAMS ramp) is also wired onto the operational projects and will drive the Capacity Planning forecast in Phase 2.</div>';
+  } else if(proformaTab==='debt'){
+    var d=P.debt||{},pers=d.personal||{};
+    body='<div class="pf-card"><div class="pf-card-h">Corporate debt — total '+_pfMoney(d.total)+'</div>'+_pfTable(['Lender','Balance','Monthly payment','Rate / term','Status','Notes'],(d.corporate||[]).map(function(x){return [esc(x.lender),_pfMoney(x.balance),esc(x.monthlyPayment),esc(x.rateTerm),esc(x.status),esc(x.notes)];}))+'</div>'
+      +'<div class="pf-card pf-locked"><div class="pf-card-h">&#128274; CEO personal financial position — Khaja Syed (most sensitive)</div>'
+      +_pfTable(['Liquid / retirement','Value'],(pers.liquid||[]).map(function(x){return [esc(x.asset),_pfMoney(x.value)];}).concat([['<b>Subtotal liquid/retirement</b>','<b>'+_pfMoney(pers.liquidSubtotal)+'</b>']]))
+      +_pfTable(['Real estate','Value','Debt','Equity','Notes'],(pers.realEstate||[]).map(function(x){return [esc(x.property),_pfMoney(x.value),_pfMoney(x.debt),_pfMoney(x.equity),esc(x.notes)];}))
+      +'<div class="pf-kv" style="margin-top:8px"><span>Estimated total net worth</span><b>'+_pfMoney(pers.netWorth)+'</b></div></div>';
+  } else if(proformaTab==='pipeline'){
+    var m=P.marines||{},pt=P.pipelineTotals||{};
+    body='<div class="pf-card"><div class="pf-card-h">Federal pipeline — '+(P.pipeline||[]).length+' active pursuits</div>'+_pfTable(['Opportunity','Customer','Vehicle','Value','Pwin','EV','Owner','Next step'],(P.pipeline||[]).map(function(x){return [esc(x.opportunity),esc(x.customer),esc(x.vehicle),_pfMoney(x.value),Math.round((x.pwin||0)*100)+'%',_pfMoney(x.ev),esc(x.owner),esc(x.next)];}))
+      +'<div class="pf-kv" style="margin-top:8px"><span>Totals</span><b>'+_pfMoney(pt.value)+' value · '+_pfMoney(pt.ev)+' EV</b></div><div class="pf-note">'+esc(pt.range||'')+'</div></div>'
+      +'<div class="pf-card"><div class="pf-card-h">Marines DD577 — high priority</div>'+_pfTable(['Field','Detail'],[
+        ['POC',esc(m.poc)],['Contact',esc(m.contact)],['Status',esc(m.status)],['Strategy',esc(m.strategy)],['Key advantage',esc(m.advantage)],['AI positioning',esc(m.aiPositioning)],['Next step',esc(m.next)]])
+      +'<div class="pf-card-h" style="margin-top:12px">Timeline</div>'+_pfTable(['Date','Event'],(m.timeline||[]).map(function(t){return [esc(t.date),esc(t.event)];}))+'</div>';
+  } else if(proformaTab==='strategy'){
+    var st=P.strategy||{},om=st.operatingModel||{};
+    body='<div class="pf-card"><div class="pf-card-h">Four-Pillar FY27 framework</div><div class="pf-grid">'+(st.pillars||[]).map(function(p){return '<div class="pf-mini"><b>'+esc(p.name)+'</b><div class="pf-sub">'+esc(p.subtitle)+'</div><ul class="pf-list">'+(p.initiatives||[]).map(function(i){return '<li>'+esc(i)+'</li>';}).join('')+'</ul></div>';}).join('')+'</div></div>'
+      +'<div class="pf-card"><div class="pf-card-h">Three strategic paths</div><div class="pf-grid">'+(st.paths||[]).map(function(p){return '<div class="pf-mini"><b>'+esc(p.name)+'</b><div class="pf-sub">'+esc(p.desc)+'</div><div class="pf-sub" style="margin-top:6px;color:var(--green)">Strengths</div><ul class="pf-list">'+(p.strengths||[]).map(function(i){return '<li>'+esc(i)+'</li>';}).join('')+'</ul><div class="pf-sub" style="color:var(--red)">Trade-offs</div><ul class="pf-list">'+(p.tradeoffs||[]).map(function(i){return '<li>'+esc(i)+'</li>';}).join('')+'</ul></div>';}).join('')+'</div></div>'
+      +'<div class="pf-card pf-locked"><div class="pf-card-h">Survival-mode hard rules</div><ul class="pf-list">'+(st.hardRules||[]).map(function(r){return '<li>&#128274; '+esc(r)+'</li>';}).join('')+'</ul></div>'
+      +'<div class="pf-card"><div class="pf-card-h">Closing recommendations</div><ol class="pf-list">'+(st.recommendations||[]).map(function(r){return '<li>'+esc(r)+'</li>';}).join('')+'</ol></div>'
+      +'<div class="pf-card"><div class="pf-card-h">Operating model — CoE / Triad / Cadence</div><div class="pf-kv"><span>CoE</span><span>'+esc(om.coe)+'</span></div><div class="pf-card-h" style="margin-top:8px">Triad</div><ul class="pf-list">'+(om.triad||[]).map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul><div class="pf-card-h" style="margin-top:8px">Cadence</div><ul class="pf-list">'+(om.cadence||[]).map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul><div class="pf-note">OS: '+esc(om.os)+'</div></div>';
+  } else if(proformaTab==='technology'){
+    var tech=P.technology||{},sb=tech.sbir||{};
+    body='<div class="pf-card"><div class="pf-card-h">Platform architecture</div>'+_pfTable(['Category','Description'],(tech.architecture||[]).map(function(x){return [esc(x.category),esc(x.desc)];}))+'</div>'
+      +'<div class="pf-card"><div class="pf-card-h">Capability layers — critical for external comms</div>'+_pfTable(['Capability','Layer / status','Notes'],(tech.capabilityLayers||[]).map(function(x){return [esc(x.capability),esc(x.layer),esc(x.notes)];}))+'</div>'
+      +'<div class="pf-card"><div class="pf-card-h">SBIR Phase III pathway</div>'+_pfTable(['Attribute','Explanation'],(sb.attributes||[]).map(function(x){return [esc(x.attr),esc(x.explanation)];}))+'<div class="pf-note">'+esc(sb.andrewKirksey||'')+'</div></div>';
+  } else if(proformaTab==='costs'){
+    var cs=P.costStructure||{};
+    body='<div class="pf-grid">'
+      +'<div class="pf-card"><div class="pf-card-h">Overhead — '+_pfMoney(cs.overheadTotal)+'/mo</div>'+_pfTable(['Category','Monthly','Notes'],(cs.overhead||[]).map(function(x){return [esc(x.category),_pfMoney(x.monthly),esc(x.notes)];}))+'</div>'
+      +'<div class="pf-card"><div class="pf-card-h">Software subscriptions — '+_pfMoney(cs.subsTotal)+'/mo</div>'+_pfTable(['Vendor','Monthly'],(cs.softwareSubs||[]).map(function(x){return [esc(x.vendor),_pfMoney(x.monthly)];}))+'</div></div>';
+  } else if(proformaTab==='risks'){
+    body='<div class="pf-card"><div class="pf-card-h">Critical dates timeline</div>'+_pfTable(['Date','Event','Impact / action','Status'],(P.dates||[]).map(function(x){return [esc(x.date),esc(x.event),esc(x.impact),'<span class="pf-pill">'+esc(x.status)+'</span>'];}))+'</div>'
+      +'<div class="pf-card"><div class="pf-card-h">Risk register</div>'+_pfTable(['Risk','Level','Status','Owner','Mitigation'],(P.risks||[]).map(function(x){return [esc(x.risk),'<span class="pf-pill pf-'+(/CRITICAL/.test(x.level)?'crit':/HIGH/.test(x.level)?'high':/RESOLVED/.test(x.level)?'ok':'med')+'">'+esc(x.level)+'</span>',esc(x.status),esc(x.owner),esc(x.mitigation)];}))+'</div>'
+      +'<div class="pf-card"><div class="pf-card-h">Data gaps to resolve</div>'+_pfTable(['Gap','Priority','Owner','Impact if unresolved'],(P.dataGaps||[]).map(function(x){return [esc(x.gap),'<span class="pf-pill pf-'+(/HIGHEST|CRITICAL/.test(x.priority)?'crit':/HIGH/.test(x.priority)?'high':'med')+'">'+esc(x.priority)+'</span>',esc(x.owner),esc(x.impact)];}))+'</div>';
+  } else if(proformaTab==='actuals'){
+    var a=P.actuals||{};
+    body='<div class="pf-card"><div class="pf-card-h">New costs present in May/Jun 2026 — not in V4 model</div>'+_pfTable(['Vendor / cost','Jun 2026 actual','Recurring?','Notes'],(a.newCosts||[]).map(function(x){return [esc(x.vendor),_pfMoney(x.jun),esc(x.recurring),esc(x.notes)];}))
+      +'<div class="pf-kv" style="margin-top:8px"><span>Subtotal — new / uncaptured</span><b>'+_pfMoney(a.newCostsSubtotal)+'</b></div>'
+      +'<div class="pf-note">Source: '+esc(a.source||'')+' · '+esc(a.asOf||'')+'. Reconciled (already-in-model) subtotal: '+_pfMoney(a.reconciledSubtotal)+'.</div></div>';
+  }
+  return '<div style="max-width:1320px;margin:0 auto">'+banner
+    +'<div style="font-size:18px;font-weight:800;margin-bottom:2px">Proforma <span style="font-size:12px;font-weight:600;color:var(--text-muted)">· CommunityForce financial & strategic brain</span></div>'
+    +kpiBar+nav+body+'</div>';
 }
 
 /* ── RESOURCES VIEW ── */
@@ -7292,7 +7616,7 @@ function delAccount(id){if(!can('accounts'))return;if(ME&&ME.id===id){alert('You
 /* ── AUTH & PERMISSIONS (client-side roles only — not API security) ── */
 var AUTH_USER='khaja@communityforce.com',AUTH_PASS='Namtra_CF27',DEFAULT_PW='CommunityForce2026';
 var ME=null;
-var SECTIONS=[{k:'org',tab:'tabOrg',l:'Department View'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources View'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'class',tab:'tabClass',l:'Classification View'},{k:'plan',tab:'tabPlan',l:'COE Plan'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'}];
+var SECTIONS=[{k:'org',tab:'tabOrg',l:'Department View'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources View'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'class',tab:'tabClass',l:'Classification View'},{k:'plan',tab:'tabPlan',l:'COE Plan'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'proforma',tab:'tabProforma',l:'Proforma'}];
 function emailFromName(name){var clean=(name||'').replace(/\(.*?\)/g,'').replace(/[^A-Za-z .\-]/g,'').trim();var parts=clean.split(/\s+/).filter(Boolean);var local=parts.length>=2?(parts[0]+'.'+parts[parts.length-1]):(parts[0]||'user');return local.toLowerCase().replace(/[^a-z0-9.]/g,'')+'@communityforce.com';}
 function authMigrate(){
   if(!D.accounts)D.accounts=[];
@@ -7311,7 +7635,7 @@ function authMigrate(){
   D.accounts.forEach(function(a){if(!('active' in a))a.active=true;if(!a.programIds)a.programIds=[];if(!a.role)a.role='viewer';});
   if(!D.sectionVis)D.sectionVis={};['owner','editor','viewer'].forEach(function(r){if(!D.sectionVis[r])D.sectionVis[r]={};});
 }
-function canSee(k){if(!ME)return false;if(ME.role==='admin')return true;if(k==='recruit')return canRecruit();if(k==='prop')return canProposal();var rv=D.sectionVis&&D.sectionVis[ME.role];return rv?rv[k]!==false:true;}
+function canSee(k){if(!ME)return false;if(k==='proforma')return canProforma();if(ME.role==='admin')return true;if(k==='recruit')return canRecruit();if(k==='prop')return canProposal();var rv=D.sectionVis&&D.sectionVis[ME.role];return rv?rv[k]!==false:true;}
 function canRecruit(){
   if(!ME)return false;
   if(ME.role==='admin'||ME.role==='editor')return true;

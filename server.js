@@ -503,7 +503,9 @@ app.post('/api/llm/with-attachment', async (req, res) => {
 // Optional bearer auth: if ATLAS_SYNC_TOKEN env var is set, callers must send
 //   Authorization: Bearer <token>. If unset, the endpoint is open.
 // Deliberately EXCLUDED for safety: accounts, notifications, recruitings,
-// candidates (PII / sensitive workflow data).
+// candidates (PII / sensitive workflow data), and proforma (confidential CEO
+// financials/debt/M&A — Admin-only, never synced). The response below is an
+// explicit allowlist, so any field not named here is excluded by construction.
 app.get('/api/atlas-snapshot', async (req, res) => {
   try {
     const token = process.env.ATLAS_SYNC_TOKEN || '';
