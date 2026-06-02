@@ -3354,6 +3354,41 @@ function pfEditObj(path){var sch=PF_OBJ[path];if(!sch)return;var ref=_pfRef(path
 function pfEditList(path){var arr=_pfArr(path),lbl=PF_LIST[path]||'Items';
   openFormModal({over:'Proforma',title:'Edit '+lbl,submitLabel:'Save',fields:[{key:'items',label:lbl+' (one per line)',type:'textarea',rows:9,value:arr.join('\n')}],
     onSubmit:function(v){var ref=_pfRef(path);ref.parent[ref.key]=String(v.items||'').split('\n').map(function(s){return s.trim();}).filter(Boolean);pfTouch();}});}
+/* Edit the time-phased contract-revenue table (project.timeline[] segments). These
+   drive the Capacity forecast, so editing here changes the projection directly. */
+function _pfTlFields(s){return [
+  {key:'from',label:'From month',type:'month',value:s?(s.from||''):''},
+  {key:'to',label:'To month (blank = ongoing)',type:'month',value:s?(s.to||''):''},
+  {key:'revenue',label:'Monthly revenue ($)',type:'number',value:s&&s.revenue!=null?s.revenue:''},
+  {key:'note',label:'Note',type:'text',value:s?(s.note||''):''}
+];}
+function pfTimelineEdit(projId,idx){
+  var p=(D.projects||[]).find(function(x){return x.id===projId;});if(!p)return;
+  if(!Array.isArray(p.timeline))p.timeline=[];var cur=(idx>=0)?p.timeline[idx]:null;
+  openFormModal({over:'Proforma · '+esc(p.name),title:(idx<0?'Add timeline segment':'Edit timeline segment'),submitLabel:'Save',fields:_pfTlFields(cur),
+    onSubmit:function(v){var seg=(idx<0)?{}:p.timeline[idx];
+      seg.from=(v.from||'').trim();seg.to=(v.to||'').trim()||null;
+      seg.revenue=(v.revenue===''||v.revenue==null)?0:Number(v.revenue);
+      if(seg.cost==null)seg.cost=0;seg.note=(v.note||'').trim();
+      if(idx<0)p.timeline.push(seg);
+      p.timeline.sort(function(a,b){return _capYM(a.from)-_capYM(b.from);});
+      D.kbTimelineSeeded=true;save();renderView();toast('Timeline segment saved.','success');}});
+}
+function pfTimelineDel(projId,idx){
+  var p=(D.projects||[]).find(function(x){return x.id===projId;});if(!p||!p.timeline)return;
+  if(!confirm('Delete this timeline segment?'))return;p.timeline.splice(idx,1);D.kbTimelineSeeded=true;save();renderView();
+}
+function pfTimelineAdd(){
+  var opts=(D.projects||[]).filter(function(p){var c=projCat(p);return c==='project'||c==='initiative';}).map(function(p){return {value:p.id,label:p.name+(p.timeline&&p.timeline.length?' ('+p.timeline.length+' seg)':'')};});
+  if(!opts.length){toast('No projects/initiatives to add a segment to.','info');return;}
+  openFormModal({over:'Proforma',title:'Add timeline segment',submitLabel:'Add',
+    fields:[{key:'proj',label:'Project / initiative',type:'select',options:opts,required:true}].concat(_pfTlFields(null)),
+    onSubmit:function(v){var p=(D.projects||[]).find(function(x){return x.id===v.proj;});if(!p)return;
+      if(!Array.isArray(p.timeline))p.timeline=[];
+      p.timeline.push({from:(v.from||'').trim(),to:(v.to||'').trim()||null,revenue:Number(v.revenue)||0,cost:0,note:(v.note||'').trim()});
+      p.timeline.sort(function(a,b){return _capYM(a.from)-_capYM(b.from);});
+      D.kbTimelineSeeded=true;save();renderView();toast('Timeline segment added.','success');}});
+}
 function _pfEditBtn(js){return ' <button class="pf-edit-btn" onclick="'+js+'" title="Edit">&#9998;</button>';}
 function _pfDelBtn(js){return '<button class="pf-edit-btn pf-del" onclick="'+js+'" title="Delete">&times;</button>';}
 function _pfAddBtn(path,label){return '<button class="btn btn-sec btn-sm pf-add" onclick="pfEditRow(\''+path+'\',-1)">'+(label||'+ Add row')+'</button>';}
@@ -3458,8 +3493,12 @@ function renderProformaView(q){
       +'<div class="pf-note" style="margin-top:8px">Cash-at-horizon is computed live by Capacity Planning under each scenario (contracted revenue + that scenario\'s levers, net of payroll + overhead + debt service).</div>';
   } else if(proformaTab==='contracts'){
     var contracts=(D.projects||[]).filter(function(p){return p.timeline&&p.timeline.length;});
-    var crows=[];contracts.forEach(function(p){(p.timeline||[]).forEach(function(s){crows.push([esc(p.name),esc(s.from)+(s.to?(' – '+esc(s.to)):' →'),_pfMoney(s.revenue),esc(s.note||'')]);});});
-    body='<div class="pf-card">'+_pfH('Contract revenue — time-phased (drives the Capacity forecast)')+_pfTable(['Contract','Period','Monthly revenue','Note'],crows)+'<div class="pf-note">Forward contract revenue is the time-phasing set on each project (FAMS sunset, BCLM +25%, C1FAMS ramp). Cost &amp; margin are computed net of payroll + overhead in Capacity Planning → Projects.</div></div>'
+    var tlBody='';contracts.forEach(function(p){(p.timeline||[]).forEach(function(s,si){
+      tlBody+='<tr><td>'+esc(p.name)+'</td><td>'+esc(s.from)+(s.to?(' – '+esc(s.to)):' →')+'</td><td>'+_pfMoney(s.revenue)+'</td><td>'+esc(s.note||'')+'</td>'
+        +'<td class="pf-row-act">'+_pfEditBtn("pfTimelineEdit('"+p.id+"',"+si+")")+_pfDelBtn("pfTimelineDel('"+p.id+"',"+si+")")+'</td></tr>';});});
+    var tlTable='<div style="overflow:auto"><table class="pf-tbl"><thead><tr><th>Contract</th><th>Period</th><th>Monthly revenue</th><th>Note</th><th></th></tr></thead><tbody>'+tlBody+'</tbody></table></div>'
+      +'<button class="btn btn-sec btn-sm pf-add" onclick="pfTimelineAdd()">+ Add timeline segment</button>';
+    body='<div class="pf-card">'+_pfH('Contract revenue — time-phased (drives the Capacity forecast)')+tlTable+'<div class="pf-note">Edit a row to change when each contract earns and how much; the Capacity forecast updates from this. Cost &amp; margin are computed net of payroll + overhead in Capacity Planning → Projects.</div></div>'
       +'<div class="pf-card">'+_pfH('Strategic role')+_pfTable(['Contract','Strategic role'],(P.contractEconomics||[]).map(function(x){return [esc(x.contract),esc(x.role)];}),'contractEconomics')+'</div>';
   } else if(proformaTab==='debt'){
     var dd=P.debt||{};
