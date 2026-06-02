@@ -826,6 +826,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 <div class="ov" id="ovKB" onclick="closeModal('ovKB')"><div class="mdl" id="mdlKB" onclick="event.stopPropagation()" style="width:90vw;max-width:900px"></div></div>
 <div class="ov" id="ovRB" onclick="closeModal('ovRB')"><div class="mdl" id="mdlRB" onclick="event.stopPropagation()" style="width:90vw;max-width:920px"></div></div>
 <div class="ov" id="ovDoss" onclick="closeModal('ovDoss')"><div class="mdl" id="mdlDoss" onclick="event.stopPropagation()" style="width:90vw;max-width:760px"></div></div>
+<div class="ov" id="ovSvc" onclick="closeModal('ovSvc')"><div class="mdl" id="mdlSvc" onclick="event.stopPropagation()" style="max-width:640px"></div></div>
 <div class="ov" id="ovNewProp" onclick="closeModal('ovNewProp')"><div class="mdl" id="mdlNewProp" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
 <div class="ov" id="ovProp" onclick="closeModal('ovProp')"><div class="mdl" id="mdlProp" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
 <div class="ov" id="ovGap" onclick="closeModal('ovGap')"><div class="mdl" id="mdlGap" onclick="event.stopPropagation()" style="max-width:820px"></div></div>
@@ -1071,6 +1072,7 @@ function proposalsMigrate(){
   if(!Array.isArray(p.services))p.services=[];
   if(!Array.isArray(p.caseStudies))p.caseStudies=[];
   if(!Array.isArray(p.winThemes))p.winThemes=[];
+  if(!Array.isArray(p.differentiators))p.differentiators=[];   // company-wide differentiators
   if(!Array.isArray(p.keyPersonnel))p.keyPersonnel=[];
   if(!Array.isArray(p.teamingPartners))p.teamingPartners=[];
   if(!p.governance)p.governance={ownerId:'',lastReviewedAt:0,version:1};
@@ -2966,6 +2968,7 @@ function openCompanyProfileManager(){
   var samplesHTML=(v.samples||[]).map(function(s,i){return '<div class="cp-row"><div style="flex:1"><div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">'+esc(s.sectionType||'sample')+'</div><div style="font-size:12px;color:var(--text-secondary);line-height:1.5">'+esc(s.text||'').slice(0,300)+(s.text&&s.text.length>300?'…':'')+'</div></div><button class="btn btn-danger-sm btn-sm" onclick="cpDelVoiceSample('+i+')">&times;</button></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:8px 4px">No voice samples yet. Add 3-5 short paragraphs of CF-approved prose so AI can match your tone.</div>';
   var doList=(v.do||[]).map(function(s,i){return '<div class="cp-row"><span style="color:var(--green);font-weight:700">&#10003;</span><span style="flex:1">'+esc(s)+'</span><button class="btn btn-danger-sm btn-sm" onclick="cpDelDo('+i+')">&times;</button></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 4px">No do-rules yet.</div>';
   var dontList=(v.dont||[]).map(function(s,i){return '<div class="cp-row"><span style="color:var(--red);font-weight:700">&times;</span><span style="flex:1">'+esc(s)+'</span><button class="btn btn-danger-sm btn-sm" onclick="cpDelDont('+i+')">&times;</button></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 4px">No don\'t-rules yet.</div>';
+  var diffList=(p.differentiators||[]).map(function(s,i){return '<div class="cp-row"><span style="color:var(--gold);font-weight:700">&#9733;</span><span style="flex:1">'+esc(s)+'</span><button class="btn btn-danger-sm btn-sm" onclick="cpDelDiff('+i+')">&times;</button></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 4px">No company differentiators yet — add as many as apply. These feed every proposal draft.</div>';
   var boilerHTML=(p.boilerplate||[]).map(function(b,i){return '<div class="cp-row"><div style="flex:1"><strong style="font-size:12px">'+esc(b.name)+'</strong><div style="font-size:11px;color:var(--text-secondary);margin-top:2px">'+esc((b.text||'').slice(0,140)+(b.text&&b.text.length>140?'…':''))+'</div></div><div style="display:flex;gap:4px"><button class="btn btn-sec btn-sm" onclick="cpEditBoiler('+i+')">Edit</button><button class="btn btn-danger-sm btn-sm" onclick="cpDelBoiler('+i+')">&times;</button></div></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 4px">No boilerplate snippets yet.</div>';
   var serviceHTML=(p.services||[]).map(function(s,i){return '<div class="cp-row"><div style="flex:1"><strong style="font-size:12px">'+esc(s.name)+'</strong> <span style="font-size:10px;color:var(--text-muted)">'+esc(s.pricingModel||'')+'</span><div style="font-size:11px;color:var(--text-secondary);margin-top:2px">'+esc((s.shortDesc||'').slice(0,140))+'</div></div><div style="display:flex;gap:4px"><button class="btn btn-sec btn-sm" onclick="cpEditService('+i+')">Edit</button><button class="btn btn-danger-sm btn-sm" onclick="cpDelService('+i+')">&times;</button></div></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 4px">No services yet.</div>';
   var caseStudyHTML=(p.caseStudies||[]).map(function(c,i){return '<div class="cs-card"><div class="cs-card-ttl">'+esc(c.title||c.customer||'(untitled)')+'</div><div class="cs-card-sub">'+esc(c.customer||'')+(c.value?' &middot; '+fmt(c.value):'')+(c.period?' &middot; '+esc(c.period):'')+'</div><div class="cs-card-met">'+esc((c.outcomes||[]).slice(0,2).join(' &middot; '))+'</div><div style="margin-top:6px;display:flex;gap:4px"><button class="btn btn-sec btn-sm" onclick="cpEditCaseStudy('+i+')">Edit</button><button class="btn btn-danger-sm btn-sm" onclick="cpDelCaseStudy('+i+')">&times;</button></div></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 4px">No case studies yet — Claude will use these for past-performance matching during proposal drafting.</div>';
@@ -2994,6 +2997,10 @@ function openCompanyProfileManager(){
       +'<div class="fld"><label class="fld-l">Do List</label><div>'+doList+'</div><div style="display:flex;gap:6px;margin-top:4px"><input class="fld-i" id="cp_do_inp" placeholder="e.g. use active voice"><button class="btn btn-sec btn-sm" onclick="cpAddDo()">+</button></div></div>'
       +'<div class="fld"><label class="fld-l">Don\'t List</label><div>'+dontList+'</div><div style="display:flex;gap:6px;margin-top:4px"><input class="fld-i" id="cp_dont_inp" placeholder="e.g. never say world-class"><button class="btn btn-sec btn-sm" onclick="cpAddDont()">+</button></div></div>'
     +'</div>'
+    +'<span class="fld-section-hdr">Company Differentiators</span>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Company-wide differentiators applied across all proposals. Add as many as apply.</div>'
+    +'<div>'+diffList+'</div>'
+    +'<div style="display:flex;gap:6px;margin-top:4px"><input class="fld-i" id="cp_diff_inp" placeholder="e.g. 10 years unbroken DoD ATO performance" onkeydown="if(event.key===\'Enter\'){event.preventDefault();cpAddDiff();}"><button class="btn btn-sec btn-sm" onclick="cpAddDiff()">+</button></div>'
     +'<span class="fld-section-hdr">Boilerplate Snippets</span>'
     +'<div>'+boilerHTML+'</div>'
     +'<div style="display:flex;gap:6px;margin-top:6px"><input class="fld-i" id="cp_bp_name" placeholder="Name (e.g. Company Overview — Short)" style="flex:0 0 240px"><input class="fld-i" id="cp_bp_text" placeholder="Snippet text..."><button class="btn btn-sec btn-sm" onclick="cpAddBoiler()">+ Add</button></div>'
@@ -3037,6 +3044,8 @@ function cpAddDo(){var p=D.companyProfile;p.voice=p.voice||{};p.voice.do=p.voice
 function cpDelDo(i){D.companyProfile.voice.do.splice(i,1);save();openCompanyProfileManager();}
 function cpAddDont(){var p=D.companyProfile;p.voice=p.voice||{};p.voice.dont=p.voice.dont||[];var t=gv('cp_dont_inp').trim();if(!t)return;p.voice.dont.push(t);save();openCompanyProfileManager();}
 function cpDelDont(i){D.companyProfile.voice.dont.splice(i,1);save();openCompanyProfileManager();}
+function cpAddDiff(){var p=D.companyProfile;p.differentiators=p.differentiators||[];var t=gv('cp_diff_inp').trim();if(!t)return;p.differentiators.push(t);save();openCompanyProfileManager();}
+function cpDelDiff(i){D.companyProfile.differentiators.splice(i,1);save();openCompanyProfileManager();}
 function cpAddBoiler(){var p=D.companyProfile;p.boilerplate=p.boilerplate||[];var n=gv('cp_bp_name').trim(),t=gv('cp_bp_text').trim();if(!n||!t)return;p.boilerplate.push({id:uid(),name:n,text:t,lastReviewedAt:Date.now(),ownerId:ME?ME.id:''});save();openCompanyProfileManager();}
 function cpDelBoiler(i){if(!confirm('Delete this boilerplate snippet?'))return;D.companyProfile.boilerplate.splice(i,1);save();openCompanyProfileManager();}
 function cpEditBoiler(i){
@@ -3045,19 +3054,60 @@ function cpEditBoiler(i){
   var tx=prompt('Snippet text:',b.text);if(tx===null)return;
   b.name=nm.trim()||b.name;b.text=tx;b.lastReviewedAt=Date.now();save();openCompanyProfileManager();
 }
+var _svcEdit=null;
 function cpEditService(idx){
   var p=D.companyProfile;p.services=p.services||[];
   var s=idx<0?{id:uid(),name:'',shortDesc:'',longDesc:'',targetBuyer:'',differentiators:[],pricingModel:'',dealSizeBand:'',naicsCodes:[]}:p.services[idx];
   if(idx>=0&&!s)return;
-  // Inline prompt-based for simplicity in Phase A
-  var nm=prompt('Service name:',s.name);if(nm===null)return;
-  var sd=prompt('Short description:',s.shortDesc);if(sd===null)return;
-  var pm=prompt('Pricing model (T&M / FFP / Subscription / Outcome-based):',s.pricingModel);if(pm===null)return;
-  var df=prompt('Key differentiators (one per line):',(s.differentiators||[]).join('\n'));if(df===null)return;
-  s.name=nm.trim();s.shortDesc=sd;s.pricingModel=pm;
-  s.differentiators=df.split('\n').map(function(x){return x.trim();}).filter(Boolean);
-  if(idx<0)p.services.push(s);
-  save();openCompanyProfileManager();
+  if(!Array.isArray(s.differentiators))s.differentiators=[];
+  _svcEdit={idx:idx,s:JSON.parse(JSON.stringify(s))};
+  _svcRender();
+}
+function _svcCapture(){
+  if(!_svcEdit)return;var s=_svcEdit.s;
+  var g=function(id){var el=document.getElementById(id);return el?el.value:undefined;};
+  if(g('svc_name')!==undefined)s.name=g('svc_name');
+  if(g('svc_short')!==undefined)s.shortDesc=g('svc_short');
+  if(g('svc_long')!==undefined)s.longDesc=g('svc_long');
+  if(g('svc_buyer')!==undefined)s.targetBuyer=g('svc_buyer');
+  if(g('svc_pm')!==undefined)s.pricingModel=g('svc_pm');
+  if(g('svc_deal')!==undefined)s.dealSizeBand=g('svc_deal');
+  if(g('svc_naics')!==undefined)s.naicsCodes=g('svc_naics').split(',').map(function(x){return x.trim();}).filter(Boolean);
+}
+function _svcRender(){
+  if(!_svcEdit)return;var s=_svcEdit.s;
+  var diffs=(s.differentiators||[]).map(function(d,i){return '<div class="cp-row"><span style="color:var(--gold);font-weight:700">&#9733;</span><span style="flex:1">'+esc(d)+'</span><button class="btn btn-danger-sm btn-sm" onclick="cpSvcDelDiff('+i+')">&times;</button></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 4px">No differentiators yet — add as many as apply. They feed the proposal generator.</div>';
+  document.getElementById('mdlSvc').innerHTML=
+    '<div class="mdl-over">Company Profile</div><div class="mdl-title">'+(_svcEdit.idx<0?'Add':'Edit')+' Product / Service</div>'
+    +'<div class="fld"><label class="fld-l">Name</label><input class="fld-i" id="svc_name" value="'+esc(s.name||'')+'" placeholder="e.g. ATO-as-a-Service"></div>'
+    +'<div class="fld"><label class="fld-l">Short Description</label><input class="fld-i" id="svc_short" value="'+esc(s.shortDesc||'')+'"></div>'
+    +'<div class="fld"><label class="fld-l">Long Description</label><textarea class="fld-i" id="svc_long" rows="3">'+esc(s.longDesc||'')+'</textarea></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+      +'<div class="fld"><label class="fld-l">Target Buyer</label><input class="fld-i" id="svc_buyer" value="'+esc(s.targetBuyer||'')+'" placeholder="e.g. DoD program offices"></div>'
+      +'<div class="fld"><label class="fld-l">Pricing Model</label><input class="fld-i" id="svc_pm" value="'+esc(s.pricingModel||'')+'" placeholder="T&M / FFP / Subscription"></div>'
+      +'<div class="fld"><label class="fld-l">Deal Size Band</label><input class="fld-i" id="svc_deal" value="'+esc(s.dealSizeBand||'')+'" placeholder="$100k-$1M"></div>'
+      +'<div class="fld"><label class="fld-l">NAICS (comma-separated)</label><input class="fld-i" id="svc_naics" value="'+esc((s.naicsCodes||[]).join(', '))+'"></div>'
+    +'</div>'
+    +'<span class="fld-section-hdr">Key Differentiators</span>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Add as many as apply — what makes CommunityForce uniquely strong here. Press Enter or click + to add each.</div>'
+    +'<div id="svc_diffs">'+diffs+'</div>'
+    +'<div style="display:flex;gap:6px;margin-top:6px"><input class="fld-i" id="svc_diff_inp" placeholder="e.g. Reusable Section 508 accelerators" onkeydown="if(event.key===\'Enter\'){event.preventDefault();cpSvcAddDiff();}"><button class="btn btn-sec btn-sm" onclick="cpSvcAddDiff()">+ Add</button></div>'
+    +'<div class="btn-row" style="margin-top:16px"><button class="btn btn-navy" style="flex:1" onclick="cpSvcSave()">Save Service</button><button class="btn btn-sec" style="flex:1" onclick="_svcEdit=null;closeModal(\'ovSvc\');openCompanyProfileManager()">Cancel</button></div>';
+  openModal('ovSvc');
+}
+function cpSvcAddDiff(){
+  if(!_svcEdit)return;_svcCapture();
+  var v=gv('svc_diff_inp').trim();if(!v)return;
+  _svcEdit.s.differentiators=_svcEdit.s.differentiators||[];_svcEdit.s.differentiators.push(v);
+  _svcRender();var inp=document.getElementById('svc_diff_inp');if(inp)inp.focus();
+}
+function cpSvcDelDiff(i){if(!_svcEdit)return;_svcCapture();_svcEdit.s.differentiators.splice(i,1);_svcRender();}
+function cpSvcSave(){
+  if(!_svcEdit)return;_svcCapture();
+  var s=_svcEdit.s;if(!s.name||!s.name.trim()){alert('Service name is required.');return;}
+  var p=D.companyProfile;p.services=p.services||[];
+  if(_svcEdit.idx<0)p.services.push(s);else p.services[_svcEdit.idx]=s;
+  _svcEdit=null;save();closeModal('ovSvc');openCompanyProfileManager();
 }
 function cpDelService(i){if(!confirm('Delete this service?'))return;D.companyProfile.services.splice(i,1);save();openCompanyProfileManager();}
 function cpEditCaseStudy(idx){
@@ -4170,6 +4220,16 @@ function _propBuildBriefCtx(p){
   if(b.differentiators&&b.differentiators.trim())parts.push('Differentiators:\n- '+b.differentiators.trim().split(/\n+/).join('\n- '));
   return parts.join('\n\n');
 }
+// Company + service differentiators and win themes, for injection into prompts.
+function _propBuildDifferentiatorsCtx(p){
+  var cp=D.companyProfile||{};var parts=[];
+  if((cp.differentiators||[]).length)parts.push('Company differentiators:\n- '+cp.differentiators.join('\n- '));
+  var svc=(cp.services||[]).filter(function(s){return (s.differentiators||[]).length;});
+  if(svc.length)parts.push('Service differentiators:\n'+svc.map(function(s){return '- '+s.name+': '+s.differentiators.join('; ');}).join('\n'));
+  var wt=(cp.winThemes||[]).map(function(w){return typeof w==='string'?w:(w.theme||'');}).filter(Boolean);
+  if(wt.length)parts.push('Win themes:\n- '+wt.join('\n- '));
+  return parts.join('\n\n');
+}
 // Shared section-drafting prompt. kbBlock is an optional Knowledge Bank excerpt
 // block injected by the full-proposal generator (empty for single-section draft).
 function _propSectionPrompt(p,s,kbBlock){
@@ -4181,6 +4241,7 @@ function _propSectionPrompt(p,s,kbBlock){
     +(briefCtx?'\n\nBUSDEV BRIEF (the capture team\'s intent — expand, enhance, and professionalize this into full prose; honor every point):\n'+briefCtx:'')
     +(kbBlock?'\n\nKNOWLEDGE BANK (excerpts from CommunityForce past proposals & capability docs — reuse relevant facts, proof points, and phrasing, but adapt to THIS customer; do not present another customer\'s work as this one\'s):\n'+kbBlock:'')
     +'\n\nBRAND VOICE:\n'+_propBuildVoiceCtx()
+    +(_propBuildDifferentiatorsCtx(p)?'\n\nDIFFERENTIATORS & WIN THEMES (weave the relevant ones in naturally; do not list them mechanically):\n'+_propBuildDifferentiatorsCtx(p):'')
     +((t.indexOf('past')>-1||t.indexOf('experience')>-1)?'\n\nPAST PERFORMANCE LIBRARY (use ONLY these — do not invent):\n'+(_propBuildPPCtx(p)||'(none selected; flag this in your output)'):'')
     +((t.indexOf('cert')>-1||t.indexOf('capabilit')>-1)?'\n\nACTIVE CERTIFICATIONS:\n'+(_propBuildCertCtx(p)||'(none selected)'):'')
     +(s.evidence&&s.evidence.length?'\n\nREQUIRED EVIDENCE: '+s.evidence.join(', ')+'.':'')
