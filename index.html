@@ -1137,10 +1137,12 @@ departments:[
 
 /* ── SERVER SYNC ── */
 function syncSetStatus(msg,color){var el=document.getElementById('ghStatus');if(!el)return;el.textContent=msg;el.style.color=color||'rgba(255,255,255,0.38)';}
+var _serverUpdatedAt=null;   /* optimistic-lock version stamp from the server */
 async function serverLoad(){
   try{
     var res=await fetch('/api/data',{cache:'no-store'});
     if(!res.ok)return{reachable:false};
+    _serverUpdatedAt=res.headers.get('X-Atlas-Updated-At')||null;
     var data=await res.json();
     return{reachable:true,data:data};
   }catch(e){return{reachable:false};}
@@ -1150,18 +1152,31 @@ async function serverSave(opts){
   syncing=true;
   syncSetStatus('Saving…','rgba(255,255,255,0.55)');
   try{
-    var url='/api/data'+((opts&&opts.force)?'?force=1':'');
-    var res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(D)});
-    if(res.ok){syncSetStatus('Saved ✓','#86efac');setTimeout(function(){syncSetStatus('Cloud sync on','rgba(255,255,255,0.38)');},2000);}
+    var force=!!(opts&&opts.force);
+    var url='/api/data'+(force?'?force=1':'');
+    var headers={'Content-Type':'application/json'};
+    if(_serverUpdatedAt&&!force)headers['X-Atlas-Base-Updated-At']=_serverUpdatedAt;
+    var res=await fetch(url,{method:'POST',headers:headers,body:JSON.stringify(D)});
+    if(res.ok){try{var ok=await res.json();if(ok&&ok.updatedAt)_serverUpdatedAt=ok.updatedAt;}catch(_){}syncSetStatus('Saved ✓','#86efac');setTimeout(function(){syncSetStatus('Cloud sync on','rgba(255,255,255,0.38)');},2000);}
     else if(res.status===409){
-      // Guardrail rejection — incoming D would wipe a protected array.
       try{var body=await res.json();}catch(_){body={};}
-      syncSetStatus('Save blocked — refresh to recover','#FCA5A5');
-      var msg='⚠ Your save was BLOCKED to protect live data.\n\n'
-        +(body.error||'A protected array would have shrunk to zero.')+'\n\n'
-        +'This usually means this tab\'s local copy is stale. The server still has your data — click OK to reload from the server. Anything you\'ve typed since this tab last loaded will be lost. (You may want to copy any in-flight text first.)';
-      if(confirm(msg)){location.reload();}
-      else{syncSetStatus('Save still blocked','#FCA5A5');}
+      if(body.conflict){
+        // Optimistic-lock conflict — someone else saved since we loaded.
+        syncSetStatus('Conflict — another user saved','#FCA5A5');
+        var cmsg='⚠ Another user saved changes since you loaded this page.\n\n'
+          +'Click OK to reload their latest version (any unsaved changes in this tab will be lost).\n\n'
+          +'Click Cancel to keep YOUR version — your next save will overwrite their changes.';
+        if(confirm(cmsg)){location.reload();}
+        else{_serverUpdatedAt=body.serverUpdatedAt||_serverUpdatedAt;saveQueued=true;syncSetStatus('Overwriting on save…','#FBBF24');}
+      } else {
+        // Guardrail rejection — incoming D would wipe a protected array.
+        syncSetStatus('Save blocked — refresh to recover','#FCA5A5');
+        var msg='⚠ Your save was BLOCKED to protect live data.\n\n'
+          +(body.error||'A protected array would have shrunk to zero.')+'\n\n'
+          +'This usually means this tab\'s local copy is stale. The server still has your data — click OK to reload from the server. Anything you\'ve typed since this tab last loaded will be lost. (You may want to copy any in-flight text first.)';
+        if(confirm(msg)){location.reload();}
+        else{syncSetStatus('Save still blocked','#FCA5A5');}
+      }
     }
     else{syncSetStatus('Save failed — kept local copy','#FCA5A5');toast('Save failed (HTTP '+res.status+') — your changes are kept locally and will retry.','error',5000);}
   }catch(e){syncSetStatus('Offline — kept local copy','#FBBF24');toast('Offline — changes kept locally and will sync when the connection returns.','warn',4000);}
@@ -2309,13 +2324,23 @@ document.getElementById('mdlProfile').innerHTML=
 +'</div>';
 openModal('ovProfile');}
 
+function unallocatedMembers(){return allM().filter(function(m){return totalAlloc(m)<=0;});}
 function renderStats(){
-var hc=0,tc=0,fl=0,oa=0;
-D.departments.forEach(function(d){hc+=d.members.length;d.members.forEach(function(m){tc+=m.cost;if(m.reassess)fl++;if(totalAlloc(m)>100)oa++;});});
+var hc=0,tc=0,fl=0,oa=0,un=0;
+D.departments.forEach(function(d){hc+=d.members.length;d.members.forEach(function(m){tc+=m.cost;if(m.reassess)fl++;var ta=totalAlloc(m);if(ta>100)oa++;if(ta<=0)un++;});});
 document.getElementById('statsBar').innerHTML=[
 {l:'Headcount',v:hc,u:'people'},{l:'Monthly Cost',v:fmt(tc),u:'/month'},{l:'Projects',v:D.projects.filter(function(p){return projCat(p)==='project';}).length,u:'active'},{l:'Initiatives',v:D.projects.filter(function(p){return projCat(p)==='initiative';}).length,u:'in pipeline'},{l:'Opportunities',v:D.projects.filter(function(p){return projCat(p)==='opportunity';}).length,u:'pursuing'},
-{l:'Skills',v:D.skillsets.length,u:'defined'},{l:'Reassess',v:fl,u:'flagged',w:fl>0},{l:'Over-alloc',v:oa,u:'people',w:oa>0}
-].map(function(s){return '<div class="st'+(s.w?' warn':'')+'"><div class="st-l">'+s.l+'</div><div class="st-v'+(s.w?' wv':'')+'">'+s.v+'<span class="st-u">'+s.u+'</span></div></div>';}).join('');}
+{l:'Skills',v:D.skillsets.length,u:'defined'},{l:'Reassess',v:fl,u:'flagged',w:fl>0},{l:'Over-alloc',v:oa,u:'people',w:oa>0},{l:'Unallocated',v:un,u:'unassigned',w:un>0,click:'openUnallocatedModal()'}
+].map(function(s){return '<div class="st'+(s.w?' warn':'')+'"'+(s.click?' style="cursor:pointer" title="People not allocated to any project or overhead item" onclick="'+s.click+'"':'')+'><div class="st-l">'+s.l+'</div><div class="st-v'+(s.w?' wv':'')+'">'+s.v+'<span class="st-u">'+s.u+'</span></div></div>';}).join('');}
+function openUnallocatedModal(){
+  var un=unallocatedMembers();
+  var didOf=function(mid){var r='';D.departments.forEach(function(d){(d.members||[]).forEach(function(m){if(m.id===mid)r=d.id;});});return r;};
+  var rows=un.length?un.map(function(m){return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #F1F5F9"><div><span style="font-weight:600">'+esc(m.name)+'</span> <span style="font-size:11px;color:var(--text-muted)">'+esc(m._dn||'')+' · '+fmt(m.cost||0)+'/mo</span></div><button class="btn btn-navy btn-sm" onclick="closeModal(\'ovForm\');openEditMember(\''+m.id+'\',\''+didOf(m.id)+'\')">Assign →</button></div>';}).join(''):'<div style="font-size:12px;color:var(--text-muted);padding:10px 0">Everyone is allocated. 🎉</div>';
+  document.getElementById('mdlForm').innerHTML='<div class="mdl-over">Resources</div><div class="mdl-title">Unallocated resources ('+un.length+')</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">These people are in a department but not allocated to any project, initiative, or overhead item — so they don\'t appear on the Projects/Overhead pages (only Org Chart). Click <b>Assign</b> to add an allocation.</div>'
+    +rows+'<div class="btn-row" style="margin-top:14px"><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovForm\')">Close</button></div>';
+  openModal('ovForm');
+}
 
 function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',recruit:'tabRecruit',init:'tabInit',opp:'tabOpp',prop:'tabProp',over:'tabOver',orgchart:'tabChart',res:'tabRes',cap:'tabCap',class:'tabClass',plan:'tabPlan',ptask:'tabPTask'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
 
@@ -2482,6 +2507,7 @@ function renderProjView(q,category){
   var revWord=category==='opportunity'?'Total potential value: ':category==='initiative'?'Total expected rev: ':'Total revenue: ';
   var sumLine=category==='overhead'?('Total fixed overhead (G&amp;A): <strong style="color:var(--red)">'+fmt(totalCost)+'/mo</strong>'+(ohPeople>0?' <span style="font-size:10px;color:var(--text-muted)">· '+fmt(ohPeople)+'/mo of people on these cost centers counts as Payroll in Capacity, not Overhead</span>':'')):(revWord+'<strong style="color:'+(pipe?'var(--amber)':'var(--green)')+'">'+fmt(totalRev)+'/mo</strong> &middot; Total cost: <strong>'+fmt(totalCost)+'/mo</strong>');
   html+='<div style="padding:10px 14px;margin-bottom:14px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;color:var(--text-secondary)"><strong style="font-size:13px;color:var(--text-primary)">'+meta.label+'</strong> &middot; '+tops.length+' '+(tops.length===1?meta.noun:meta.plural)+' &middot; '+sumLine+'</div>';
+  if(category!=='opportunity'){var _un=unallocatedMembers();if(_un.length)html+='<div style="margin-bottom:14px;padding:9px 13px;background:#FEF3C7;border:1px solid #FCD34D;border-radius:var(--radius);font-size:12px;color:#92400E">&#9888; <b>'+_un.length+'</b> resource'+(_un.length===1?'':'s')+' in your departments '+(_un.length===1?'is':'are')+' not allocated to any project or overhead item, so '+(_un.length===1?'it':'they')+' won\'t appear on these pages. <a href="#" onclick="openUnallocatedModal();return false;" style="color:#92400E;font-weight:700;text-decoration:underline">Review &amp; assign &rarr;</a></div>';}
   if(category==='overhead'&&pfOh>0){
     var cs=(D.proforma||{}).costStructure||{};
     var lines=(cs.overhead||[]).map(function(x){return {n:x.category,m:Number(x.monthly)||0,t:x.type};}).concat((cs.softwareSubs||[]).map(function(x){return {n:x.vendor,m:Number(x.monthly)||0,t:x.type};}))

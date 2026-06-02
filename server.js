@@ -97,7 +97,9 @@ async function extractDocText(buffer, mime, name) {
 
 app.get('/api/data', async (req, res) => {
   try {
-    const r = await pool.query('SELECT data FROM app_state WHERE id = 1');
+    const r = await pool.query('SELECT data, updated_at FROM app_state WHERE id = 1');
+    // Version stamp for optimistic locking (client echoes it back on save).
+    if (r.rows.length && r.rows[0].updated_at) res.setHeader('X-Atlas-Updated-At', r.rows[0].updated_at.toISOString());
     res.json(r.rows.length ? r.rows[0].data : null);
   } catch (e) {
     console.error('GET /api/data failed:', e.message);
@@ -130,9 +132,20 @@ app.post('/api/data', async (req, res) => {
     const newData = req.body || {};
     // Optional bypass for explicit reset/import flows the user knowingly chose
     const force = req.query.force === '1' || req.get('X-Atlas-Force') === '1';
+    const base = req.get('X-Atlas-Base-Updated-At') || '';
     if (!force) {
-      const existing = await pool.query('SELECT data FROM app_state WHERE id = 1');
+      const existing = await pool.query('SELECT data, updated_at FROM app_state WHERE id = 1');
       const oldData = existing.rows.length ? existing.rows[0].data : null;
+      const curTs = existing.rows.length && existing.rows[0].updated_at ? existing.rows[0].updated_at.toISOString() : '';
+      // Optimistic lock: another client saved since this one loaded → don't silently overwrite.
+      if (base && curTs && base !== curTs) {
+        console.warn('[lock] REJECTED save: base ' + base + ' != current ' + curTs);
+        return res.status(409).json({
+          conflict: true,
+          error: 'Another user saved changes since you loaded this page. Reload to get their latest version, or choose to overwrite.',
+          serverUpdatedAt: curTs,
+        });
+      }
       if (oldData) {
         for (const key of PROTECTED_ARRAYS) {
           const oldArr = Array.isArray(oldData[key]) ? oldData[key] : null;
@@ -149,12 +162,13 @@ app.post('/api/data', async (req, res) => {
         }
       }
     }
-    await pool.query(
+    const w = await pool.query(
       `INSERT INTO app_state (id, data, updated_at) VALUES (1, $1, now())
-       ON CONFLICT (id) DO UPDATE SET data = $1, updated_at = now()`,
+       ON CONFLICT (id) DO UPDATE SET data = $1, updated_at = now()
+       RETURNING updated_at`,
       [JSON.stringify(newData)]
     );
-    res.json({ ok: true });
+    res.json({ ok: true, updatedAt: w.rows.length && w.rows[0].updated_at ? w.rows[0].updated_at.toISOString() : null });
   } catch (e) {
     console.error('POST /api/data failed:', e.message);
     res.status(500).json({ error: e.message, code: e.code });
