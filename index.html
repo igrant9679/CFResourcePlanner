@@ -3352,7 +3352,7 @@ function openKnowledgeBankManager(){
     +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">CommunityForce history &amp; capabilities. Atlas extracts the text, summarizes it, and the Proposal Generator picks the relevant sources when drafting a new proposal. Original files and full text are stored server-side; only summaries sync in the app state.</div>'
     +'<div class="kb-upload-row">'
     +'<select id="kb_type" class="inp" style="max-width:230px">'+typeOpts+'</select>'
-    +'<input type="file" id="kb_file" class="inp" accept=".pdf,.docx,.txt,.md,.csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" style="flex:1;min-width:160px"/>'
+    +'<input type="file" id="kb_file" class="inp" accept=".pdf,.docx,.xlsx,.xls,.txt,.md,.csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain" style="flex:1;min-width:160px"/>'
     +'<button class="btn btn-gold btn-sm" onclick="kbUpload()">Upload</button>'
     +'<button class="btn btn-outline btn-sm" onclick="kbPasteText()">Paste Text&hellip;</button>'
     +'</div>'
@@ -5009,7 +5009,7 @@ function _cfPricingEditorHTML(p){
     +'</div>';
   return cfg+laborTbl+odcTbl+travelBlock+costBlock+totalsPanel;
 }
-function cfPrSet(propId,field,val){var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;var cf=_cfEnsure(p);cf[field]=Number(val)||0;save();renderProposalDetail(propId);}
+function cfPrSet(propId,field,val){var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;var cf=_cfEnsure(p);cf[field]=Number(val)||0;save();setTimeout(function(){renderProposalDetail(propId);},0);}   /* defer: a blur-triggered re-render must not eat the click that caused the blur */
 function cfResAdd(propId){var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;var cf=_cfEnsure(p);cf.resources.push({id:uid(),role:'',count:1,monthlyRate:''});save();renderProposalDetail(propId);}
 function cfResSet(propId,idx,field,val){
   var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;var cf=_cfEnsure(p);var r=cf.resources[idx];if(!r)return;
@@ -5017,7 +5017,7 @@ function cfResSet(propId,idx,field,val){
   else if(field==='monthlyRate')r.monthlyRate=(val===''?'':(Number(val)||0));
   else r[field]=val;
   save();
-  if(field==='count'||field==='monthlyRate')renderProposalDetail(propId);   // recompute year columns; text fields keep focus
+  if(field==='count'||field==='monthlyRate')setTimeout(function(){renderProposalDetail(propId);},0);   // defer recompute so it doesn't eat the next click; text fields keep focus
 }
 function cfResDel(propId,idx){var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;var cf=_cfEnsure(p);cf.resources.splice(idx,1);save();renderProposalDetail(propId);}
 function cfSeedRoles(propId){
@@ -5042,7 +5042,7 @@ function cfOdcSet(propId,idx,field,val){
   var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;var cf=_cfEnsure(p);var o=cf.odcs[idx];if(!o)return;
   if(field==='qty'||field==='unitCost')o[field]=Number(val)||0;else o[field]=val;
   save();
-  if(field==='qty'||field==='unitCost')renderProposalDetail(propId);
+  if(field==='qty'||field==='unitCost')setTimeout(function(){renderProposalDetail(propId);},0);
 }
 function cfOdcDel(propId,idx){var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;var cf=_cfEnsure(p);cf.odcs.splice(idx,1);save();renderProposalDetail(propId);}
 // CF pricing table for the print/export document.

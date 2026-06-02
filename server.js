@@ -65,6 +65,7 @@ async function extractDocText(buffer, mime, name) {
   const m = String(mime || '').toLowerCase();
   const isDocx = /wordprocessingml/.test(m) || lower.endsWith('.docx');
   const isPdf = /pdf$/.test(m) || lower.endsWith('.pdf');
+  const isXlsx = /spreadsheetml|ms-excel/.test(m) || lower.endsWith('.xlsx') || lower.endsWith('.xlsm') || lower.endsWith('.xls');
   const isText = /^text\//.test(m) || lower.endsWith('.txt') || lower.endsWith('.md') || lower.endsWith('.csv');
   try {
     if (isDocx) {
@@ -76,6 +77,16 @@ async function extractDocText(buffer, mime, name) {
       const pdfParse = require('pdf-parse');
       const r = await pdfParse(buffer);
       return String((r && r.text) || '').trim();
+    }
+    if (isXlsx) {
+      const XLSX = require('xlsx');
+      const wb = XLSX.read(buffer, { type: 'buffer' });
+      let out = '';
+      (wb.SheetNames || []).forEach((n) => {
+        const csv = XLSX.utils.sheet_to_csv(wb.Sheets[n]) || '';
+        if (csv.trim()) out += '=== Sheet: ' + n + ' ===\n' + csv + '\n\n';
+      });
+      return out.trim();
     }
     if (isText) return buffer.toString('utf8').trim();
   } catch (e) {
