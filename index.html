@@ -2951,10 +2951,10 @@ function capProjData(roster,multPct,opts){
     var active=roster.filter(function(pn){return capPersonActive(pn,mo.y,mo.m);});
     var baseRev=0;
     items.forEach(function(p){var c=projCat(p);
-      if(c==='project'){var rev=capProjRevAt(p,mo.y,mo.m);
+      if(c==='project'){var rev=capInWindow(p,mo.y,mo.m)?capProjRevAt(p,mo.y,mo.m):0;
         if(p.id==='p_c1fams'&&opts.c1target!=null&&rev===100000)rev=opts.c1target;  // scenario C1FAMS maturity override
         baseRev+=rev;}
-      else if(c==='initiative'){ if(capItemFTER(active,p.id)>0)baseRev+=capProjRevAt(p,mo.y,mo.m); }
+      else if(c==='initiative'){ if(capItemFTER(active,p.id)>0&&capInWindow(p,mo.y,mo.m))baseRev+=capProjRevAt(p,mo.y,mo.m); }
     });
     // Split labor: people (or % of them) allocated to overhead-category items are
     // Overhead labor; the rest (revenue work + bench) is direct payroll.
@@ -2980,6 +2980,15 @@ function capProjData(roster,multPct,opts){
   return {rows:rows,noDate:noDate,modeled:modeled,overheadFixed:fixedOh};
 }
 function capOverheadItemIds(){ return (D.projects||[]).filter(function(p){return projCat(p)==='overhead';}).map(function(p){return p.id;}); }
+/* Is a project active in month (y,m)? Honors project.startDate / endDate ('YYYY-MM',
+   inclusive). Blank bound = open-ended. Used so the Strategic/Capacity forecast only
+   counts a project's revenue while it is running. */
+function capInWindow(p,y,m){
+  var key=y*12+m;
+  if(p.startDate){var s=_capYM(p.startDate);if(!isNaN(s)&&key<s)return false;}
+  if(p.endDate){var e=_capYM(p.endDate);if(!isNaN(e)&&key>e)return false;}
+  return true;
+}
 /* Cash-only financing burden below the operating line: corporate debt service
    (overhead/G&A is now in operating cost). Editable override via _capBurdenOverride. */
 var _capBurdenOverride=null, _capCashMode=false;
@@ -7726,6 +7735,7 @@ document.getElementById('mdlDeptEdit').innerHTML=
 +fT('ep_name','Name',p.name)
 +'<div class="fld"><label class="fld-l" for="ep_cat">Category</label><select class="fld-sel" id="ep_cat">'+catOpts+'</select><div style="font-size:9px;color:var(--text-muted);margin-top:3px">Changing category? Save, then reopen to set its revenue.</div></div>'
 +revField
++(cat!=='opportunity'?('<div class="fld-row2"><div class="fld"><label class="fld-l" for="ep_start">Start month (optional)</label><input class="fld-i" type="month" id="ep_start" value="'+esc(p.startDate||'')+'"></div><div class="fld"><label class="fld-l" for="ep_end">End month (optional)</label><input class="fld-i" type="month" id="ep_end" value="'+esc(p.endDate||'')+'"></div></div><div style="font-size:9px;color:var(--text-muted);margin:-4px 0 8px">Revenue counts in Capacity / Strategic Planning only within this window. Blank = active across the whole horizon.</div>'):'')
 +(cat==='project'?renderClinsSection(pid):'')
 +(cat==='opportunity'?oppEditFields(p):'')
 +fT('ep_note','Note / Context',p.revenueNote||'')
@@ -7782,6 +7792,8 @@ else if(isPipelineCat(newCat)){p.targetRevenue=rv?(Number(rv.value)||0):(p.targe
 else{p.revenue=0;p.targetRevenue=0;}
 if(newCat==='opportunity'){var sEl=document.getElementById('ep_stage');if(sEl)p.stage=sEl.value;p.customer=gv('ep_customer');p.leadGen=gv('ep_lg');p.presales=gv('ep_ps');p.sales=gv('ep_sales');p.delivery=gv('ep_deliv');p.opr=gv('ep_opr');p.pm=gv('ep_pm');p.team=gv('ep_team');p.closeDate=gv('ep_close');p.changeRequested=gv('ep_change');var potEl=document.getElementById('ep_potential');p.potential=potEl?(Number(potEl.value)||0):(p.potential||0);p.status=gv('ep_status');}
 p.revenueNote=gv('ep_note');p.description=rtGet('ep_desc');p.parentId=catChanged?null:(gv('ep_parent')||null);
+var stEl=document.getElementById('ep_start');if(stEl)p.startDate=stEl.value||'';
+var enEl=document.getElementById('ep_end');if(enEl)p.endDate=enEl.value||'';
 closeModal('ovDeptEdit');save();
 var el=document.getElementById('projList');if(el)el.innerHTML=renderProjList(p.category);
 renderView();}
