@@ -596,6 +596,26 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .toast-act{background:rgba(255,255,255,0.16);color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;}
 .toast-act:hover{background:rgba(255,255,255,0.28);}
 @media(max-width:1024px){.tab-bar{overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;}.tab{flex:0 0 auto;}}
+/* ── Batch C: drag affordances ── */
+[draggable="true"]{cursor:grab;}
+[draggable="true"]:active{cursor:grabbing;}
+.plan-col.over,.dept-body.drop-over{outline:2px dashed var(--gold,#C5A55A);outline-offset:-4px;background:rgba(197,165,90,0.06);}
+/* ── Batch D: grouped proposal tabs ── */
+.pd-tabgroups{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:flex-end;margin-bottom:10px;border-bottom:1px solid var(--border);padding-bottom:8px;}
+.pd-tabgroup{display:flex;flex-direction:column;gap:3px;}
+.pd-tabgroup-lbl{font-size:9px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);padding-left:2px;}
+.pd-tabgroup .pd-tabs{display:flex;gap:3px;flex-wrap:wrap;border:none;padding:0;margin:0;}
+/* ── Batch E: responsive pass ── */
+.och-h-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+@media(max-width:768px){
+  .hdr-actions{flex-wrap:wrap;justify-content:flex-end;}
+  .search-hdr{order:5;flex:1 1 100%;}
+}
+@media(max-width:640px){
+  .mdl{max-width:95vw!important;width:95vw!important;max-height:92vh;overflow:auto;}
+  .mdl table{display:block;overflow-x:auto;white-space:nowrap;}
+  .pd-tabgroups{gap:6px 10px;}
+}
 .tpl-card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px;border-left:3px solid #7C3AED;}
 .tpl-card-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;}
 .tpl-card-name{font-size:13px;font-weight:700;}
@@ -1247,7 +1267,7 @@ function planFiltered(q){var kind=planKind();return D.activities.filter(function
 function planProgress(acts){var done=acts.filter(function(a){return a.status==='done';}).length;return{done:done,total:acts.length,pct:acts.length?Math.round(done/acts.length*100):0};}
 function planSetFilter(key,val){planFilter[key]=val;renderView();}
 function planSetMode(m){planMode=m;renderView();}
-function planSetStatus(id,k){var a=D.activities.find(function(x){return x.id===id;});if(!a)return;if(!can('task',a.programId)){alert('You do not have permission to change this task.');return;}a.status=k;save();renderView();}
+function planSetStatus(id,k){var a=D.activities.find(function(x){return x.id===id;});if(!a)return;if(!can('task',a.programId)){toast('You don\'t have permission to change this task.','error');return;}var prev=a.status;if(prev===k)return;a.status=k;save();renderView();var nm=a.subtask||a.task||'Task';toastAction('Moved “'+nm+'” to '+k,'Undo',function(){var aa=D.activities.find(function(x){return x.id===id;});if(aa){aa.status=prev;save();renderView();}});}
 var planRowDragId=null;
 function planRowDragStart(e,id){
   planRowDragId=id;
@@ -2206,7 +2226,7 @@ function oppDragStart(e,id){oppDrag=id;if(e.dataTransfer){e.dataTransfer.effectA
 function oppDragEnd(){oppDrag=null;var els=document.querySelectorAll('.plan-card.drag');for(var i=0;i<els.length;i++)els[i].classList.remove('drag');}
 function oppDragOver(e,k){e.preventDefault();var el=document.getElementById('oppcol_'+k.replace(/\s/g,'_'));if(el)el.classList.add('over');}
 function oppDragLeave(k){var el=document.getElementById('oppcol_'+k.replace(/\s/g,'_'));if(el)el.classList.remove('over');}
-function oppDrop(e,k){e.preventDefault();var el=document.getElementById('oppcol_'+k.replace(/\s/g,'_'));if(el)el.classList.remove('over');var id=oppDrag||(e.dataTransfer&&e.dataTransfer.getData('text/plain'));if(!id)return;if(!can('globals')){alert('No permission.');return;}var p=D.projects.find(function(x){return x.id===id;});if(p){p.stage=k;save();renderView();}}
+function oppDrop(e,k){e.preventDefault();var el=document.getElementById('oppcol_'+k.replace(/\s/g,'_'));if(el)el.classList.remove('over');var id=oppDrag||(e.dataTransfer&&e.dataTransfer.getData('text/plain'));if(!id)return;if(!can('globals')){toast('You don\'t have permission to move opportunities.','error');return;}var p=D.projects.find(function(x){return x.id===id;});if(p){var prev=p.stage;if(prev===k)return;p.stage=k;save();renderView();toastAction('Moved “'+(p.name||'opportunity')+'” to '+k,'Undo',function(){var pp=D.projects.find(function(x){return x.id===id;});if(pp){pp.stage=prev;save();renderView();}});}}
 function oppEditFields(p){
   var stageOpts=OPP_STAGES.map(function(s){return '<option'+((p.stage||'Lead Gen')===s.k?' selected':'')+'>'+s.k+'</option>';}).join('');
   return '<span class="fld-section-hdr">Pipeline</span>'
@@ -3993,21 +4013,17 @@ function renderProposalDetail(id){
   var dueChip='';
   if(due){var dd=new Date(due);if(!isNaN(dd)){var days=Math.round((dd-Date.now())/86400000);if(days<0)dueChip='<span class="rq-sla rq-sla-red">'+Math.abs(days)+'d overdue</span>';else if(days<14)dueChip='<span class="rq-sla rq-sla-warn">due in '+days+'d</span>';else dueChip='<span class="rq-sla">due in '+days+'d</span>';}}
   var stsOpts=PROP_STATUSES.map(function(s){return '<option value="'+s.k+'"'+(p.status===s.k?' selected':'')+'>'+s.l+'</option>';}).join('');
-  var tabs=[
-    {k:'overview',l:'Overview'},
-    {k:'rfp',l:'RFP Details'},
-    {k:'brief',l:'BusDev Brief'},
-    {k:'sections',l:'Sections'},
-    {k:'staffing',l:'Staffing'},
-    {k:'pp',l:'Past Performance'},
-    {k:'pricing',l:'Pricing'},
-    {k:'cover',l:'Cover Sheet'},
-    {k:'redteam',l:'Red Team'},
-    {k:'export',l:'Export'},
-    {k:'files',l:'Files'},
-    {k:'settings',l:'Settings'}
+  var tabGroups=[
+    {g:'Content',tabs:[['overview','Overview'],['brief','BusDev Brief'],['sections','Sections']]},
+    {g:'Inputs',tabs:[['rfp','RFP Details'],['pp','Past Performance'],['staffing','Staffing']]},
+    {g:'Business',tabs:[['pricing','Pricing'],['cover','Cover Sheet']]},
+    {g:'Review & Output',tabs:[['redteam','Red Team'],['export','Export'],['files','Files'],['settings','Settings']]}
   ];
-  var tabBar='<div class="pd-tabs">'+tabs.map(function(t){return '<button class="pd-tab'+(_pdTab===t.k?' active':'')+'" onclick="pdSetTab(\''+id+'\',\''+t.k+'\')">'+t.l+'</button>';}).join('')+'</div>';
+  var tabBar='<div class="pd-tabgroups">'+tabGroups.map(function(grp){
+    return '<div class="pd-tabgroup"><div class="pd-tabgroup-lbl">'+esc(grp.g)+'</div><div class="pd-tabs">'
+      +grp.tabs.map(function(t){return '<button class="pd-tab'+(_pdTab===t[0]?' active':'')+'" onclick="pdSetTab(\''+id+'\',\''+t[0]+'\')">'+t[1]+'</button>';}).join('')
+      +'</div></div>';
+  }).join('')+'</div>';
   var hdr='<div class="mdl-over">Proposal</div>'
     +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:6px">'
     +'<div style="flex:1;min-width:280px"><div class="mdl-title" style="margin-bottom:4px">'+esc(p.title)+'</div>'
