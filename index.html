@@ -2485,11 +2485,14 @@ function renderProjView(q,category){
     var hdrHTML='<div class="proj-nm">'+esc(proj.name)+(hasKids?'<span style="font-size:8px;font-weight:700;background:rgba(197,165,90,0.15);color:var(--gold);padding:1px 6px;border-radius:3px;margin-left:6px;vertical-align:middle;text-transform:uppercase">Rollup</span>':'')+'</div>'
       +(proj.description?'<div style="font-size:11px;color:var(--text-secondary);margin:3px 0 6px;line-height:1.4">'+esc(proj.description)+'</div>':'')
       +projFinBlock(rev,tc,proj.revenueNote,noteClass,category)
+      +((proj.startDate||proj.endDate)?'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">&#128197; Active '+esc(proj.startDate||'start')+' → '+esc(proj.endDate||'ongoing')+'</div>':'')
       +'<div class="proj-cnt" style="margin-top:5px">'+(hasKids?fl.length+' direct &middot; '+rollup.count+' total':fl.length+' '+(fl.length===1?'person':'people'))+' assigned</div>'
       +projAttachHTML(proj);
     html+='<div class="proj-card">'
       +'<div class="proj-hdr"><div class="proj-hdr-left">'+hdrHTML+'</div>'
-      +'<button class="btn btn-danger-sm btn-sm" onclick="deleteProject(\''+proj.id+'\')" title="Delete">&#10005;</button></div>'
+      +'<div style="display:flex;gap:4px;flex-shrink:0">'
+      +'<button class="btn-icon btn-icon-edit" onclick="openEditProject(\''+proj.id+'\')" title="Edit (name, revenue, start/end dates, CLINs)">&#9998;</button>'
+      +'<button class="btn btn-danger-sm btn-sm" onclick="deleteProject(\''+proj.id+'\')" title="Delete">&#10005;</button></div></div>'
       +'<div class="proj-members">';
     if(fl.length)fl.forEach(function(m){html+=projMemRowHTML(m,proj.id);});
     else if(!hasKids)html+='<div style="padding:14px;text-align:center;font-size:12px;color:var(--text-muted)">No members assigned</div>';
