@@ -2822,11 +2822,11 @@ function renderCapacityView(q){
       +'</div>';
   }).join('');
   // Allocation matrix (people × items), editable %
-  var head='<tr><th class="cap-sticky">Person</th>'+items.map(function(p){var oh=projCat(p)==='overhead';return '<th class="cap-col'+(oh?' cap-col-oh':'')+'" title="'+esc(p.name)+(oh?' — overhead / G&A cost center (allocations here count as Overhead)':'')+'">'+esc((p.name||'').slice(0,14))+(p.name.length>14?'…':'')+(oh?' <span class="cap-oh-tag">OVH</span>':'')+'</th>';}).join('')+'<th>Alloc</th></tr>';
+  var head='<tr><th class="cap-sticky">Person</th>'+items.map(function(p){var oh=projCat(p)==='overhead'&&!_capExclFromGA(p.name);return '<th class="cap-col'+(oh?' cap-col-oh':'')+'" title="'+esc(p.name)+(oh?' — overhead / G&A cost center (allocations here count as Overhead/G&A)':'')+'">'+esc((p.name||'').slice(0,14))+(p.name.length>14?'…':'')+(oh?' <span class="cap-oh-tag">OVH</span>':'')+'</th>';}).join('')+'<th>Alloc</th></tr>';
   var _rank={ghost:0,prospect:1,member:2};
   var rows=roster.slice().sort(function(a,b){return (_rank[a._origin]||2)-(_rank[b._origin]||2);}).map(function(pn){
     var alloc=capAllocR(pn),over=alloc>100,full=alloc===100;
-    var cells=items.map(function(p){var oh=projCat(p)==='overhead';
+    var cells=items.map(function(p){var oh=projCat(p)==='overhead'&&!_capExclFromGA(p.name);
       var e=(pn.projects||[]).find(function(x){return x.id===p.id;});var v=e?(Number(e.pct)||0):'';
       return '<td'+(oh?' class="cap-col-oh"':'')+'><input class="cap-cell'+(v?' has':'')+(oh?' cap-cell-oh':'')+'" type="number" min="0" max="100" step="5" value="'+v+'" onchange="capSetPct(\''+pn.id+'\',\''+p.id+'\',this.value)"></td>';
     }).join('');
@@ -2954,7 +2954,7 @@ function capProjData(roster,multPct,opts){
   if(opts.marinesWon){var mo2=opps.find(function(o){return /marines|dd577/i.test(o.name||'');});var cd=mo2&&mo2.closeDate?new Date(mo2.closeDate):null;marinesStart=(cd&&!isNaN(cd))?cd.getFullYear()*12+cd.getMonth():(2026*12+9);}
   var MAR_GROSS=41667,MAR_COST=20834;  // $500K ARR / 12 ; 50% margin
   var fixedOh=proformaOverheadMonthly();   // company-wide fixed G&A cost (Cost Structure → Overhead › G&A/Operations)
-  var OHIDS=capOverheadItemIds();          // all overhead-category items (Federal Sales/BD, G&A/Operations, + any future)
+  var OHIDS=capGAOverheadItemIds();        // overhead items counted in Overhead/G&A (excludes Federal Sales/BD + Management)
   var cum=0,rows=capProjMonths().map(function(mo){
     var active=roster.filter(function(pn){return capPersonActive(pn,mo.y,mo.m);});
     var baseRev=0;
@@ -2988,6 +2988,10 @@ function capProjData(roster,multPct,opts){
   return {rows:rows,noDate:noDate,modeled:modeled,overheadFixed:fixedOh};
 }
 function capOverheadItemIds(){ return (D.projects||[]).filter(function(p){return projCat(p)==='overhead';}).map(function(p){return p.id;}); }
+/* Overhead items excluded from the Overhead/G&A cost line (Federal Sales/BD,
+   Management/Business Development) — their labor stays in Payroll, not Overhead. */
+function _capExclFromGA(name){ return /federal|business develop|management/i.test(String(name||'')); }
+function capGAOverheadItemIds(){ return (D.projects||[]).filter(function(p){return projCat(p)==='overhead'&&!_capExclFromGA(p.name);}).map(function(p){return p.id;}); }
 /* Is a project active in month (y,m)? Honors project.startDate / endDate ('YYYY-MM',
    inclusive). Blank bound = open-ended. Used so the Strategic/Capacity forecast only
    counts a project's revenue while it is running. */
@@ -3097,7 +3101,7 @@ function _capProjHTML(roster){
     +'<tr><th class="mo">Month</th><th>Revenue</th><th>of which pipeline</th><th>Payroll</th><th>Overhead/G&amp;A</th><th>Profit</th><th>'+(_capCashMode?'Cash balance':'Cumulative profit')+'</th></tr></thead>'
     +'<tbody>'+body+'</tbody></table></div>';
   var note='<div class="cap-proj-note">Projection starts this month and runs through Dec '+rows[rows.length-1].y+'. '
-    +'Cost = direct payroll + Overhead/G&amp;A. Overhead/G&amp;A = labor allocated to overhead items (Federal Sales/BD, G&amp;A/Operations, and any future overhead item) + '+fmt(d.overheadFixed||0)+'/mo fixed G&amp;A from the Proforma Cost Structure. Profit and margin are net of all of it. Contract revenue is time-phased from the Knowledge Base (FAMS sunset Sep 24, BCLM +25% step, C1FAMS ramp to $100K Oct). '
+    +'Cost = direct payroll + Overhead/G&amp;A. Overhead/G&amp;A = labor allocated to G&amp;A overhead items + '+fmt(d.overheadFixed||0)+'/mo fixed G&amp;A from the Proforma Cost Structure. Federal Sales/BD and Management costs are excluded from Overhead/G&amp;A (they sit in Payroll). Profit and margin are net of all of it. Contract revenue is time-phased from the Knowledge Base (FAMS sunset Sep 24, BCLM +25% step, C1FAMS ramp to $100K Oct). '
     +d.modeled+' opportunit'+(d.modeled===1?'y is':'ies are')+' ramped in at close date, weighted by stage × '+_capProjMult+'% confidence'+(_capProjOpts().marinesWon?' (Marines forced to won)':'')+(_capProjOpts().c1target!=null?' · C1FAMS maturity set to '+fmt(_capProjOpts().c1target):'')+(d.noDate?'; '+d.noDate+' opportunit'+(d.noDate===1?'y':'ies')+' without a close date excluded':'')+'.'
     +(_capCashMode?' Cash = opening '+fmt(opening)+' + cumulative (profit − debt service '+fmt(burden)+'/mo).':'')+'</div>';
   var charts='<div class="cap-chart" style="margin-bottom:14px"><div class="cap-chart-h">Cumulative revenue &amp; profit through Dec '+rows[rows.length-1].y+'</div>'+_capProjChart(rows)+'</div>'
