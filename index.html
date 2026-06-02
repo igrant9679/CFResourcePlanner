@@ -643,6 +643,10 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .cap-matrix th,.cap-matrix td{border:1px solid #eef2f7;padding:3px 5px;text-align:center;}
 .cap-matrix thead th{position:sticky;top:0;background:#f1f5f9;z-index:2;font-size:10px;}
 .cap-col{max-width:90px;}
+.cap-matrix th.cap-col-oh,.cap-matrix td.cap-col-oh{background:#eef1f5;}
+.cap-matrix thead th.cap-col-oh{background:#e3e8ef;}
+.cap-oh-tag{display:inline-block;font-size:7px;font-weight:800;background:#546478;color:#fff;padding:0 3px;border-radius:3px;vertical-align:middle;letter-spacing:.3px;}
+.cap-cell-oh.has{background:rgba(84,100,120,0.14);}
 .cap-sticky{position:sticky;left:0;background:#fff;text-align:left!important;z-index:1;min-width:170px;box-shadow:1px 0 0 #e2e8f0;}
 .cap-matrix thead .cap-sticky{z-index:3;background:#f1f5f9;}
 .cap-person{font-size:12px;font-weight:700;}
@@ -2808,13 +2812,13 @@ function renderCapacityView(q){
       +'</div>';
   }).join('');
   // Allocation matrix (people × items), editable %
-  var head='<tr><th class="cap-sticky">Person</th>'+items.map(function(p){return '<th class="cap-col" title="'+esc(p.name)+'">'+esc((p.name||'').slice(0,14))+(p.name.length>14?'…':'')+'</th>';}).join('')+'<th>Alloc</th></tr>';
+  var head='<tr><th class="cap-sticky">Person</th>'+items.map(function(p){var oh=projCat(p)==='overhead';return '<th class="cap-col'+(oh?' cap-col-oh':'')+'" title="'+esc(p.name)+(oh?' — overhead / G&A cost center (allocations here count as Overhead)':'')+'">'+esc((p.name||'').slice(0,14))+(p.name.length>14?'…':'')+(oh?' <span class="cap-oh-tag">OVH</span>':'')+'</th>';}).join('')+'<th>Alloc</th></tr>';
   var _rank={ghost:0,prospect:1,member:2};
   var rows=roster.slice().sort(function(a,b){return (_rank[a._origin]||2)-(_rank[b._origin]||2);}).map(function(pn){
     var alloc=capAllocR(pn),over=alloc>100,full=alloc===100;
-    var cells=items.map(function(p){
+    var cells=items.map(function(p){var oh=projCat(p)==='overhead';
       var e=(pn.projects||[]).find(function(x){return x.id===p.id;});var v=e?(Number(e.pct)||0):'';
-      return '<td><input class="cap-cell'+(v?' has':'')+'" type="number" min="0" max="100" step="5" value="'+v+'" onchange="capSetPct(\''+pn.id+'\',\''+p.id+'\',this.value)"></td>';
+      return '<td'+(oh?' class="cap-col-oh"':'')+'><input class="cap-cell'+(v?' has':'')+(oh?' cap-cell-oh':'')+'" type="number" min="0" max="100" step="5" value="'+v+'" onchange="capSetPct(\''+pn.id+'\',\''+p.id+'\',this.value)"></td>';
     }).join('');
     var barCls=over?'bad':full?'full':'ok';
     var badge=pn._origin!=='member'?' <span class="cap-ghost">'+esc(pn._origin)+'</span>':'';
@@ -2828,7 +2832,7 @@ function renderCapacityView(q){
   var matrix='<div class="cap-matrix-wrap"><table class="cap-matrix"><thead>'+head+'</thead><tbody>'+rows+footFTE+'</tbody></table></div>';
   var toolbar='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px">'
     +'<div><div style="font-size:18px;font-weight:800">Capacity Planning <span style="font-size:12px;font-weight:600;color:var(--text-muted)">· what-if sandbox</span></div>'
-    +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Edit allocation % in the matrix, or drag a person\'s &#9783; handle onto a project/initiative card to allocate their free capacity. Nothing changes live data until you Apply. Initiatives count toward revenue only when staffed.</div></div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Edit allocation % in the matrix, or drag a person\'s &#9783; handle onto a project/initiative card to allocate their free capacity. Nothing changes live data until you Apply. Initiatives count toward revenue only when staffed. Columns tagged <span class="cap-oh-tag">OVH</span> (Federal Sales/BD, G&amp;A/Operations, …) are overhead cost centers — allocating there moves that person\'s cost from Payroll to Overhead/G&amp;A in the forecast.</div></div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
     +'<button class="btn btn-sec btn-sm" onclick="capAddGhost()">&#43; Hypothetical hire</button>'
     +'<button class="btn btn-sec btn-sm" onclick="capAddProspects()">&#43; Stage prospects</button>'
