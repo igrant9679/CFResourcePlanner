@@ -679,6 +679,32 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .cap-grip{cursor:grab;color:#94a3b8;margin-right:5px;font-size:13px;}
 .cap-grip:active{cursor:grabbing;}
 .cap-card.drop{outline:2px dashed var(--gold,#C5A55A);outline-offset:-3px;background:rgba(197,165,90,0.07);}
+.cap-subtabs{display:inline-flex;gap:0;background:#eef2f7;border-radius:8px;padding:3px;margin:0 0 12px;}
+.cap-subtab{border:none;background:transparent;font-size:12px;font-weight:700;color:var(--text-muted);padding:6px 16px;border-radius:6px;cursor:pointer;}
+.cap-subtab.active{background:#fff;color:var(--navy);box-shadow:0 1px 2px rgba(0,0,0,0.08);}
+.cap-proj-ctl{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:12px;}
+.cap-proj-ctl label{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);}
+.cap-proj-ctl input[type=range]{flex:1;min-width:140px;max-width:260px;accent-color:var(--gold,#C5A55A);}
+.cap-proj-prob{font-size:16px;font-weight:800;color:var(--navy);min-width:48px;}
+.cap-proj-chip{border:1px solid var(--border);background:#f8fafc;color:var(--text-secondary);font-size:11px;font-weight:700;padding:4px 10px;border-radius:14px;cursor:pointer;}
+.cap-proj-chip:hover{border-color:var(--gold,#C5A55A);}
+.cap-proj-chip.on{background:var(--navy);color:#fff;border-color:var(--navy);}
+.cap-yr-cards{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
+.cap-yr{flex:1;min-width:240px;background:#fff;border:1px solid var(--border);border-top:3px solid var(--gold,#C5A55A);border-radius:8px;padding:12px 16px;}
+.cap-yr-yr{font-size:13px;font-weight:800;color:var(--navy);}
+.cap-yr-sub{font-size:10px;color:var(--text-muted);font-weight:600;margin-bottom:8px;}
+.cap-yr-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;}
+.cap-yr-m{display:flex;justify-content:space-between;font-size:12px;}
+.cap-yr-m .k{color:var(--text-muted);}
+.cap-yr-m .v{font-weight:800;color:var(--navy);}
+.cap-proj-tbl-wrap{overflow:auto;max-height:48vh;border:1px solid var(--border);border-radius:8px;background:#fff;margin-top:4px;}
+.cap-proj-tbl{border-collapse:collapse;font-size:11px;width:100%;min-width:560px;}
+.cap-proj-tbl th,.cap-proj-tbl td{border:1px solid #eef2f7;padding:4px 9px;text-align:right;white-space:nowrap;}
+.cap-proj-tbl thead th{position:sticky;top:0;background:#f1f5f9;z-index:1;font-size:10px;text-transform:uppercase;letter-spacing:.3px;}
+.cap-proj-tbl td.mo,.cap-proj-tbl th.mo{text-align:left;font-weight:700;position:sticky;left:0;background:#fff;}
+.cap-proj-tbl thead th.mo{background:#f1f5f9;z-index:2;}
+.cap-proj-tbl tr.yr-end td{border-bottom:2px solid #cbd5e1;}
+.cap-proj-note{font-size:11px;color:var(--text-muted);margin:8px 2px 0;}
 .tpl-card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px;border-left:3px solid #7C3AED;}
 .tpl-card-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;}
 .tpl-card-name{font-size:13px;font-weight:700;}
@@ -937,6 +963,8 @@ var STORE_KEY='cf_orgchart_v2';
 var PALETTE=['#2D6A4F','#C5A55A','#7C5CBF','#D97706','#546478','#0D9488','#DC2626','#2563EB','#7C3AED','#059669','#B45309','#6366F1'];
 var D,viewMode='org',collState={},dragInfo=null,MS_REG={},adminTab='skills';
 var CAP=null;  /* Capacity Planning non-destructive sandbox: {name, roster:[...], baseline:{...}} */
+var capTab='sandbox';   /* 'sandbox' | 'proj' — Capacity Planning sub-tab */
+var _capProjProb=30;    /* pipeline win-probability (%) applied to open opportunities in projections */
 var syncing=false,saveQueued=false;
 
 function defaultData(){return{
@@ -2469,20 +2497,24 @@ function renderCapacityView(q){
     +'<div><div style="font-size:18px;font-weight:800">Capacity Planning <span style="font-size:12px;font-weight:600;color:var(--text-muted)">· what-if sandbox</span></div>'
     +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Edit allocation % in the matrix, or drag a person\'s &#9783; handle onto a project/initiative card to allocate their free capacity. Nothing changes live data until you Apply. Initiatives count toward revenue only when staffed.</div></div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
-    +'<button class="btn btn-outline btn-sm" onclick="capAddGhost()">+ Hypothetical hire</button>'
-    +'<button class="btn btn-outline btn-sm" onclick="capAddProspects()">+ Stage prospects</button>'
+    +'<button class="btn btn-sec btn-sm" onclick="capAddGhost()">&#43; Hypothetical hire</button>'
+    +'<button class="btn btn-sec btn-sm" onclick="capAddProspects()">&#43; Stage prospects</button>'
     +'<button class="btn btn-sec btn-sm" onclick="capReset()">↺ Reset to live</button>'
     +(can('globals')?'<button class="btn btn-gold btn-sm" onclick="capApply()">✓ Apply to live…</button>':'')+'</div></div>';
+  var subtabs='<div class="cap-subtabs">'
+    +'<button class="cap-subtab'+(capTab==='sandbox'?' active':'')+'" onclick="capSetTab(\'sandbox\')">Sandbox</button>'
+    +'<button class="cap-subtab'+(capTab==='proj'?' active':'')+'" onclick="capSetTab(\'proj\')">Projections</button></div>';
   var scs=D.scenarios||[];
   var scStrip='<div class="cap-scn"><span class="cap-scn-l">Scenarios</span>'
     +(scs.length?scs.map(function(s){return '<span class="cap-scn-chip"><button onclick="capLoadScenario(\''+s.id+'\')" title="Load this scenario">'+esc(s.name)+'</button><button class="cap-scn-x" onclick="capDeleteScenario(\''+s.id+'\')" title="Delete">&times;</button></span>';}).join(''):'<span style="font-size:11px;color:var(--text-muted)">none saved yet</span>')
     +'<span style="flex:1"></span><button class="btn btn-sec btn-sm" onclick="capSaveScenario()">&#128190; Save current</button>'
     +'<button class="btn btn-sec btn-sm" onclick="capCompare()">&#9878; Compare</button></div>';
-  return '<div style="max-width:1320px;margin:0 auto">'+toolbar+scStrip+kpiBar
-    +_capChartsHTML(roster)
-    +'<div class="cap-cards">'+cards+'</div>'
-    +matrix+'</div>';
+  var body=(capTab==='proj')
+    ? _capProjHTML(roster)
+    : kpiBar+_capChartsHTML(roster)+'<div class="cap-cards">'+cards+'</div>'+matrix;
+  return '<div style="max-width:1320px;margin:0 auto">'+toolbar+subtabs+scStrip+body+'</div>';
 }
+function capSetTab(t){ capTab=t; renderView(); }
 function _capChartsHTML(roster){
   var items=capItems().filter(function(p){return projCat(p)!=='overhead';});
   var data=items.map(function(p){var c=projCat(p),fte=capItemFTER(roster,p.id),cost=capItemCostR(roster,p.id),rev=capItemRevenue(p),counts=(c==='project')||(c==='initiative'&&fte>0);return {name:p.name||'',profit:(counts?rev:0)-cost};}).sort(function(a,b){return b.profit-a.profit;});
@@ -2504,6 +2536,126 @@ function _capChartsHTML(roster){
     +'<text x="'+cx+'" y="'+(cy+17)+'" text-anchor="middle" font-size="9" fill="#64748b">utilized</text></svg>';
   return '<div class="cap-charts"><div class="cap-chart"><div class="cap-chart-h">Profit by project / initiative</div>'+bar+'</div>'
     +'<div class="cap-chart" style="flex:0 0 180px;text-align:center"><div class="cap-chart-h">Utilization</div>'+donut+'<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+t.benchFTE+' FTE bench</div></div></div>';
+}
+/* ── CAPACITY PLANNING · Projections sub-tab ──
+   Pipeline-aware monthly forecast from the current scenario through Dec of next
+   calendar year. Base run-rate = active projects + staffed initiatives + scenario
+   payroll (held flat). Opportunities ramp in at their closeDate, contributing
+   potential/12 per month, weighted by a win-probability (won opps count fully,
+   lost opps excluded). Nothing here touches live data. */
+var CAP_MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function capProjMonths(){
+  var now=new Date(),y=now.getFullYear(),m=now.getMonth(),endY=y+1,arr=[];
+  while(y<endY||(y===endY&&m<=11)){ arr.push({y:y,m:m}); if(++m>11){m=0;y++;} }
+  return arr;
+}
+function capProjData(roster,probPct){
+  var prob=Math.max(0,Math.min(100,Number(probPct)||0))/100;
+  var items=capItems(),baseRev=0;
+  items.forEach(function(p){var c=projCat(p);
+    if(c==='project')baseRev+=capItemRevenue(p);
+    else if(c==='initiative'){ if(capItemFTER(roster,p.id)>0)baseRev+=capItemRevenue(p); }
+  });
+  var payroll=roster.reduce(function(s,pn){return s+(Number(pn.cost)||0);},0);
+  var opps=(D.projects||[]).filter(function(p){return projCat(p)==='opportunity';});
+  var noDate=0,modeled=0;
+  opps.forEach(function(o){
+    var st=(o.status||'').toLowerCase(),stg=(o.stage||'').toLowerCase();
+    if(stg==='lost'||st==='closed lost')return;
+    if(!o.closeDate){noDate++;return;}
+    modeled++;
+  });
+  var cum=0,rows=capProjMonths().map(function(mo){
+    var oppRev=0;
+    opps.forEach(function(o){
+      var st=(o.status||'').toLowerCase(),stg=(o.stage||'').toLowerCase();
+      if(stg==='lost'||st==='closed lost')return;
+      if(!o.closeDate)return;
+      var cd=new Date(o.closeDate);if(isNaN(cd))return;
+      var live=mo.y>cd.getFullYear()||(mo.y===cd.getFullYear()&&mo.m>=cd.getMonth());
+      if(!live)return;
+      var won=stg==='won'||st==='closed won';
+      oppRev+=((Number(o.potential)||0)/12)*(won?1:prob);
+    });
+    var rev=baseRev+oppRev,profit=rev-payroll;cum+=profit;
+    return {y:mo.y,m:mo.m,baseRev:baseRev,oppRev:oppRev,rev:rev,payroll:payroll,profit:profit,cum:cum};
+  });
+  return {rows:rows,baseRev:baseRev,payroll:payroll,noDate:noDate,modeled:modeled};
+}
+function capSetProjProb(v){ _capProjProb=Math.max(0,Math.min(100,Number(v)||0)); renderView(); }
+function _capYearTotals(rows,yr){
+  var r={revenue:0,payroll:0,profit:0,months:0};
+  rows.forEach(function(x){ if(x.y!==yr)return; r.revenue+=x.rev;r.payroll+=x.payroll;r.profit+=x.profit;r.months++; });
+  r.margin=r.revenue?Math.round(r.profit/r.revenue*100):0;
+  return r;
+}
+function _capProjHTML(roster){
+  var d=capProjData(roster,_capProjProb),rows=d.rows;
+  if(!rows.length)return '<div class="empty-msg">No months to project.</div>';
+  var presets=[0,25,50,75,100];
+  var ctl='<div class="cap-proj-ctl">'
+    +'<label>Pipeline win&nbsp;probability</label>'
+    +'<input type="range" min="0" max="100" step="5" value="'+_capProjProb+'" oninput="capSetProjProb(this.value)">'
+    +'<span class="cap-proj-prob">'+_capProjProb+'%</span>'
+    +presets.map(function(p){return '<button class="cap-proj-chip'+(p===_capProjProb?' on':'')+'" onclick="capSetProjProb('+p+')">'+(p===0?'No pipeline':p===100?'Best case':p+'%')+'</button>';}).join('')
+    +'</div>';
+  // annual roll-up cards
+  var years=[];rows.forEach(function(r){if(years.indexOf(r.y)<0)years.push(r.y);});
+  var yrCards=years.map(function(yr){
+    var t=_capYearTotals(rows,yr),mr=rows.filter(function(x){return x.y===yr;});
+    var span=mr.length?CAP_MONTHS[mr[0].m]+'–'+CAP_MONTHS[mr[mr.length-1].m]+' '+yr+' · '+t.months+' mo':'';
+    return '<div class="cap-yr"><div class="cap-yr-yr">'+yr+(t.months<12?' (partial year)':'')+'</div><div class="cap-yr-sub">'+span+'</div>'
+      +'<div class="cap-yr-grid">'
+      +'<div class="cap-yr-m"><span class="k">Revenue</span><span class="v">'+fmt(t.revenue)+'</span></div>'
+      +'<div class="cap-yr-m"><span class="k">Payroll</span><span class="v">'+fmt(t.payroll)+'</span></div>'
+      +'<div class="cap-yr-m"><span class="k">Profit</span><span class="v '+(t.profit>=0?'cap-pos':'cap-neg')+'">'+fmt(t.profit)+'</span></div>'
+      +'<div class="cap-yr-m"><span class="k">Margin</span><span class="v">'+t.margin+'%</span></div>'
+      +'</div></div>';
+  }).join('');
+  // monthly table
+  var body=rows.map(function(r,i){
+    var yrEnd=(i<rows.length-1&&rows[i+1].y!==r.y);
+    return '<tr'+(yrEnd?' class="yr-end"':'')+'><td class="mo">'+CAP_MONTHS[r.m]+" '"+(r.y%100)+'</td>'
+      +'<td>'+fmt(r.rev)+'</td>'
+      +'<td>'+(r.oppRev?'<span class="cap-pos">'+fmt(r.oppRev)+'</span>':'—')+'</td>'
+      +'<td>'+fmt(r.payroll)+'</td>'
+      +'<td class="'+(r.profit>=0?'cap-pos':'cap-neg')+'">'+fmt(r.profit)+'</td>'
+      +'<td class="'+(r.cum>=0?'cap-pos':'cap-neg')+'">'+fmt(r.cum)+'</td></tr>';
+  }).join('');
+  var tbl='<div class="cap-proj-tbl-wrap"><table class="cap-proj-tbl"><thead>'
+    +'<tr><th class="mo">Month</th><th>Revenue</th><th>of which pipeline</th><th>Payroll</th><th>Profit</th><th>Cumulative profit</th></tr></thead>'
+    +'<tbody>'+body+'</tbody></table></div>';
+  var note='<div class="cap-proj-note">Projection starts this month and runs through Dec '+rows[rows.length-1].y+'. '
+    +'Active projects + staffed initiatives form a flat monthly run-rate; payroll reflects the current sandbox roster (add hypothetical hires/prospects in the Sandbox tab to model new cost). '
+    +d.modeled+' opportunit'+(d.modeled===1?'y is':'ies are')+' ramped in at their close date'+(_capProjProb<100?(' at '+_capProjProb+'% win probability'):' at full value')+(d.noDate?'; '+d.noDate+' opportunit'+(d.noDate===1?'y was':'ies were')+' excluded for having no close date':'')+'.</div>';
+  return ctl+'<div class="cap-chart" style="margin-bottom:14px"><div class="cap-chart-h">Cumulative revenue &amp; profit through Dec '+rows[rows.length-1].y+'</div>'+_capProjChart(rows)+'</div>'
+    +'<div class="cap-yr-cards">'+yrCards+'</div>'+tbl+note;
+}
+function _capProjChart(rows){
+  var w=760,h=210,padL=64,padR=14,padT=12,padB=30,n=rows.length;
+  var cumRev=0,pts=rows.map(function(r){cumRev+=r.rev;return {rev:cumRev,profit:r.cum,y:r.y,m:r.m};});
+  var vals=pts.reduce(function(a,p){a.push(p.rev,p.profit);return a;},[0]);
+  var maxV=Math.max.apply(null,vals),minV=Math.min.apply(null,vals);
+  if(maxV===minV)maxV=minV+1;
+  var plotW=w-padL-padR,plotH=h-padT-padB;
+  var xFor=function(i){return padL+(n<=1?0:i/(n-1)*plotW);};
+  var yFor=function(v){return padT+(maxV-v)/(maxV-minV)*plotH;};
+  var line=function(key,color){return '<polyline fill="none" stroke="'+color+'" stroke-width="2" points="'+pts.map(function(p,i){return xFor(i)+','+(Math.round(yFor(p[key])*10)/10);}).join(' ')+'"/>';};
+  // zero baseline
+  var zero=(minV<0&&maxV>0)?'<line x1="'+padL+'" y1="'+yFor(0)+'" x2="'+(w-padR)+'" y2="'+yFor(0)+'" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="3 3"/><text x="'+(padL-6)+'" y="'+(yFor(0)+3)+'" text-anchor="end" font-size="9" fill="#94a3b8">$0</text>':'';
+  // y axis max/min labels
+  var yLab='<text x="'+(padL-6)+'" y="'+(padT+4)+'" text-anchor="end" font-size="9" fill="#64748b">'+fmt(maxV)+'</text>'
+    +'<text x="'+(padL-6)+'" y="'+(h-padB+3)+'" text-anchor="end" font-size="9" fill="#64748b">'+fmt(minV)+'</text>';
+  // x labels: first month of each year + last
+  var xLab=pts.map(function(p,i){
+    var first=(i===0)||(pts[i-1].y!==p.y),last=(i===n-1);
+    if(!first&&!last)return '';
+    return '<text x="'+xFor(i)+'" y="'+(h-padB+16)+'" text-anchor="'+(last&&!first?'end':'middle')+'" font-size="9" fill="#64748b">'+CAP_MONTHS[p.m]+" '"+(p.y%100)+'</text>';
+  }).join('');
+  var leg='<g font-size="10"><rect x="'+(w-180)+'" y="2" width="10" height="10" fill="#C5A55A"/><text x="'+(w-166)+'" y="11" fill="#475569">Cumulative revenue</text></g>'
+    +'<g font-size="10"><rect x="'+(w-180)+'" y="16" width="10" height="10" fill="#2D6A4F"/><text x="'+(w-166)+'" y="25" fill="#475569">Cumulative profit</text></g>';
+  return '<svg width="100%" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="xMinYMin meet" style="max-height:'+h+'px">'
+    +zero+yLab+xLab+leg+line('rev','#C5A55A')+line('profit','#2D6A4F')+'</svg>';
 }
 function capSetPct(pid,projId,val){
   if(!CAP)return;var person=CAP.roster.find(function(x){return x.id===pid;});if(!person)return;
