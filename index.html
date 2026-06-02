@@ -622,6 +622,44 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
   .mdl table{display:block;overflow-x:auto;white-space:nowrap;}
   .pd-tabgroups{gap:6px 10px;}
 }
+/* ── Capacity Planning ── */
+.cap-kpis{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
+.cap-kpi{flex:1;min-width:120px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:9px 12px;}
+.cap-kpi-l{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);font-weight:700;}
+.cap-kpi-v{font-size:18px;font-weight:800;color:var(--navy);margin-top:2px;}
+.cap-delta{font-size:11px;font-weight:700;margin-left:4px;}
+.cap-delta.good{color:var(--green);}
+.cap-delta.bad{color:var(--red);}
+.cap-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-bottom:14px;}
+.cap-card{background:#fff;border:1px solid var(--border);border-left:3px solid #2D6A4F;border-radius:8px;padding:9px 11px;}
+.cap-card-h{display:flex;justify-content:space-between;align-items:baseline;gap:6px;}
+.cap-card-name{font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cap-card-cat{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;flex-shrink:0;}
+.cap-card-row{display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);margin-top:4px;}
+.cap-pos{color:var(--green);font-weight:700;}
+.cap-neg{color:var(--red);font-weight:700;}
+.cap-matrix-wrap{overflow:auto;max-height:62vh;border:1px solid var(--border);border-radius:8px;background:#fff;}
+.cap-matrix{border-collapse:collapse;font-size:11px;width:max-content;min-width:100%;}
+.cap-matrix th,.cap-matrix td{border:1px solid #eef2f7;padding:3px 5px;text-align:center;}
+.cap-matrix thead th{position:sticky;top:0;background:#f1f5f9;z-index:2;font-size:10px;}
+.cap-col{max-width:90px;}
+.cap-sticky{position:sticky;left:0;background:#fff;text-align:left!important;z-index:1;min-width:170px;box-shadow:1px 0 0 #e2e8f0;}
+.cap-matrix thead .cap-sticky{z-index:3;background:#f1f5f9;}
+.cap-person{font-size:12px;font-weight:700;}
+.cap-person-sub{font-size:10px;color:var(--text-muted);}
+.cap-ghost{font-size:8px;background:#7C5CBF;color:#fff;padding:1px 5px;border-radius:8px;text-transform:uppercase;}
+.cap-cell{width:48px;border:1px solid var(--border);border-radius:4px;padding:2px 3px;text-align:center;font-size:11px;}
+.cap-cell.has{background:rgba(45,106,79,0.1);font-weight:700;}
+.cap-alloc{font-size:11px;font-weight:700;}
+.cap-alloc.ok{color:var(--text-secondary);}
+.cap-alloc.full{color:var(--green);}
+.cap-alloc.bad{color:var(--red);}
+.cap-bar{height:4px;background:#eef2f7;border-radius:2px;margin-top:2px;overflow:hidden;}
+.cap-bar-fill{height:100%;}
+.cap-bar-fill.ok{background:#94a3b8;}
+.cap-bar-fill.full{background:var(--green);}
+.cap-bar-fill.bad{background:var(--red);}
+.cap-foot td{background:#f8fafc;font-weight:700;font-size:10px;}
 .tpl-card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px;border-left:3px solid #7C3AED;}
 .tpl-card-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;}
 .tpl-card-name{font-size:13px;font-weight:700;}
@@ -837,6 +875,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
       <button class="tab" id="tabProp" onclick="switchTab('prop')">Proposals</button>
       <button class="tab" id="tabOver" onclick="switchTab('over')">Overhead</button>
       <button class="tab" id="tabRes" onclick="switchTab('res')">Resources View</button>
+      <button class="tab" id="tabCap" onclick="switchTab('cap')">Capacity Planning</button>
       <button class="tab" id="tabClass" onclick="switchTab('class')">Classification View</button>
       <button class="tab" id="tabPlan" onclick="switchTab('plan')">COE Plan</button>
       <button class="tab" id="tabPTask" onclick="switchTab('ptask')">Project Tasks</button>
@@ -877,6 +916,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 var STORE_KEY='cf_orgchart_v2';
 var PALETTE=['#2D6A4F','#C5A55A','#7C5CBF','#D97706','#546478','#0D9488','#DC2626','#2563EB','#7C3AED','#059669','#B45309','#6366F1'];
 var D,viewMode='org',collState={},dragInfo=null,MS_REG={},adminTab='skills';
+var CAP=null;  /* Capacity Planning non-destructive sandbox: {name, roster:[...], baseline:{...}} */
 var syncing=false,saveQueued=false;
 
 function defaultData(){return{
@@ -1898,7 +1938,7 @@ document.getElementById('statsBar').innerHTML=[
 {l:'Skills',v:D.skillsets.length,u:'defined'},{l:'Reassess',v:fl,u:'flagged',w:fl>0},{l:'Over-alloc',v:oa,u:'people',w:oa>0}
 ].map(function(s){return '<div class="st'+(s.w?' warn':'')+'"><div class="st-l">'+s.l+'</div><div class="st-v'+(s.w?' wv':'')+'">'+s.v+'<span class="st-u">'+s.u+'</span></div></div>';}).join('');}
 
-function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',recruit:'tabRecruit',init:'tabInit',opp:'tabOpp',prop:'tabProp',over:'tabOver',orgchart:'tabChart',res:'tabRes',class:'tabClass',plan:'tabPlan',ptask:'tabPTask'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
+function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',recruit:'tabRecruit',init:'tabInit',opp:'tabOpp',prop:'tabProp',over:'tabOver',orgchart:'tabChart',res:'tabRes',cap:'tabCap',class:'tabClass',plan:'tabPlan',ptask:'tabPTask'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
 
 function cardHTML(m,did){
 var dept=D.departments.find(function(d){return d.id===did;});
@@ -2284,8 +2324,114 @@ function renderView(){
   else if(viewMode==='class')html=renderClassificationView(q);
   else if(viewMode==='recruit')html=renderRecruitView(q);
   else if(viewMode==='prop')html=renderProposalsView(q);
+  else if(viewMode==='cap')html=renderCapacityView(q);
   else html=renderResourcesView(q);
   document.getElementById('mainContent').innerHTML=html;
+}
+
+/* ── CAPACITY PLANNING (Phase 1) ── non-destructive what-if sandbox over the
+   allocation model. Edits live only in CAP.roster until Apply-to-live. */
+function capBuildRoster(){
+  return allM().map(function(m){
+    return {id:m.id,name:m.name,role:m.role||'',cost:Number(m.cost)||0,_deptName:m._dn,_origin:'member',
+      projects:(m.projects||[]).map(function(x){return (typeof x==='object')?{id:x.id,pct:Number(x.pct)||0,clinId:x.clinId}:{id:x,pct:100};})};
+  });
+}
+function capEnter(){ if(!CAP){var r=capBuildRoster();CAP={name:'Working scenario',roster:r,baseline:capTotals(r)}; } }
+function capReset(){ CAP=null;capEnter();toast('Scenario reset to live data.','info');renderView(); }
+function capItems(){ return (D.projects||[]).filter(function(p){var c=projCat(p);return c==='project'||c==='initiative'||c==='overhead';}); }
+function capItemRevenue(p){ var c=projCat(p); if(c==='project')return Number(p.revenue)||0; if(c==='initiative')return Number(p.targetRevenue)||0; return 0; }
+function capAllocR(person){ return (person.projects||[]).reduce(function(s,x){return s+(Number(x.pct)||0);},0); }
+function capItemCostR(roster,projId){ return roster.reduce(function(s,pn){var e=(pn.projects||[]).find(function(x){return x.id===projId;});return s+(e?pn.cost*(Number(e.pct)||0)/100:0);},0); }
+function capItemFTER(roster,projId){ return roster.reduce(function(s,pn){var e=(pn.projects||[]).find(function(x){return x.id===projId;});return s+(e?(Number(e.pct)||0)/100:0);},0); }
+function capTotals(roster){
+  var items=capItems(),revenue=0;
+  items.forEach(function(p){var c=projCat(p);
+    if(c==='project')revenue+=capItemRevenue(p);
+    else if(c==='initiative'){ if(capItemFTER(roster,p.id)>0)revenue+=capItemRevenue(p); }   // initiatives count only when staffed (projected)
+  });
+  var payroll=roster.reduce(function(s,pn){return s+(Number(pn.cost)||0);},0);
+  var allocatedCost=items.reduce(function(s,p){return s+capItemCostR(roster,p.id);},0);
+  var over=roster.filter(function(pn){return capAllocR(pn)>100;}).length;
+  var benchFTE=roster.reduce(function(s,pn){return s+Math.max(0,100-capAllocR(pn))/100;},0);
+  return {revenue:revenue,payroll:payroll,profit:revenue-payroll,margin:revenue?Math.round((revenue-payroll)/revenue*100):0,
+    util:payroll?Math.round(allocatedCost/payroll*100):0,benchFTE:Math.round(benchFTE*10)/10,over:over,headcount:roster.length};
+}
+function _capDelta(cur,base,goodUp,money){
+  var d=cur-base; if(!d)return '';
+  var good=(d>0)===goodUp; var arrow=d>0?'▲':'▼';
+  var val=money?fmt(Math.abs(d)):(Math.round(Math.abs(d)*10)/10);
+  return ' <span class="cap-delta '+(good?'good':'bad')+'">'+arrow+' '+val+'</span>';
+}
+function renderCapacityView(q){
+  if(!canSee('cap'))return '<div class="empty-msg">No access.</div>';
+  capEnter();
+  var roster=CAP.roster, t=capTotals(roster), b=CAP.baseline, items=capItems();
+  // KPI bar
+  var kpis=[
+    {l:'Projected Revenue',v:fmt(t.revenue),d:_capDelta(t.revenue,b.revenue,true,true)},
+    {l:'Payroll',v:fmt(t.payroll),d:_capDelta(t.payroll,b.payroll,false,true)},
+    {l:'Profit',v:fmt(t.profit),d:_capDelta(t.profit,b.profit,true,true)},
+    {l:'Margin',v:t.margin+'%',d:_capDelta(t.margin,b.margin,true,false)},
+    {l:'Utilization',v:t.util+'%',d:_capDelta(t.util,b.util,true,false)},
+    {l:'Bench (FTE)',v:t.benchFTE,d:_capDelta(t.benchFTE,b.benchFTE,false,false)},
+    {l:'Over-allocated',v:t.over,d:_capDelta(t.over,b.over,false,false)}
+  ];
+  var kpiBar='<div class="cap-kpis">'+kpis.map(function(k){return '<div class="cap-kpi"><div class="cap-kpi-l">'+k.l+'</div><div class="cap-kpi-v">'+k.v+k.d+'</div></div>';}).join('')+'</div>';
+  // Per-item profitability cards
+  var cards=items.map(function(p){
+    var c=projCat(p),fte=capItemFTER(roster,p.id),cost=capItemCostR(roster,p.id),rev=capItemRevenue(p);
+    var staffed=fte>0, counts=(c==='project')||(c==='initiative'&&staffed);
+    var prof=(counts?rev:0)-cost, margin=(counts&&rev)?Math.round(prof/rev*100):null;
+    var accent=c==='project'?'#2D6A4F':c==='initiative'?'#7C5CBF':'#546478';
+    return '<div class="cap-card" style="border-left-color:'+accent+'">'
+      +'<div class="cap-card-h"><span class="cap-card-name" title="'+esc(p.name)+'">'+esc(p.name)+'</span><span class="cap-card-cat" style="color:'+accent+'">'+esc(c)+'</span></div>'
+      +'<div class="cap-card-row"><span>'+(Math.round(fte*100)/100)+' FTE</span><span>'+fmt(cost)+' cost</span></div>'
+      +'<div class="cap-card-row"><span>'+(c==='overhead'?'—':fmt(rev))+(c==='initiative'?(staffed?' rev':' (unstaffed)'):'')+'</span>'
+      +(c!=='overhead'?'<span class="'+(prof>=0?'cap-pos':'cap-neg')+'">'+fmt(prof)+(margin!==null?' · '+margin+'%':'')+'</span>':'<span></span>')+'</div>'
+      +'</div>';
+  }).join('');
+  // Allocation matrix (people × items), editable %
+  var head='<tr><th class="cap-sticky">Person</th>'+items.map(function(p){return '<th class="cap-col" title="'+esc(p.name)+'">'+esc((p.name||'').slice(0,14))+(p.name.length>14?'…':'')+'</th>';}).join('')+'<th>Alloc</th></tr>';
+  var rows=roster.map(function(pn){
+    var alloc=capAllocR(pn),over=alloc>100,full=alloc===100;
+    var cells=items.map(function(p){
+      var e=(pn.projects||[]).find(function(x){return x.id===p.id;});var v=e?(Number(e.pct)||0):'';
+      return '<td><input class="cap-cell'+(v?' has':'')+'" type="number" min="0" max="100" step="5" value="'+v+'" onchange="capSetPct(\''+pn.id+'\',\''+p.id+'\',this.value)"></td>';
+    }).join('');
+    var barCls=over?'bad':full?'full':'ok';
+    return '<tr><td class="cap-sticky"><div class="cap-person">'+esc(pn.name)+(pn._origin!=='member'?' <span class="cap-ghost">'+esc(pn._origin)+'</span>':'')+'</div><div class="cap-person-sub">'+esc(pn.role||pn._deptName||'')+' · '+fmt(pn.cost)+'/mo</div></td>'
+      +cells
+      +'<td><div class="cap-alloc '+barCls+'">'+alloc+'%</div><div class="cap-bar"><div class="cap-bar-fill '+barCls+'" style="width:'+Math.min(100,alloc)+'%"></div></div></td></tr>';
+  }).join('');
+  var footFTE='<tr class="cap-foot"><td class="cap-sticky">FTE</td>'+items.map(function(p){return '<td>'+(Math.round(capItemFTER(roster,p.id)*100)/100||'')+'</td>';}).join('')+'<td></td></tr>';
+  var matrix='<div class="cap-matrix-wrap"><table class="cap-matrix"><thead>'+head+'</thead><tbody>'+rows+footFTE+'</tbody></table></div>';
+  var toolbar='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px">'
+    +'<div><div style="font-size:18px;font-weight:800">Capacity Planning <span style="font-size:12px;font-weight:600;color:var(--text-muted)">· what-if sandbox</span></div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Edit allocation % to move people across projects &amp; initiatives. Nothing changes live data until you Apply. Initiatives count toward revenue only when staffed.</div></div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-sec btn-sm" onclick="capReset()">↺ Reset to live</button>'
+    +(can('globals')?'<button class="btn btn-gold btn-sm" onclick="capApply()">✓ Apply to live…</button>':'')+'</div></div>';
+  return '<div style="max-width:1320px;margin:0 auto">'+toolbar+kpiBar
+    +'<div class="cap-cards">'+cards+'</div>'
+    +matrix+'</div>';
+}
+function capSetPct(pid,projId,val){
+  if(!CAP)return;var person=CAP.roster.find(function(x){return x.id===pid;});if(!person)return;
+  var v=Math.max(0,Math.min(100,Number(val)||0));
+  var e=(person.projects||[]).find(function(x){return x.id===projId;});
+  if(v<=0)person.projects=(person.projects||[]).filter(function(x){return x.id!==projId;});
+  else if(e)e.pct=v;
+  else (person.projects=person.projects||[]).push({id:projId,pct:v});
+  renderView();
+}
+function capApply(){
+  if(!CAP)return;
+  if(!confirm('Apply this scenario\'s allocations to LIVE data?\n\nThis overwrites current project allocations for everyone in the org chart. (Hypothetical hires/prospects are not written.) Take an Export backup first if unsure.'))return;
+  CAP.roster.forEach(function(pn){
+    if(pn._origin!=='member')return;
+    var f=findMember(pn.id);if(f&&f.m){f.m.projects=(pn.projects||[]).filter(function(x){return (Number(x.pct)||0)>0;}).map(function(x){return {id:x.id,pct:Number(x.pct)||0,clinId:x.clinId};});}
+  });
+  save();CAP.baseline=capTotals(CAP.roster);renderView();renderStats();toast('Scenario applied to live allocations.','success');
 }
 
 /* ── RESOURCES VIEW ── */
@@ -6784,7 +6930,7 @@ function delAccount(id){if(!can('accounts'))return;if(ME&&ME.id===id){alert('You
 /* ── AUTH & PERMISSIONS (client-side roles only — not API security) ── */
 var AUTH_USER='khaja@communityforce.com',AUTH_PASS='Namtra_CF27',DEFAULT_PW='CommunityForce2026';
 var ME=null;
-var SECTIONS=[{k:'org',tab:'tabOrg',l:'Department View'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources View'},{k:'class',tab:'tabClass',l:'Classification View'},{k:'plan',tab:'tabPlan',l:'COE Plan'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'}];
+var SECTIONS=[{k:'org',tab:'tabOrg',l:'Department View'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources View'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'class',tab:'tabClass',l:'Classification View'},{k:'plan',tab:'tabPlan',l:'COE Plan'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'}];
 function emailFromName(name){var clean=(name||'').replace(/\(.*?\)/g,'').replace(/[^A-Za-z .\-]/g,'').trim();var parts=clean.split(/\s+/).filter(Boolean);var local=parts.length>=2?(parts[0]+'.'+parts[parts.length-1]):(parts[0]||'user');return local.toLowerCase().replace(/[^a-z0-9.]/g,'')+'@communityforce.com';}
 function authMigrate(){
   if(!D.accounts)D.accounts=[];
