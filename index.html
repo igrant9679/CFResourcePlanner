@@ -2960,7 +2960,7 @@ function capProjData(roster,multPct,opts){
     var baseRev=0;
     items.forEach(function(p){var c=projCat(p);
       if(c==='project'){var rev=capInWindow(p,mo.y,mo.m)?capProjRevAt(p,mo.y,mo.m):0;
-        if(p.id==='p_c1fams'&&opts.c1target!=null&&rev===100000)rev=opts.c1target;  // scenario C1FAMS maturity override
+        if(p.id==='p_c1fams'&&opts.c1target!=null&&opts.c1target!==100000&&rev>=100000)rev=opts.c1target;  // only Conservative/Overperformance deliberately change C1FAMS maturity; Base & edits stay authoritative
         baseRev+=rev;}
       else if(c==='initiative'){ if(capItemFTER(active,p.id)>0&&capInWindow(p,mo.y,mo.m))baseRev+=capProjRevAt(p,mo.y,mo.m); }
     });
