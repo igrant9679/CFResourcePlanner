@@ -1264,14 +1264,7 @@ function proformaSeedV4(){
       history:[{year:'2024 (Full Year)',revenue:11400000,netIncome:884781,opCashFlow:744636,endingCash:1783889},
         {year:'2025 (Full Year Est.)',revenue:8000000,netIncome:null,opCashFlow:null,endingCash:584000},
         {year:'2026 YTD (through May)',revenue:null,netIncome:null,opCashFlow:null,endingCash:1100000}],
-      cashTrajectory:[{date:'2025-12-31',cash:584000,delta:null,status:'Actual',notes:'FY2025 closing'},
-        {date:'2026-05-31',cash:1100000,delta:103000,status:'Actual',notes:'Confirmed cash position'},
-        {date:'2026-06-30',cash:1113295,delta:13295,status:'Projected',notes:'BCLM+FAMS+C1FAMS+Software'},
-        {date:'2026-09-30',cash:1153180,delta:13295,status:'Projected',notes:'End of FAMS contract'},
-        {date:'2026-12-31',cash:1272130,delta:39650,status:'Projected',notes:'C1FAMS at $100K target'},
-        {date:'2027-03-31',cash:1391080,delta:39650,status:'Projected',notes:'Approaching gate'},
-        {date:'2027-06-30',cash:1510030,delta:39650,status:'Projected',notes:'✅ CASH GATE MET ($1.5M)'},
-        {date:'2027-08-14',cash:1569505,delta:39650,status:'Projected',notes:'BCLM extension end'}],
+      cashTrajectory:[{date:'2026-05-31',cash:1100000,delta:103000,status:'Actual',notes:'Confirmed cash position'}],
       gates:[{name:'Sterling debt restructured',status:'✅ COMPLETE',projectedClose:'Filed March 2026',notes:'2-yr extension to 6/30/29, quarterly NAV-indexed payments'},
         {name:'Cash balance > $1.5M',status:'⏳ TRACKING',projectedClose:'~June 2027 (base case)',notes:'Currently $1.10M; Sterling payment quantification could shift timing'},
         {name:'6 consecutive months positive cash flow',status:'⏳ ON TRACK',projectedClose:'Q3 2026',notes:'Monthly profit targets met through May 2026'}]},
@@ -1459,6 +1452,18 @@ function proformaMigrate(){
       });
     }
     D.proformaV4Reorg3=true;
+  }
+  // One-time: Cash Position keeps only Actual rows dated 2026+ (drop seeded Projected
+  // rows and the 2025 entry). Future projected figures come from Capacity Planning.
+  if(!D.proformaCashTrim){
+    if(D.proforma&&D.proforma.financials&&Array.isArray(D.proforma.financials.cashTrajectory)){
+      D.proforma.financials.cashTrajectory=D.proforma.financials.cashTrajectory.filter(function(r){
+        if(/projected/i.test(r.status||''))return false;
+        var d=new Date(r.date);if(!isNaN(d)&&d.getFullYear()<2026)return false;
+        return true;
+      });
+    }
+    D.proformaCashTrim=true;
   }
 }
 /* Actuals "new cost" vendors that are payment vehicles for people already on payroll
@@ -3000,7 +3005,12 @@ function capFixedBurden(){
   if(_capBurdenOverride!=null)return _capBurdenOverride+extra;
   return proformaDebtService()+extra;
 }
-function capOpeningCash(){ var P=D.proforma; return (P&&P.financials&&P.financials.openingCash)||0; }
+function capOpeningCash(){
+  var P=D.proforma; if(!P||!P.financials)return 0;
+  var acts=(P.financials.cashTrajectory||[]).filter(function(r){return /actual/i.test(r.status||'');});
+  if(acts.length){var c=Number(acts[acts.length-1].cash); if(!isNaN(c))return c;}   // opening = most recent actual cash
+  return Number(P.financials.openingCash)||0;
+}
 function capSetProjMult(v){ _capV4=null;_capProjMult=Math.max(0,Math.min(200,Number(v)||0)); renderView(); }
 function capSetV4(k){ _capV4=(k===_capV4?null:k); if(_capV4&&CAP_V4[_capV4]){_capProjMult=CAP_V4[_capV4].mult;} renderView(); }
 function capToggleCash(){ _capCashMode=!_capCashMode; renderView(); }
