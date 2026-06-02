@@ -579,6 +579,9 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .doss-pick{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;font-size:12px;cursor:pointer;}
 .doss-pick.have{opacity:.6;}
 .doss-pick input{margin-top:2px;flex-shrink:0;}
+.fm-checks{display:flex;flex-direction:column;gap:5px;max-height:38vh;overflow:auto;border:1px solid var(--border);border-radius:6px;padding:8px 10px;}
+.fm-check{display:flex;gap:8px;align-items:flex-start;font-size:12px;cursor:pointer;}
+.fm-check input{margin-top:2px;flex-shrink:0;}
 .cf-price-totals{margin-top:14px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;}
 .cf-price-totals>div{display:flex;flex-direction:column;font-size:12px;}
 .cf-price-totals>div>span{color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:.4px;}
@@ -605,6 +608,9 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .pd-tabgroup{display:flex;flex-direction:column;gap:3px;}
 .pd-tabgroup-lbl{font-size:9px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-muted);padding-left:2px;}
 .pd-tabgroup .pd-tabs{display:flex;gap:3px;flex-wrap:wrap;border:none;padding:0;margin:0;}
+.me-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:8px;}
+.me-tab{background:transparent;border:1px solid var(--border);border-radius:6px;padding:5px 11px;font-size:12px;font-weight:600;color:var(--text-secondary);cursor:pointer;}
+.me-tab.active{background:var(--navy,#16223C);color:#fff;border-color:var(--navy,#16223C);}
 /* ── Batch E: responsive pass ── */
 .och-h-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
 @media(max-width:768px){
@@ -1755,6 +1761,7 @@ function openFormModal(opts){
     if(f.type==='textarea')ctrl='<textarea class="fld-i" id="'+id+'" rows="'+(f.rows||4)+'" placeholder="'+esc(f.placeholder||'')+'">'+esc(f.value||'')+'</textarea>';
     else if(f.type==='select')ctrl='<select class="fld-sel" id="'+id+'">'+(f.options||[]).map(function(o){return '<option value="'+esc(o.value)+'"'+(String(f.value||'')===String(o.value)?' selected':'')+'>'+esc(o.label)+'</option>';}).join('')+'</select>';
     else if(f.type==='file')ctrl='<input type="file" id="'+id+'" class="fld-i"'+(f.accept?' accept="'+esc(f.accept)+'"':'')+'>';
+    else if(f.type==='checkboxes')ctrl='<div id="'+id+'" class="fm-checks">'+(f.options||[]).map(function(o){var on=(f.value||[]).indexOf(o.value)>-1;return '<label class="fm-check"><input type="checkbox" value="'+esc(o.value)+'" '+(on?'checked':'')+'> <span>'+esc(o.label)+'</span></label>';}).join('')+'</div>';
     else ctrl='<input class="fld-i" type="'+(f.type==='number'?'number':(f.type==='date'?'date':'text'))+'" id="'+id+'" value="'+esc(f.value!=null?f.value:'')+'" placeholder="'+esc(f.placeholder||'')+'">';
     return '<div class="fld">'+lbl+ctrl+(f.hint?'<div style="font-size:10px;color:var(--text-muted);margin-top:2px">'+esc(f.hint)+'</div>':'')+'</div>';
   }).join('');
@@ -1773,8 +1780,9 @@ function _formSubmit(){
   for(var i=0;i<flds.length;i++){
     var f=flds[i],el=document.getElementById('fm_'+f.key);if(!el)continue;
     if(f.type==='file'){files[f.key]=(el.files&&el.files[0])||null;vals[f.key]=files[f.key];}
+    else if(f.type==='checkboxes'){var sel=[];el.querySelectorAll('input[type=checkbox]:checked').forEach(function(c){sel.push(c.value);});vals[f.key]=sel;}
     else vals[f.key]=el.value;
-    if(f.required){var missing=(f.type==='file')?!files[f.key]:!(vals[f.key]&&String(vals[f.key]).trim());if(missing){_formStatus('“'+f.label+'” is required.');try{el.focus();}catch(_){}return;}}
+    if(f.required){var missing=(f.type==='file')?!files[f.key]:(f.type==='checkboxes')?!(vals[f.key]&&vals[f.key].length):!(vals[f.key]&&String(vals[f.key]).trim());if(missing){_formStatus('“'+f.label+'” is required.');try{el.focus();}catch(_){}return;}}
   }
   var r=_formCfg.onSubmit(vals,files,_formStatus);
   if(r!==false){closeModal('ovForm');}
@@ -2361,11 +2369,10 @@ function openTaskTemplatesManager(){
   openModal('ovTpl');
 }
 function tplAdd(){
-  var name=prompt('New task template name (e.g. "Perform Lead Generation"):');
-  if(!name||!name.trim())return;
-  if(!D.taskTemplates)D.taskTemplates=[];
-  D.taskTemplates.push({id:uid(),name:name.trim()});
-  save();openTaskTemplatesManager();
+  openFormModal({over:'Administration',title:'Add Task Template',submitLabel:'Add Template',
+    fields:[{key:'name',label:'Template name',type:'text',required:true,placeholder:'e.g. Perform Lead Generation'}],
+    onSubmit:function(v){if(!D.taskTemplates)D.taskTemplates=[];D.taskTemplates.push({id:uid(),name:v.name.trim()});save();openTaskTemplatesManager();}
+  });
 }
 function tplUpdateName(id,val){
   var t=(D.taskTemplates||[]).find(function(x){return x.id===id;});
@@ -2970,32 +2977,32 @@ function candDelInterview(candId,ivId){
 }
 function candHire(id){
   var c=D.candidates.find(function(x){return x.id===id;});if(!c)return;
-  if(c.status==='hired'){alert('This candidate is already marked Hired.');return;}
-  if(!confirm('Mark '+c.name+' as Hired?\n\nYou\'ll then be prompted to create a Department member entry pre-filled from their candidate data.'))return;
+  if(c.status==='hired'){toast(c.name+' is already marked Hired.','info');return;}
+  if(!confirm('Mark '+c.name+' as Hired? You can then optionally create a Department member pre-filled from their data.'))return;
   c.status='hired';
   if(c.offer)c.offer.state=c.offer.state||'Accepted';
-  candLog(id,'hired',{});
-  // Try to find a sensible department
-  var deptOpts=D.departments.map(function(d){return {id:d.id,name:d.name};});
-  var pickedDid=prompt('Department to add '+c.name+' to (type the name exactly, or leave blank to skip):\n\nAvailable: '+deptOpts.map(function(d){return d.name;}).join(' · '));
-  if(pickedDid){
-    var dept=D.departments.find(function(d){return d.name.toLowerCase()===pickedDid.toLowerCase();});
-    if(dept){
-      var monthlyCost=c.salaryK?Math.round(c.salaryK*1000/12):0;
-      var newM={id:uid(),name:c.name,role:'',cost:monthlyCost,badge:'',projects:[],skillsets:[],reportsTo:'',hub:false,sme:false,associate:false,proposal:false,recruiter:false,note:'Hired from candidate '+c.id,reassess:false,location:'',clearance:'',certifications:[],pastProjects:[],pastClients:[],attachments:[],resumeLink:''};
-      // Map clearance to existing list if matching
-      var clMatch=(D.clearances||[]).find(function(x){return x.name.toLowerCase()===(c.clearance||'').toLowerCase();});
-      if(clMatch)newM.clearance=clMatch.id;
-      // Move the resume attachment to the member
-      if(c.resume){newM.attachments.push({id:c.resume.id,name:c.resume.name,url:c.resume.url,type:'file',size:c.resume.size});}
-      dept.members.push(newM);
-      candLog(id,'member.created',{memberId:newM.id,deptId:dept.id});
-      alert('Created member entry for '+c.name+' in '+dept.name+'.');
-    } else {
-      alert('Department "'+pickedDid+'" not found. You can create the member manually in Department View.');
+  candLog(id,'hired',{});save();
+  var deptOpts=D.departments.map(function(d){return {value:d.id,label:d.name};});
+  openFormModal({over:'Recruiting',title:'Hire — Create Member (optional)',submitLabel:'Done',
+    intro:c.name+' is now Hired. Optionally create a Department member pre-filled from their candidate data (cost = salary ÷ 12, resume attached).',
+    fields:[{key:'dept',label:'Add to department',type:'select',options:[{value:'',label:'— skip, don\'t create a member —'}].concat(deptOpts)}],
+    onSubmit:function(v){
+      if(v.dept){
+        var dept=D.departments.find(function(d){return d.id===v.dept;});
+        if(dept){
+          var monthlyCost=c.salaryK?Math.round(c.salaryK*1000/12):0;
+          var newM={id:uid(),name:c.name,role:'',cost:monthlyCost,badge:'',projects:[],skillsets:[],reportsTo:'',hub:false,sme:false,associate:false,proposal:false,recruiter:false,note:'Hired from candidate '+c.id,reassess:false,location:'',clearance:'',certifications:[],pastProjects:[],pastClients:[],attachments:[],resumeLink:''};
+          var clMatch=(D.clearances||[]).find(function(x){return x.name.toLowerCase()===(c.clearance||'').toLowerCase();});
+          if(clMatch)newM.clearance=clMatch.id;
+          if(c.resume){newM.attachments.push({id:c.resume.id,name:c.resume.name,url:c.resume.url,type:'file',size:c.resume.size});}
+          dept.members.push(newM);
+          candLog(id,'member.created',{memberId:newM.id,deptId:dept.id});
+          toast('Created member entry for '+c.name+' in '+dept.name+'.','success');
+        }
+      }
+      save();openCandModal(c.recruitingId,id);
     }
-  }
-  save();openCandModal(c.recruitingId,id);
+  });
 }
 
 /* ── PROPOSALS MODULE (Phase A: foundation) ── */
@@ -3708,8 +3715,11 @@ function propTplSecField(tid,sid,field,val){
 function propTplSecPrompt(tid,sid){
   var t=(D.proposalTemplates||[]).find(function(x){return x.id===tid;});if(!t)return;
   var s=(t.sections||[]).find(function(x){return x.id===sid;});if(!s)return;
-  var p=prompt('Section AI prompt (used when source=ai or hybrid):',s.prompt||'');
-  if(p===null)return;s.prompt=p;save();
+  openFormModal({over:'Proposal Templates',title:'Section AI Prompt',submitLabel:'Save Prompt',
+    intro:'Per-section instruction Claude uses when this section\'s source is AI or Hybrid.',
+    fields:[{key:'prompt',label:'AI prompt for “'+s.title+'”',type:'textarea',rows:6,value:s.prompt||''}],
+    onSubmit:function(v){s.prompt=v.prompt;save();propTplEdit(tid);}
+  });
 }
 function propTplSecDel(tid,sid){
   if(!confirm('Delete this section?'))return;
@@ -3719,10 +3729,10 @@ function propTplSecDel(tid,sid){
 }
 function propTplSecAdd(tid){
   var t=(D.proposalTemplates||[]).find(function(x){return x.id===tid;});if(!t)return;
-  var ttl=prompt('Section title:');if(!ttl)return;
-  t.sections=t.sections||[];
-  t.sections.push({id:uid(),title:ttl.trim(),order:t.sections.length,required:false,source:'user-only',pageBudget:1,prompt:'',evidence:[]});
-  save();propTplEdit(tid);
+  openFormModal({over:'Proposal Templates',title:'Add Section',submitLabel:'Add Section',
+    fields:[{key:'title',label:'Section title',type:'text',required:true}],
+    onSubmit:function(v){t.sections=t.sections||[];t.sections.push({id:uid(),title:v.title.trim(),order:t.sections.length,required:false,source:'user-only',pageBudget:1,prompt:'',evidence:[]});save();propTplEdit(tid);}
+  });
 }
 
 /* ── NEW PROPOSAL: choice (upload RFP vs. manual) → extraction → confirm → create ── */
@@ -5353,27 +5363,33 @@ function pdRedTeamScore(propId,sectionId,criterion,score){
 }
 function pdAssignRedTeam(propId){
   var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
-  if(!p.opportunityId){alert('Link this proposal to an opportunity first — the red-team review task attaches to the opportunity.');return;}
-  var who=prompt('Reviewer names (comma-separated). Members will be auto-linked when their names match the org chart.','');
-  if(!who)return;
-  var dueDate=prompt('Due date (YYYY-MM-DD, optional):','');
-  var opp=D.projects.find(function(x){return x.id===p.opportunityId;});
-  var newAct={
-    id:uid(),kind:'project',projectId:p.opportunityId,programId:'',
-    task:'Task_'+((opp&&opp.name)||'').replace(/[^A-Za-z0-9]+/g,'').slice(0,40)+'_RedTeam',
-    subtask:'Red-Team Review · '+esc(p.title),
-    outline:'AI-generated section-by-section rubric is on the proposal\'s Red Team tab. Each reviewer scores Compliance/Win Themes/Clarity/Risk 1-5 per section.',
-    objective:'Submit scored rubric before submission.',phase:'Month 1',status:'todo',
-    start:'',dueDate:(dueDate||'').trim(),isMilestone:true,parentId:null,
-    pm:(opp&&opp.pm)||'',ownerText:who,owners:planResolveOwners(who),
-    updates:[],attachments:[],order:(D.activities||[]).length
-  };
-  D.activities=D.activities||[];D.activities.push(newAct);
-  p.redTeam.createdTaskId=newAct.id;
-  // Notify assigned reviewers
-  (newAct.owners||[]).forEach(function(mid){pushNotif(mid,'redteam-assigned','recruiting',p.opportunityId,'Red-team review assigned: '+p.title);});
-  p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'redteam.assigned',payload:{taskId:newAct.id,reviewers:who}});
-  save();renderProposalDetail(propId);
+  if(!p.opportunityId){toast('Link this proposal to an opportunity first — the red-team task attaches to it.','warn',4500);return;}
+  openFormModal({over:'Red Team',title:'Assign Reviewers',submitLabel:'Create Review Task',
+    intro:'Creates a Project Task on the linked opportunity. Reviewer names matching the org chart are auto-linked and notified.',
+    fields:[
+      {key:'who',label:'Reviewer names (comma-separated)',type:'text',required:true,placeholder:'e.g. Jane Doe, John Smith'},
+      {key:'dueDate',label:'Due date',type:'date'}
+    ],
+    onSubmit:function(v){
+      var who=v.who.trim();var dueDate=v.dueDate||'';
+      var opp=D.projects.find(function(x){return x.id===p.opportunityId;});
+      var newAct={
+        id:uid(),kind:'project',projectId:p.opportunityId,programId:'',
+        task:'Task_'+((opp&&opp.name)||'').replace(/[^A-Za-z0-9]+/g,'').slice(0,40)+'_RedTeam',
+        subtask:'Red-Team Review · '+p.title,
+        outline:'AI-generated section-by-section rubric is on the proposal\'s Red Team tab. Each reviewer scores Compliance/Win Themes/Clarity/Risk 1-5 per section.',
+        objective:'Submit scored rubric before submission.',phase:'Month 1',status:'todo',
+        start:'',dueDate:dueDate.trim(),isMilestone:true,parentId:null,
+        pm:(opp&&opp.pm)||'',ownerText:who,owners:planResolveOwners(who),
+        updates:[],attachments:[],order:(D.activities||[]).length
+      };
+      D.activities=D.activities||[];D.activities.push(newAct);
+      p.redTeam.createdTaskId=newAct.id;
+      (newAct.owners||[]).forEach(function(mid){pushNotif(mid,'redteam-assigned','recruiting',p.opportunityId,'Red-team review assigned: '+p.title);});
+      p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'redteam.assigned',payload:{taskId:newAct.id,reviewers:who}});
+      save();renderProposalDetail(propId);toast('Red-team review task created.','success');
+    }
+  });
 }
 
 /* ── PHASE F: EXPORT TO PRINT/PDF ── */
@@ -5551,20 +5567,18 @@ function wlSave(propId,status){
 function wlPromoteSections(propId){
   var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
   var tpl=(D.proposalTemplates||[]).find(function(t){return t.id===p.templateId;});
-  if(!tpl){alert('No template linked — can\'t promote.');return;}
+  if(!tpl){toast('No template linked — can\'t promote.','warn');return;}
   var sections=(p.sections||[]).filter(function(s){return (s.html||'').trim()&&(s.source==='ai'||s.source==='hybrid');});
-  if(!sections.length){alert('No AI-drafted sections to promote.');return;}
-  var picks=sections.map(function(s,i){return (i+1)+'. '+s.title;}).join('\n');
-  var input=prompt('Enter the numbers of sections to promote as winning examples in the template (e.g. "1,3,5"):\n\n'+picks);
-  if(!input)return;
-  var nums=input.split(',').map(function(s){return parseInt(s.trim(),10)-1;}).filter(function(n){return !isNaN(n)&&n>=0&&n<sections.length;});
-  if(!nums.length)return;
-  tpl.winningExamples=tpl.winningExamples||[];
-  nums.forEach(function(idx){
-    var s=sections[idx];
-    tpl.winningExamples.push({id:uid(),fromProposalId:propId,fromProposalTitle:p.title,sectionTitle:s.title,html:s.html,promotedAt:Date.now()});
+  if(!sections.length){toast('No AI-drafted sections to promote.','info');return;}
+  openFormModal({over:'Win/Loss',title:'Promote Winning Sections',submitLabel:'Promote Selected',
+    intro:'Selected sections become reusable winning examples on the template “'+tpl.name+'” — future drafts reference them.',
+    fields:[{key:'secs',label:'Sections to promote',type:'checkboxes',required:true,options:sections.map(function(s){return {value:s.id,label:s.title};})}],
+    onSubmit:function(v){
+      tpl.winningExamples=tpl.winningExamples||[];var n=0;
+      (v.secs||[]).forEach(function(sid){var s=sections.find(function(x){return x.id===sid;});if(s){tpl.winningExamples.push({id:uid(),fromProposalId:propId,fromProposalTitle:p.title,sectionTitle:s.title,html:s.html,promotedAt:Date.now()});n++;}});
+      save();toast('Promoted '+n+' section'+(n===1?'':'s')+' to “'+tpl.name+'”.','success');
+    }
   });
-  save();alert('Promoted '+nums.length+' section(s) to template "'+tpl.name+'" as winning examples. Future drafts of those sections will reference them.');
 }
 function wlAddCaseStudy(propId){
   var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
@@ -5878,26 +5892,33 @@ function candCopyKit(id){
 function candSummInterview(candId,ivId){
   var c=D.candidates.find(function(x){return x.id===candId;});if(!c)return;
   var iv=(c.interviews||[]).find(function(x){return x.id===ivId;});if(!iv)return;
-  var raw=prompt('Paste your raw interview notes (Claude will summarize and suggest an outcome).\n\nLeave blank to use the existing notes field.',iv.notes||'');
-  if(raw===null)return;
-  var notes=(raw||iv.notes||'').trim();if(!notes){alert('No notes to summarize.');return;}
-  var ctx=candCtx(c);
-  var sys='You summarize raw interview notes into a structured outcome. Output ONLY a JSON object inside a ```json``` block.';
-  var prompt='Summarize these interview notes for '+ctx.candidate.name+' on role "'+ctx.jd.title+'". Suggest an outcome: reject/consider/accept, with brief rationale. Be honest, not flattering.\n\nRaw notes:\n'+notes+'\n\nReturn:\n{"summary":"clean 2-4 sentence summary","suggestedOutcome":"reject|consider|accept","rationale":"one sentence","redFlags":["..."],"greenFlags":["..."]}';
-  fetch('/api/llm/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-    accountId:ME?ME.id:'',system:sys,messages:[{role:'user',content:prompt}],max_tokens:1500
-  })}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||('HTTP '+r.status));return j;});}).then(function(j){
-    var parsed=llmExtractJSON(j);
-    if(!parsed){alert('Could not parse summary.');return;}
-    var msg='AI Summary:\n\n'+parsed.summary+'\n\nSuggested outcome: '+parsed.suggestedOutcome+'\nRationale: '+parsed.rationale+'\n\nApply this summary to the interview notes (and optionally set the outcome to '+parsed.suggestedOutcome+')?';
-    if(confirm(msg)){
-      iv.notes=parsed.summary+'\n\n— suggested: '+parsed.suggestedOutcome+' · '+parsed.rationale;
-      if(['reject','consider','accept'].indexOf(parsed.suggestedOutcome)>-1){
-        if(!iv.outcome||confirm('Set outcome to "'+parsed.suggestedOutcome+'"?'))iv.outcome=parsed.suggestedOutcome;
-      }
-      candLog(candId,'ai.iv.summary',{ivId:ivId,outcome:parsed.suggestedOutcome});save();openCandModal(c.recruitingId,candId);
+  openFormModal({over:'Interview',title:'Summarize Interview Notes',submitLabel:'Summarize with AI',
+    intro:'Paste raw notes — Claude returns a clean summary and a suggested outcome you can apply.',
+    fields:[{key:'notes',label:'Raw interview notes',type:'textarea',rows:9,required:true,value:iv.notes||''}],
+    onSubmit:function(v,files,setStatus){
+      var notes=(v.notes||'').trim();if(!notes){setStatus('Enter some notes first.');return false;}
+      setStatus('Summarizing…');
+      var ctx=candCtx(c);
+      var sys='You summarize raw interview notes into a structured outcome. Output ONLY a JSON object inside a ```json``` block.';
+      var instr='Summarize these interview notes for '+ctx.candidate.name+' on role "'+ctx.jd.title+'". Suggest an outcome: reject/consider/accept, with brief rationale. Be honest, not flattering.\n\nRaw notes:\n'+notes+'\n\nReturn:\n{"summary":"clean 2-4 sentence summary","suggestedOutcome":"reject|consider|accept","rationale":"one sentence","redFlags":["..."],"greenFlags":["..."]}';
+      fetch('/api/llm/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        accountId:ME?ME.id:'',system:sys,messages:[{role:'user',content:instr}],max_tokens:1500
+      })}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||('HTTP '+r.status));return j;});}).then(function(j){
+        var parsed=llmExtractJSON(j);
+        if(!parsed){setStatus('Could not parse summary.');return;}
+        closeModal('ovForm');
+        var msg='AI Summary:\n\n'+parsed.summary+'\n\nSuggested outcome: '+parsed.suggestedOutcome+'\nRationale: '+parsed.rationale+'\n\nApply this summary to the interview notes (and set the outcome to '+parsed.suggestedOutcome+')?';
+        if(confirm(msg)){
+          iv.notes=parsed.summary+'\n\n— suggested: '+parsed.suggestedOutcome+' · '+parsed.rationale;
+          if(['reject','consider','accept'].indexOf(parsed.suggestedOutcome)>-1){
+            if(!iv.outcome||confirm('Set outcome to "'+parsed.suggestedOutcome+'"?'))iv.outcome=parsed.suggestedOutcome;
+          }
+          candLog(candId,'ai.iv.summary',{ivId:ivId,outcome:parsed.suggestedOutcome});save();openCandModal(c.recruitingId,candId);
+        }
+      }).catch(function(e){setStatus('Summary failed: '+e.message);});
+      return false;
     }
-  }).catch(function(e){alert('Summary failed: '+e.message);});
+  });
 }
 
 // 5) Email drafts
@@ -6175,38 +6196,53 @@ var clrOpts=_lookupOpts(m.clearance,D.clearances);
 var deptMvOpts=deptOptHTML(null,0,[]);
 document.getElementById('mdlEdit').innerHTML=
 '<div class="mdl-over">Edit Team Member</div><div class="mdl-title">'+esc(m.name)+'</div>'
-+'<div class="fld-row2">'+fT('e_name','Name',m.name)+fT('e_role','Role / Title',m.role)+'</div>'
-+'<div class="fld-row2">'+fN('e_cost','Monthly Cost ($)',m.cost)+fT('e_badge','Badge',m.badge||'')+'</div>'
-+'<div class="fld"><label class="fld-l">Current Department</label><div class="fld-i" style="background:var(--page-bg);font-weight:600;cursor:default">'+esc(dept.name)+'</div></div>'
-+'<div class="fld"><label class="fld-l" for="e_dept_mv">Move to Department</label><select class="fld-sel" id="e_dept_mv"><option value="">— keep in current dept —</option>'+deptMvOpts+'</select></div>'
-+'<div class="fld"><label class="fld-l" for="e_reports">Reports To</label><select class="fld-sel" id="e_reports"><option value="">— none —</option>'+names.map(function(n){return '<option value="'+esc(n)+'"'+(m.reportsTo===n?' selected':'')+'>'+esc(n)+'</option>';}).join('')+'</select></div>'
-+'<span class="fld-section-hdr">Projects &amp; Skills</span>'
-+'<div class="fld"><label class="fld-l">Assignments (Projects / Initiatives / Overhead)</label>'+msHTML('e_proj',m.projects||[],D.projects,'proj-chip','Add assignments...')+'<div id="e_proj_alloc"></div></div>'
-+'<div class="fld"><label class="fld-l">Skills</label>'+msHTML('e_skill',m.skillsets||[],D.skillsets,'skill-chip','Add skills...')+'</div>'
-+'<div class="fld"><label class="fld-l">Certifications</label>'+msHTML('e_cert',m.certifications||[],D.certifications,'cert-chip','Add certifications...')+'</div>'
-+'<span class="fld-section-hdr">Profile</span>'
-+'<div class="fld-row2"><div class="fld"><label class="fld-l" for="e_loc">Location</label><select class="fld-sel" id="e_loc">'+locOpts+'</select></div>'
-+'<div class="fld"><label class="fld-l" for="e_clr">Clearance</label><select class="fld-sel" id="e_clr">'+clrOpts+'</select></div></div>'
-+'<div class="fld"><label class="fld-l" for="e_resume">Resume (SharePoint Link)</label><input class="fld-i" id="e_resume" type="url" placeholder="https://..." value="'+esc(m.resumeLink||'')+'"></div>'
-+'<div class="fld"><label class="fld-l">Resume &amp; Files (upload Word/PDF or link)</label><div id="e_att_list">'+renderMemberAtt(mid)+'</div>'
-+'<div style="margin-top:8px"><input type="file" id="e_att_file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="font-size:11px;max-width:100%"> <button class="btn btn-navy btn-sm" id="e_att_btn" onclick="memberUpload(\''+mid+'\')">&#8593; Upload</button></div>'
-+'<div class="fld-row2" style="margin-top:6px"><input class="fld-i" id="e_att_name" placeholder="Label (e.g. Resume)"><input class="fld-i" id="e_att_url" placeholder="https://… (SharePoint ok)"></div>'
-+'<button class="btn btn-sec btn-sm" style="margin-top:6px" onclick="memberAddLink(\''+mid+'\')">+ Add link</button></div>'
-+'<span class="fld-section-hdr">Background</span>'
-+'<div class="fld"><label class="fld-l">Past Projects</label>'+msHTML('e_ppj',m.pastProjects||[],D.pastProjects,'past-chip','Add past projects...')+'</div>'
-+'<div class="fld"><label class="fld-l">Past Clients</label>'+msHTML('e_pcl',m.pastClients||[],D.pastClients,'past-chip','Add past clients...')+'</div>'
-+'<span class="fld-section-hdr">Classification</span>'
-+'<div class="fld"><div style="display:flex;gap:16px;flex-wrap:wrap">'
-+'<div class="chk-row"><input type="checkbox" id="e_hub" '+(m.hub?'checked':'')+'><label for="e_hub">Hub</label></div>'
-+'<div class="chk-row"><input type="checkbox" id="e_sme" '+(m.sme?'checked':'')+'><label for="e_sme">SME</label></div>'
-+'<div class="chk-row"><input type="checkbox" id="e_assoc" '+(m.associate?'checked':'')+'><label for="e_assoc">Associate</label></div>'
-+'<div class="chk-row"><input type="checkbox" id="e_prop" '+(m.proposal?'checked':'')+'><label for="e_prop">Proposal</label></div>'
-+'<div class="chk-row"><input type="checkbox" id="e_recr" '+(m.recruiter?'checked':'')+'><label for="e_recr">Recruiter</label></div></div></div>'
-+fT('e_note','Notes / Transition Plan',m.note||'')
-+'<div class="fld"><div class="chk-row warn-chk"><input type="checkbox" id="e_reassess" '+(m.reassess?'checked':'')+'><label for="e_reassess">&#9888; Flag for value reassessment</label></div></div>'
++'<div class="me-tabs">'
+ +'<button type="button" class="me-tab active" data-met="core" onclick="meSetTab(\'core\')">Core</button>'
+ +'<button type="button" class="me-tab" data-met="proj" onclick="meSetTab(\'proj\')">Projects &amp; Skills</button>'
+ +'<button type="button" class="me-tab" data-met="profile" onclick="meSetTab(\'profile\')">Profile &amp; Files</button>'
+ +'<button type="button" class="me-tab" data-met="bg" onclick="meSetTab(\'bg\')">Background</button>'
++'</div>'
++'<div class="me-pane" data-met="core">'
+  +'<div class="fld-row2">'+fT('e_name','Name',m.name)+fT('e_role','Role / Title',m.role)+'</div>'
+  +'<div class="fld-row2">'+fN('e_cost','Monthly Cost ($)',m.cost)+fT('e_badge','Badge',m.badge||'')+'</div>'
+  +'<div class="fld"><label class="fld-l">Current Department</label><div class="fld-i" style="background:var(--page-bg);font-weight:600;cursor:default">'+esc(dept.name)+'</div></div>'
+  +'<div class="fld"><label class="fld-l" for="e_dept_mv">Move to Department</label><select class="fld-sel" id="e_dept_mv"><option value="">— keep in current dept —</option>'+deptMvOpts+'</select></div>'
+  +'<div class="fld"><label class="fld-l" for="e_reports">Reports To</label><select class="fld-sel" id="e_reports"><option value="">— none —</option>'+names.map(function(n){return '<option value="'+esc(n)+'"'+(m.reportsTo===n?' selected':'')+'>'+esc(n)+'</option>';}).join('')+'</select></div>'
++'</div>'
++'<div class="me-pane" data-met="proj" style="display:none">'
+  +'<div class="fld"><label class="fld-l">Assignments (Projects / Initiatives / Overhead)</label>'+msHTML('e_proj',m.projects||[],D.projects,'proj-chip','Add assignments...')+'<div id="e_proj_alloc"></div></div>'
+  +'<div class="fld"><label class="fld-l">Skills</label>'+msHTML('e_skill',m.skillsets||[],D.skillsets,'skill-chip','Add skills...')+'</div>'
+  +'<div class="fld"><label class="fld-l">Certifications</label>'+msHTML('e_cert',m.certifications||[],D.certifications,'cert-chip','Add certifications...')+'</div>'
++'</div>'
++'<div class="me-pane" data-met="profile" style="display:none">'
+  +'<div class="fld-row2"><div class="fld"><label class="fld-l" for="e_loc">Location</label><select class="fld-sel" id="e_loc">'+locOpts+'</select></div>'
+  +'<div class="fld"><label class="fld-l" for="e_clr">Clearance</label><select class="fld-sel" id="e_clr">'+clrOpts+'</select></div></div>'
+  +'<div class="fld"><label class="fld-l" for="e_resume">Resume (SharePoint Link)</label><input class="fld-i" id="e_resume" type="url" placeholder="https://..." value="'+esc(m.resumeLink||'')+'"></div>'
+  +'<div class="fld"><label class="fld-l">Resume &amp; Files (upload Word/PDF or link)</label><div id="e_att_list">'+renderMemberAtt(mid)+'</div>'
+  +'<div style="margin-top:8px"><input type="file" id="e_att_file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="font-size:11px;max-width:100%"> <button class="btn btn-navy btn-sm" id="e_att_btn" onclick="memberUpload(\''+mid+'\')">&#8593; Upload</button></div>'
+  +'<div class="fld-row2" style="margin-top:6px"><input class="fld-i" id="e_att_name" placeholder="Label (e.g. Resume)"><input class="fld-i" id="e_att_url" placeholder="https://… (SharePoint ok)"></div>'
+  +'<button class="btn btn-sec btn-sm" style="margin-top:6px" onclick="memberAddLink(\''+mid+'\')">+ Add link</button></div>'
++'</div>'
++'<div class="me-pane" data-met="bg" style="display:none">'
+  +'<div class="fld"><label class="fld-l">Past Projects</label>'+msHTML('e_ppj',m.pastProjects||[],D.pastProjects,'past-chip','Add past projects...')+'</div>'
+  +'<div class="fld"><label class="fld-l">Past Clients</label>'+msHTML('e_pcl',m.pastClients||[],D.pastClients,'past-chip','Add past clients...')+'</div>'
+  +'<span class="fld-section-hdr" style="margin-top:0">Classification</span>'
+  +'<div class="fld"><div style="display:flex;gap:16px;flex-wrap:wrap">'
+  +'<div class="chk-row"><input type="checkbox" id="e_hub" '+(m.hub?'checked':'')+'><label for="e_hub">Hub</label></div>'
+  +'<div class="chk-row"><input type="checkbox" id="e_sme" '+(m.sme?'checked':'')+'><label for="e_sme">SME</label></div>'
+  +'<div class="chk-row"><input type="checkbox" id="e_assoc" '+(m.associate?'checked':'')+'><label for="e_assoc">Associate</label></div>'
+  +'<div class="chk-row"><input type="checkbox" id="e_prop" '+(m.proposal?'checked':'')+'><label for="e_prop">Proposal</label></div>'
+  +'<div class="chk-row"><input type="checkbox" id="e_recr" '+(m.recruiter?'checked':'')+'><label for="e_recr">Recruiter</label></div></div></div>'
+  +fT('e_note','Notes / Transition Plan',m.note||'')
+  +'<div class="fld"><div class="chk-row warn-chk"><input type="checkbox" id="e_reassess" '+(m.reassess?'checked':'')+'><label for="e_reassess">&#9888; Flag for value reassessment</label></div></div>'
++'</div>'
 +'<div class="btn-row"><button class="btn btn-navy" style="flex:1" onclick="saveEdit(\''+mid+'\',\''+did+'\')">Save</button><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovEdit\')">Cancel</button></div>'
 +'<button class="btn btn-danger-sm btn-full" onclick="delMem(\''+mid+'\',\''+did+'\')">Remove from Team</button>';
 openModal('ovEdit');updateAllocMeter('e_proj');}
+function meSetTab(t){
+  document.querySelectorAll('#mdlEdit .me-pane').forEach(function(p){p.style.display=(p.getAttribute('data-met')===t)?'':'none';});
+  document.querySelectorAll('#mdlEdit .me-tab').forEach(function(b){b.classList.toggle('active',b.getAttribute('data-met')===t);});
+}
 
 function saveEdit(mid,did){
 var fromDept=D.departments.find(function(d){return d.id===did;}),m;
