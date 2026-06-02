@@ -660,6 +660,9 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .cap-bar-fill.full{background:var(--green);}
 .cap-bar-fill.bad{background:var(--red);}
 .cap-foot td{background:#f8fafc;font-weight:700;font-size:10px;}
+.cap-cost{width:60px;border:1px solid var(--border);border-radius:3px;padding:0 3px;font-size:10px;}
+.cap-rm{margin-left:6px;border:none;background:transparent;color:var(--text-muted);cursor:pointer;font-size:13px;line-height:1;padding:0 2px;}
+.cap-rm:hover{color:var(--red);}
 .tpl-card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px;border-left:3px solid #7C3AED;}
 .tpl-card-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;}
 .tpl-card-name{font-size:13px;font-weight:700;}
@@ -2393,14 +2396,17 @@ function renderCapacityView(q){
   }).join('');
   // Allocation matrix (people × items), editable %
   var head='<tr><th class="cap-sticky">Person</th>'+items.map(function(p){return '<th class="cap-col" title="'+esc(p.name)+'">'+esc((p.name||'').slice(0,14))+(p.name.length>14?'…':'')+'</th>';}).join('')+'<th>Alloc</th></tr>';
-  var rows=roster.map(function(pn){
+  var _rank={ghost:0,prospect:1,member:2};
+  var rows=roster.slice().sort(function(a,b){return (_rank[a._origin]||2)-(_rank[b._origin]||2);}).map(function(pn){
     var alloc=capAllocR(pn),over=alloc>100,full=alloc===100;
     var cells=items.map(function(p){
       var e=(pn.projects||[]).find(function(x){return x.id===p.id;});var v=e?(Number(e.pct)||0):'';
       return '<td><input class="cap-cell'+(v?' has':'')+'" type="number" min="0" max="100" step="5" value="'+v+'" onchange="capSetPct(\''+pn.id+'\',\''+p.id+'\',this.value)"></td>';
     }).join('');
     var barCls=over?'bad':full?'full':'ok';
-    return '<tr><td class="cap-sticky"><div class="cap-person">'+esc(pn.name)+(pn._origin!=='member'?' <span class="cap-ghost">'+esc(pn._origin)+'</span>':'')+'</div><div class="cap-person-sub">'+esc(pn.role||pn._deptName||'')+' · '+fmt(pn.cost)+'/mo</div></td>'
+    var badge=pn._origin!=='member'?' <span class="cap-ghost">'+esc(pn._origin)+'</span>':'';
+    return '<tr><td class="cap-sticky"><div class="cap-person">'+esc(pn.name)+badge+'<button class="cap-rm" title="Remove from this scenario" onclick="capRemovePerson(\''+pn.id+'\')">&times;</button></div>'
+      +'<div class="cap-person-sub">'+esc(pn.role||pn._deptName||'')+' · $<input class="cap-cost" type="number" min="0" step="100" value="'+(Number(pn.cost)||0)+'" title="Scenario monthly cost" onchange="capSetCost(\''+pn.id+'\',this.value)">/mo</div></td>'
       +cells
       +'<td><div class="cap-alloc '+barCls+'">'+alloc+'%</div><div class="cap-bar"><div class="cap-bar-fill '+barCls+'" style="width:'+Math.min(100,alloc)+'%"></div></div></td></tr>';
   }).join('');
@@ -2409,7 +2415,10 @@ function renderCapacityView(q){
   var toolbar='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px">'
     +'<div><div style="font-size:18px;font-weight:800">Capacity Planning <span style="font-size:12px;font-weight:600;color:var(--text-muted)">· what-if sandbox</span></div>'
     +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Edit allocation % to move people across projects &amp; initiatives. Nothing changes live data until you Apply. Initiatives count toward revenue only when staffed.</div></div>'
-    +'<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-sec btn-sm" onclick="capReset()">↺ Reset to live</button>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+    +'<button class="btn btn-outline btn-sm" onclick="capAddGhost()">+ Hypothetical hire</button>'
+    +'<button class="btn btn-outline btn-sm" onclick="capAddProspects()">+ Stage prospects</button>'
+    +'<button class="btn btn-sec btn-sm" onclick="capReset()">↺ Reset to live</button>'
     +(can('globals')?'<button class="btn btn-gold btn-sm" onclick="capApply()">✓ Apply to live…</button>':'')+'</div></div>';
   return '<div style="max-width:1320px;margin:0 auto">'+toolbar+kpiBar
     +'<div class="cap-cards">'+cards+'</div>'
@@ -2423,6 +2432,48 @@ function capSetPct(pid,projId,val){
   else if(e)e.pct=v;
   else (person.projects=person.projects||[]).push({id:projId,pct:v});
   renderView();
+}
+function capSetCost(pid,val){ if(!CAP)return;var p=CAP.roster.find(function(x){return x.id===pid;});if(!p)return;p.cost=Math.max(0,Number(val)||0);renderView(); }
+function capRemovePerson(pid){ if(!CAP)return;CAP.roster=CAP.roster.filter(function(x){return x.id!==pid;});renderView(); }
+function capAddGhost(){
+  if(!CAP)return;
+  openFormModal({over:'Capacity Planning',title:'Add Hypothetical Hire',submitLabel:'Add to Scenario',
+    intro:'A ghost resource for planning — not written to live. Allocate it in the matrix after adding.',
+    fields:[
+      {key:'name',label:'Name / label',type:'text',required:true,placeholder:'e.g. New Java Dev (TBD)'},
+      {key:'role',label:'Role',type:'text',placeholder:'e.g. Backend Developer'},
+      {key:'cost',label:'Monthly cost ($)',type:'number',placeholder:'e.g. 12000'}
+    ],
+    onSubmit:function(v){CAP.roster.push({id:'ghost_'+uid(),name:v.name.trim(),role:(v.role||'').trim(),cost:Number(v.cost)||0,_origin:'ghost',_deptName:'(hypothetical)',projects:[]});renderView();toast('Added hypothetical hire.','success');}
+  });
+}
+var _capProspectOpts=[];
+function capProspectOptions(){
+  var opts=[];
+  (typeof resumeBankAll==='function'?resumeBankAll():[]).forEach(function(e){
+    var cost=0;
+    if(e.kind==='candidate'){var c=(D.candidates||[]).find(function(x){return x.id===e.candidateId;});if(c&&c.salaryK)cost=Math.round(c.salaryK*1000/12);}
+    else if(e.kind==='member'){var f=findMember(e.memberId);if(f&&f.m)cost=f.m.cost||0;}
+    opts.push({value:'rb:'+e.key,label:'['+e.kind+'] '+e.name+(e.role?' — '+e.role:''),_name:e.name,_role:e.role||'',_cost:cost});
+  });
+  (D.recruitings||[]).filter(function(r){return r.status==='open';}).forEach(function(r){
+    opts.push({value:'req:'+r.id,label:'[open req] '+(r.jdTitle||'requisition'),_name:r.jdTitle||'Open req',_role:r.jdTitle||'',_cost:0});
+  });
+  return opts;
+}
+function capAddProspects(){
+  if(!CAP)return;
+  _capProspectOpts=capProspectOptions();
+  if(!_capProspectOpts.length){toast('No Resume-Bank people or open requisitions to stage.','info');return;}
+  openFormModal({over:'Capacity Planning',title:'Stage Prospects',submitLabel:'Add to Scenario',
+    intro:'Add open requisitions or Resume-Bank people as prospective fills (hypothetical — not written to live). Costs are estimated; edit them in the matrix.',
+    fields:[{key:'sel',label:'Select people / open requisitions',type:'checkboxes',required:true,options:_capProspectOpts.map(function(o){return {value:o.value,label:o.label};})}],
+    onSubmit:function(v){
+      var n=0;(v.sel||[]).forEach(function(val){var o=_capProspectOpts.find(function(x){return x.value===val;});if(!o)return;
+        CAP.roster.push({id:'prospect_'+uid(),name:o._name,role:o._role,cost:o._cost||0,_origin:'prospect',_deptName:'(prospect)',projects:[]});n++;});
+      renderView();toast('Added '+n+' prospect'+(n===1?'':'s')+' to the scenario.','success');
+    }
+  });
 }
 function capApply(){
   if(!CAP)return;
