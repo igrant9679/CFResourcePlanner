@@ -1469,20 +1469,26 @@ function proformaMigrate(){
 /* Actuals "new cost" vendors that are payment vehicles for people already on payroll
    (the workbook's "same as [member]" mappings) — excluded to avoid double-counting. */
 var PF_DUP_VENDORS=['LSI Media LLC','Global Insights + Solutions, LLC','Highbury / SIE','CyberSecWave','Cerulaxis (A-Z Services / QB)'];
-/* A Cost Structure line that is really Federal Sales/BD or Management — excluded from
-   Overhead/G&A and counted in Payroll instead (matches the overhead-item exclusion). */
+/* Legacy name-based hint: lines that look like Federal Sales/BD or Management
+   default to 'payroll' classification when no explicit type is set. */
 function _pfBDMgmt(name){ return /federal|business develop|\bbd\b|management/i.test(String(name||'')); }
-function _pfFixedSum(pred){
-  var cs=(D.proforma||{}).costStructure||{},t=0;
-  (cs.overhead||[]).forEach(function(x){if(pred(x.category))t+=Number(x.monthly)||0;});
-  (cs.softwareSubs||[]).forEach(function(x){if(pred(x.vendor))t+=Number(x.monthly)||0;});
-  return Math.round(t);
+/* Each Cost Structure line carries a type: 'overhead' (fixed G&A → Overhead/G&A),
+   'payroll' (a person/team → Other Payroll), or 'debt' (financing → excluded from
+   operating profit; the cash view uses the Debt section). Untyped lines fall back
+   to the name hint, else 'overhead'. */
+function _pfLineType(name,explicit){ if(explicit==='overhead'||explicit==='payroll'||explicit==='debt')return explicit; return _pfBDMgmt(name)?'payroll':'overhead'; }
+function _pfFixedByType(t){
+  var cs=(D.proforma||{}).costStructure||{},sum=0;
+  (cs.overhead||[]).forEach(function(x){if(_pfLineType(x.category,x.type)===t)sum+=Number(x.monthly)||0;});
+  (cs.softwareSubs||[]).forEach(function(x){if(_pfLineType(x.vendor,x.type)===t)sum+=Number(x.monthly)||0;});
+  return Math.round(sum);
 }
-/* Fixed monthly G&A from Cost Structure — EXCLUDING Federal Sales/BD & Management
-   lines (those go to Payroll). This is what feeds the Overhead/G&A line. */
-function proformaOverheadMonthly(){ return _pfFixedSum(function(n){return !_pfBDMgmt(n);}); }
-/* Federal Sales/BD & Management fixed lines from Cost Structure — counted in Payroll. */
-function proformaBDMgmtFixedMonthly(){ return _pfFixedSum(_pfBDMgmt); }
+/* Fixed monthly G&A (overhead-typed lines only) — feeds the Overhead/G&A line. */
+function proformaOverheadMonthly(){ return _pfFixedByType('overhead'); }
+/* Payroll-typed Cost Structure lines (people/teams) — counted in Other Payroll. */
+function proformaBDMgmtFixedMonthly(){ return _pfFixedByType('payroll'); }
+/* Debt-typed Cost Structure lines — financing, excluded from operating profit. */
+function proformaCSDebtMonthly(){ return _pfFixedByType('debt'); }
 /* Corporate debt service per month (parseable obligations only) — a financing
    cash outflow below the operating line; used by the Capacity cash-gate view. */
 function proformaDebtService(){
@@ -2478,8 +2484,8 @@ function renderProjView(q,category){
   html+='<div style="padding:10px 14px;margin-bottom:14px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;color:var(--text-secondary)"><strong style="font-size:13px;color:var(--text-primary)">'+meta.label+'</strong> &middot; '+tops.length+' '+(tops.length===1?meta.noun:meta.plural)+' &middot; '+sumLine+'</div>';
   if(category==='overhead'&&pfOh>0){
     var cs=(D.proforma||{}).costStructure||{};
-    var lines=(cs.overhead||[]).map(function(x){return {n:x.category,m:Number(x.monthly)||0};}).concat((cs.softwareSubs||[]).map(function(x){return {n:x.vendor,m:Number(x.monthly)||0};}))
-      .filter(function(l){return !_pfBDMgmt(l.n);});  // Federal Sales/BD & Management are not G&A — kept in Payroll
+    var lines=(cs.overhead||[]).map(function(x){return {n:x.category,m:Number(x.monthly)||0,t:x.type};}).concat((cs.softwareSubs||[]).map(function(x){return {n:x.vendor,m:Number(x.monthly)||0,t:x.type};}))
+      .filter(function(l){return _pfLineType(l.n,l.t)==='overhead';});  // only overhead-typed lines are G&A; payroll/debt lines are elsewhere
     lines.sort(function(a,b){return b.m-a.m;});
     html+='<div style="margin-bottom:14px;background:var(--card-bg);border:1px solid var(--border);border-left:3px solid #546478;border-radius:var(--radius);padding:11px 14px">'
       +'<div style="display:flex;justify-content:space-between;align-items:baseline"><strong style="font-size:13px">G&amp;A / Operations — fixed monthly costs</strong><strong style="color:var(--red)">'+fmt(pfOh)+'/mo</strong></div>'
@@ -3330,8 +3336,8 @@ var PF_FIELDS={
  'technology.architecture':{label:'Architecture item',cols:[{k:'category',l:'Category'},{k:'desc',l:'Description',type:'textarea'}]},
  'technology.capabilityLayers':{label:'Capability',cols:[{k:'capability',l:'Capability'},{k:'layer',l:'Layer / status'},{k:'notes',l:'Notes'}]},
  'technology.sbir.attributes':{label:'SBIR attribute',cols:[{k:'attr',l:'Attribute'},{k:'explanation',l:'Explanation',type:'textarea'}]},
- 'costStructure.overhead':{label:'Overhead line',cols:[{k:'category',l:'Category'},{k:'monthly',l:'Monthly',type:'number'},{k:'notes',l:'Notes'}]},
- 'costStructure.softwareSubs':{label:'Software sub',cols:[{k:'vendor',l:'Vendor'},{k:'monthly',l:'Monthly',type:'number'}]},
+ 'costStructure.overhead':{label:'Overhead line',cols:[{k:'category',l:'Category'},{k:'monthly',l:'Monthly',type:'number'},{k:'type',l:'Type',type:'select',opts:['overhead','payroll','debt']},{k:'notes',l:'Notes'}]},
+ 'costStructure.softwareSubs':{label:'Software sub',cols:[{k:'vendor',l:'Vendor'},{k:'monthly',l:'Monthly',type:'number'},{k:'type',l:'Type',type:'select',opts:['overhead','payroll','debt']}]},
  'risks':{label:'Risk',cols:[{k:'risk',l:'Risk'},{k:'level',l:'Level',type:'select',opts:PF_SEL.level},{k:'status',l:'Status',type:'textarea'},{k:'owner',l:'Owner'},{k:'mitigation',l:'Mitigation',type:'textarea'}]},
  'dates':{label:'Critical date',cols:[{k:'date',l:'Date'},{k:'event',l:'Event'},{k:'impact',l:'Impact / action',type:'textarea'},{k:'status',l:'Status',type:'select',opts:PF_SEL.dstatus}]},
  'dataGaps':{label:'Data gap',cols:[{k:'gap',l:'Gap',type:'textarea'},{k:'priority',l:'Priority',type:'select',opts:PF_SEL.priority},{k:'owner',l:'Owner'},{k:'impact',l:'Impact',type:'textarea'}]},
@@ -3544,11 +3550,13 @@ function renderProformaView(q){
       +'<div class="pf-card">'+_pfH('Capability layers — critical for external comms')+_pfTable(['Capability','Layer / status','Notes'],(tech.capabilityLayers||[]).map(function(x){return [esc(x.capability),esc(x.layer),esc(x.notes)];}),'technology.capabilityLayers')+'</div>'
       +'<div class="pf-card">'+_pfH('SBIR Phase III pathway',"pfEditObj('technology.sbir')")+_pfTable(['Attribute','Explanation'],(sb.attributes||[]).map(function(x){return [esc(x.attr),esc(x.explanation)];}),'technology.sbir.attributes')+'<div class="pf-note">'+esc(sb.andrewKirksey||'')+'</div></div>';
   } else if(proformaTab==='costs'){
-    var cs=P.costStructure||{};var ohT=(cs.overhead||[]).reduce(function(s,x){return s+(Number(x.monthly)||0);},0),subT=(cs.softwareSubs||[]).reduce(function(s,x){return s+(Number(x.monthly)||0);},0);
-    body='<div class="pf-note" style="margin-bottom:8px">These are CommunityForce\'s fixed monthly costs. Their total (<b>'+_pfMoney(ohT+subT)+'/mo</b>) flows into the <b>Overhead</b> tab under <b>G&amp;A/Operations</b> and is subtracted as a real cost in the Capacity Planning forecast. Add any new recurring cost here.</div>'
+    var cs=P.costStructure||{};
+    var byT={overhead:proformaOverheadMonthly(),payroll:proformaBDMgmtFixedMonthly(),debt:proformaCSDebtMonthly()};
+    function tpill(name,t){var et=_pfLineType(name,t);return '<span class="pf-pill pf-'+(et==='overhead'?'med':et==='payroll'?'high':'crit')+'">'+et+'</span>';}
+    body='<div class="pf-note" style="margin-bottom:8px">Each line has a <b>Type</b>: <b>Overhead</b> (fixed G&amp;A → Overhead/G&amp;A line), <b>Payroll</b> (a person/team → Other Payroll), or <b>Debt</b> (financing → excluded from operating profit; the cash view uses the Debt section). Capacity: Overhead/G&amp;A = '+_pfMoney(byT.overhead)+'/mo · Payroll-typed → Other Payroll '+_pfMoney(byT.payroll)+'/mo · Debt-typed '+_pfMoney(byT.debt)+'/mo (below the line). Edit a line to set its Type.</div>'
       +'<div class="pf-grid">'
-      +'<div class="pf-card">'+_pfH('Overhead — '+_pfMoney(ohT)+'/mo')+_pfTable(['Category','Monthly','Notes'],(cs.overhead||[]).map(function(x){return [esc(x.category),_pfMoney(x.monthly),esc(x.notes)];}),'costStructure.overhead')+'</div>'
-      +'<div class="pf-card">'+_pfH('Software subscriptions — '+_pfMoney(subT)+'/mo')+_pfTable(['Vendor','Monthly'],(cs.softwareSubs||[]).map(function(x){return [esc(x.vendor),_pfMoney(x.monthly)];}),'costStructure.softwareSubs')+'</div></div>';
+      +'<div class="pf-card">'+_pfH('Overhead lines')+_pfTable(['Category','Monthly','Type','Notes'],(cs.overhead||[]).map(function(x){return [esc(x.category),_pfMoney(x.monthly),tpill(x.category,x.type),esc(x.notes)];}),'costStructure.overhead')+'</div>'
+      +'<div class="pf-card">'+_pfH('Software subscriptions — '+_pfMoney((cs.softwareSubs||[]).reduce(function(s,x){return s+(Number(x.monthly)||0);},0))+'/mo')+_pfTable(['Vendor','Monthly','Type'],(cs.softwareSubs||[]).map(function(x){return [esc(x.vendor),_pfMoney(x.monthly),tpill(x.vendor,x.type)];}),'costStructure.softwareSubs')+'</div></div>';
   } else if(proformaTab==='risks'){
     body='<div class="pf-card">'+_pfH('Critical dates timeline')+_pfTable(['Date','Event','Impact / action','Status'],(P.dates||[]).map(function(x){return [esc(x.date),esc(x.event),esc(x.impact),'<span class="pf-pill">'+esc(x.status)+'</span>'];}),'dates')+'</div>'
       +'<div class="pf-card">'+_pfH('Risk register')+_pfTable(['Risk','Level','Status','Owner','Mitigation'],(P.risks||[]).map(function(x){return [esc(x.risk),'<span class="pf-pill pf-'+(/CRITICAL/.test(x.level)?'crit':/HIGH/.test(x.level)?'high':/RESOLVED/.test(x.level)?'ok':'med')+'">'+esc(x.level)+'</span>',esc(x.status),esc(x.owner),esc(x.mitigation)];}),'risks')+'</div>'
