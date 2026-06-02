@@ -676,6 +676,9 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .cap-charts{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
 .cap-chart{flex:1;min-width:280px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 12px;}
 .cap-chart-h{font-size:11px;font-weight:700;color:var(--navy);margin-bottom:6px;}
+.cap-grip{cursor:grab;color:#94a3b8;margin-right:5px;font-size:13px;}
+.cap-grip:active{cursor:grabbing;}
+.cap-card.drop{outline:2px dashed var(--gold,#C5A55A);outline-offset:-3px;background:rgba(197,165,90,0.07);}
 .tpl-card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px;border-left:3px solid #7C3AED;}
 .tpl-card-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;}
 .tpl-card-name{font-size:13px;font-weight:700;}
@@ -2437,7 +2440,7 @@ function renderCapacityView(q){
     var staffed=fte>0, counts=(c==='project')||(c==='initiative'&&staffed);
     var prof=(counts?rev:0)-cost, margin=(counts&&rev)?Math.round(prof/rev*100):null;
     var accent=c==='project'?'#2D6A4F':c==='initiative'?'#7C5CBF':'#546478';
-    return '<div class="cap-card" style="border-left-color:'+accent+'">'
+    return '<div class="cap-card" data-cap-item="'+esc(p.id)+'" ondragover="capCardOver(event)" ondragleave="capCardLeave(event)" ondrop="capCardDrop(event,\''+p.id+'\')" style="border-left-color:'+accent+'">'
       +'<div class="cap-card-h"><span class="cap-card-name" title="'+esc(p.name)+'">'+esc(p.name)+'</span><span class="cap-card-cat" style="color:'+accent+'">'+esc(c)+'</span></div>'
       +'<div class="cap-card-row"><span>'+(Math.round(fte*100)/100)+' FTE</span><span>'+fmt(cost)+' cost</span></div>'
       +'<div class="cap-card-row"><span>'+(c==='overhead'?'—':fmt(rev))+(c==='initiative'?(staffed?' rev':' (unstaffed)'):'')+'</span>'
@@ -2455,7 +2458,7 @@ function renderCapacityView(q){
     }).join('');
     var barCls=over?'bad':full?'full':'ok';
     var badge=pn._origin!=='member'?' <span class="cap-ghost">'+esc(pn._origin)+'</span>':'';
-    return '<tr><td class="cap-sticky"><div class="cap-person">'+esc(pn.name)+badge+'<button class="cap-rm" title="Remove from this scenario" onclick="capRemovePerson(\''+pn.id+'\')">&times;</button></div>'
+    return '<tr><td class="cap-sticky"><div class="cap-person"><span class="cap-grip" draggable="true" ondragstart="capDragStart(event,\''+pn.id+'\')" title="Drag onto a project/initiative card to allocate free capacity">&#9783;</span>'+esc(pn.name)+badge+'<button class="cap-rm" title="Remove from this scenario" onclick="capRemovePerson(\''+pn.id+'\')">&times;</button></div>'
       +'<div class="cap-person-sub">'+esc(pn.role||pn._deptName||'')+' · $<input class="cap-cost" type="number" min="0" step="100" value="'+(Number(pn.cost)||0)+'" title="Scenario monthly cost" onchange="capSetCost(\''+pn.id+'\',this.value)">/mo</div></td>'
       +cells
       +'<td><div class="cap-alloc '+barCls+'">'+alloc+'%</div><div class="cap-bar"><div class="cap-bar-fill '+barCls+'" style="width:'+Math.min(100,alloc)+'%"></div></div></td></tr>';
@@ -2464,7 +2467,7 @@ function renderCapacityView(q){
   var matrix='<div class="cap-matrix-wrap"><table class="cap-matrix"><thead>'+head+'</thead><tbody>'+rows+footFTE+'</tbody></table></div>';
   var toolbar='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px">'
     +'<div><div style="font-size:18px;font-weight:800">Capacity Planning <span style="font-size:12px;font-weight:600;color:var(--text-muted)">· what-if sandbox</span></div>'
-    +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Edit allocation % to move people across projects &amp; initiatives. Nothing changes live data until you Apply. Initiatives count toward revenue only when staffed.</div></div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Edit allocation % in the matrix, or drag a person\'s &#9783; handle onto a project/initiative card to allocate their free capacity. Nothing changes live data until you Apply. Initiatives count toward revenue only when staffed.</div></div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
     +'<button class="btn btn-outline btn-sm" onclick="capAddGhost()">+ Hypothetical hire</button>'
     +'<button class="btn btn-outline btn-sm" onclick="capAddProspects()">+ Stage prospects</button>'
@@ -2513,6 +2516,21 @@ function capSetPct(pid,projId,val){
 }
 function capSetCost(pid,val){ if(!CAP)return;var p=CAP.roster.find(function(x){return x.id===pid;});if(!p)return;p.cost=Math.max(0,Number(val)||0);renderView(); }
 function capRemovePerson(pid){ if(!CAP)return;CAP.roster=CAP.roster.filter(function(x){return x.id!==pid;});renderView(); }
+var _capDrag=null;
+function capDragStart(e,pid){ _capDrag=pid; if(e.dataTransfer){e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',pid);}catch(_){}} }
+function capCardOver(e){ e.preventDefault(); if(e.dataTransfer)e.dataTransfer.dropEffect='move'; var c=e.currentTarget;if(c)c.classList.add('drop'); }
+function capCardLeave(e){ var c=e.currentTarget;if(c)c.classList.remove('drop'); }
+function capCardDrop(e,projId){
+  e.preventDefault();var c=e.currentTarget;if(c)c.classList.remove('drop');
+  if(!CAP)return;var pid=_capDrag||(e.dataTransfer&&e.dataTransfer.getData('text/plain'));_capDrag=null;
+  var person=CAP.roster.find(function(x){return x.id===pid;});if(!person)return;
+  var free=100-capAllocR(person);
+  if(free<=0){toast(person.name+' is already fully allocated (100%).','warn');return;}
+  var e2=(person.projects||[]).find(function(x){return x.id===projId;});
+  capSetPct(pid,projId,(e2?e2.pct:0)+free);   // dump free capacity onto the dropped item
+  var it=(D.projects||[]).find(function(x){return x.id===projId;});
+  toast('Allocated '+free+'% of '+person.name+' to '+((it&&it.name)||'item')+'.','success');
+}
 function capAddGhost(){
   if(!CAP)return;
   openFormModal({over:'Capacity Planning',title:'Add Hypothetical Hire',submitLabel:'Add to Scenario',

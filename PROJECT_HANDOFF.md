@@ -1013,3 +1013,37 @@ Large session. Everything below is live on `main`.
   harness (synthetic mouse-drag doesn't fire HTML5 DnD events) — verify by hand.
 - Deferred: broader `confirm()` → styled-modal migration; richer Knowledge Bank
   tag editing; server-side Puppeteer PDF export (still browser print-to-PDF).
+
+---
+
+## 15. Capacity Planning module (resource simulation / what-if)
+
+New top-level **Capacity Planning** tab (`viewMode='cap'`, `renderCapacityView`).
+A **non-destructive sandbox** over the allocation model for capacity experiments.
+
+- **Sandbox:** `CAP = {name, roster:[...], baseline}` (global, in-memory, session-
+  scoped). `capEnter()` clones live people into `CAP.roster` on first render and
+  freezes a `baseline` (live totals) for Δ comparison. Nothing touches `D` until
+  **Apply to live**. `capReset()` rebuilds from live.
+- **Roster person:** `{id,name,role,cost,_origin:'member'|'ghost'|'prospect',_deptName,projects:[{id,pct,clinId}]}`.
+- **Engine (reads a roster):** `capItems` (project/initiative/overhead),
+  `capItemRevenue` (project→revenue, initiative→targetRevenue), `capItemCostR`,
+  `capItemFTER`, `capAllocR`, `capTotals`. Semantics: projects always count
+  revenue; **initiatives count revenue only when staffed (FTE>0)**;
+  profit = revenue − payroll; utilization = allocated cost / payroll; plus bench
+  FTE and over-allocation count.
+- **UI:** KPI bar (revenue/payroll/profit/margin/util/bench/over) with Δ-vs-baseline
+  chips; SVG charts (`_capChartsHTML` — profit-by-item bars + utilization donut);
+  per-item profitability cards; editable **people×items matrix** (`capSetPct`,
+  sticky person column, capacity bars, per-item FTE footer). **Drag** a person's
+  grip onto a card to dump free capacity (`capDragStart`/`capCardDrop`).
+- **Hypotheticals:** `capAddGhost` (ghost hire), inline `capSetCost`,
+  `capRemovePerson`, `capAddProspects` (stage open reqs + Resume-Bank people via
+  `capProspectOptions`).
+- **Scenarios:** `D.scenarios=[{id,name,createdAt,createdBy,roster}]`;
+  `capSaveScenario` / `capLoadScenario` / `capDeleteScenario`; `capCompare`
+  (modal `ovCapCmp`) shows Live vs each saved scenario vs working sandbox.
+- **Apply:** `capApply()` writes member allocations back to `D` (confirm-gated);
+  ghosts/prospects/removals are planning-only and never written.
+- Reads existing helpers `allM`, `findMember`, `projCat`, `fmt`. `D.scenarios`
+  is lazily initialized; not in the array-wipe guardrail.
