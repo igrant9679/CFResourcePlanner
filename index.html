@@ -1385,13 +1385,15 @@ function proformaSeedV4(){
 function proformaMigrate(){
   if(!D.proforma)D.proforma=proformaSeedV4();
   // ── Phase 1 Tier A enrichment: time-phased contract economics on operational projects ──
+  // `to` is the INCLUSIVE last month a segment applies; ranges are non-overlapping
+  // so each month resolves to exactly one segment (Capacity Projections consume this).
   var TL={
-    p_bclm:[{from:'2026-06',to:'2026-08',revenue:212756,cost:146267,note:'Current rate (through Aug 14)'},{from:'2026-08',to:null,revenue:265945,cost:172867,note:'Extended +25% (Aug 15 – Aug 14, 2027)'}],
+    p_bclm:[{from:'2026-06',to:'2026-08',revenue:212756,cost:146267,note:'Current rate (through Aug 14)'},{from:'2026-09',to:null,revenue:265945,cost:172867,note:'Extended +25% (from Aug 15, 2026)'}],
     p_fams:[{from:'2026-06',to:'2026-09',revenue:76944,cost:11394,note:'85.2% margin — ends Sep 24, 2026'},{from:'2026-10',to:null,revenue:0,cost:0,note:'Contract ended'}],
     p_c1fams:[{from:'2026-06',to:'2026-09',revenue:25984,cost:25000,note:'Ramp — near breakeven (2 resources)'},{from:'2026-10',to:null,revenue:100000,cost:38700,note:'At $100K target (6 resources) — 61.3% margin'}],
     p_software:[{from:'2026-06',to:null,revenue:50000,cost:46175,note:'$600K ARR · 7.65% margin — needs intervention'}]
   };
-  (D.projects||[]).forEach(function(p){ if(TL[p.id]&&!p.timeline)p.timeline=TL[p.id]; });
+  if(!D.kbTimelineSeeded){ (D.projects||[]).forEach(function(p){ if(TL[p.id])p.timeline=TL[p.id]; }); D.kbTimelineSeeded=true; }
   // ── Member cost schedules (only where Oct+ cost differs from Jun–Sep) — matched by name ──
   var COST={'SpiritOne':[{from:'2026-06',cost:40194},{from:'2026-10',cost:66794}],
     'Don Van Meter':[{from:'2026-06',cost:17640},{from:'2026-10',cost:22640}],
@@ -2624,6 +2626,7 @@ function renderView(){
 function capBuildRoster(){
   return allM().map(function(m){
     return {id:m.id,name:m.name,role:m.role||'',cost:Number(m.cost)||0,_deptName:m._dn,_origin:'member',
+      costSchedule:m.costSchedule?JSON.parse(JSON.stringify(m.costSchedule)):null,
       projects:(m.projects||[]).map(function(x){return (typeof x==='object')?{id:x.id,pct:Number(x.pct)||0,clinId:x.clinId}:{id:x,pct:100};})};
   });
 }
@@ -2642,7 +2645,7 @@ function capSaveScenario(){
 function capLoadScenario(id){
   var sc=(D.scenarios||[]).find(function(x){return x.id===id;});if(!sc)return;
   CAP={name:sc.name,roster:JSON.parse(JSON.stringify(sc.roster||[])),baseline:capTotals(capBuildRoster())};
-  _capProjMult=(sc.projMult!=null?sc.projMult:100);
+  _capProjMult=(sc.projMult!=null?sc.projMult:100);_capV4=null;
   renderView();toast('Loaded scenario “'+sc.name+'”.','info');
 }
 function capDeleteScenario(id){
@@ -2813,19 +2816,61 @@ function capPersonActive(pn,y,m){
   if(isNaN(sy))return true;
   return y>sy||(y===sy&&m>=sm);
 }
-function capProjData(roster,multPct){
+function _capYM(s){ var p=String(s||'').split('-'); return (+p[0])*12+((+p[1]||1)-1); }
+/* Time-phased revenue for a project in month (y,m): reads project.timeline[] (the
+   KB-seeded contract economics — FAMS sunset, BCLM step, C1FAMS ramp) when present,
+   else falls back to the flat capItemRevenue. */
+function capProjRevAt(p,y,m){
+  if(p.timeline&&p.timeline.length){var key=y*12+m;
+    for(var i=0;i<p.timeline.length;i++){var s=p.timeline[i],fk=_capYM(s.from),tk=s.to?_capYM(s.to):Infinity;
+      if(key>=fk&&key<=tk)return Number(s.revenue)||0;}
+    return 0;
+  }
+  return capItemRevenue(p);
+}
+/* Effective monthly cost for a roster person in month (y,m): reads member.costSchedule[]
+   (effective-dated; e.g. SpiritOne's Oct step-up) when present, else flat pn.cost. */
+function capPersonCostAt(pn,y,m){
+  if(pn.costSchedule&&pn.costSchedule.length){var key=y*12+m,best=null,bk=-Infinity;
+    pn.costSchedule.forEach(function(s){var fk=_capYM(s.from);if(fk<=key&&fk>=bk){bk=fk;best=s;}});
+    if(best)return Number(best.cost)||0;
+  }
+  return Number(pn.cost)||0;
+}
+/* V4 scenario presets (workbook §2) — each adjusts pipeline confidence, the C1FAMS
+   maturity target, whether Marines is treated as won, and any extra monthly cash burden. */
+// V4 scenarios model CONTRACTED revenue (no speculative pipeline → mult 0); each
+// then layers its specific lever: Marines forced-won, C1FAMS maturity target,
+// and/or extra monthly cash burden (Sterling). Workbook reference cash shown for
+// comparison; exact tie-out depends on the editable "other monthly costs".
+var CAP_V4={
+  base:{label:'Base Case',mult:0,c1target:100000,marinesWon:false,extraBurden:0,ref:1569505},
+  marines:{label:'Marines Win',mult:0,c1target:100000,marinesWon:true,extraBurden:0,ref:1820000},
+  conservative:{label:'Conservative',mult:0,c1target:80000,marinesWon:false,extraBurden:0,ref:1380000},
+  sterling:{label:'Sterling Stress',mult:0,c1target:100000,marinesWon:false,extraBurden:10000,ref:1420000},
+  over:{label:'Overperformance',mult:0,c1target:120000,marinesWon:true,extraBurden:0,ref:2000000}
+};
+var _capV4=null;   /* active V4 scenario key, or null for free what-if */
+function capProjData(roster,multPct,opts){
+  opts=opts||{};
   var items=capItems();
   var opps=(D.projects||[]).filter(function(p){return projCat(p)==='opportunity';});
   var noDate=0,modeled=0;
   opps.forEach(function(o){ if(capOppStage(o)==='Lost')return; if(!o.closeDate){noDate++;return;} modeled++; });
+  // Marines win lever (workbook §2): $500K ARR at 50% margin from the opp's close month.
+  var marinesStart=null;
+  if(opts.marinesWon){var mo2=opps.find(function(o){return /marines|dd577/i.test(o.name||'');});var cd=mo2&&mo2.closeDate?new Date(mo2.closeDate):null;marinesStart=(cd&&!isNaN(cd))?cd.getFullYear()*12+cd.getMonth():(2026*12+9);}
+  var MAR_GROSS=41667,MAR_COST=20834;  // $500K ARR / 12 ; 50% margin
   var cum=0,rows=capProjMonths().map(function(mo){
     var active=roster.filter(function(pn){return capPersonActive(pn,mo.y,mo.m);});
     var baseRev=0;
     items.forEach(function(p){var c=projCat(p);
-      if(c==='project')baseRev+=capItemRevenue(p);
-      else if(c==='initiative'){ if(capItemFTER(active,p.id)>0)baseRev+=capItemRevenue(p); }
+      if(c==='project'){var rev=capProjRevAt(p,mo.y,mo.m);
+        if(p.id==='p_c1fams'&&opts.c1target!=null&&rev===100000)rev=opts.c1target;  // scenario C1FAMS maturity override
+        baseRev+=rev;}
+      else if(c==='initiative'){ if(capItemFTER(active,p.id)>0)baseRev+=capProjRevAt(p,mo.y,mo.m); }
     });
-    var payroll=active.reduce(function(s,pn){return s+(Number(pn.cost)||0);},0);
+    var payroll=active.reduce(function(s,pn){return s+capPersonCostAt(pn,mo.y,mo.m);},0);
     var oppRev=0;
     opps.forEach(function(o){
       if(!o.closeDate)return; var cd=new Date(o.closeDate);if(isNaN(cd))return;
@@ -2834,12 +2879,30 @@ function capProjData(roster,multPct){
       oppRev+=((Number(o.potential)||0)/12)*capOppEffProb(o,multPct);
     });
     oppRev=Math.round(oppRev);
+    // Marines win: add ARR revenue + delivery cost (net = 50% margin) from its start month
+    if(opts.marinesWon&&marinesStart!=null&&(mo.y*12+mo.m)>=marinesStart){oppRev+=MAR_GROSS;payroll+=MAR_COST;}
     var rev=baseRev+oppRev,profit=rev-payroll;cum+=profit;
     return {y:mo.y,m:mo.m,baseRev:baseRev,oppRev:oppRev,rev:rev,payroll:payroll,profit:profit,cum:cum};
   });
   return {rows:rows,noDate:noDate,modeled:modeled};
 }
-function capSetProjMult(v){ _capProjMult=Math.max(0,Math.min(200,Number(v)||0)); renderView(); }
+/* Fixed monthly cash burden not captured in roster payroll: overhead + parseable
+   corporate debt service (from the Proforma). Editable override via _capBurdenOverride. */
+var _capBurdenOverride=null, _capCashMode=false;
+function capFixedBurden(){
+  var extra=(_capV4&&CAP_V4[_capV4])?(CAP_V4[_capV4].extraBurden||0):0;
+  if(_capBurdenOverride!=null)return _capBurdenOverride+extra;
+  var P=D.proforma; if(!P)return extra;
+  var oh=(P.costStructure&&P.costStructure.overheadTotal)||0;
+  var debt=0;(P.debt&&P.debt.corporate||[]).forEach(function(x){var n=parseFloat(String(x.monthlyPayment).replace(/[^0-9.]/g,''));if(!isNaN(n)&&/\d/.test(String(x.monthlyPayment))&&!/equiv/i.test(x.monthlyPayment))debt+=n;});
+  return oh+debt+extra;
+}
+function capOpeningCash(){ var P=D.proforma; return (P&&P.financials&&P.financials.openingCash)||0; }
+function capSetProjMult(v){ _capV4=null;_capProjMult=Math.max(0,Math.min(200,Number(v)||0)); renderView(); }
+function capSetV4(k){ _capV4=(k===_capV4?null:k); if(_capV4&&CAP_V4[_capV4]){_capProjMult=CAP_V4[_capV4].mult;} renderView(); }
+function capToggleCash(){ _capCashMode=!_capCashMode; renderView(); }
+function capSetBurden(v){ var n=Number(v); _capBurdenOverride=(v===''||isNaN(n))?null:Math.max(0,n); renderView(); }
+function _capProjOpts(){ return _capV4&&CAP_V4[_capV4]?{c1target:CAP_V4[_capV4].c1target,marinesWon:CAP_V4[_capV4].marinesWon}:{}; }
 function _capYearTotals(rows,yr){
   var r={revenue:0,payroll:0,profit:0,months:0};
   rows.forEach(function(x){ if(x.y!==yr)return; r.revenue+=x.rev;r.payroll+=x.payroll;r.profit+=x.profit;r.months++; });
@@ -2847,8 +2910,12 @@ function _capYearTotals(rows,yr){
   return r;
 }
 function _capProjHTML(roster){
-  var d=capProjData(roster,_capProjMult),rows=d.rows;
+  var d=capProjData(roster,_capProjMult,_capProjOpts()),rows=d.rows;
   if(!rows.length)return '<div class="empty-msg">No months to project.</div>';
+  // cash overlay
+  var burden=capFixedBurden(),opening=capOpeningCash(),gate=(D.proforma&&D.proforma.financials&&D.proforma.financials.cashGateTarget)||1500000;
+  var cash=opening,gateMet=null;
+  rows.forEach(function(r){ r.netCash=r.profit-burden; cash+=r.netCash; r.cashBal=cash; if(gateMet===null&&cash>=gate)gateMet=r; });
   var presets=[{v:0,l:'No pipeline'},{v:50,l:'Conservative'},{v:100,l:'Likely'},{v:150,l:'Aggressive'},{v:200,l:'Max'}];
   var stageLeg=['Lead Gen','Presales','Sales','Delivery'].map(function(s){
     var eff=Math.round(Math.min(1,CAP_STAGE_PROB[s]*_capProjMult/100)*100);
@@ -2858,23 +2925,37 @@ function _capProjHTML(roster){
     +'<label>Pipeline confidence</label>'
     +'<input type="range" min="0" max="200" step="10" value="'+_capProjMult+'" oninput="capSetProjMult(this.value)">'
     +'<span class="cap-proj-prob">'+_capProjMult+'%</span>'
-    +presets.map(function(p){return '<button class="cap-proj-chip'+(p.v===_capProjMult?' on':'')+'" onclick="capSetProjMult('+p.v+')">'+p.l+'</button>';}).join('')
+    +presets.map(function(p){return '<button class="cap-proj-chip'+(p.v===_capProjMult&&!_capV4?' on':'')+'" onclick="capSetProjMult('+p.v+')">'+p.l+'</button>';}).join('')
     +'<span style="flex:1"></span>'
+    +'<button class="cap-proj-chip'+(_capCashMode?' on':'')+'" onclick="capToggleCash()">&#128181; Cash gate</button>'
     +'<button class="btn btn-sec btn-sm" onclick="capProjExportCSV()">&#8595; CSV</button>'
     +'<button class="btn btn-sec btn-sm" onclick="capProjPrint()">&#128424; Print</button>'
     +'<div class="cap-stage-leg" style="flex-basis:100%">Effective win odds by stage at '+_capProjMult+'% confidence: '+stageLeg+'</div>'
     +'</div>';
+  // V4 scenario presets (from the Proforma / Knowledge Base)
+  var v4='<div class="cap-proj-ctl"><label>V4 scenarios</label>'
+    +Object.keys(CAP_V4).map(function(k){var s=CAP_V4[k];return '<button class="cap-proj-chip'+(_capV4===k?' on':'')+'" onclick="capSetV4(\''+k+'\')" title="'+esc(s.label)+' — ref cash @Aug 2027: '+fmt(s.ref)+'">'+esc(s.label)+'</button>';}).join('')
+    +'<span style="flex:1"></span>'+(_capV4?'<span class="cap-stage-leg">Modeling <b>'+esc(CAP_V4[_capV4].label)+'</b> · workbook reference cash @Aug 2027: '+fmt(CAP_V4[_capV4].ref)+'</span>':'<span class="cap-stage-leg">Pick a scenario to apply its pipeline + C1FAMS + Marines assumptions.</span>')+'</div>';
+  // cash controls
+  var cashPanel=_capCashMode?'<div class="cap-proj-ctl">'
+    +'<label>Opening cash</label><span class="cap-proj-prob">'+fmt(opening)+'</span>'
+    +'<label style="margin-left:10px">Other monthly costs</label><input type="number" class="cap-cost" style="width:96px" value="'+Math.round(burden)+'" onchange="capSetBurden(this.value)" title="Overhead + debt service not already in roster payroll (default from Proforma)">'
+    +'<span style="flex:1"></span>'
+    +'<span class="cap-stage-leg">'+(gateMet?('&#9989; $'+(Math.round(gate/1000))+'K gate met '+CAP_MONTHS[gateMet.m]+" '"+(gateMet.y%100)+' (cash '+fmt(gateMet.cashBal)+')'):'&#9888; $'+(Math.round(gate/1000))+'K gate not reached by Dec '+rows[rows.length-1].y)+'</span>'
+    +'</div>':'';
   // annual roll-up cards
   var years=[];rows.forEach(function(r){if(years.indexOf(r.y)<0)years.push(r.y);});
   var yrCards=years.map(function(yr){
     var t=_capYearTotals(rows,yr),mr=rows.filter(function(x){return x.y===yr;});
     var span=mr.length?CAP_MONTHS[mr[0].m]+'–'+CAP_MONTHS[mr[mr.length-1].m]+' '+yr+' · '+t.months+' mo':'';
+    var endCash=mr.length?mr[mr.length-1].cashBal:0;
     return '<div class="cap-yr"><div class="cap-yr-yr">'+yr+(t.months<12?' (partial year)':'')+'</div><div class="cap-yr-sub">'+span+'</div>'
       +'<div class="cap-yr-grid">'
       +'<div class="cap-yr-m"><span class="k">Revenue</span><span class="v">'+fmt(t.revenue)+'</span></div>'
       +'<div class="cap-yr-m"><span class="k">Payroll</span><span class="v">'+fmt(t.payroll)+'</span></div>'
       +'<div class="cap-yr-m"><span class="k">Profit</span><span class="v '+(t.profit>=0?'cap-pos':'cap-neg')+'">'+fmt(t.profit)+'</span></div>'
       +'<div class="cap-yr-m"><span class="k">Margin</span><span class="v">'+t.margin+'%</span></div>'
+      +(_capCashMode?'<div class="cap-yr-m" style="grid-column:1/3"><span class="k">Cash at year-end</span><span class="v '+(endCash>=gate?'cap-pos':'cap-neg')+'">'+fmt(endCash)+'</span></div>':'')
       +'</div></div>';
   }).join('');
   // monthly table
@@ -2885,16 +2966,37 @@ function _capProjHTML(roster){
       +'<td>'+(r.oppRev?'<span class="cap-pos">'+fmt(r.oppRev)+'</span>':'—')+'</td>'
       +'<td>'+fmt(r.payroll)+'</td>'
       +'<td class="'+(r.profit>=0?'cap-pos':'cap-neg')+'">'+fmt(r.profit)+'</td>'
-      +'<td class="'+(r.cum>=0?'cap-pos':'cap-neg')+'">'+fmt(r.cum)+'</td></tr>';
+      +(_capCashMode?'<td class="'+(r.cashBal>=gate?'cap-pos':'cap-neg')+'">'+fmt(r.cashBal)+(gateMet&&gateMet.y===r.y&&gateMet.m===r.m?' &#9989;':'')+'</td>':'<td class="'+(r.cum>=0?'cap-pos':'cap-neg')+'">'+fmt(r.cum)+'</td>')
+      +'</tr>';
   }).join('');
   var tbl='<div class="cap-proj-tbl-wrap"><table class="cap-proj-tbl"><thead>'
-    +'<tr><th class="mo">Month</th><th>Revenue</th><th>of which pipeline</th><th>Payroll</th><th>Profit</th><th>Cumulative profit</th></tr></thead>'
+    +'<tr><th class="mo">Month</th><th>Revenue</th><th>of which pipeline</th><th>Payroll</th><th>Profit</th><th>'+(_capCashMode?'Cash balance':'Cumulative profit')+'</th></tr></thead>'
     +'<tbody>'+body+'</tbody></table></div>';
   var note='<div class="cap-proj-note">Projection starts this month and runs through Dec '+rows[rows.length-1].y+'. '
-    +'Each month counts active projects + staffed initiatives; payroll includes only people on payroll that month — hypothetical hires/prospects ramp in at their start month (set it in the Sandbox matrix). '
-    +d.modeled+' opportunit'+(d.modeled===1?'y is':'ies are')+' ramped in at their close date, weighted by pipeline stage × '+_capProjMult+'% confidence (Won counts fully, Lost excluded)'+(d.noDate?'; '+d.noDate+' opportunit'+(d.noDate===1?'y was':'ies were')+' excluded for having no close date':'')+'.</div>';
-  return ctl+'<div class="cap-chart" style="margin-bottom:14px"><div class="cap-chart-h">Cumulative revenue &amp; profit through Dec '+rows[rows.length-1].y+'</div>'+_capProjChart(rows)+'</div>'
-    +'<div class="cap-yr-cards">'+yrCards+'</div>'+tbl+note;
+    +'Contract revenue is time-phased from the Knowledge Base (FAMS sunset Sep 24, BCLM +25% step, C1FAMS ramp to $100K Oct); payroll counts only people on payroll that month (hires/prospects ramp at their start month; member cost schedules apply). '
+    +d.modeled+' opportunit'+(d.modeled===1?'y is':'ies are')+' ramped in at close date, weighted by stage × '+_capProjMult+'% confidence'+(_capProjOpts().marinesWon?' (Marines forced to won)':'')+(_capProjOpts().c1target!=null?' · C1FAMS maturity set to '+fmt(_capProjOpts().c1target):'')+(d.noDate?'; '+d.noDate+' opportunit'+(d.noDate===1?'y':'ies')+' without a close date excluded':'')+'.'
+    +(_capCashMode?' Cash = opening '+fmt(opening)+' + cumulative (profit − other monthly costs '+fmt(burden)+'); the latter is an editable estimate of overhead + debt service not in payroll, so calibrate it to tie to your books.':'')+'</div>';
+  var charts='<div class="cap-chart" style="margin-bottom:14px"><div class="cap-chart-h">Cumulative revenue &amp; profit through Dec '+rows[rows.length-1].y+'</div>'+_capProjChart(rows)+'</div>'
+    +(_capCashMode?'<div class="cap-chart" style="margin-bottom:14px"><div class="cap-chart-h">Cash balance vs $'+(Math.round(gate/1000))+'K survival gate</div>'+_capCashChart(rows,gate,opening)+'</div>':'');
+  return ctl+v4+cashPanel+charts+'<div class="cap-yr-cards">'+yrCards+'</div>'+tbl+note;
+}
+function _capCashChart(rows,gate,opening){
+  var w=760,h=200,padL=64,padR=14,padT=12,padB=30,n=rows.length;
+  var vals=rows.map(function(r){return r.cashBal;}).concat([gate,opening]);
+  var maxV=Math.max.apply(null,vals),minV=Math.min.apply(null,vals);
+  if(maxV===minV)maxV=minV+1; var pad=(maxV-minV)*0.08; maxV+=pad; minV-=pad;
+  var plotW=w-padL-padR,plotH=h-padT-padB;
+  var xFor=function(i){return padL+(n<=1?0:i/(n-1)*plotW);};
+  var yFor=function(v){return padT+(maxV-v)/(maxV-minV)*plotH;};
+  var cashLine='<polyline fill="none" stroke="#2D6A4F" stroke-width="2.5" points="'+rows.map(function(r,i){return xFor(i)+','+(Math.round(yFor(r.cashBal)*10)/10);}).join(' ')+'"/>';
+  var gy=yFor(gate);
+  var gateLine='<line x1="'+padL+'" y1="'+gy+'" x2="'+(w-padR)+'" y2="'+gy+'" stroke="#DC2626" stroke-width="1.5" stroke-dasharray="5 3"/><text x="'+(w-padR)+'" y="'+(gy-4)+'" text-anchor="end" font-size="9" fill="#DC2626">gate '+fmt(gate)+'</text>';
+  var dots=rows.map(function(r,i){var hit=r.cashBal>=gate&&(i===0||rows[i-1].cashBal<gate);return hit?'<circle cx="'+xFor(i)+'" cy="'+yFor(r.cashBal)+'" r="4" fill="#2D6A4F"/>':'';}).join('');
+  var yLab='<text x="'+(padL-6)+'" y="'+(padT+4)+'" text-anchor="end" font-size="9" fill="#64748b">'+fmt(maxV)+'</text>'
+    +'<text x="'+(padL-6)+'" y="'+(h-padB+3)+'" text-anchor="end" font-size="9" fill="#64748b">'+fmt(minV)+'</text>';
+  var xLab=rows.map(function(r,i){var first=(i===0)||(rows[i-1].y!==r.y),last=(i===n-1);if(!first&&!last)return '';
+    return '<text x="'+xFor(i)+'" y="'+(h-padB+16)+'" text-anchor="'+(last&&!first?'end':'middle')+'" font-size="9" fill="#64748b">'+CAP_MONTHS[r.m]+" '"+(r.y%100)+'</text>';}).join('');
+  return '<svg width="100%" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="xMinYMin meet" style="max-height:'+h+'px">'+gateLine+yLab+xLab+cashLine+dots+'</svg>';
 }
 function _capProjChart(rows){
   var w=760,h=210,padL=64,padR=14,padT=12,padB=30,n=rows.length;
@@ -2923,12 +3025,18 @@ function _capProjChart(rows){
     +zero+yLab+xLab+leg+line('rev','#C5A55A')+line('profit','#2D6A4F')+'</svg>';
 }
 function _capProjYears(rows){ var y=[];rows.forEach(function(r){if(y.indexOf(r.y)<0)y.push(r.y);});return y; }
+function _capProjRowsForExport(){
+  var rows=capProjData(CAP.roster,_capProjMult,_capProjOpts()).rows;
+  if(_capCashMode){var burden=capFixedBurden(),cash=capOpeningCash();rows.forEach(function(r){r.netCash=r.profit-burden;cash+=r.netCash;r.cashBal=cash;});}
+  return rows;
+}
 function capProjExportCSV(){
   if(!CAP)return;
-  var rows=capProjData(CAP.roster,_capProjMult).rows;
-  var lines=[['Month','Revenue','Pipeline portion','Payroll','Profit','Cumulative profit']];
-  rows.forEach(function(r){lines.push([CAP_MONTHS[r.m]+" '"+(r.y%100),Math.round(r.rev),Math.round(r.oppRev),Math.round(r.payroll),Math.round(r.profit),Math.round(r.cum)]);});
+  var rows=_capProjRowsForExport(),cashMode=_capCashMode;
+  var lines=[['Month','Revenue','Pipeline portion','Payroll','Profit',cashMode?'Net cash Δ':'Cumulative profit',cashMode?'Cash balance':''].filter(function(x){return x!=='';})];
+  rows.forEach(function(r){var row=[CAP_MONTHS[r.m]+" '"+(r.y%100),Math.round(r.rev),Math.round(r.oppRev),Math.round(r.payroll),Math.round(r.profit)];if(cashMode){row.push(Math.round(r.netCash),Math.round(r.cashBal));}else{row.push(Math.round(r.cum));}lines.push(row);});
   lines.push([]);
+  if(_capV4&&CAP_V4[_capV4])lines.push(['Scenario',CAP_V4[_capV4].label,'ref cash @Aug 2027',CAP_V4[_capV4].ref]);
   lines.push(['Annual total','Revenue','Payroll','Profit','Margin %']);
   _capProjYears(rows).forEach(function(yr){var t=_capYearTotals(rows,yr);lines.push([yr+(t.months<12?' (partial)':''),Math.round(t.revenue),Math.round(t.payroll),Math.round(t.profit),t.margin]);});
   var csv=lines.map(function(row){return row.map(function(c){var s=String(c==null?'':c);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}).join(',');}).join('\r\n');
@@ -2939,10 +3047,12 @@ function capProjExportCSV(){
 }
 function capProjPrint(){
   if(!CAP)return;
-  var rows=capProjData(CAP.roster,_capProjMult).rows;
+  var rows=_capProjRowsForExport(),cashMode=_capCashMode;
   var name=(CAP.name&&CAP.name!=='Working scenario')?CAP.name:'Working scenario';
+  if(_capV4&&CAP_V4[_capV4])name+=' · '+CAP_V4[_capV4].label;
+  var lastCol=cashMode?'Cash balance':'Cumulative profit';
   var yrRows=_capProjYears(rows).map(function(yr){var t=_capYearTotals(rows,yr);return '<tr><td>'+yr+(t.months<12?' (partial year)':'')+'</td><td>'+fmt(t.revenue)+'</td><td>'+fmt(t.payroll)+'</td><td>'+fmt(t.profit)+'</td><td>'+t.margin+'%</td></tr>';}).join('');
-  var moRows=rows.map(function(r,i){var yrEnd=(i<rows.length-1&&rows[i+1].y!==r.y);return '<tr'+(yrEnd?' class="ye"':'')+'><td>'+CAP_MONTHS[r.m]+" '"+(r.y%100)+'</td><td>'+fmt(r.rev)+'</td><td>'+fmt(r.oppRev)+'</td><td>'+fmt(r.payroll)+'</td><td>'+fmt(r.profit)+'</td><td>'+fmt(r.cum)+'</td></tr>';}).join('');
+  var moRows=rows.map(function(r,i){var yrEnd=(i<rows.length-1&&rows[i+1].y!==r.y);return '<tr'+(yrEnd?' class="ye"':'')+'><td>'+CAP_MONTHS[r.m]+" '"+(r.y%100)+'</td><td>'+fmt(r.rev)+'</td><td>'+fmt(r.oppRev)+'</td><td>'+fmt(r.payroll)+'</td><td>'+fmt(r.profit)+'</td><td>'+fmt(cashMode?r.cashBal:r.cum)+'</td></tr>';}).join('');
   var w=window.open('','_blank');if(!w){toast('Pop-up blocked — allow pop-ups to print.','warn');return;}
   var html='<!doctype html><html><head><meta charset="utf-8"><title>Capacity Projection — '+esc(name)+'</title>'
     +'<style>body{font-family:Arial,Helvetica,sans-serif;color:#16223C;margin:32px;}h1{font-size:18px;margin:0 0 2px;}.sub{color:#64748b;font-size:12px;margin-bottom:18px;}'
@@ -2950,7 +3060,7 @@ function capProjPrint(){
     +'tr.ye td{border-bottom:2px solid #94a3b8;}h2{font-size:13px;margin:0 0 6px;}@media print{body{margin:12mm;}}</style></head><body>'
     +'<h1>Capacity Projection</h1><div class="sub">Scenario: '+esc(name)+' · pipeline confidence '+_capProjMult+'% · generated '+new Date().toLocaleDateString()+'</div>'
     +'<h2>Annual roll-up</h2><table><thead><tr><th>Year</th><th>Revenue</th><th>Payroll</th><th>Profit</th><th>Margin</th></tr></thead><tbody>'+yrRows+'</tbody></table>'
-    +'<h2>Monthly detail</h2><table><thead><tr><th>Month</th><th>Revenue</th><th>Pipeline</th><th>Payroll</th><th>Profit</th><th>Cumulative</th></tr></thead><tbody>'+moRows+'</tbody></table>'
+    +'<h2>Monthly detail</h2><table><thead><tr><th>Month</th><th>Revenue</th><th>Pipeline</th><th>Payroll</th><th>Profit</th><th>'+lastCol+'</th></tr></thead><tbody>'+moRows+'</tbody></table>'
     +'<script>window.onload=function(){window.print();};<\/script></body></html>';
   w.document.write(html);w.document.close();
 }
