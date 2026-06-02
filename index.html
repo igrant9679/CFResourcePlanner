@@ -727,6 +727,24 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .pf-pill.pf-high{background:#FEF3C7;color:#B45309;}
 .pf-pill.pf-med{background:#E0E7FF;color:#3730A3;}
 .pf-pill.pf-ok{background:#DCFCE7;color:#166534;}
+.pf-actions-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+.pf-meta{font-size:11px;color:var(--text-muted);}
+.pf-card-h{position:relative;}
+.pf-edit-btn{border:1px solid var(--border);background:#fff;color:var(--navy);font-size:11px;font-weight:700;border-radius:5px;padding:1px 7px;cursor:pointer;line-height:1.5;}
+.pf-edit-btn:hover{border-color:var(--gold,#C5A55A);background:#fffdf7;}
+.pf-edit-btn.pf-del{color:var(--red);}
+.pf-edit-btn.pf-del:hover{background:#FEE2E2;border-color:var(--red);}
+.pf-card-h .pf-edit-btn{float:right;}
+.pf-add{margin-top:8px;}
+.pf-row-act{white-space:nowrap;text-align:right;}
+.pf-row-act .pf-edit-btn{padding:1px 6px;margin-left:3px;}
+.pf-mini-h{display:flex;justify-content:space-between;align-items:flex-start;gap:6px;}
+.pf-mini-h .pf-edit-btn{padding:0 6px;}
+.pf-trend td:first-child,.pf-trend th:first-child{text-align:left;}
+.pf-trend td,.pf-trend th{text-align:right;}
+.pf-pill.pf-diff-add{background:#DCFCE7;color:#166534;}
+.pf-pill.pf-diff-del{background:#FEE2E2;color:#B91C1C;}
+.pf-pill.pf-diff-chg{background:#FEF3C7;color:#B45309;}
 .cap-yr-cards{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;}
 .cap-yr{flex:1;min-width:240px;background:#fff;border:1px solid var(--border);border-top:3px solid var(--gold,#C5A55A);border-radius:8px;padding:12px 16px;}
 .cap-yr-yr{font-size:13px;font-weight:800;color:var(--navy);}
@@ -3145,89 +3163,213 @@ function capApply(){
 /* ── PROFORMA SECTION (confidential, Admin-only) — read-only V1 ── */
 function pfSetTab(t){ proformaTab=t; renderView(); }
 function _pfMoney(v){ return (v==null||v==='')?'—':fmt(v); }
-function _pfTable(headers,rows){
-  return '<div style="overflow:auto"><table class="pf-tbl"><thead><tr>'+headers.map(function(h){return '<th>'+h+'</th>';}).join('')+'</tr></thead>'
-    +'<tbody>'+rows.map(function(r){return '<tr>'+r.map(function(c){return '<td>'+(c==null?'':c)+'</td>';}).join('')+'</tr>';}).join('')+'</tbody></table></div>';
+/* ── PROFORMA editing engine (Admin-only) — schema-driven generic editors ── */
+var PF_SEL={level:['CRITICAL','HIGH','MEDIUM-HIGH','MEDIUM','LOW','RESOLVED'],priority:['HIGHEST','CRITICAL','HIGH','MEDIUM','LOW'],dstatus:['ACTION','DONE','MILESTONE','UPCOMING','CRITICAL','GATE','STRATEGIC','FUTURE']};
+var PF_FIELDS={
+ 'company.notableClients':{label:'Notable client',cols:[{k:'name',l:'Client'},{k:'type',l:'Type'}]},
+ 'company.competitors':{label:'Competitor',cols:[{k:'name',l:'Competitor'},{k:'type',l:'Type'},{k:'note',l:'Note'}]},
+ 'financials.history':{label:'Historical year',cols:[{k:'year',l:'Year'},{k:'revenue',l:'Revenue',type:'number'},{k:'netIncome',l:'Net income',type:'number'},{k:'opCashFlow',l:'Op. cash flow',type:'number'},{k:'endingCash',l:'Ending cash',type:'number'}]},
+ 'financials.cashTrajectory':{label:'Cash point',cols:[{k:'date',l:'Date (YYYY-MM-DD)'},{k:'cash',l:'Cash',type:'number'},{k:'delta',l:'Monthly Δ',type:'number'},{k:'status',l:'Status'},{k:'notes',l:'Notes'}]},
+ 'financials.gates':{label:'Exit gate',cols:[{k:'name',l:'Gate'},{k:'status',l:'Status'},{k:'projectedClose',l:'Projected close'},{k:'notes',l:'Notes'}]},
+ 'scenarios':{label:'Scenario',cols:[{k:'name',l:'Name'},{k:'cashAtHorizon',l:'Cash @ horizon',type:'number'},{k:'gateTiming',l:'Gate timing'},{k:'assumptions',l:'Assumptions',type:'textarea'}]},
+ 'contractEconomics':{label:'Contract',cols:[{k:'contract',l:'Contract'},{k:'rev',l:'Monthly rev',type:'number'},{k:'cost',l:'Monthly cost',type:'number'},{k:'profit',l:'Monthly profit',type:'number'},{k:'margin',l:'Margin (0–1)',type:'number'},{k:'role',l:'Strategic role',type:'textarea'}]},
+ 'debt.corporate':{label:'Debt obligation',cols:[{k:'lender',l:'Lender'},{k:'balance',l:'Balance',type:'number'},{k:'monthlyPayment',l:'Monthly payment'},{k:'rateTerm',l:'Rate / term'},{k:'status',l:'Status'},{k:'notes',l:'Notes',type:'textarea'}]},
+ 'debt.personal.liquid':{label:'Liquid asset',cols:[{k:'asset',l:'Asset'},{k:'value',l:'Value',type:'number'}]},
+ 'debt.personal.realEstate':{label:'Real estate',cols:[{k:'property',l:'Property'},{k:'value',l:'Value',type:'number'},{k:'debt',l:'Debt',type:'number'},{k:'equity',l:'Equity',type:'number'},{k:'notes',l:'Notes'}]},
+ 'pipeline':{label:'Pursuit',cols:[{k:'opportunity',l:'Opportunity'},{k:'customer',l:'Customer'},{k:'vehicle',l:'Vehicle'},{k:'value',l:'Value',type:'number'},{k:'pwin',l:'Pwin (0–1)',type:'number'},{k:'ev',l:'Expected value',type:'number'},{k:'owner',l:'Owner'},{k:'next',l:'Next step',type:'textarea'}]},
+ 'marines.timeline':{label:'Marines event',cols:[{k:'date',l:'Date'},{k:'event',l:'Event'}]},
+ 'technology.architecture':{label:'Architecture item',cols:[{k:'category',l:'Category'},{k:'desc',l:'Description',type:'textarea'}]},
+ 'technology.capabilityLayers':{label:'Capability',cols:[{k:'capability',l:'Capability'},{k:'layer',l:'Layer / status'},{k:'notes',l:'Notes'}]},
+ 'technology.sbir.attributes':{label:'SBIR attribute',cols:[{k:'attr',l:'Attribute'},{k:'explanation',l:'Explanation',type:'textarea'}]},
+ 'costStructure.overhead':{label:'Overhead line',cols:[{k:'category',l:'Category'},{k:'monthly',l:'Monthly',type:'number'},{k:'notes',l:'Notes'}]},
+ 'costStructure.softwareSubs':{label:'Software sub',cols:[{k:'vendor',l:'Vendor'},{k:'monthly',l:'Monthly',type:'number'}]},
+ 'risks':{label:'Risk',cols:[{k:'risk',l:'Risk'},{k:'level',l:'Level',type:'select',opts:PF_SEL.level},{k:'status',l:'Status',type:'textarea'},{k:'owner',l:'Owner'},{k:'mitigation',l:'Mitigation',type:'textarea'}]},
+ 'dates':{label:'Critical date',cols:[{k:'date',l:'Date'},{k:'event',l:'Event'},{k:'impact',l:'Impact / action',type:'textarea'},{k:'status',l:'Status',type:'select',opts:PF_SEL.dstatus}]},
+ 'dataGaps':{label:'Data gap',cols:[{k:'gap',l:'Gap',type:'textarea'},{k:'priority',l:'Priority',type:'select',opts:PF_SEL.priority},{k:'owner',l:'Owner'},{k:'impact',l:'Impact',type:'textarea'}]},
+ 'actuals.newCosts':{label:'New cost',cols:[{k:'vendor',l:'Vendor / cost'},{k:'jun',l:'Monthly actual',type:'number'},{k:'recurring',l:'Recurring?'},{k:'notes',l:'Notes',type:'textarea'}]},
+ 'strategy.pillars':{label:'Pillar',cols:[{k:'name',l:'Name'},{k:'subtitle',l:'Subtitle'},{k:'initiatives',l:'Initiatives',type:'list'}]},
+ 'strategy.paths':{label:'Strategic path',cols:[{k:'name',l:'Name'},{k:'desc',l:'Description'},{k:'strengths',l:'Strengths',type:'list'},{k:'tradeoffs',l:'Trade-offs',type:'list'}]}
+};
+var PF_OBJ={
+ 'company':{label:'Company identity',fields:[{k:'founded',l:'Founded'},{k:'hq',l:'HQ'},{k:'businessModel',l:'Business model'},{k:'coreProduct',l:'Core product'},{k:'teamSize',l:'Team size'},{k:'activeClients',l:'Active clients'},{k:'arr',l:'ARR'},{k:'retention',l:'Retention'},{k:'operatingStatus',l:'Operating status'},{k:'cashPosition',l:'Cash position',type:'number'},{k:'monthlyRevenue',l:'Monthly revenue',type:'number'},{k:'monthlyProfit',l:'Monthly profit',type:'number'},{k:'monthlyProfitOct',l:'Monthly profit (Oct+)',type:'number'},{k:'corporateDebt',l:'Corporate debt',type:'number'},{k:'ceoNetWorth',l:'CEO net worth',type:'number'},{k:'cashGate',l:'Cash gate',type:'number'},{k:'gateDate',l:'Gate ETA'},{k:'fy27RevenueTarget',l:'FY27 revenue target',type:'number'},{k:'maRange',l:'M&A range'}]},
+ 'financials':{label:'Cash assumptions',fields:[{k:'openingCash',l:'Opening cash',type:'number'},{k:'cashGateTarget',l:'Cash gate target',type:'number'}]},
+ 'debt':{label:'Corporate debt summary',fields:[{k:'total',l:'Total debt',type:'number'},{k:'monthlyRange',l:'Monthly range'}]},
+ 'debt.personal':{label:'Personal position summary',fields:[{k:'netWorth',l:'Net worth',type:'number'},{k:'liquidSubtotal',l:'Liquid subtotal',type:'number'},{k:'realEstateEquity',l:'Real-estate equity',type:'number'}]},
+ 'pipelineTotals':{label:'Pipeline totals',fields:[{k:'value',l:'Total value',type:'number'},{k:'ev',l:'Expected value',type:'number'},{k:'range',l:'EV range note'}]},
+ 'marines':{label:'Marines detail',fields:[{k:'poc',l:'POC'},{k:'contact',l:'Contact'},{k:'status',l:'Status',type:'textarea'},{k:'strategy',l:'Strategy',type:'textarea'},{k:'advantage',l:'Key advantage',type:'textarea'},{k:'aiPositioning',l:'AI positioning',type:'textarea'},{k:'next',l:'Next step',type:'textarea'}]},
+ 'strategy.operatingModel':{label:'Operating model',fields:[{k:'coe',l:'CoE',type:'textarea'},{k:'triad',l:'Triad',type:'list'},{k:'cadence',l:'Cadence',type:'list'},{k:'os',l:'Operating system'}]},
+ 'technology.sbir':{label:'SBIR note',fields:[{k:'andrewKirksey',l:'Andrew Kirksey role',type:'textarea'}]},
+ 'actuals':{label:'Actuals summary',fields:[{k:'asOf',l:'As of'},{k:'source',l:'Source'},{k:'reconciledSubtotal',l:'Reconciled subtotal',type:'number'}]},
+ 'meta':{label:'Document meta',fields:[{k:'version',l:'Version'},{k:'asOf',l:'As of'},{k:'supersedes',l:'Supersedes'}]}
+};
+var PF_LIST={'company.competencies':'Core competencies','strategy.recommendations':'Closing recommendations','strategy.hardRules':'Survival-mode hard rules'};
+var _pfCompareFrom=null,_pfCompareTo='current';
+function _pfRef(path){var parts=path.split('.'),o=D.proforma;for(var i=0;i<parts.length-1;i++){if(o[parts[i]]==null)o[parts[i]]={};o=o[parts[i]];}return {parent:o,key:parts[parts.length-1]};}
+function _pfArr(path){var r=_pfRef(path);if(!Array.isArray(r.parent[r.key]))r.parent[r.key]=[];return r.parent[r.key];}
+function pfTouch(){if(!D.proforma.meta)D.proforma.meta={};D.proforma.meta.updatedAt=Date.now();D.proforma.meta.updatedBy=ME?(ME.name||ME.email):'admin';save();renderView();}
+function _pfFormFields(cols,src){return cols.map(function(c){var v=src?src[c.k]:'';
+  if(c.type==='list')return {key:c.k,label:c.l+' (one per line)',type:'textarea',rows:c.rows||5,value:Array.isArray(v)?v.join('\n'):''};
+  if(c.type==='select')return {key:c.k,label:c.l,type:'select',options:(c.opts||[]).map(function(o){return {value:o,label:o};}),value:v!=null?v:''};
+  return {key:c.k,label:c.l,type:c.type||'text',rows:c.rows,value:v!=null?v:''};});}
+function _pfApply(cols,rec,v){cols.forEach(function(c){var val=v[c.k];
+  if(c.type==='number')val=(val===''||val==null)?null:Number(val);
+  else if(c.type==='list')val=String(val||'').split('\n').map(function(s){return s.trim();}).filter(Boolean);
+  rec[c.k]=val;});}
+function pfEditRow(path,idx){var sch=PF_FIELDS[path];if(!sch)return;var arr=_pfArr(path);var cur=(idx>=0)?arr[idx]:null;
+  openFormModal({over:'Proforma',title:(idx<0?'Add ':'Edit ')+sch.label,submitLabel:'Save',fields:_pfFormFields(sch.cols,cur),
+    onSubmit:function(v){var rec=(idx<0)?{}:arr[idx];_pfApply(sch.cols,rec,v);if(idx<0)arr.push(rec);pfTouch();toast((idx<0?'Added':'Updated')+' — '+sch.label.toLowerCase()+'.','success');}});}
+function pfDelRow(path,idx){var arr=_pfArr(path);if(!arr[idx])return;if(!confirm('Delete this entry?'))return;arr.splice(idx,1);pfTouch();}
+function pfEditObj(path){var sch=PF_OBJ[path];if(!sch)return;var ref=_pfRef(path);var obj=ref.parent[ref.key];if(obj==null){obj={};ref.parent[ref.key]=obj;}
+  openFormModal({over:'Proforma',title:'Edit '+sch.label,submitLabel:'Save',fields:_pfFormFields(sch.fields,obj),
+    onSubmit:function(v){_pfApply(sch.fields,obj,v);pfTouch();toast('Updated — '+sch.label.toLowerCase()+'.','success');}});}
+function pfEditList(path){var arr=_pfArr(path),lbl=PF_LIST[path]||'Items';
+  openFormModal({over:'Proforma',title:'Edit '+lbl,submitLabel:'Save',fields:[{key:'items',label:lbl+' (one per line)',type:'textarea',rows:9,value:arr.join('\n')}],
+    onSubmit:function(v){var ref=_pfRef(path);ref.parent[ref.key]=String(v.items||'').split('\n').map(function(s){return s.trim();}).filter(Boolean);pfTouch();}});}
+function _pfEditBtn(js){return ' <button class="pf-edit-btn" onclick="'+js+'" title="Edit">&#9998;</button>';}
+function _pfDelBtn(js){return '<button class="pf-edit-btn pf-del" onclick="'+js+'" title="Delete">&times;</button>';}
+function _pfAddBtn(path,label){return '<button class="btn btn-sec btn-sm pf-add" onclick="pfEditRow(\''+path+'\',-1)">'+(label||'+ Add row')+'</button>';}
+function _pfH(t,js){return '<div class="pf-card-h">'+t+(js?_pfEditBtn(js):'')+'</div>';}
+function _pfTable(headers,rows,editPath){
+  var hs=headers.slice();if(editPath)hs.push('');
+  var body=rows.map(function(r,i){var cells=r.map(function(c){return '<td>'+(c==null?'':c)+'</td>';}).join('');
+    if(editPath)cells+='<td class="pf-row-act">'+_pfEditBtn("pfEditRow('"+editPath+"',"+i+")")+_pfDelBtn("pfDelRow('"+editPath+"',"+i+")")+'</td>';
+    return '<tr>'+cells+'</tr>';}).join('');
+  return '<div style="overflow:auto"><table class="pf-tbl"><thead><tr>'+hs.map(function(h){return '<th>'+h+'</th>';}).join('')+'</tr></thead>'
+    +'<tbody>'+body+'</tbody></table></div>'+(editPath?_pfAddBtn(editPath):'');
+}
+/* ── Snapshots & change reporting ── */
+function proformaTakeSnapshot(){
+  openFormModal({over:'Proforma',title:'Take Snapshot',submitLabel:'Capture',intro:'Saves a point-in-time copy of the entire Proforma so you can track and report changes over time.',
+    fields:[{key:'label',label:'Label (optional)',type:'text',placeholder:'e.g. V4 · post-Marines update'}],
+    onSubmit:function(v){if(!Array.isArray(D.proformaSnapshots))D.proformaSnapshots=[];
+      D.proformaSnapshots.push({id:uid(),ts:Date.now(),label:(v.label||'').trim()||('Snapshot '+(D.proformaSnapshots.length+1)),by:ME?(ME.name||ME.email):'admin',data:JSON.parse(JSON.stringify(D.proforma))});
+      save();renderView();toast('Snapshot captured.','success');}});}
+function proformaDelSnapshot(id){if(!confirm('Delete this snapshot?'))return;D.proformaSnapshots=(D.proformaSnapshots||[]).filter(function(s){return s.id!==id;});if(_pfCompareFrom===id)_pfCompareFrom=null;if(_pfCompareTo===id)_pfCompareTo='current';save();renderView();}
+function pfSetCompare(which,val){if(which==='from')_pfCompareFrom=val||null;else _pfCompareTo=val;renderView();}
+function _pfType(x){return Array.isArray(x)?'arr':(x&&typeof x==='object')?'obj':'val';}
+function _pfDiff(a,b,path,out){out=out||[];path=path||'';
+  if(/meta\.(updatedAt|updatedBy)$/.test(path))return out;
+  var ta=_pfType(a),tb=_pfType(b);
+  if(a!==undefined&&b!==undefined&&ta!==tb){out.push({path:path,t:'chg',a:JSON.stringify(a),b:JSON.stringify(b)});return out;}
+  if(ta==='obj'&&tb==='obj'){var ks={};Object.keys(a).forEach(function(k){ks[k]=1;});Object.keys(b).forEach(function(k){ks[k]=1;});Object.keys(ks).forEach(function(k){_pfDiff(a[k],b[k],path?path+'.'+k:k,out);});}
+  else if(ta==='arr'||tb==='arr'){var aa=a||[],bb=b||[],n=Math.max(aa.length,bb.length);for(var i=0;i<n;i++)_pfDiff(aa[i],bb[i],path+'['+(i+1)+']',out);}
+  else{if(a===undefined&&b!==undefined)out.push({path:path,t:'add',a:null,b:b});else if(a!==undefined&&b===undefined)out.push({path:path,t:'del',a:a,b:null});else if(a!==b&&!(a==null&&b==null))out.push({path:path,t:'chg',a:a,b:b});}
+  return out;}
+function _pfSnapKPIs(pf){pf=pf||{};var c=pf.company||{},f=pf.financials||{},d=(pf.debt||{}).personal||{},pt=pf.pipelineTotals||{};
+  return {cash:f.openingCash,gate:f.cashGateTarget,netWorth:d.netWorth,corpDebt:c.corporateDebt,mProfit:c.monthlyProfit,mProfitOct:c.monthlyProfitOct,pipelineEV:pt.ev,risks:(pf.risks||[]).length,gaps:(pf.dataGaps||[]).length};}
+function _pfDate(ts){if(!ts||typeof ts!=='number')return '';try{return new Date(ts).toLocaleDateString();}catch(e){return '';}}
+function _pfSnapshotsHTML(P){
+  var snaps=(D.proformaSnapshots||[]).slice().sort(function(a,b){return a.ts-b.ts;});
+  if(!snaps.length)return '<div class="pf-card"><div class="pf-card-h">Snapshots</div><div class="pf-note">No snapshots yet. Click <b>&#128247; Take snapshot</b> above to capture the current Proforma. Take one before each leadership update, then compare here to see exactly what changed.</div></div>';
+  var cols=snaps.map(function(s){return {label:s.label,sub:_pfDate(s.ts),kpi:_pfSnapKPIs(s.data)};});
+  cols.push({label:'Current',sub:'live',kpi:_pfSnapKPIs(P)});
+  var metrics=[['Cash position','cash',1],['Cash gate','gate',1],['CEO net worth','netWorth',1],['Corporate debt','corpDebt',1],['Monthly profit','mProfit',1],['Monthly profit (Oct+)','mProfitOct',1],['Pipeline EV','pipelineEV',1],['Open risks','risks',0],['Open data gaps','gaps',0]];
+  var thead='<tr><th>Metric</th>'+cols.map(function(cc){return '<th>'+esc(cc.label)+'<div class="pf-sub">'+esc(cc.sub)+'</div></th>';}).join('')+'</tr>';
+  var tbody=metrics.map(function(m){return '<tr><td style="text-align:left;font-weight:600">'+m[0]+'</td>'+cols.map(function(cc){var v=cc.kpi[m[1]];return '<td>'+(v==null?'—':(m[2]?fmt(v):v))+'</td>';}).join('')+'</tr>';}).join('');
+  var trend='<div class="pf-card"><div class="pf-card-h">Headline trend across snapshots</div><div style="overflow:auto"><table class="pf-tbl pf-trend"><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table></div></div>';
+  if(!_pfCompareFrom||!snaps.some(function(s){return s.id===_pfCompareFrom;}))_pfCompareFrom=snaps[0].id;
+  var fromSel='<select class="fld-sel" style="max-width:240px" onchange="pfSetCompare(\'from\',this.value)">'+snaps.map(function(s){return '<option value="'+s.id+'"'+(_pfCompareFrom===s.id?' selected':'')+'>'+esc(s.label)+' · '+_pfDate(s.ts)+'</option>';}).join('')+'</select>';
+  var toSel='<select class="fld-sel" style="max-width:240px" onchange="pfSetCompare(\'to\',this.value)"><option value="current"'+(_pfCompareTo==='current'?' selected':'')+'>Current (live)</option>'+snaps.map(function(s){return '<option value="'+s.id+'"'+(_pfCompareTo===s.id?' selected':'')+'>'+esc(s.label)+' · '+_pfDate(s.ts)+'</option>';}).join('')+'</select>';
+  var fromS=snaps.find(function(s){return s.id===_pfCompareFrom;});
+  var toData=(_pfCompareTo==='current')?P:(snaps.find(function(s){return s.id===_pfCompareTo;})||{}).data;
+  var diffHTML='';
+  if(fromS&&toData){
+    var diffs=_pfDiff(fromS.data,toData);var cnt={add:0,del:0,chg:0};diffs.forEach(function(x){cnt[x.t]++;});
+    var rowsH=diffs.slice(0,300).map(function(x){var lbl=x.t==='add'?'added':x.t==='del'?'removed':'changed';
+      return '<tr><td>'+esc(x.path.replace(/\./g,' › '))+'</td><td><span class="pf-pill pf-diff-'+x.t+'">'+lbl+'</span></td><td>'+(x.a==null?'—':esc(String(x.a)))+'</td><td>'+(x.b==null?'—':esc(String(x.b)))+'</td></tr>';}).join('');
+    diffHTML='<div style="margin-top:10px">'+(diffs.length?('<div class="pf-note" style="margin-bottom:6px"><b>'+diffs.length+'</b> change'+(diffs.length===1?'':'s')+': '+cnt.chg+' modified · '+cnt.add+' added · '+cnt.del+' removed'+(diffs.length>300?' (showing first 300)':'')+'</div><div style="overflow:auto"><table class="pf-tbl"><thead><tr><th>Field</th><th>Change</th><th>Before</th><th>After</th></tr></thead><tbody>'+rowsH+'</tbody></table></div>'):'<div class="pf-note">No differences — these two versions are identical (excluding edit timestamps).</div>');
+  }
+  var compare='<div class="pf-card"><div class="pf-card-h">Compare &amp; change report</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="pf-sub">From</span>'+fromSel+'<span class="pf-sub">→ To</span>'+toSel+'</div>'+diffHTML+'</div>';
+  var list='<div class="pf-card"><div class="pf-card-h">Snapshots ('+snaps.length+')</div>'+_pfTable(['Label','Captured','By'],snaps.map(function(s){return [esc(s.label),_pfDate(s.ts),esc(s.by||'')];}))
+    +'<div style="margin-top:8px">'+snaps.map(function(s){return '<button class="pf-edit-btn pf-del" style="margin-right:8px" onclick="proformaDelSnapshot(\''+s.id+'\')" title="Delete snapshot">&times; '+esc(s.label)+'</button>';}).join('')+'</div></div>';
+  return trend+compare+list;
 }
 function renderProformaView(q){
   if(!canProforma())return '<div class="empty-msg">No access. The Proforma section is restricted to Admin.</div>';
   if(!D.proforma)proformaMigrate();
-  var P=D.proforma,c=P.company||{},f=P.financials||{};
+  var P=D.proforma,c=P.company||{},f=P.financials||{},meta=P.meta||{};
   var gateTarget=f.cashGateTarget||1500000,cash=f.openingCash||c.cashPosition||0,pct=Math.max(0,Math.min(100,Math.round(cash/gateTarget*100)));
-  var tabs=[['overview','Overview'],['financials','Financials & Cash'],['scenarios','Scenarios'],['contracts','Contracts'],['debt','Debt & Personal'],['pipeline','Pipeline'],['strategy','Strategy'],['technology','Technology'],['costs','Cost Structure'],['risks','Risks & Dates'],['actuals','Actuals']];
+  var tabs=[['overview','Overview'],['financials','Financials & Cash'],['scenarios','Scenarios'],['contracts','Contracts'],['debt','Debt & Personal'],['pipeline','Pipeline'],['strategy','Strategy'],['technology','Technology'],['costs','Cost Structure'],['risks','Risks & Dates'],['actuals','Actuals'],['snapshots','Snapshots']];
   var nav='<div class="pf-subtabs">'+tabs.map(function(t){return '<button class="pf-subtab'+(proformaTab===t[0]?' active':'')+'" onclick="pfSetTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
   var kpis=[['Cash position',_pfMoney(cash)],['Cash gate',_pfMoney(gateTarget)+' · '+pct+'%'],['Monthly profit',_pfMoney(c.monthlyProfit)+' → '+_pfMoney(c.monthlyProfitOct)],['Corporate debt',_pfMoney(c.corporateDebt)],['CEO net worth',_pfMoney(c.ceoNetWorth)],['Gate ETA',esc(c.gateDate||'—')]];
   var kpiBar='<div class="pf-kpis">'+kpis.map(function(k){return '<div class="pf-kpi"><div class="pf-kpi-l">'+k[0]+'</div><div class="pf-kpi-v">'+k[1]+'</div></div>';}).join('')+'</div>';
-  var banner='<div class="pf-banner">&#128274; CONFIDENTIAL — CEO second brain. Restricted to Admin. Not synced externally. <span style="opacity:.8">Source: Knowledge Base '+esc((P.meta||{}).version||'')+' · as of '+esc((P.meta||{}).asOf||'')+'</span></div>';
+  var upd=(meta.updatedBy&&meta.updatedBy!=='seed')?(' · last edited by '+esc(meta.updatedBy)+(_pfDate(meta.updatedAt)?(' on '+_pfDate(meta.updatedAt)):'')):'';
+  var banner='<div class="pf-banner">&#128274; CONFIDENTIAL — CEO second brain. Restricted to Admin. Not synced externally. <span style="opacity:.8">Source: Knowledge Base '+esc(meta.version||'')+' · as of '+esc(meta.asOf||'')+upd+'</span></div>';
+  var actions='<div class="pf-actions-row"><button class="btn btn-gold btn-sm" onclick="proformaTakeSnapshot()">&#128247; Take snapshot</button>'
+    +'<button class="btn btn-sec btn-sm" onclick="pfEditObj(\'meta\')">Edit doc meta</button>'
+    +'<span class="pf-meta">'+((D.proformaSnapshots||[]).length)+' snapshot'+(((D.proformaSnapshots||[]).length)===1?'':'s')+' on file · edits save to live and stamp who/when</span></div>';
   var body='';
   if(proformaTab==='overview'){
     body='<div class="pf-grid">'
-      +'<div class="pf-card"><div class="pf-card-h">Identity</div>'+_pfTable(['Field','Value'],[
+      +'<div class="pf-card">'+_pfH('Identity',"pfEditObj('company')")+_pfTable(['Field','Value'],[
         ['Founded',esc(c.founded)],['HQ',esc(c.hq)],['Business model',esc(c.businessModel)],['Core product',esc(c.coreProduct)],
         ['Team size',esc(c.teamSize)],['Active clients',esc(c.activeClients)],['ARR',esc(c.arr)],['Retention',esc(c.retention)],
         ['Operating status','<b>'+esc(c.operatingStatus)+'</b>'],['FY27 revenue target',_pfMoney(c.fy27RevenueTarget)],['M&A range',esc(c.maRange)]])+'</div>'
-      +'<div class="pf-card"><div class="pf-card-h">Cash gate progress</div><div class="pf-gate"><div class="pf-gate-bar"><div class="pf-gate-fill" style="width:'+pct+'%"></div></div>'
+      +'<div class="pf-card">'+_pfH('Cash gate progress',"pfEditObj('financials')")+'<div class="pf-gate"><div class="pf-gate-bar"><div class="pf-gate-fill" style="width:'+pct+'%"></div></div>'
         +'<div class="pf-gate-lbl">'+_pfMoney(cash)+' of '+_pfMoney(gateTarget)+' ('+pct+'%) · ETA '+esc(c.gateDate||'—')+'</div></div>'
-        +'<div class="pf-card-h" style="margin-top:14px">Core competencies</div><ul class="pf-list">'+(c.competencies||[]).map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul></div>'
-      +'<div class="pf-card"><div class="pf-card-h">Notable clients</div>'+_pfTable(['Client','Type'],(c.notableClients||[]).map(function(x){return [esc(x.name),esc(x.type)];}))+'</div>'
-      +'<div class="pf-card"><div class="pf-card-h">Competitive landscape</div>'+_pfTable(['Competitor','Type','Note'],(c.competitors||[]).map(function(x){return [esc(x.name),esc(x.type),esc(x.note)];}))+'</div>'
+        +_pfH('Core competencies',"pfEditList('company.competencies')")+'<ul class="pf-list">'+(c.competencies||[]).map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul></div>'
+      +'<div class="pf-card">'+_pfH('Notable clients')+_pfTable(['Client','Type'],(c.notableClients||[]).map(function(x){return [esc(x.name),esc(x.type)];}),'company.notableClients')+'</div>'
+      +'<div class="pf-card">'+_pfH('Competitive landscape')+_pfTable(['Competitor','Type','Note'],(c.competitors||[]).map(function(x){return [esc(x.name),esc(x.type),esc(x.note)];}),'company.competitors')+'</div>'
       +'</div>';
   } else if(proformaTab==='financials'){
-    body='<div class="pf-card"><div class="pf-card-h">Historical performance</div>'+_pfTable(['Year','Revenue','Net income','Op. cash flow','Ending cash'],(f.history||[]).map(function(h){return [esc(h.year),_pfMoney(h.revenue),_pfMoney(h.netIncome),_pfMoney(h.opCashFlow),_pfMoney(h.endingCash)];}))+'</div>'
-      +'<div class="pf-card"><div class="pf-card-h">Cash position trajectory (base case)</div>'+_pfTable(['Date','Cash','Monthly Δ','Status','Notes'],(f.cashTrajectory||[]).map(function(r){return [esc(r.date),_pfMoney(r.cash),_pfMoney(r.delta),esc(r.status),esc(r.notes)];}))+'</div>'
-      +'<div class="pf-card"><div class="pf-card-h">Survival-mode exit gates</div>'+_pfTable(['Gate','Status','Projected close','Notes'],(f.gates||[]).map(function(g){return [esc(g.name),esc(g.status),esc(g.projectedClose),esc(g.notes)];}))+'</div>';
+    body='<div class="pf-card">'+_pfH('Historical performance')+_pfTable(['Year','Revenue','Net income','Op. cash flow','Ending cash'],(f.history||[]).map(function(h){return [esc(h.year),_pfMoney(h.revenue),_pfMoney(h.netIncome),_pfMoney(h.opCashFlow),_pfMoney(h.endingCash)];}),'financials.history')+'</div>'
+      +'<div class="pf-card">'+_pfH('Cash position trajectory (base case)',"pfEditObj('financials')")+_pfTable(['Date','Cash','Monthly Δ','Status','Notes'],(f.cashTrajectory||[]).map(function(r){return [esc(r.date),_pfMoney(r.cash),_pfMoney(r.delta),esc(r.status),esc(r.notes)];}),'financials.cashTrajectory')+'</div>'
+      +'<div class="pf-card">'+_pfH('Survival-mode exit gates')+_pfTable(['Gate','Status','Projected close','Notes'],(f.gates||[]).map(function(g){return [esc(g.name),esc(g.status),esc(g.projectedClose),esc(g.notes)];}),'financials.gates')+'</div>';
   } else if(proformaTab==='scenarios'){
-    body='<div class="pf-grid">'+(P.scenarios||[]).map(function(s){return '<div class="pf-card"><div class="pf-card-h">'+esc(s.name)+'</div>'
-      +'<div class="pf-big">'+_pfMoney(s.cashAtHorizon)+'</div><div class="pf-sub">cash at Aug 14, 2027</div>'
+    body='<div class="pf-grid">'+(P.scenarios||[]).map(function(s,si){return '<div class="pf-card"><div class="pf-card-h">'+esc(s.name)+_pfEditBtn("pfEditRow('scenarios',"+si+")")+_pfDelBtn("pfDelRow('scenarios',"+si+")")+'</div>'
+      +'<div class="pf-big">'+_pfMoney(s.cashAtHorizon)+'</div><div class="pf-sub">cash at horizon</div>'
       +'<div class="pf-kv"><span>Gate timing</span><b>'+esc(s.gateTiming)+'</b></div><div class="pf-note">'+esc(s.assumptions)+'</div></div>';}).join('')+'</div>'
-      +'<div class="pf-note" style="margin-top:8px">These map onto Capacity Planning scenarios (Phase 2): Base / Marines Win / Conservative / Sterling Stress / Overperformance.</div>';
+      +_pfAddBtn('scenarios','+ Add scenario')+'<div class="pf-note" style="margin-top:8px">These map onto the Capacity Planning V4 scenario presets.</div>';
   } else if(proformaTab==='contracts'){
-    body='<div class="pf-card"><div class="pf-card-h">Contract profitability summary</div>'+_pfTable(['Contract','Monthly rev','Monthly cost','Monthly profit','Margin','Strategic role'],(P.contractEconomics||[]).map(function(x){return [esc(x.contract),_pfMoney(x.rev),_pfMoney(x.cost),_pfMoney(x.profit),Math.round((x.margin||0)*1000)/10+'%',esc(x.role)];}))+'</div>'
-      +'<div class="pf-note">Time-phasing (FAMS sunset, BCLM +25%, C1FAMS ramp) is also wired onto the operational projects and will drive the Capacity Planning forecast in Phase 2.</div>';
+    body='<div class="pf-card">'+_pfH('Contract profitability summary')+_pfTable(['Contract','Monthly rev','Monthly cost','Monthly profit','Margin','Strategic role'],(P.contractEconomics||[]).map(function(x){return [esc(x.contract),_pfMoney(x.rev),_pfMoney(x.cost),_pfMoney(x.profit),Math.round((x.margin||0)*1000)/10+'%',esc(x.role)];}),'contractEconomics')+'</div>'
+      +'<div class="pf-note">Time-phasing (FAMS sunset, BCLM +25%, C1FAMS ramp) is wired onto the operational projects and drives the Capacity Planning forecast.</div>';
   } else if(proformaTab==='debt'){
-    var d=P.debt||{},pers=d.personal||{};
-    body='<div class="pf-card"><div class="pf-card-h">Corporate debt — total '+_pfMoney(d.total)+'</div>'+_pfTable(['Lender','Balance','Monthly payment','Rate / term','Status','Notes'],(d.corporate||[]).map(function(x){return [esc(x.lender),_pfMoney(x.balance),esc(x.monthlyPayment),esc(x.rateTerm),esc(x.status),esc(x.notes)];}))+'</div>'
-      +'<div class="pf-card pf-locked"><div class="pf-card-h">&#128274; CEO personal financial position — Khaja Syed (most sensitive)</div>'
-      +_pfTable(['Liquid / retirement','Value'],(pers.liquid||[]).map(function(x){return [esc(x.asset),_pfMoney(x.value)];}).concat([['<b>Subtotal liquid/retirement</b>','<b>'+_pfMoney(pers.liquidSubtotal)+'</b>']]))
-      +_pfTable(['Real estate','Value','Debt','Equity','Notes'],(pers.realEstate||[]).map(function(x){return [esc(x.property),_pfMoney(x.value),_pfMoney(x.debt),_pfMoney(x.equity),esc(x.notes)];}))
+    var dd=P.debt||{},pers=dd.personal||{};
+    body='<div class="pf-card">'+_pfH('Corporate debt — total '+_pfMoney(dd.total),"pfEditObj('debt')")+_pfTable(['Lender','Balance','Monthly payment','Rate / term','Status','Notes'],(dd.corporate||[]).map(function(x){return [esc(x.lender),_pfMoney(x.balance),esc(x.monthlyPayment),esc(x.rateTerm),esc(x.status),esc(x.notes)];}),'debt.corporate')+'</div>'
+      +'<div class="pf-card pf-locked">'+_pfH('&#128274; CEO personal financial position — Khaja Syed (most sensitive)',"pfEditObj('debt.personal')")
+      +'<div class="pf-sub">Liquid / retirement</div>'+_pfTable(['Asset','Value'],(pers.liquid||[]).map(function(x){return [esc(x.asset),_pfMoney(x.value)];}),'debt.personal.liquid')
+      +'<div class="pf-kv" style="margin-top:6px"><span>Liquid subtotal</span><b>'+_pfMoney(pers.liquidSubtotal)+'</b></div>'
+      +'<div class="pf-sub" style="margin-top:10px">Real estate</div>'+_pfTable(['Property','Value','Debt','Equity','Notes'],(pers.realEstate||[]).map(function(x){return [esc(x.property),_pfMoney(x.value),_pfMoney(x.debt),_pfMoney(x.equity),esc(x.notes)];}),'debt.personal.realEstate')
       +'<div class="pf-kv" style="margin-top:8px"><span>Estimated total net worth</span><b>'+_pfMoney(pers.netWorth)+'</b></div></div>';
   } else if(proformaTab==='pipeline'){
     var m=P.marines||{},pt=P.pipelineTotals||{};
-    body='<div class="pf-card"><div class="pf-card-h">Federal pipeline — '+(P.pipeline||[]).length+' active pursuits</div>'+_pfTable(['Opportunity','Customer','Vehicle','Value','Pwin','EV','Owner','Next step'],(P.pipeline||[]).map(function(x){return [esc(x.opportunity),esc(x.customer),esc(x.vehicle),_pfMoney(x.value),Math.round((x.pwin||0)*100)+'%',_pfMoney(x.ev),esc(x.owner),esc(x.next)];}))
+    body='<div class="pf-card">'+_pfH('Federal pipeline — '+(P.pipeline||[]).length+' active pursuits',"pfEditObj('pipelineTotals')")+_pfTable(['Opportunity','Customer','Vehicle','Value','Pwin','EV','Owner','Next step'],(P.pipeline||[]).map(function(x){return [esc(x.opportunity),esc(x.customer),esc(x.vehicle),_pfMoney(x.value),Math.round((x.pwin||0)*100)+'%',_pfMoney(x.ev),esc(x.owner),esc(x.next)];}),'pipeline')
       +'<div class="pf-kv" style="margin-top:8px"><span>Totals</span><b>'+_pfMoney(pt.value)+' value · '+_pfMoney(pt.ev)+' EV</b></div><div class="pf-note">'+esc(pt.range||'')+'</div></div>'
-      +'<div class="pf-card"><div class="pf-card-h">Marines DD577 — high priority</div>'+_pfTable(['Field','Detail'],[
+      +'<div class="pf-card">'+_pfH('Marines DD577 — high priority',"pfEditObj('marines')")+_pfTable(['Field','Detail'],[
         ['POC',esc(m.poc)],['Contact',esc(m.contact)],['Status',esc(m.status)],['Strategy',esc(m.strategy)],['Key advantage',esc(m.advantage)],['AI positioning',esc(m.aiPositioning)],['Next step',esc(m.next)]])
-      +'<div class="pf-card-h" style="margin-top:12px">Timeline</div>'+_pfTable(['Date','Event'],(m.timeline||[]).map(function(t){return [esc(t.date),esc(t.event)];}))+'</div>';
+      +_pfH('Timeline')+_pfTable(['Date','Event'],(m.timeline||[]).map(function(t){return [esc(t.date),esc(t.event)];}),'marines.timeline')+'</div>';
   } else if(proformaTab==='strategy'){
     var st=P.strategy||{},om=st.operatingModel||{};
-    body='<div class="pf-card"><div class="pf-card-h">Four-Pillar FY27 framework</div><div class="pf-grid">'+(st.pillars||[]).map(function(p){return '<div class="pf-mini"><b>'+esc(p.name)+'</b><div class="pf-sub">'+esc(p.subtitle)+'</div><ul class="pf-list">'+(p.initiatives||[]).map(function(i){return '<li>'+esc(i)+'</li>';}).join('')+'</ul></div>';}).join('')+'</div></div>'
-      +'<div class="pf-card"><div class="pf-card-h">Three strategic paths</div><div class="pf-grid">'+(st.paths||[]).map(function(p){return '<div class="pf-mini"><b>'+esc(p.name)+'</b><div class="pf-sub">'+esc(p.desc)+'</div><div class="pf-sub" style="margin-top:6px;color:var(--green)">Strengths</div><ul class="pf-list">'+(p.strengths||[]).map(function(i){return '<li>'+esc(i)+'</li>';}).join('')+'</ul><div class="pf-sub" style="color:var(--red)">Trade-offs</div><ul class="pf-list">'+(p.tradeoffs||[]).map(function(i){return '<li>'+esc(i)+'</li>';}).join('')+'</ul></div>';}).join('')+'</div></div>'
-      +'<div class="pf-card pf-locked"><div class="pf-card-h">Survival-mode hard rules</div><ul class="pf-list">'+(st.hardRules||[]).map(function(r){return '<li>&#128274; '+esc(r)+'</li>';}).join('')+'</ul></div>'
-      +'<div class="pf-card"><div class="pf-card-h">Closing recommendations</div><ol class="pf-list">'+(st.recommendations||[]).map(function(r){return '<li>'+esc(r)+'</li>';}).join('')+'</ol></div>'
-      +'<div class="pf-card"><div class="pf-card-h">Operating model — CoE / Triad / Cadence</div><div class="pf-kv"><span>CoE</span><span>'+esc(om.coe)+'</span></div><div class="pf-card-h" style="margin-top:8px">Triad</div><ul class="pf-list">'+(om.triad||[]).map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul><div class="pf-card-h" style="margin-top:8px">Cadence</div><ul class="pf-list">'+(om.cadence||[]).map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul><div class="pf-note">OS: '+esc(om.os)+'</div></div>';
+    body='<div class="pf-card">'+_pfH('Four-Pillar FY27 framework')+'<div class="pf-grid">'+(st.pillars||[]).map(function(p,pi){return '<div class="pf-mini"><div class="pf-mini-h"><b>'+esc(p.name)+'</b><span>'+_pfEditBtn("pfEditRow('strategy.pillars',"+pi+")")+_pfDelBtn("pfDelRow('strategy.pillars',"+pi+")")+'</span></div><div class="pf-sub">'+esc(p.subtitle)+'</div><ul class="pf-list">'+(p.initiatives||[]).map(function(i){return '<li>'+esc(i)+'</li>';}).join('')+'</ul></div>';}).join('')+'</div>'+_pfAddBtn('strategy.pillars','+ Add pillar')+'</div>'
+      +'<div class="pf-card">'+_pfH('Three strategic paths')+'<div class="pf-grid">'+(st.paths||[]).map(function(p,pi){return '<div class="pf-mini"><div class="pf-mini-h"><b>'+esc(p.name)+'</b><span>'+_pfEditBtn("pfEditRow('strategy.paths',"+pi+")")+_pfDelBtn("pfDelRow('strategy.paths',"+pi+")")+'</span></div><div class="pf-sub">'+esc(p.desc)+'</div><div class="pf-sub" style="margin-top:6px;color:var(--green)">Strengths</div><ul class="pf-list">'+(p.strengths||[]).map(function(i){return '<li>'+esc(i)+'</li>';}).join('')+'</ul><div class="pf-sub" style="color:var(--red)">Trade-offs</div><ul class="pf-list">'+(p.tradeoffs||[]).map(function(i){return '<li>'+esc(i)+'</li>';}).join('')+'</ul></div>';}).join('')+'</div>'+_pfAddBtn('strategy.paths','+ Add path')+'</div>'
+      +'<div class="pf-card pf-locked">'+_pfH('Survival-mode hard rules',"pfEditList('strategy.hardRules')")+'<ul class="pf-list">'+(st.hardRules||[]).map(function(r){return '<li>&#128274; '+esc(r)+'</li>';}).join('')+'</ul></div>'
+      +'<div class="pf-card">'+_pfH('Closing recommendations',"pfEditList('strategy.recommendations')")+'<ol class="pf-list">'+(st.recommendations||[]).map(function(r){return '<li>'+esc(r)+'</li>';}).join('')+'</ol></div>'
+      +'<div class="pf-card">'+_pfH('Operating model — CoE / Triad / Cadence',"pfEditObj('strategy.operatingModel')")+'<div class="pf-kv"><span>CoE</span><span>'+esc(om.coe)+'</span></div><div class="pf-sub" style="margin-top:8px">Triad</div><ul class="pf-list">'+(om.triad||[]).map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul><div class="pf-sub" style="margin-top:8px">Cadence</div><ul class="pf-list">'+(om.cadence||[]).map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul><div class="pf-note">OS: '+esc(om.os)+'</div></div>';
   } else if(proformaTab==='technology'){
     var tech=P.technology||{},sb=tech.sbir||{};
-    body='<div class="pf-card"><div class="pf-card-h">Platform architecture</div>'+_pfTable(['Category','Description'],(tech.architecture||[]).map(function(x){return [esc(x.category),esc(x.desc)];}))+'</div>'
-      +'<div class="pf-card"><div class="pf-card-h">Capability layers — critical for external comms</div>'+_pfTable(['Capability','Layer / status','Notes'],(tech.capabilityLayers||[]).map(function(x){return [esc(x.capability),esc(x.layer),esc(x.notes)];}))+'</div>'
-      +'<div class="pf-card"><div class="pf-card-h">SBIR Phase III pathway</div>'+_pfTable(['Attribute','Explanation'],(sb.attributes||[]).map(function(x){return [esc(x.attr),esc(x.explanation)];}))+'<div class="pf-note">'+esc(sb.andrewKirksey||'')+'</div></div>';
+    body='<div class="pf-card">'+_pfH('Platform architecture')+_pfTable(['Category','Description'],(tech.architecture||[]).map(function(x){return [esc(x.category),esc(x.desc)];}),'technology.architecture')+'</div>'
+      +'<div class="pf-card">'+_pfH('Capability layers — critical for external comms')+_pfTable(['Capability','Layer / status','Notes'],(tech.capabilityLayers||[]).map(function(x){return [esc(x.capability),esc(x.layer),esc(x.notes)];}),'technology.capabilityLayers')+'</div>'
+      +'<div class="pf-card">'+_pfH('SBIR Phase III pathway',"pfEditObj('technology.sbir')")+_pfTable(['Attribute','Explanation'],(sb.attributes||[]).map(function(x){return [esc(x.attr),esc(x.explanation)];}),'technology.sbir.attributes')+'<div class="pf-note">'+esc(sb.andrewKirksey||'')+'</div></div>';
   } else if(proformaTab==='costs'){
-    var cs=P.costStructure||{};
+    var cs=P.costStructure||{};var ohT=(cs.overhead||[]).reduce(function(s,x){return s+(Number(x.monthly)||0);},0),subT=(cs.softwareSubs||[]).reduce(function(s,x){return s+(Number(x.monthly)||0);},0);
     body='<div class="pf-grid">'
-      +'<div class="pf-card"><div class="pf-card-h">Overhead — '+_pfMoney(cs.overheadTotal)+'/mo</div>'+_pfTable(['Category','Monthly','Notes'],(cs.overhead||[]).map(function(x){return [esc(x.category),_pfMoney(x.monthly),esc(x.notes)];}))+'</div>'
-      +'<div class="pf-card"><div class="pf-card-h">Software subscriptions — '+_pfMoney(cs.subsTotal)+'/mo</div>'+_pfTable(['Vendor','Monthly'],(cs.softwareSubs||[]).map(function(x){return [esc(x.vendor),_pfMoney(x.monthly)];}))+'</div></div>';
+      +'<div class="pf-card">'+_pfH('Overhead — '+_pfMoney(ohT)+'/mo')+_pfTable(['Category','Monthly','Notes'],(cs.overhead||[]).map(function(x){return [esc(x.category),_pfMoney(x.monthly),esc(x.notes)];}),'costStructure.overhead')+'</div>'
+      +'<div class="pf-card">'+_pfH('Software subscriptions — '+_pfMoney(subT)+'/mo')+_pfTable(['Vendor','Monthly'],(cs.softwareSubs||[]).map(function(x){return [esc(x.vendor),_pfMoney(x.monthly)];}),'costStructure.softwareSubs')+'</div></div>';
   } else if(proformaTab==='risks'){
-    body='<div class="pf-card"><div class="pf-card-h">Critical dates timeline</div>'+_pfTable(['Date','Event','Impact / action','Status'],(P.dates||[]).map(function(x){return [esc(x.date),esc(x.event),esc(x.impact),'<span class="pf-pill">'+esc(x.status)+'</span>'];}))+'</div>'
-      +'<div class="pf-card"><div class="pf-card-h">Risk register</div>'+_pfTable(['Risk','Level','Status','Owner','Mitigation'],(P.risks||[]).map(function(x){return [esc(x.risk),'<span class="pf-pill pf-'+(/CRITICAL/.test(x.level)?'crit':/HIGH/.test(x.level)?'high':/RESOLVED/.test(x.level)?'ok':'med')+'">'+esc(x.level)+'</span>',esc(x.status),esc(x.owner),esc(x.mitigation)];}))+'</div>'
-      +'<div class="pf-card"><div class="pf-card-h">Data gaps to resolve</div>'+_pfTable(['Gap','Priority','Owner','Impact if unresolved'],(P.dataGaps||[]).map(function(x){return [esc(x.gap),'<span class="pf-pill pf-'+(/HIGHEST|CRITICAL/.test(x.priority)?'crit':/HIGH/.test(x.priority)?'high':'med')+'">'+esc(x.priority)+'</span>',esc(x.owner),esc(x.impact)];}))+'</div>';
+    body='<div class="pf-card">'+_pfH('Critical dates timeline')+_pfTable(['Date','Event','Impact / action','Status'],(P.dates||[]).map(function(x){return [esc(x.date),esc(x.event),esc(x.impact),'<span class="pf-pill">'+esc(x.status)+'</span>'];}),'dates')+'</div>'
+      +'<div class="pf-card">'+_pfH('Risk register')+_pfTable(['Risk','Level','Status','Owner','Mitigation'],(P.risks||[]).map(function(x){return [esc(x.risk),'<span class="pf-pill pf-'+(/CRITICAL/.test(x.level)?'crit':/HIGH/.test(x.level)?'high':/RESOLVED/.test(x.level)?'ok':'med')+'">'+esc(x.level)+'</span>',esc(x.status),esc(x.owner),esc(x.mitigation)];}),'risks')+'</div>'
+      +'<div class="pf-card">'+_pfH('Data gaps to resolve')+_pfTable(['Gap','Priority','Owner','Impact if unresolved'],(P.dataGaps||[]).map(function(x){return [esc(x.gap),'<span class="pf-pill pf-'+(/HIGHEST|CRITICAL/.test(x.priority)?'crit':/HIGH/.test(x.priority)?'high':'med')+'">'+esc(x.priority)+'</span>',esc(x.owner),esc(x.impact)];}),'dataGaps')+'</div>';
   } else if(proformaTab==='actuals'){
-    var a=P.actuals||{};
-    body='<div class="pf-card"><div class="pf-card-h">New costs present in May/Jun 2026 — not in V4 model</div>'+_pfTable(['Vendor / cost','Jun 2026 actual','Recurring?','Notes'],(a.newCosts||[]).map(function(x){return [esc(x.vendor),_pfMoney(x.jun),esc(x.recurring),esc(x.notes)];}))
-      +'<div class="pf-kv" style="margin-top:8px"><span>Subtotal — new / uncaptured</span><b>'+_pfMoney(a.newCostsSubtotal)+'</b></div>'
+    var a=P.actuals||{};var ncT=(a.newCosts||[]).reduce(function(s,x){return s+(Number(x.jun)||0);},0);
+    body='<div class="pf-card">'+_pfH('New costs present in current actuals — not in V4 model',"pfEditObj('actuals')")+_pfTable(['Vendor / cost','Monthly actual','Recurring?','Notes'],(a.newCosts||[]).map(function(x){return [esc(x.vendor),_pfMoney(x.jun),esc(x.recurring),esc(x.notes)];}),'actuals.newCosts')
+      +'<div class="pf-kv" style="margin-top:8px"><span>Subtotal — new / uncaptured</span><b>'+_pfMoney(ncT)+'</b></div>'
       +'<div class="pf-note">Source: '+esc(a.source||'')+' · '+esc(a.asOf||'')+'. Reconciled (already-in-model) subtotal: '+_pfMoney(a.reconciledSubtotal)+'.</div></div>';
+  } else if(proformaTab==='snapshots'){
+    body=_pfSnapshotsHTML(P);
   }
   return '<div style="max-width:1320px;margin:0 auto">'+banner
     +'<div style="font-size:18px;font-weight:800;margin-bottom:2px">Proforma <span style="font-size:12px;font-weight:600;color:var(--text-muted)">· CommunityForce financial & strategic brain</span></div>'
-    +kpiBar+nav+body+'</div>';
+    +kpiBar+actions+nav+body+'</div>';
 }
 
 /* ── RESOURCES VIEW ── */
