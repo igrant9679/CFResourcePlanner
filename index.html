@@ -2469,9 +2469,10 @@ function renderProjView(q,category){
   var totalRev=0,totalCost=0;
   tops.forEach(function(proj){var r=projRollupData(proj.id,all);totalRev+=r.revenue;totalCost+=r.cost;});
   var pfOh=(category==='overhead'&&typeof proformaOverheadMonthly==='function')?proformaOverheadMonthly():0;
-  if(category==='overhead')totalCost+=pfOh;
+  var ohPeople=totalCost;  // labor allocated to overhead items — counts as (Other) Payroll, not Overhead
+  if(category==='overhead')totalCost=pfOh;  // Overhead = fixed Cost Structure G&A only
   var revWord=category==='opportunity'?'Total potential value: ':category==='initiative'?'Total expected rev: ':'Total revenue: ';
-  var sumLine=category==='overhead'?('Total overhead: <strong style="color:var(--red)">'+fmt(totalCost)+'/mo</strong>'+(pfOh>0?' <span style="font-size:10px;color:var(--text-muted)">(incl. '+fmt(pfOh)+'/mo G&amp;A from Cost Structure)</span>':'')):(revWord+'<strong style="color:'+(pipe?'var(--amber)':'var(--green)')+'">'+fmt(totalRev)+'/mo</strong> &middot; Total cost: <strong>'+fmt(totalCost)+'/mo</strong>');
+  var sumLine=category==='overhead'?('Total fixed overhead (G&amp;A): <strong style="color:var(--red)">'+fmt(totalCost)+'/mo</strong>'+(ohPeople>0?' <span style="font-size:10px;color:var(--text-muted)">· '+fmt(ohPeople)+'/mo of people on these cost centers counts as Payroll in Capacity, not Overhead</span>':'')):(revWord+'<strong style="color:'+(pipe?'var(--amber)':'var(--green)')+'">'+fmt(totalRev)+'/mo</strong> &middot; Total cost: <strong>'+fmt(totalCost)+'/mo</strong>');
   html+='<div style="padding:10px 14px;margin-bottom:14px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;color:var(--text-secondary)"><strong style="font-size:13px;color:var(--text-primary)">'+meta.label+'</strong> &middot; '+tops.length+' '+(tops.length===1?meta.noun:meta.plural)+' &middot; '+sumLine+'</div>';
   if(category==='overhead'&&pfOh>0){
     var cs=(D.proforma||{}).costStructure||{};
@@ -2835,11 +2836,11 @@ function renderCapacityView(q){
       +'</div>';
   }).join('');
   // Allocation matrix (people × items), editable %
-  var head='<tr><th class="cap-sticky">Person</th>'+items.map(function(p){var oh=projCat(p)==='overhead'&&!_capExclFromGA(p.name);return '<th class="cap-col'+(oh?' cap-col-oh':'')+'" title="'+esc(p.name)+(oh?' — overhead / G&A cost center (allocations here count as Overhead/G&A)':'')+'">'+esc((p.name||'').slice(0,14))+(p.name.length>14?'…':'')+(oh?' <span class="cap-oh-tag">OVH</span>':'')+'</th>';}).join('')+'<th>Alloc</th></tr>';
+  var head='<tr><th class="cap-sticky">Person</th>'+items.map(function(p){var oh=projCat(p)==='overhead';return '<th class="cap-col'+(oh?' cap-col-oh':'')+'" title="'+esc(p.name)+(oh?' — non-project cost center (allocations here count as Other Payroll, not Project Payroll or Overhead)':'')+'">'+esc((p.name||'').slice(0,14))+(p.name.length>14?'…':'')+(oh?' <span class="cap-oh-tag">OTHER</span>':'')+'</th>';}).join('')+'<th>Alloc</th></tr>';
   var _rank={ghost:0,prospect:1,member:2};
   var rows=roster.slice().sort(function(a,b){return (_rank[a._origin]||2)-(_rank[b._origin]||2);}).map(function(pn){
     var alloc=capAllocR(pn),over=alloc>100,full=alloc===100;
-    var cells=items.map(function(p){var oh=projCat(p)==='overhead'&&!_capExclFromGA(p.name);
+    var cells=items.map(function(p){var oh=projCat(p)==='overhead';
       var e=(pn.projects||[]).find(function(x){return x.id===p.id;});var v=e?(Number(e.pct)||0):'';
       return '<td'+(oh?' class="cap-col-oh"':'')+'><input class="cap-cell'+(v?' has':'')+(oh?' cap-cell-oh':'')+'" type="number" min="0" max="100" step="5" value="'+v+'" onchange="capSetPct(\''+pn.id+'\',\''+p.id+'\',this.value)"></td>';
     }).join('');
@@ -2855,7 +2856,7 @@ function renderCapacityView(q){
   var matrix='<div class="cap-matrix-wrap"><table class="cap-matrix"><thead>'+head+'</thead><tbody>'+rows+footFTE+'</tbody></table></div>';
   var toolbar='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px">'
     +'<div><div style="font-size:18px;font-weight:800">Capacity Planning <span style="font-size:12px;font-weight:600;color:var(--text-muted)">· what-if sandbox</span></div>'
-    +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Edit allocation % in the matrix, or drag a person\'s &#9783; handle onto a project/initiative card to allocate their free capacity. Nothing changes live data until you Apply. Initiatives count toward revenue only when staffed. Columns tagged <span class="cap-oh-tag">OVH</span> (Federal Sales/BD, G&amp;A/Operations, …) are overhead cost centers — allocating there moves that person\'s cost from Payroll to Overhead/G&amp;A in the forecast.</div></div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Edit allocation % in the matrix, or drag a person\'s &#9783; handle onto a project/initiative card to allocate their free capacity. Nothing changes live data until you Apply. Initiatives count toward revenue only when staffed. Columns tagged <span class="cap-oh-tag">OTHER</span> (Federal Sales/BD, G&amp;A/Operations, …) are non-project cost centers — allocating there puts that person\'s cost in <b>Other payroll</b>. People on projects/initiatives are <b>Project payroll</b>; the forecast also adds fixed <b>Overhead/G&amp;A</b> from Cost Structure.</div></div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
     +'<button class="btn btn-sec btn-sm" onclick="capAddGhost()">&#43; Hypothetical hire</button>'
     +'<button class="btn btn-sec btn-sm" onclick="capAddProspects()">&#43; Stage prospects</button>'
@@ -2966,9 +2967,9 @@ function capProjData(roster,multPct,opts){
   var marinesStart=null;
   if(opts.marinesWon){var mo2=opps.find(function(o){return /marines|dd577/i.test(o.name||'');});var cd=mo2&&mo2.closeDate?new Date(mo2.closeDate):null;marinesStart=(cd&&!isNaN(cd))?cd.getFullYear()*12+cd.getMonth():(2026*12+9);}
   var MAR_GROSS=41667,MAR_COST=20834;  // $500K ARR / 12 ; 50% margin
-  var fixedOh=proformaOverheadMonthly();   // fixed G&A cost from Cost Structure (excludes Federal Sales/BD + Management lines)
-  var fixedBDMgmt=proformaBDMgmtFixedMonthly();  // Federal Sales/BD + Management fixed lines → counted in Payroll, not Overhead/G&A
-  var OHIDS=capGAOverheadItemIds();        // overhead items counted in Overhead/G&A (excludes Federal Sales/BD + Management)
+  var fixedOh=proformaOverheadMonthly();   // Overhead/G&A = fixed Cost Structure G&A only (no labor; excludes Federal Sales/BD + Management lines)
+  var fixedBDMgmt=proformaBDMgmtFixedMonthly();  // Federal Sales/BD + Management fixed lines → Other Payroll
+  var REVIDS=(D.projects||[]).filter(function(p){var c=projCat(p);return c==='project'||c==='initiative';}).map(function(p){return p.id;});
   var cum=0,rows=capProjMonths().map(function(mo){
     var active=roster.filter(function(pn){return capPersonActive(pn,mo.y,mo.m);});
     var baseRev=0;
@@ -2978,13 +2979,14 @@ function capProjData(roster,multPct,opts){
         baseRev+=rev;}
       else if(c==='initiative'){ if(capItemFTER(active,p.id)>0&&capInWindow(p,mo.y,mo.m))baseRev+=capProjRevAt(p,mo.y,mo.m); }
     });
-    // Split labor: people (or % of them) allocated to overhead-category items are
-    // Overhead labor; the rest (revenue work + bench) is direct payroll.
-    var totalLabor=0,ohLabor=0;
+    // Split labor: % allocated to projects/initiatives = Project Payroll; everything
+    // else (overhead-item allocations + bench/unallocated) = Other Payroll.
+    var totalLabor=0,projLabor=0;
     active.forEach(function(pn){var cst=capPersonCostAt(pn,mo.y,mo.m);totalLabor+=cst;
-      var ohPct=(pn.projects||[]).reduce(function(a,x){return a+(OHIDS.indexOf(x.id)>-1?(Number(x.pct)||0):0);},0);
-      ohLabor+=cst*Math.min(100,ohPct)/100;});
-    var payroll=totalLabor-ohLabor+fixedBDMgmt;
+      var pp=(pn.projects||[]).reduce(function(a,x){return a+(REVIDS.indexOf(x.id)>-1?(Number(x.pct)||0):0);},0);
+      projLabor+=cst*Math.min(100,pp)/100;});
+    var projectPayroll=projLabor;
+    var otherPayroll=(totalLabor-projLabor)+fixedBDMgmt;
     var oppRev=0;
     opps.forEach(function(o){
       if(!o.closeDate)return; var cd=new Date(o.closeDate);if(isNaN(cd))return;
@@ -2994,10 +2996,10 @@ function capProjData(roster,multPct,opts){
     });
     oppRev=Math.round(oppRev);
     // Marines win: add ARR revenue + direct delivery cost (net = 50% margin) from its start month
-    if(opts.marinesWon&&marinesStart!=null&&(mo.y*12+mo.m)>=marinesStart){oppRev+=MAR_GROSS;payroll+=MAR_COST;}
-    var overhead=ohLabor+fixedOh;
-    var rev=baseRev+oppRev,cost=payroll+overhead,profit=rev-cost;cum+=profit;
-    return {y:mo.y,m:mo.m,baseRev:baseRev,oppRev:oppRev,rev:rev,payroll:payroll,overhead:overhead,ohLabor:ohLabor,cost:cost,profit:profit,cum:cum};
+    if(opts.marinesWon&&marinesStart!=null&&(mo.y*12+mo.m)>=marinesStart){oppRev+=MAR_GROSS;projectPayroll+=MAR_COST;}
+    var overhead=fixedOh;
+    var rev=baseRev+oppRev,cost=projectPayroll+otherPayroll+overhead,profit=rev-cost;cum+=profit;
+    return {y:mo.y,m:mo.m,baseRev:baseRev,oppRev:oppRev,rev:rev,projectPayroll:projectPayroll,otherPayroll:otherPayroll,overhead:overhead,cost:cost,profit:profit,cum:cum};
   });
   return {rows:rows,noDate:noDate,modeled:modeled,overheadFixed:fixedOh};
 }
@@ -3035,8 +3037,8 @@ function capToggleCash(){ _capCashMode=!_capCashMode; renderView(); }
 function capSetBurden(v){ var n=Number(v); _capBurdenOverride=(v===''||isNaN(n))?null:Math.max(0,n); renderView(); }
 function _capProjOpts(){ return _capV4&&CAP_V4[_capV4]?{c1target:CAP_V4[_capV4].c1target,marinesWon:CAP_V4[_capV4].marinesWon}:{}; }
 function _capYearTotals(rows,yr){
-  var r={revenue:0,payroll:0,overhead:0,profit:0,months:0};
-  rows.forEach(function(x){ if(x.y!==yr)return; r.revenue+=x.rev;r.payroll+=x.payroll;r.overhead+=(x.overhead||0);r.profit+=x.profit;r.months++; });
+  var r={revenue:0,projectPayroll:0,otherPayroll:0,overhead:0,profit:0,months:0};
+  rows.forEach(function(x){ if(x.y!==yr)return; r.revenue+=x.rev;r.projectPayroll+=(x.projectPayroll||0);r.otherPayroll+=(x.otherPayroll||0);r.overhead+=(x.overhead||0);r.profit+=x.profit;r.months++; });
   r.margin=r.revenue?Math.round(r.profit/r.revenue*100):0;
   return r;
 }
@@ -3083,7 +3085,8 @@ function _capProjHTML(roster){
     return '<div class="cap-yr"><div class="cap-yr-yr">'+yr+(t.months<12?' (partial year)':'')+'</div><div class="cap-yr-sub">'+span+'</div>'
       +'<div class="cap-yr-grid">'
       +'<div class="cap-yr-m"><span class="k">Revenue</span><span class="v">'+fmt(t.revenue)+'</span></div>'
-      +'<div class="cap-yr-m"><span class="k">Payroll</span><span class="v">'+fmt(t.payroll)+'</span></div>'
+      +'<div class="cap-yr-m"><span class="k">Project payroll</span><span class="v">'+fmt(t.projectPayroll)+'</span></div>'
+      +'<div class="cap-yr-m"><span class="k">Other payroll</span><span class="v">'+fmt(t.otherPayroll)+'</span></div>'
       +'<div class="cap-yr-m"><span class="k">Overhead/G&amp;A</span><span class="v">'+fmt(t.overhead)+'</span></div>'
       +'<div class="cap-yr-m"><span class="k">Profit</span><span class="v '+(t.profit>=0?'cap-pos':'cap-neg')+'">'+fmt(t.profit)+'</span></div>'
       +'<div class="cap-yr-m"><span class="k">Margin</span><span class="v">'+t.margin+'%</span></div>'
@@ -3096,7 +3099,7 @@ function _capProjHTML(roster){
   var acts=traj.filter(function(r){return /actual/i.test(r.status||'');});
   if(acts.length){var a=acts[acts.length-1],ad=new Date(a.date);if(!isNaN(ad))anchor={y:ad.getFullYear(),m:ad.getMonth(),profit:Number(a.delta)||0,cash:Number(a.cash)||0};}
   var anchorRow=anchor?('<tr class="cap-actual-row"><td class="mo">'+CAP_MONTHS[anchor.m]+" '"+(anchor.y%100)+' <span class="cap-actual-tag">actual</span></td>'
-    +'<td>—</td><td>—</td><td>—</td><td>—</td>'
+    +'<td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>'
     +'<td class="'+(anchor.profit>=0?'cap-pos':'cap-neg')+'">'+fmt(anchor.profit)+'</td>'
     +'<td class="'+(anchor.cash>=gate?'cap-pos':'cap-neg')+'">'+fmt(_capCashMode?anchor.cash:anchor.profit)+'</td></tr>'):'';
   var cumBase=anchor?anchor.profit:0;   // keep cumulative profit continuous from the last actual
@@ -3105,17 +3108,18 @@ function _capProjHTML(roster){
     return '<tr'+(yrEnd?' class="yr-end"':'')+'><td class="mo">'+CAP_MONTHS[r.m]+" '"+(r.y%100)+'</td>'
       +'<td>'+fmt(r.rev)+'</td>'
       +'<td>'+(r.oppRev?'<span class="cap-pos">'+fmt(r.oppRev)+'</span>':'—')+'</td>'
-      +'<td>'+fmt(r.payroll)+'</td>'
+      +'<td>'+fmt(r.projectPayroll||0)+'</td>'
+      +'<td>'+fmt(r.otherPayroll||0)+'</td>'
       +'<td>'+fmt(r.overhead||0)+'</td>'
       +'<td class="'+(r.profit>=0?'cap-pos':'cap-neg')+'">'+fmt(r.profit)+'</td>'
       +(_capCashMode?'<td class="'+(r.cashBal>=gate?'cap-pos':'cap-neg')+'">'+fmt(r.cashBal)+(gateMet&&gateMet.y===r.y&&gateMet.m===r.m?' &#9989;':'')+'</td>':'<td class="'+((r.cum+cumBase)>=0?'cap-pos':'cap-neg')+'">'+fmt(r.cum+cumBase)+'</td>')
       +'</tr>';
   }).join('');
   var tbl='<div class="cap-proj-tbl-wrap"><table class="cap-proj-tbl"><thead>'
-    +'<tr><th class="mo">Month</th><th>Revenue</th><th>of which pipeline</th><th>Payroll</th><th>Overhead/G&amp;A</th><th>Profit</th><th>'+(_capCashMode?'Cash balance':'Cumulative profit')+'</th></tr></thead>'
+    +'<tr><th class="mo">Month</th><th>Revenue</th><th>of which pipeline</th><th>Project payroll</th><th>Other payroll</th><th>Overhead/G&amp;A</th><th>Profit</th><th>'+(_capCashMode?'Cash balance':'Cumulative profit')+'</th></tr></thead>'
     +'<tbody>'+body+'</tbody></table></div>';
   var note='<div class="cap-proj-note">Projection starts this month and runs through Dec '+rows[rows.length-1].y+'. '
-    +'Cost = direct payroll + Overhead/G&amp;A. Overhead/G&amp;A = labor allocated to G&amp;A overhead items + '+fmt(d.overheadFixed||0)+'/mo fixed G&amp;A from the Proforma Cost Structure (excluding any Federal Sales/BD or Management lines). All Federal Sales/BD and Management costs — overhead-item allocations AND Cost Structure lines — are counted in Payroll, not Overhead/G&amp;A. Profit and margin are net of all of it. Contract revenue is time-phased from the Knowledge Base (FAMS sunset Sep 24, BCLM +25% step, C1FAMS ramp to $100K Oct). '
+    +'Cost = Project payroll + Other payroll + Overhead/G&amp;A. <b>Project payroll</b> = labor allocated to projects/initiatives. <b>Other payroll</b> = all non-project labor (people on overhead items like G&amp;A/Operations, bench, plus Federal Sales/BD &amp; Management). <b>Overhead/G&amp;A</b> = '+fmt(d.overheadFixed||0)+'/mo fixed costs from the Proforma Cost Structure only (no people). Profit and margin are net of all three. Contract revenue is time-phased from the Knowledge Base (FAMS sunset Sep 24, BCLM +25% step, C1FAMS ramp to $100K Oct). '
     +d.modeled+' opportunit'+(d.modeled===1?'y is':'ies are')+' ramped in at close date, weighted by stage × '+_capProjMult+'% confidence'+(_capProjOpts().marinesWon?' (Marines forced to won)':'')+(_capProjOpts().c1target!=null?' · C1FAMS maturity set to '+fmt(_capProjOpts().c1target):'')+(d.noDate?'; '+d.noDate+' opportunit'+(d.noDate===1?'y':'ies')+' without a close date excluded':'')+'.'
     +(_capCashMode?' Cash = opening '+fmt(opening)+' + cumulative (profit − debt service '+fmt(burden)+'/mo).':'')+'</div>';
   var charts='<div class="cap-chart" style="margin-bottom:14px"><div class="cap-chart-h">Cumulative revenue &amp; profit through Dec '+rows[rows.length-1].y+'</div>'+_capProjChart(rows)+'</div>'
@@ -3175,12 +3179,12 @@ function _capProjRowsForExport(){
 function capProjExportCSV(){
   if(!CAP)return;
   var rows=_capProjRowsForExport(),cashMode=_capCashMode;
-  var lines=[['Month','Revenue','Pipeline portion','Payroll','Overhead/G&A','Profit',cashMode?'Net cash Δ':'Cumulative profit',cashMode?'Cash balance':''].filter(function(x){return x!=='';})];
-  rows.forEach(function(r){var row=[CAP_MONTHS[r.m]+" '"+(r.y%100),Math.round(r.rev),Math.round(r.oppRev),Math.round(r.payroll),Math.round(r.overhead||0),Math.round(r.profit)];if(cashMode){row.push(Math.round(r.netCash),Math.round(r.cashBal));}else{row.push(Math.round(r.cum));}lines.push(row);});
+  var lines=[['Month','Revenue','Pipeline portion','Project payroll','Other payroll','Overhead/G&A','Profit',cashMode?'Net cash Δ':'Cumulative profit',cashMode?'Cash balance':''].filter(function(x){return x!=='';})];
+  rows.forEach(function(r){var row=[CAP_MONTHS[r.m]+" '"+(r.y%100),Math.round(r.rev),Math.round(r.oppRev),Math.round(r.projectPayroll||0),Math.round(r.otherPayroll||0),Math.round(r.overhead||0),Math.round(r.profit)];if(cashMode){row.push(Math.round(r.netCash),Math.round(r.cashBal));}else{row.push(Math.round(r.cum));}lines.push(row);});
   lines.push([]);
   if(_capV4&&CAP_V4[_capV4])lines.push(['Scenario',CAP_V4[_capV4].label,'ref cash @Aug 2027',CAP_V4[_capV4].ref]);
-  lines.push(['Annual total','Revenue','Payroll','Overhead/G&A','Profit','Margin %']);
-  _capProjYears(rows).forEach(function(yr){var t=_capYearTotals(rows,yr);lines.push([yr+(t.months<12?' (partial)':''),Math.round(t.revenue),Math.round(t.payroll),Math.round(t.overhead),Math.round(t.profit),t.margin]);});
+  lines.push(['Annual total','Revenue','Project payroll','Other payroll','Overhead/G&A','Profit','Margin %']);
+  _capProjYears(rows).forEach(function(yr){var t=_capYearTotals(rows,yr);lines.push([yr+(t.months<12?' (partial)':''),Math.round(t.revenue),Math.round(t.projectPayroll),Math.round(t.otherPayroll),Math.round(t.overhead),Math.round(t.profit),t.margin]);});
   var csv=lines.map(function(row){return row.map(function(c){var s=String(c==null?'':c);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}).join(',');}).join('\r\n');
   var blob=new Blob([csv],{type:'text/csv'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download='atlas_projection_'+new Date().toISOString().slice(0,10)+'.csv';
@@ -3193,16 +3197,16 @@ function capProjPrint(){
   var name=(CAP.name&&CAP.name!=='Working scenario')?CAP.name:'Working scenario';
   if(_capV4&&CAP_V4[_capV4])name+=' · '+CAP_V4[_capV4].label;
   var lastCol=cashMode?'Cash balance':'Cumulative profit';
-  var yrRows=_capProjYears(rows).map(function(yr){var t=_capYearTotals(rows,yr);return '<tr><td>'+yr+(t.months<12?' (partial year)':'')+'</td><td>'+fmt(t.revenue)+'</td><td>'+fmt(t.payroll)+'</td><td>'+fmt(t.profit)+'</td><td>'+t.margin+'%</td></tr>';}).join('');
-  var moRows=rows.map(function(r,i){var yrEnd=(i<rows.length-1&&rows[i+1].y!==r.y);return '<tr'+(yrEnd?' class="ye"':'')+'><td>'+CAP_MONTHS[r.m]+" '"+(r.y%100)+'</td><td>'+fmt(r.rev)+'</td><td>'+fmt(r.oppRev)+'</td><td>'+fmt(r.payroll)+'</td><td>'+fmt(r.profit)+'</td><td>'+fmt(cashMode?r.cashBal:r.cum)+'</td></tr>';}).join('');
+  var yrRows=_capProjYears(rows).map(function(yr){var t=_capYearTotals(rows,yr);return '<tr><td>'+yr+(t.months<12?' (partial year)':'')+'</td><td>'+fmt(t.revenue)+'</td><td>'+fmt(t.projectPayroll)+'</td><td>'+fmt(t.otherPayroll)+'</td><td>'+fmt(t.overhead)+'</td><td>'+fmt(t.profit)+'</td><td>'+t.margin+'%</td></tr>';}).join('');
+  var moRows=rows.map(function(r,i){var yrEnd=(i<rows.length-1&&rows[i+1].y!==r.y);return '<tr'+(yrEnd?' class="ye"':'')+'><td>'+CAP_MONTHS[r.m]+" '"+(r.y%100)+'</td><td>'+fmt(r.rev)+'</td><td>'+fmt(r.oppRev)+'</td><td>'+fmt(r.projectPayroll||0)+'</td><td>'+fmt(r.otherPayroll||0)+'</td><td>'+fmt(r.overhead||0)+'</td><td>'+fmt(r.profit)+'</td><td>'+fmt(cashMode?r.cashBal:r.cum)+'</td></tr>';}).join('');
   var w=window.open('','_blank');if(!w){toast('Pop-up blocked — allow pop-ups to print.','warn');return;}
   var html='<!doctype html><html><head><meta charset="utf-8"><title>Capacity Projection — '+esc(name)+'</title>'
     +'<style>body{font-family:Arial,Helvetica,sans-serif;color:#16223C;margin:32px;}h1{font-size:18px;margin:0 0 2px;}.sub{color:#64748b;font-size:12px;margin-bottom:18px;}'
     +'table{border-collapse:collapse;width:100%;font-size:12px;margin-bottom:22px;}th,td{border:1px solid #d0d7e2;padding:5px 9px;text-align:right;}th{background:#16223C;color:#fff;}td:first-child,th:first-child{text-align:left;}'
     +'tr.ye td{border-bottom:2px solid #94a3b8;}h2{font-size:13px;margin:0 0 6px;}@media print{body{margin:12mm;}}</style></head><body>'
     +'<h1>Capacity Projection</h1><div class="sub">Scenario: '+esc(name)+' · pipeline confidence '+_capProjMult+'% · generated '+new Date().toLocaleDateString()+'</div>'
-    +'<h2>Annual roll-up</h2><table><thead><tr><th>Year</th><th>Revenue</th><th>Payroll</th><th>Profit</th><th>Margin</th></tr></thead><tbody>'+yrRows+'</tbody></table>'
-    +'<h2>Monthly detail</h2><table><thead><tr><th>Month</th><th>Revenue</th><th>Pipeline</th><th>Payroll</th><th>Profit</th><th>'+lastCol+'</th></tr></thead><tbody>'+moRows+'</tbody></table>'
+    +'<h2>Annual roll-up</h2><table><thead><tr><th>Year</th><th>Revenue</th><th>Project payroll</th><th>Other payroll</th><th>Overhead/G&amp;A</th><th>Profit</th><th>Margin</th></tr></thead><tbody>'+yrRows+'</tbody></table>'
+    +'<h2>Monthly detail</h2><table><thead><tr><th>Month</th><th>Revenue</th><th>Pipeline</th><th>Project payroll</th><th>Other payroll</th><th>Overhead/G&amp;A</th><th>Profit</th><th>'+lastCol+'</th></tr></thead><tbody>'+moRows+'</tbody></table>'
     +'<script>window.onload=function(){window.print();};<\/script></body></html>';
   w.document.write(html);w.document.close();
 }
