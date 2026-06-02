@@ -647,6 +647,8 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .cap-matrix thead th.cap-col-oh{background:#e3e8ef;}
 .cap-oh-tag{display:inline-block;font-size:7px;font-weight:800;background:#546478;color:#fff;padding:0 3px;border-radius:3px;vertical-align:middle;letter-spacing:.3px;}
 .cap-cell-oh.has{background:rgba(84,100,120,0.14);}
+.cap-proj-tbl tr.cap-actual-row td{background:#f1f7f3;font-style:italic;}
+.cap-actual-tag{display:inline-block;font-size:8px;font-weight:800;background:#2D6A4F;color:#fff;padding:0 5px;border-radius:8px;text-transform:uppercase;letter-spacing:.3px;font-style:normal;}
 .cap-sticky{position:sticky;left:0;background:#fff;text-align:left!important;z-index:1;min-width:170px;box-shadow:1px 0 0 #e2e8f0;}
 .cap-matrix thead .cap-sticky{z-index:3;background:#f1f5f9;}
 .cap-person{font-size:12px;font-weight:700;}
@@ -3048,8 +3050,17 @@ function _capProjHTML(roster){
       +(_capCashMode?'<div class="cap-yr-m" style="grid-column:1/3"><span class="k">Cash at year-end</span><span class="v '+(endCash>=gate?'cap-pos':'cap-neg')+'">'+fmt(endCash)+'</span></div>':'')
       +'</div></div>';
   }).join('');
-  // monthly table
-  var body=rows.map(function(r,i){
+  // monthly table — anchored on the most recent ACTUAL from the Proforma cash position
+  var anchor=null;
+  var traj=(D.proforma&&D.proforma.financials&&D.proforma.financials.cashTrajectory)||[];
+  var acts=traj.filter(function(r){return /actual/i.test(r.status||'');});
+  if(acts.length){var a=acts[acts.length-1],ad=new Date(a.date);if(!isNaN(ad))anchor={y:ad.getFullYear(),m:ad.getMonth(),profit:Number(a.delta)||0,cash:Number(a.cash)||0};}
+  var anchorRow=anchor?('<tr class="cap-actual-row"><td class="mo">'+CAP_MONTHS[anchor.m]+" '"+(anchor.y%100)+' <span class="cap-actual-tag">actual</span></td>'
+    +'<td>—</td><td>—</td><td>—</td><td>—</td>'
+    +'<td class="'+(anchor.profit>=0?'cap-pos':'cap-neg')+'">'+fmt(anchor.profit)+'</td>'
+    +'<td class="'+(anchor.cash>=gate?'cap-pos':'cap-neg')+'">'+fmt(_capCashMode?anchor.cash:anchor.profit)+'</td></tr>'):'';
+  var cumBase=anchor?anchor.profit:0;   // keep cumulative profit continuous from the last actual
+  var body=anchorRow+rows.map(function(r,i){
     var yrEnd=(i<rows.length-1&&rows[i+1].y!==r.y);
     return '<tr'+(yrEnd?' class="yr-end"':'')+'><td class="mo">'+CAP_MONTHS[r.m]+" '"+(r.y%100)+'</td>'
       +'<td>'+fmt(r.rev)+'</td>'
@@ -3057,7 +3068,7 @@ function _capProjHTML(roster){
       +'<td>'+fmt(r.payroll)+'</td>'
       +'<td>'+fmt(r.overhead||0)+'</td>'
       +'<td class="'+(r.profit>=0?'cap-pos':'cap-neg')+'">'+fmt(r.profit)+'</td>'
-      +(_capCashMode?'<td class="'+(r.cashBal>=gate?'cap-pos':'cap-neg')+'">'+fmt(r.cashBal)+(gateMet&&gateMet.y===r.y&&gateMet.m===r.m?' &#9989;':'')+'</td>':'<td class="'+(r.cum>=0?'cap-pos':'cap-neg')+'">'+fmt(r.cum)+'</td>')
+      +(_capCashMode?'<td class="'+(r.cashBal>=gate?'cap-pos':'cap-neg')+'">'+fmt(r.cashBal)+(gateMet&&gateMet.y===r.y&&gateMet.m===r.m?' &#9989;':'')+'</td>':'<td class="'+((r.cum+cumBase)>=0?'cap-pos':'cap-neg')+'">'+fmt(r.cum+cumBase)+'</td>')
       +'</tr>';
   }).join('');
   var tbl='<div class="cap-proj-tbl-wrap"><table class="cap-proj-tbl"><thead>'
