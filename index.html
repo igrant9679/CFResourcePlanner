@@ -2388,7 +2388,9 @@ function projChildren(pid){return D.projects.filter(function(p){return p.parentI
 function topLevelProjects(){return D.projects.filter(function(p){return !p.parentId;});}
 function projCat(p){return p.category||'project';}
 function topLevelByCat(cat){return D.projects.filter(function(p){return !p.parentId&&projCat(p)===cat;});}
-function itemRev(p){if(!p)return 0;var c=projCat(p);if(c==='overhead')return 0;if(c==='initiative'||c==='opportunity')return p.targetRevenue||0;return p.revenue||0;}
+function itemRev(p){if(!p)return 0;var c=projCat(p);if(c==='overhead')return 0;
+  if(p.timeline&&p.timeline.length){var n=new Date();return capProjRevAt(p,n.getFullYear(),n.getMonth());}  // time-phased: current-month revenue from the editable timeline
+  if(c==='initiative'||c==='opportunity')return p.targetRevenue||0;return p.revenue||0;}
 function isPipelineCat(c){return c==='initiative'||c==='opportunity';}
 function projAttachHTML(proj){var a=proj.attachments||[];if(!a.length)return '';return '<div style="margin-top:7px;display:flex;flex-wrap:wrap;gap:5px">'+a.map(function(at){return '<a href="'+esc(at.url)+'" target="_blank" rel="noopener" style="font-size:10px;font-weight:600;color:var(--navy);background:var(--page-bg);border:1px solid var(--border);border-radius:5px;padding:3px 7px;text-decoration:none">&#128206; '+esc(at.name||at.url)+'</a>';}).join('')+'</div>';}
 function projDescendantIds(pid){var ids=[pid];projChildren(pid).forEach(function(c){ids=ids.concat(projDescendantIds(c.id));});return ids;}
