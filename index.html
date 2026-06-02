@@ -2939,7 +2939,8 @@ function capProjData(roster,multPct,opts){
   var marinesStart=null;
   if(opts.marinesWon){var mo2=opps.find(function(o){return /marines|dd577/i.test(o.name||'');});var cd=mo2&&mo2.closeDate?new Date(mo2.closeDate):null;marinesStart=(cd&&!isNaN(cd))?cd.getFullYear()*12+cd.getMonth():(2026*12+9);}
   var MAR_GROSS=41667,MAR_COST=20834;  // $500K ARR / 12 ; 50% margin
-  var overhead=proformaOverheadMonthly();   // company-wide G&A/Operations fixed cost (Cost Structure)
+  var fixedOh=proformaOverheadMonthly();   // company-wide fixed G&A cost (Cost Structure → Overhead › G&A/Operations)
+  var OHIDS=capOverheadItemIds();          // all overhead-category items (Federal Sales/BD, G&A/Operations, + any future)
   var cum=0,rows=capProjMonths().map(function(mo){
     var active=roster.filter(function(pn){return capPersonActive(pn,mo.y,mo.m);});
     var baseRev=0;
@@ -2949,7 +2950,13 @@ function capProjData(roster,multPct,opts){
         baseRev+=rev;}
       else if(c==='initiative'){ if(capItemFTER(active,p.id)>0)baseRev+=capProjRevAt(p,mo.y,mo.m); }
     });
-    var payroll=active.reduce(function(s,pn){return s+capPersonCostAt(pn,mo.y,mo.m);},0);
+    // Split labor: people (or % of them) allocated to overhead-category items are
+    // Overhead labor; the rest (revenue work + bench) is direct payroll.
+    var totalLabor=0,ohLabor=0;
+    active.forEach(function(pn){var cst=capPersonCostAt(pn,mo.y,mo.m);totalLabor+=cst;
+      var ohPct=(pn.projects||[]).reduce(function(a,x){return a+(OHIDS.indexOf(x.id)>-1?(Number(x.pct)||0):0);},0);
+      ohLabor+=cst*Math.min(100,ohPct)/100;});
+    var payroll=totalLabor-ohLabor;
     var oppRev=0;
     opps.forEach(function(o){
       if(!o.closeDate)return; var cd=new Date(o.closeDate);if(isNaN(cd))return;
@@ -2958,13 +2965,15 @@ function capProjData(roster,multPct,opts){
       oppRev+=((Number(o.potential)||0)/12)*capOppEffProb(o,multPct);
     });
     oppRev=Math.round(oppRev);
-    // Marines win: add ARR revenue + delivery cost (net = 50% margin) from its start month
+    // Marines win: add ARR revenue + direct delivery cost (net = 50% margin) from its start month
     if(opts.marinesWon&&marinesStart!=null&&(mo.y*12+mo.m)>=marinesStart){oppRev+=MAR_GROSS;payroll+=MAR_COST;}
+    var overhead=ohLabor+fixedOh;
     var rev=baseRev+oppRev,cost=payroll+overhead,profit=rev-cost;cum+=profit;
-    return {y:mo.y,m:mo.m,baseRev:baseRev,oppRev:oppRev,rev:rev,payroll:payroll,overhead:overhead,cost:cost,profit:profit,cum:cum};
+    return {y:mo.y,m:mo.m,baseRev:baseRev,oppRev:oppRev,rev:rev,payroll:payroll,overhead:overhead,ohLabor:ohLabor,cost:cost,profit:profit,cum:cum};
   });
-  return {rows:rows,noDate:noDate,modeled:modeled,overhead:overhead};
+  return {rows:rows,noDate:noDate,modeled:modeled,overheadFixed:fixedOh};
 }
+function capOverheadItemIds(){ return (D.projects||[]).filter(function(p){return projCat(p)==='overhead';}).map(function(p){return p.id;}); }
 /* Cash-only financing burden below the operating line: corporate debt service
    (overhead/G&A is now in operating cost). Editable override via _capBurdenOverride. */
 var _capBurdenOverride=null, _capCashMode=false;
@@ -3051,7 +3060,7 @@ function _capProjHTML(roster){
     +'<tr><th class="mo">Month</th><th>Revenue</th><th>of which pipeline</th><th>Payroll</th><th>Overhead/G&amp;A</th><th>Profit</th><th>'+(_capCashMode?'Cash balance':'Cumulative profit')+'</th></tr></thead>'
     +'<tbody>'+body+'</tbody></table></div>';
   var note='<div class="cap-proj-note">Projection starts this month and runs through Dec '+rows[rows.length-1].y+'. '
-    +'Cost = payroll (people on payroll that month) + Overhead/G&amp;A '+fmt(d.overhead||0)+'/mo (from the Proforma Cost Structure, shown on the Overhead tab under G&amp;A/Operations). Profit and margin are net of all of it. Contract revenue is time-phased from the Knowledge Base (FAMS sunset Sep 24, BCLM +25% step, C1FAMS ramp to $100K Oct). '
+    +'Cost = direct payroll + Overhead/G&amp;A. Overhead/G&amp;A = labor allocated to overhead items (Federal Sales/BD, G&amp;A/Operations, and any future overhead item) + '+fmt(d.overheadFixed||0)+'/mo fixed G&amp;A from the Proforma Cost Structure. Profit and margin are net of all of it. Contract revenue is time-phased from the Knowledge Base (FAMS sunset Sep 24, BCLM +25% step, C1FAMS ramp to $100K Oct). '
     +d.modeled+' opportunit'+(d.modeled===1?'y is':'ies are')+' ramped in at close date, weighted by stage × '+_capProjMult+'% confidence'+(_capProjOpts().marinesWon?' (Marines forced to won)':'')+(_capProjOpts().c1target!=null?' · C1FAMS maturity set to '+fmt(_capProjOpts().c1target):'')+(d.noDate?'; '+d.noDate+' opportunit'+(d.noDate===1?'y':'ies')+' without a close date excluded':'')+'.'
     +(_capCashMode?' Cash = opening '+fmt(opening)+' + cumulative (profit − debt service '+fmt(burden)+'/mo).':'')+'</div>';
   var charts='<div class="cap-chart" style="margin-bottom:14px"><div class="cap-chart-h">Cumulative revenue &amp; profit through Dec '+rows[rows.length-1].y+'</div>'+_capProjChart(rows)+'</div>'
