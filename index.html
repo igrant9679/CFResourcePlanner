@@ -1469,14 +1469,20 @@ function proformaMigrate(){
 /* Actuals "new cost" vendors that are payment vehicles for people already on payroll
    (the workbook's "same as [member]" mappings) — excluded to avoid double-counting. */
 var PF_DUP_VENDORS=['LSI Media LLC','Global Insights + Solutions, LLC','Highbury / SIE','CyberSecWave','Cerulaxis (A-Z Services / QB)'];
-/* Company-wide fixed monthly overhead / G&A cost (Cost Structure → shown under the
-   Overhead view's G&A/Operations item and subtracted as a real cost in Capacity). */
-function proformaOverheadMonthly(){
-  var cs=(D.proforma||{}).costStructure||{};
-  var oh=(cs.overhead||[]).reduce(function(s,x){return s+(Number(x.monthly)||0);},0);
-  var subs=(cs.softwareSubs||[]).reduce(function(s,x){return s+(Number(x.monthly)||0);},0);
-  return Math.round(oh+subs);
+/* A Cost Structure line that is really Federal Sales/BD or Management — excluded from
+   Overhead/G&A and counted in Payroll instead (matches the overhead-item exclusion). */
+function _pfBDMgmt(name){ return /federal|business develop|\bbd\b|management/i.test(String(name||'')); }
+function _pfFixedSum(pred){
+  var cs=(D.proforma||{}).costStructure||{},t=0;
+  (cs.overhead||[]).forEach(function(x){if(pred(x.category))t+=Number(x.monthly)||0;});
+  (cs.softwareSubs||[]).forEach(function(x){if(pred(x.vendor))t+=Number(x.monthly)||0;});
+  return Math.round(t);
 }
+/* Fixed monthly G&A from Cost Structure — EXCLUDING Federal Sales/BD & Management
+   lines (those go to Payroll). This is what feeds the Overhead/G&A line. */
+function proformaOverheadMonthly(){ return _pfFixedSum(function(n){return !_pfBDMgmt(n);}); }
+/* Federal Sales/BD & Management fixed lines from Cost Structure — counted in Payroll. */
+function proformaBDMgmtFixedMonthly(){ return _pfFixedSum(_pfBDMgmt); }
 /* Corporate debt service per month (parseable obligations only) — a financing
    cash outflow below the operating line; used by the Capacity cash-gate view. */
 function proformaDebtService(){
@@ -2469,7 +2475,8 @@ function renderProjView(q,category){
   html+='<div style="padding:10px 14px;margin-bottom:14px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;color:var(--text-secondary)"><strong style="font-size:13px;color:var(--text-primary)">'+meta.label+'</strong> &middot; '+tops.length+' '+(tops.length===1?meta.noun:meta.plural)+' &middot; '+sumLine+'</div>';
   if(category==='overhead'&&pfOh>0){
     var cs=(D.proforma||{}).costStructure||{};
-    var lines=(cs.overhead||[]).map(function(x){return {n:x.category,m:Number(x.monthly)||0};}).concat((cs.softwareSubs||[]).map(function(x){return {n:x.vendor,m:Number(x.monthly)||0};}));
+    var lines=(cs.overhead||[]).map(function(x){return {n:x.category,m:Number(x.monthly)||0};}).concat((cs.softwareSubs||[]).map(function(x){return {n:x.vendor,m:Number(x.monthly)||0};}))
+      .filter(function(l){return !_pfBDMgmt(l.n);});  // Federal Sales/BD & Management are not G&A — kept in Payroll
     lines.sort(function(a,b){return b.m-a.m;});
     html+='<div style="margin-bottom:14px;background:var(--card-bg);border:1px solid var(--border);border-left:3px solid #546478;border-radius:var(--radius);padding:11px 14px">'
       +'<div style="display:flex;justify-content:space-between;align-items:baseline"><strong style="font-size:13px">G&amp;A / Operations — fixed monthly costs</strong><strong style="color:var(--red)">'+fmt(pfOh)+'/mo</strong></div>'
@@ -2953,7 +2960,8 @@ function capProjData(roster,multPct,opts){
   var marinesStart=null;
   if(opts.marinesWon){var mo2=opps.find(function(o){return /marines|dd577/i.test(o.name||'');});var cd=mo2&&mo2.closeDate?new Date(mo2.closeDate):null;marinesStart=(cd&&!isNaN(cd))?cd.getFullYear()*12+cd.getMonth():(2026*12+9);}
   var MAR_GROSS=41667,MAR_COST=20834;  // $500K ARR / 12 ; 50% margin
-  var fixedOh=proformaOverheadMonthly();   // company-wide fixed G&A cost (Cost Structure → Overhead › G&A/Operations)
+  var fixedOh=proformaOverheadMonthly();   // fixed G&A cost from Cost Structure (excludes Federal Sales/BD + Management lines)
+  var fixedBDMgmt=proformaBDMgmtFixedMonthly();  // Federal Sales/BD + Management fixed lines → counted in Payroll, not Overhead/G&A
   var OHIDS=capGAOverheadItemIds();        // overhead items counted in Overhead/G&A (excludes Federal Sales/BD + Management)
   var cum=0,rows=capProjMonths().map(function(mo){
     var active=roster.filter(function(pn){return capPersonActive(pn,mo.y,mo.m);});
@@ -2970,7 +2978,7 @@ function capProjData(roster,multPct,opts){
     active.forEach(function(pn){var cst=capPersonCostAt(pn,mo.y,mo.m);totalLabor+=cst;
       var ohPct=(pn.projects||[]).reduce(function(a,x){return a+(OHIDS.indexOf(x.id)>-1?(Number(x.pct)||0):0);},0);
       ohLabor+=cst*Math.min(100,ohPct)/100;});
-    var payroll=totalLabor-ohLabor;
+    var payroll=totalLabor-ohLabor+fixedBDMgmt;
     var oppRev=0;
     opps.forEach(function(o){
       if(!o.closeDate)return; var cd=new Date(o.closeDate);if(isNaN(cd))return;
@@ -2990,7 +2998,7 @@ function capProjData(roster,multPct,opts){
 function capOverheadItemIds(){ return (D.projects||[]).filter(function(p){return projCat(p)==='overhead';}).map(function(p){return p.id;}); }
 /* Overhead items excluded from the Overhead/G&A cost line (Federal Sales/BD,
    Management/Business Development) — their labor stays in Payroll, not Overhead. */
-function _capExclFromGA(name){ return /federal|business develop|management/i.test(String(name||'')); }
+function _capExclFromGA(name){ return _pfBDMgmt(name); }
 function capGAOverheadItemIds(){ return (D.projects||[]).filter(function(p){return projCat(p)==='overhead'&&!_capExclFromGA(p.name);}).map(function(p){return p.id;}); }
 /* Is a project active in month (y,m)? Honors project.startDate / endDate ('YYYY-MM',
    inclusive). Blank bound = open-ended. Used so the Strategic/Capacity forecast only
@@ -3101,7 +3109,7 @@ function _capProjHTML(roster){
     +'<tr><th class="mo">Month</th><th>Revenue</th><th>of which pipeline</th><th>Payroll</th><th>Overhead/G&amp;A</th><th>Profit</th><th>'+(_capCashMode?'Cash balance':'Cumulative profit')+'</th></tr></thead>'
     +'<tbody>'+body+'</tbody></table></div>';
   var note='<div class="cap-proj-note">Projection starts this month and runs through Dec '+rows[rows.length-1].y+'. '
-    +'Cost = direct payroll + Overhead/G&amp;A. Overhead/G&amp;A = labor allocated to G&amp;A overhead items + '+fmt(d.overheadFixed||0)+'/mo fixed G&amp;A from the Proforma Cost Structure. Federal Sales/BD and Management costs are excluded from Overhead/G&amp;A (they sit in Payroll). Profit and margin are net of all of it. Contract revenue is time-phased from the Knowledge Base (FAMS sunset Sep 24, BCLM +25% step, C1FAMS ramp to $100K Oct). '
+    +'Cost = direct payroll + Overhead/G&amp;A. Overhead/G&amp;A = labor allocated to G&amp;A overhead items + '+fmt(d.overheadFixed||0)+'/mo fixed G&amp;A from the Proforma Cost Structure (excluding any Federal Sales/BD or Management lines). All Federal Sales/BD and Management costs — overhead-item allocations AND Cost Structure lines — are counted in Payroll, not Overhead/G&amp;A. Profit and margin are net of all of it. Contract revenue is time-phased from the Knowledge Base (FAMS sunset Sep 24, BCLM +25% step, C1FAMS ramp to $100K Oct). '
     +d.modeled+' opportunit'+(d.modeled===1?'y is':'ies are')+' ramped in at close date, weighted by stage × '+_capProjMult+'% confidence'+(_capProjOpts().marinesWon?' (Marines forced to won)':'')+(_capProjOpts().c1target!=null?' · C1FAMS maturity set to '+fmt(_capProjOpts().c1target):'')+(d.noDate?'; '+d.noDate+' opportunit'+(d.noDate===1?'y':'ies')+' without a close date excluded':'')+'.'
     +(_capCashMode?' Cash = opening '+fmt(opening)+' + cumulative (profit − debt service '+fmt(burden)+'/mo).':'')+'</div>';
   var charts='<div class="cap-chart" style="margin-bottom:14px"><div class="cap-chart-h">Cumulative revenue &amp; profit through Dec '+rows[rows.length-1].y+'</div>'+_capProjChart(rows)+'</div>'
