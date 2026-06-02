@@ -2729,7 +2729,13 @@ function capBuildRoster(){
       projects:(m.projects||[]).map(function(x){return (typeof x==='object')?{id:x.id,pct:Number(x.pct)||0,clinId:x.clinId}:{id:x,pct:100};})};
   });
 }
-function capEnter(){ if(!Array.isArray(D.scenarios))D.scenarios=[]; if(!CAP){var r=capBuildRoster();CAP={name:'Working scenario',roster:r,baseline:capTotals(r)}; } }
+function capEnter(){ if(!Array.isArray(D.scenarios))D.scenarios=[];
+  if(!CAP){var r=capBuildRoster();CAP={name:'Working scenario',roster:r,baseline:capTotals(r),dirty:false};return;}
+  // Untouched working scenario: keep it synced with live data (so newly assigned
+  // resources — incl. on Initiatives — flow in). Once edited (dirty) or a saved
+  // scenario is loaded, hold the what-if until Reset to live.
+  if(!CAP.dirty&&CAP.name==='Working scenario'){var r2=capBuildRoster();CAP.roster=r2;CAP.baseline=capTotals(r2);}
+}
 function capSaveScenario(){
   if(!CAP)return;
   openFormModal({over:'Capacity Planning',title:'Save Scenario',submitLabel:'Save',
@@ -2743,7 +2749,7 @@ function capSaveScenario(){
 }
 function capLoadScenario(id){
   var sc=(D.scenarios||[]).find(function(x){return x.id===id;});if(!sc)return;
-  CAP={name:sc.name,roster:JSON.parse(JSON.stringify(sc.roster||[])),baseline:capTotals(capBuildRoster())};
+  CAP={name:sc.name,roster:JSON.parse(JSON.stringify(sc.roster||[])),baseline:capTotals(capBuildRoster()),dirty:true};
   _capProjMult=(sc.projMult!=null?sc.projMult:100);_capV4=null;
   renderView();toast('Loaded scenario “'+sc.name+'”.','info');
 }
@@ -3207,11 +3213,11 @@ function capSetPct(pid,projId,val){
   if(v<=0)person.projects=(person.projects||[]).filter(function(x){return x.id!==projId;});
   else if(e)e.pct=v;
   else (person.projects=person.projects||[]).push({id:projId,pct:v});
-  renderView();
+  CAP.dirty=true;renderView();
 }
-function capSetCost(pid,val){ if(!CAP)return;var p=CAP.roster.find(function(x){return x.id===pid;});if(!p)return;p.cost=Math.max(0,Number(val)||0);renderView(); }
-function capSetStart(pid,val){ if(!CAP)return;var p=CAP.roster.find(function(x){return x.id===pid;});if(!p)return;p.startMonth=(val||'').trim()||null;renderView(); }
-function capRemovePerson(pid){ if(!CAP)return;CAP.roster=CAP.roster.filter(function(x){return x.id!==pid;});renderView(); }
+function capSetCost(pid,val){ if(!CAP)return;var p=CAP.roster.find(function(x){return x.id===pid;});if(!p)return;p.cost=Math.max(0,Number(val)||0);CAP.dirty=true;renderView(); }
+function capSetStart(pid,val){ if(!CAP)return;var p=CAP.roster.find(function(x){return x.id===pid;});if(!p)return;p.startMonth=(val||'').trim()||null;CAP.dirty=true;renderView(); }
+function capRemovePerson(pid){ if(!CAP)return;CAP.roster=CAP.roster.filter(function(x){return x.id!==pid;});CAP.dirty=true;renderView(); }
 var _capDrag=null;
 function capDragStart(e,pid){ _capDrag=pid; if(e.dataTransfer){e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',pid);}catch(_){}} }
 function capCardOver(e){ e.preventDefault(); if(e.dataTransfer)e.dataTransfer.dropEffect='move'; var c=e.currentTarget;if(c)c.classList.add('drop'); }
@@ -3237,7 +3243,7 @@ function capAddGhost(){
       {key:'cost',label:'Monthly cost ($)',type:'number',placeholder:'e.g. 12000'},
       {key:'start',label:'Start month (blank = immediately)',type:'month'}
     ],
-    onSubmit:function(v){CAP.roster.push({id:'ghost_'+uid(),name:v.name.trim(),role:(v.role||'').trim(),cost:Number(v.cost)||0,startMonth:(v.start||'').trim()||null,_origin:'ghost',_deptName:'(hypothetical)',projects:[]});renderView();toast('Added hypothetical hire.','success');}
+    onSubmit:function(v){CAP.roster.push({id:'ghost_'+uid(),name:v.name.trim(),role:(v.role||'').trim(),cost:Number(v.cost)||0,startMonth:(v.start||'').trim()||null,_origin:'ghost',_deptName:'(hypothetical)',projects:[]});CAP.dirty=true;renderView();toast('Added hypothetical hire.','success');}
   });
 }
 var _capProspectOpts=[];
@@ -3264,7 +3270,7 @@ function capAddProspects(){
     onSubmit:function(v){
       var n=0;(v.sel||[]).forEach(function(val){var o=_capProspectOpts.find(function(x){return x.value===val;});if(!o)return;
         CAP.roster.push({id:'prospect_'+uid(),name:o._name,role:o._role,cost:o._cost||0,_origin:'prospect',_deptName:'(prospect)',projects:[]});n++;});
-      renderView();toast('Added '+n+' prospect'+(n===1?'':'s')+' to the scenario.','success');
+      CAP.dirty=true;renderView();toast('Added '+n+' prospect'+(n===1?'':'s')+' to the scenario.','success');
     }
   });
 }
