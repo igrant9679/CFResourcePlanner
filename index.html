@@ -591,7 +591,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 /* ── Batch A: accessibility + toasts ── */
 :focus-visible{outline:2px solid var(--gold,#C5A55A);outline-offset:2px;border-radius:3px;}
 #toastWrap{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:99999;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;}
-.toast{pointer-events:auto;min-width:240px;max-width:min(92vw,520px);background:#16223C;color:#fff;font-size:13px;line-height:1.4;padding:11px 16px;border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.28);opacity:0;transform:translateY(10px);transition:opacity .25s,transform .25s;display:flex;align-items:center;gap:12px;}
+.toast{pointer-events:auto;min-width:240px;max-width:min(92vw,520px);background:#16223C;color:#fff;font-size:13px;line-height:1.4;padding:11px 16px;border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.28);opacity:0;transform:translateY(10px);transition:opacity .25s,transform .25s;display:flex;align-items:center;gap:12px;white-space:pre-line;}
 .toast.toast-in{opacity:1;transform:translateY(0);}
 .toast-error{background:#7F1D1D;}
 .toast-warn{background:#92400E;}
@@ -1746,6 +1746,17 @@ function toastAction(msg,actionLabel,onAction,ms){
   setTimeout(function(){t.classList.remove('toast-in');setTimeout(function(){if(t.parentNode)t.parentNode.removeChild(t);},300);},ms||6000);
   return t;
 }
+// Route legacy alert() notifications through the toast system (non-blocking,
+// consistent styling). confirm()/prompt() are untouched — destructive yes/no
+// stays blocking. Severity is inferred from the message text.
+window.alert=function(m){
+  var s=String(m==null?'':m);
+  var kind='info';
+  if(/fail|error|invalid|cannot|could ?n.t|not found|no permission|don.t have|blocked|denied|wrong/i.test(s))kind='error';
+  else if(/saved|added|created|copied|promoted|flipped|removed|deleted|updated|\bdone\b/i.test(s))kind='success';
+  else if(/required|select|choose|\bpick\b|first|already|must|^no |unable/i.test(s))kind='warn';
+  return toast(s,kind,kind==='error'?5200:3400);
+};
 
 /* ── Reusable form modal (Batch B: replaces chained prompt() dialogs) ──
    opts: {over,title,intro,submitLabel,fields:[{key,label,type,value,placeholder,
@@ -6240,8 +6251,8 @@ document.getElementById('mdlEdit').innerHTML=
 +'<button class="btn btn-danger-sm btn-full" onclick="delMem(\''+mid+'\',\''+did+'\')">Remove from Team</button>';
 openModal('ovEdit');updateAllocMeter('e_proj');}
 function meSetTab(t){
-  document.querySelectorAll('#mdlEdit .me-pane').forEach(function(p){p.style.display=(p.getAttribute('data-met')===t)?'':'none';});
-  document.querySelectorAll('#mdlEdit .me-tab').forEach(function(b){b.classList.toggle('active',b.getAttribute('data-met')===t);});
+  document.querySelectorAll('.ov.show .me-pane').forEach(function(p){p.style.display=(p.getAttribute('data-met')===t)?'':'none';});
+  document.querySelectorAll('.ov.show .me-tab').forEach(function(b){b.classList.toggle('active',b.getAttribute('data-met')===t);});
 }
 
 function saveEdit(mid,did){
@@ -6265,32 +6276,43 @@ var locOpts='<option value="">— not set —</option>'+D.locations.map(function
 var clrOpts='<option value="">— not set —</option>'+D.clearances.map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join('');
 document.getElementById('mdlAdd').innerHTML=
 '<div class="mdl-over">Add Team Member</div><div class="mdl-title">New Resource</div>'
-+'<div class="fld"><label class="fld-l">Department</label><select class="fld-sel" id="a_dept"><option value="">Select department...</option>'+deptOptHTML(null,0,[])+'</select></div>'
-+'<div class="fld-row2">'+fT('a_name','Name','')+fT('a_role','Role / Title','')+'</div>'
-+'<div class="fld-row2">'+fN('a_cost','Monthly Cost ($)',0)+fT('a_badge','Badge','')+'</div>'
-+'<div class="fld"><label class="fld-l" for="a_reports">Reports To</label><select class="fld-sel" id="a_reports"><option value="">— none —</option>'+names.map(function(n){return '<option value="'+esc(n)+'">'+esc(n)+'</option>';}).join('')+'</select></div>'
-+'<span class="fld-section-hdr">Projects &amp; Skills</span>'
-+'<div class="fld"><label class="fld-l">Assignments (Projects / Initiatives / Overhead)</label>'+msHTML('a_proj',[],D.projects,'proj-chip','Add assignments...')+'<div id="a_proj_alloc"></div></div>'
-+'<div class="fld"><label class="fld-l">Skills</label>'+msHTML('a_skill',[],D.skillsets,'skill-chip','Add skills...')+'</div>'
-+'<div class="fld"><label class="fld-l">Certifications</label>'+msHTML('a_cert',[],D.certifications,'cert-chip','Add certifications...')+'</div>'
-+'<span class="fld-section-hdr">Profile</span>'
-+'<div class="fld-row2"><div class="fld"><label class="fld-l" for="a_loc">Location</label><select class="fld-sel" id="a_loc">'+locOpts+'</select></div>'
-+'<div class="fld"><label class="fld-l" for="a_clr">Clearance</label><select class="fld-sel" id="a_clr">'+clrOpts+'</select></div></div>'
-+'<div class="fld"><label class="fld-l" for="a_resume">Resume (SharePoint Link)</label><input class="fld-i" id="a_resume" type="url" placeholder="https://..."></div>'
-+'<span class="fld-section-hdr">Background</span>'
-+'<div class="fld"><label class="fld-l">Past Projects</label>'+msHTML('a_ppj',[],D.pastProjects,'past-chip','Add past projects...')+'</div>'
-+'<div class="fld"><label class="fld-l">Past Clients</label>'+msHTML('a_pcl',[],D.pastClients,'past-chip','Add past clients...')+'</div>'
-+'<span class="fld-section-hdr">Classification</span>'
-+'<div class="fld"><div style="display:flex;gap:16px;flex-wrap:wrap">'
-+'<div class="chk-row"><input type="checkbox" id="a_hub"><label for="a_hub">Hub</label></div>'
-+'<div class="chk-row"><input type="checkbox" id="a_sme"><label for="a_sme">SME</label></div>'
-+'<div class="chk-row"><input type="checkbox" id="a_assoc"><label for="a_assoc">Associate</label></div></div></div>'
-+fT('a_note','Notes','')
-+'<div class="fld"><div class="chk-row warn-chk"><input type="checkbox" id="a_reassess"><label for="a_reassess">&#9888; Flag for value reassessment</label></div></div>'
++'<div class="me-tabs">'
+ +'<button type="button" class="me-tab active" data-met="core" onclick="meSetTab(\'core\')">Core</button>'
+ +'<button type="button" class="me-tab" data-met="proj" onclick="meSetTab(\'proj\')">Projects &amp; Skills</button>'
+ +'<button type="button" class="me-tab" data-met="profile" onclick="meSetTab(\'profile\')">Profile</button>'
+ +'<button type="button" class="me-tab" data-met="bg" onclick="meSetTab(\'bg\')">Background</button>'
++'</div>'
++'<div class="me-pane" data-met="core">'
+  +'<div class="fld"><label class="fld-l">Department</label><select class="fld-sel" id="a_dept"><option value="">Select department...</option>'+deptOptHTML(null,0,[])+'</select></div>'
+  +'<div class="fld-row2">'+fT('a_name','Name','')+fT('a_role','Role / Title','')+'</div>'
+  +'<div class="fld-row2">'+fN('a_cost','Monthly Cost ($)',0)+fT('a_badge','Badge','')+'</div>'
+  +'<div class="fld"><label class="fld-l" for="a_reports">Reports To</label><select class="fld-sel" id="a_reports"><option value="">— none —</option>'+names.map(function(n){return '<option value="'+esc(n)+'">'+esc(n)+'</option>';}).join('')+'</select></div>'
++'</div>'
++'<div class="me-pane" data-met="proj" style="display:none">'
+  +'<div class="fld"><label class="fld-l">Assignments (Projects / Initiatives / Overhead)</label>'+msHTML('a_proj',[],D.projects,'proj-chip','Add assignments...')+'<div id="a_proj_alloc"></div></div>'
+  +'<div class="fld"><label class="fld-l">Skills</label>'+msHTML('a_skill',[],D.skillsets,'skill-chip','Add skills...')+'</div>'
+  +'<div class="fld"><label class="fld-l">Certifications</label>'+msHTML('a_cert',[],D.certifications,'cert-chip','Add certifications...')+'</div>'
++'</div>'
++'<div class="me-pane" data-met="profile" style="display:none">'
+  +'<div class="fld-row2"><div class="fld"><label class="fld-l" for="a_loc">Location</label><select class="fld-sel" id="a_loc">'+locOpts+'</select></div>'
+  +'<div class="fld"><label class="fld-l" for="a_clr">Clearance</label><select class="fld-sel" id="a_clr">'+clrOpts+'</select></div></div>'
+  +'<div class="fld"><label class="fld-l" for="a_resume">Resume (SharePoint Link)</label><input class="fld-i" id="a_resume" type="url" placeholder="https://..."></div>'
++'</div>'
++'<div class="me-pane" data-met="bg" style="display:none">'
+  +'<div class="fld"><label class="fld-l">Past Projects</label>'+msHTML('a_ppj',[],D.pastProjects,'past-chip','Add past projects...')+'</div>'
+  +'<div class="fld"><label class="fld-l">Past Clients</label>'+msHTML('a_pcl',[],D.pastClients,'past-chip','Add past clients...')+'</div>'
+  +'<span class="fld-section-hdr" style="margin-top:0">Classification</span>'
+  +'<div class="fld"><div style="display:flex;gap:16px;flex-wrap:wrap">'
+  +'<div class="chk-row"><input type="checkbox" id="a_hub"><label for="a_hub">Hub</label></div>'
+  +'<div class="chk-row"><input type="checkbox" id="a_sme"><label for="a_sme">SME</label></div>'
+  +'<div class="chk-row"><input type="checkbox" id="a_assoc"><label for="a_assoc">Associate</label></div></div></div>'
+  +fT('a_note','Notes','')
+  +'<div class="fld"><div class="chk-row warn-chk"><input type="checkbox" id="a_reassess"><label for="a_reassess">&#9888; Flag for value reassessment</label></div></div>'
++'</div>'
 +'<div class="btn-row"><button class="btn btn-navy" style="flex:1" onclick="saveAddMem()">Add</button><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovAdd\')">Cancel</button></div>';
 openModal('ovAdd');}
 
-function saveAddMem(){var name=gv('a_name').trim();if(!name)return;var did=gv('a_dept'),dept=D.departments.find(function(d){return d.id===did;});if(!dept)return;
+function saveAddMem(){var name=gv('a_name').trim();if(!name){toast('Name is required.','warn');meSetTab('core');return;}var did=gv('a_dept'),dept=D.departments.find(function(d){return d.id===did;});if(!dept){toast('Select a department.','warn');meSetTab('core');return;}
 dept.members.push({id:uid(),name:name,role:gv('a_role'),cost:Number(gv('a_cost'))||0,badge:gv('a_badge'),reportsTo:gv('a_reports'),projects:msVal('a_proj'),skillsets:msVal('a_skill'),certifications:msVal('a_cert'),pastProjects:msVal('a_ppj'),pastClients:msVal('a_pcl'),location:gv('a_loc'),clearance:gv('a_clr'),resumeLink:gv('a_resume'),hub:gc('a_hub'),sme:gc('a_sme'),associate:gc('a_assoc'),note:gv('a_note'),reassess:gc('a_reassess')});
 closeModal('ovAdd');save();renderView();}
 
