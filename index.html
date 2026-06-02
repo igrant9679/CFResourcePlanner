@@ -4135,7 +4135,7 @@ function _pdSectionsHTML(p,tpl){
   }
   return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">'
     +'<div style="font-size:12px;color:var(--text-muted)">Section-by-section authoring. Pick a section, draft with AI, edit in place, rewrite in CF voice, then run Gap Analysis to verify every RFP requirement is covered.</div>'
-    +'<div>'+gapBtn+gapSummary+'</div>'
+    +'<div style="text-align:right"><button id="pd_gen_btn" type="button" class="btn btn-gold btn-sm" onclick="pdGenerateFullProposal(\''+p.id+'\')" title="Draft all AI sections from the BusDev Brief + RFP + Knowledge Bank">&#10024; Generate All</button> '+gapBtn+gapSummary+'<div id="pd_gen_status" style="font-size:11px;color:#7C3AED;margin-top:4px"></div></div>'
     +'</div>'
     +'<div class="sec-layout">'
     +'<div class="sec-list">'+sidebar+'</div>'
@@ -4206,6 +4206,8 @@ function _pdBriefHTML(p){
     +'<button class="btn btn-navy btn-sm" onclick="pdSaveBrief(\''+p.id+'\')">&#128190; Save Brief</button>'
     +'<span id="pd_brief_savemsg" style="font-size:11px;color:var(--green)"></span>'+updated
     +'<span style="flex:1"></span>'
+    +'<label style="font-size:11px;display:inline-flex;align-items:center;gap:4px" title="Seed the CF pricing sheet from RFP roles (only if pricing is empty)"><input type="checkbox" id="pd_gen_pricing" checked> Seed pricing</label>'
+    +'<label style="font-size:11px;display:inline-flex;align-items:center;gap:4px" title="Generate dossiers for bench members you assigned in the Staffing tab"><input type="checkbox" id="pd_gen_dossiers"> Dossiers (assigned bench)</label>'
     +'<button id="pd_gen_btn" class="btn btn-gold" onclick="pdGenerateFullProposal(\''+p.id+'\')">&#10024; Generate Full Proposal'+(aiSecs?' ('+aiSecs+' section'+(aiSecs===1?'':'s')+')':'')+'</button>'
     +'</div>'
     +'<div id="pd_gen_status" style="font-size:12px;color:#7C3AED;margin-top:10px;min-height:18px"></div>';
@@ -4245,11 +4247,18 @@ function pdGenerateFullProposal(id){
     kbIds=kbIds||[];
     var i=0,errs=0;
     function done(){
-      if(btn){btn.disabled=false;btn.textContent='✨ Generate Full Proposal';}
-      p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'proposal.generated',payload:{sections:aiSecs.length,errors:errs,kbSources:kbIds.length}});
-      save();
-      setStatus('Done — drafted '+(aiSecs.length-errs)+'/'+aiSecs.length+' section'+(aiSecs.length===1?'':'s')+(errs?' ('+errs+' failed — retry individually in Sections)':'')+'. Opening Sections…');
-      setTimeout(function(){_pdTab='sections';renderProposalDetail(id);},1000);
+      var doPricing=_genFlag('pd_gen_pricing',true);
+      var doDoss=_genFlag('pd_gen_dossiers',false);
+      var pricingMsg=doPricing&&_genSeedPricing(p)?' · pricing seeded':'';
+      function finalize(dossCount){
+        if(btn){btn.disabled=false;btn.textContent='✨ Generate Full Proposal';}
+        p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'proposal.generated',payload:{sections:aiSecs.length,errors:errs,kbSources:kbIds.length,pricingSeeded:!!pricingMsg,dossiers:dossCount}});
+        save();
+        setStatus('Done — drafted '+(aiSecs.length-errs)+'/'+aiSecs.length+' section'+(aiSecs.length===1?'':'s')+(errs?' ('+errs+' failed — retry individually)':'')+pricingMsg+(dossCount?' · '+dossCount+' dossier'+(dossCount===1?'':'s'):'')+'. Opening Sections…');
+        setTimeout(function(){_pdTab='sections';renderProposalDetail(id);},1100);
+      }
+      if(doDoss){setStatus('Generating key-personnel dossiers for assigned bench…');_genDossiers(p,finalize);}
+      else finalize(0);
     }
     function next(){
       if(i>=aiSecs.length){done();return;}
@@ -4267,6 +4276,37 @@ function pdGenerateFullProposal(id){
     }
     next();
   });
+}
+function _genFlag(id,dflt){var el=document.getElementById(id);return el?el.checked:dflt;}
+// Seed the CF pricing sheet from RFP roles — only when pricing is entirely empty
+// (never clobber a manual/CLIN table or existing resources). Returns true if seeded.
+function _genSeedPricing(p){
+  var roles=(p.rfp&&p.rfp.requiredRoles)||[];if(!roles.length)return false;
+  p.pricing=p.pricing||{mode:'cf-monthly',linkedProjectId:'',items:[]};
+  var cf=_cfEnsure(p);
+  if((p.pricing.items&&p.pricing.items.length)||(cf.resources&&cf.resources.length))return false;
+  p.pricing.mode='cf-monthly';
+  roles.forEach(function(role){cf.resources.push({id:uid(),role:role.title||'',count:Number(role.count)||1,monthlyRate:''});});
+  return true;
+}
+function _memberDossEntry(memberId){
+  var m=allM().find(function(x){return x.id===memberId;});if(!m)return null;
+  return {key:'mem:'+m.id,kind:'member',memberId:m.id,name:m.name||'(unnamed)',role:m.role||'',clearance:_resolveClrName(m.clearance)||m.clearance||'',location:_resolveLocName(m.location)||m.location||'',skills:_resolveSkillsetNames(m.skillsets),summary:m.note||'',attachmentId:''};
+}
+// Generate dossiers for members already assigned in the Staffing tab (bench intent).
+function _genDossiers(p,cb){
+  var rms=(p.staffing&&p.staffing.roleMatches)||[];
+  var ids=[];rms.forEach(function(rm){(rm.assignedMemberIds||[]).forEach(function(mid){if(ids.indexOf(mid)<0)ids.push(mid);});});
+  var have={};(p.dossiers||[]).forEach(function(d){if(d.sourceKey)have[d.sourceKey]=true;});
+  var entries=ids.map(_memberDossEntry).filter(Boolean).filter(function(e){return !have[e.key];});
+  if(!entries.length){cb(0);return;}
+  p.dossiers=p.dossiers||[];
+  var i=0,made=0;
+  (function nx(){
+    if(i>=entries.length){cb(made);return;}
+    var e=entries[i];
+    _dossGenerateOne(p,e,function(html){if(html){p.dossiers.push({id:uid(),name:e.name,role:e.role||'',sourceKey:e.key,sourceKind:e.kind,html:html,generatedAt:Date.now()});made++;}i++;save();nx();});
+  })();
 }
 function _propBuildRFPCtx(p){
   var rfp=p.rfp||{};

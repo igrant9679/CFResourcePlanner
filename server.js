@@ -110,6 +110,8 @@ const PROTECTED_ARRAYS = [
   'taskTemplates',
   'programs',
   'accounts',
+  'knowledgeBank',        // proposal knowledge-bank metadata (text lives in knowledge_docs)
+  'resumeBank',           // dedicated standalone resume uploads
 ];
 
 app.post('/api/data', async (req, res) => {
