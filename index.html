@@ -1425,6 +1425,53 @@ function proformaMigrate(){
     'C1FAMS FY27':{pwin:0.5,ev:600000,value:1200000,owner:'Khaja'},'DD577 or workforce Cert App':{pwin:0.5,ev:600000,value:1200000,owner:'Khaja'},
     'SpaceForce S&T':{pwin:0.5,ev:225000,value:450000,owner:'Khaja / Norman'},'Marines DD577':{pwin:0.5,ev:600000,value:1200000,owner:'Khaja'}};
   (D.projects||[]).forEach(function(p){ if(projCat(p)!=='opportunity')return; var k=PW[p.name]; if(k){ if(p.pwin==null)p.pwin=k.pwin; if(p.expectedValue==null)p.expectedValue=k.ev; if(!p.owner&&!p.opr)p.owner=k.owner; } });
+  // ── Phase 4 reorg (one-time): fold Actuals "new costs" into Cost Structure, drop CEO
+  //    personal financials + net worth (corporate-level info only). ──
+  if(!D.proformaV4Reorg){
+    var P=D.proforma;
+    if(P){
+      P.costStructure=P.costStructure||{}; if(!Array.isArray(P.costStructure.overhead))P.costStructure.overhead=[];
+      if(P.actuals&&Array.isArray(P.actuals.newCosts)){
+        P.actuals.newCosts.forEach(function(x){
+          if(PF_DUP_VENDORS.indexOf(x.vendor)>-1)return;   // payment vehicle for someone already in payroll — would double-count
+          if(P.costStructure.overhead.some(function(o){return o.category===x.vendor;}))return;
+          P.costStructure.overhead.push({category:x.vendor,monthly:Number(x.jun)||0,notes:'(from actuals · '+(x.recurring||'')+') '+(x.notes||'')});
+        });
+      }
+      delete P.actuals;
+      if(P.debt)delete P.debt.personal;
+      if(P.company)delete P.company.ceoNetWorth;
+    }
+    D.proformaV4Reorg=true;
+  }
+  // Corrective: drop previously auto-merged actuals lines that duplicate payroll (payment
+  // vehicles for roster members). Re-runs once via the V3 flag to fix already-migrated data.
+  if(!D.proformaV4Reorg3){
+    if(D.proforma&&D.proforma.costStructure&&Array.isArray(D.proforma.costStructure.overhead)){
+      D.proforma.costStructure.overhead=D.proforma.costStructure.overhead.filter(function(o){
+        return !(/\(from actuals/i.test(o.notes||'')&&PF_DUP_VENDORS.indexOf(o.category)>-1);
+      });
+    }
+    D.proformaV4Reorg3=true;
+  }
+}
+/* Actuals "new cost" vendors that are payment vehicles for people already on payroll
+   (the workbook's "same as [member]" mappings) — excluded to avoid double-counting. */
+var PF_DUP_VENDORS=['LSI Media LLC','Global Insights + Solutions, LLC','Highbury / SIE','CyberSecWave','Cerulaxis (A-Z Services / QB)'];
+/* Company-wide fixed monthly overhead / G&A cost (Cost Structure → shown under the
+   Overhead view's G&A/Operations item and subtracted as a real cost in Capacity). */
+function proformaOverheadMonthly(){
+  var cs=(D.proforma||{}).costStructure||{};
+  var oh=(cs.overhead||[]).reduce(function(s,x){return s+(Number(x.monthly)||0);},0);
+  var subs=(cs.softwareSubs||[]).reduce(function(s,x){return s+(Number(x.monthly)||0);},0);
+  return Math.round(oh+subs);
+}
+/* Corporate debt service per month (parseable obligations only) — a financing
+   cash outflow below the operating line; used by the Capacity cash-gate view. */
+function proformaDebtService(){
+  var d=(D.proforma||{}).debt||{},t=0;
+  (d.corporate||[]).forEach(function(x){var n=parseFloat(String(x.monthlyPayment).replace(/[^0-9.]/g,''));if(!isNaN(n)&&/\d/.test(String(x.monthlyPayment))&&!/equiv/i.test(x.monthlyPayment))t+=n;});
+  return Math.round(t);
 }
 function proposalsMigrate(){
   if(!D.proposals)D.proposals=[];
@@ -2404,9 +2451,22 @@ function renderProjView(q,category){
   var all=allM(),tops=topLevelByCat(category),html='<div class="proj-scroll">';
   var totalRev=0,totalCost=0;
   tops.forEach(function(proj){var r=projRollupData(proj.id,all);totalRev+=r.revenue;totalCost+=r.cost;});
+  var pfOh=(category==='overhead'&&typeof proformaOverheadMonthly==='function')?proformaOverheadMonthly():0;
+  if(category==='overhead')totalCost+=pfOh;
   var revWord=category==='opportunity'?'Total potential value: ':category==='initiative'?'Total expected rev: ':'Total revenue: ';
-  var sumLine=category==='overhead'?('Total overhead: <strong style="color:var(--red)">'+fmt(totalCost)+'/mo</strong>'):(revWord+'<strong style="color:'+(pipe?'var(--amber)':'var(--green)')+'">'+fmt(totalRev)+'/mo</strong> &middot; Total cost: <strong>'+fmt(totalCost)+'/mo</strong>');
+  var sumLine=category==='overhead'?('Total overhead: <strong style="color:var(--red)">'+fmt(totalCost)+'/mo</strong>'+(pfOh>0?' <span style="font-size:10px;color:var(--text-muted)">(incl. '+fmt(pfOh)+'/mo G&amp;A from Cost Structure)</span>':'')):(revWord+'<strong style="color:'+(pipe?'var(--amber)':'var(--green)')+'">'+fmt(totalRev)+'/mo</strong> &middot; Total cost: <strong>'+fmt(totalCost)+'/mo</strong>');
   html+='<div style="padding:10px 14px;margin-bottom:14px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;color:var(--text-secondary)"><strong style="font-size:13px;color:var(--text-primary)">'+meta.label+'</strong> &middot; '+tops.length+' '+(tops.length===1?meta.noun:meta.plural)+' &middot; '+sumLine+'</div>';
+  if(category==='overhead'&&pfOh>0){
+    var cs=(D.proforma||{}).costStructure||{};
+    var lines=(cs.overhead||[]).map(function(x){return {n:x.category,m:Number(x.monthly)||0};}).concat((cs.softwareSubs||[]).map(function(x){return {n:x.vendor,m:Number(x.monthly)||0};}));
+    lines.sort(function(a,b){return b.m-a.m;});
+    html+='<div style="margin-bottom:14px;background:var(--card-bg);border:1px solid var(--border);border-left:3px solid #546478;border-radius:var(--radius);padding:11px 14px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:baseline"><strong style="font-size:13px">G&amp;A / Operations — fixed monthly costs</strong><strong style="color:var(--red)">'+fmt(pfOh)+'/mo</strong></div>'
+      +'<div style="font-size:10px;color:var(--text-muted);margin:2px 0 8px">From the Proforma → Cost Structure. Counted as overhead cost in Capacity Planning.'+(canProforma?(canProforma()?' <a href="#" onclick="viewMode=\'proforma\';proformaTab=\'costs\';renderView();return false;" style="color:var(--gold)">Edit in Cost Structure →</a>':''):'')+'</div>'
+      +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:2px 16px;font-size:11px">'
+      +lines.map(function(l){return '<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:2px 0"><span style="color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(l.n)+'</span><span style="font-weight:600">'+fmt(l.m)+'</span></div>';}).join('')
+      +'</div></div>';
+  }
   tops.forEach(function(proj){
     var children=projChildren(proj.id);
     if(q&&!projOrDescHasMatch(proj,q,all))return;
@@ -2879,6 +2939,7 @@ function capProjData(roster,multPct,opts){
   var marinesStart=null;
   if(opts.marinesWon){var mo2=opps.find(function(o){return /marines|dd577/i.test(o.name||'');});var cd=mo2&&mo2.closeDate?new Date(mo2.closeDate):null;marinesStart=(cd&&!isNaN(cd))?cd.getFullYear()*12+cd.getMonth():(2026*12+9);}
   var MAR_GROSS=41667,MAR_COST=20834;  // $500K ARR / 12 ; 50% margin
+  var overhead=proformaOverheadMonthly();   // company-wide G&A/Operations fixed cost (Cost Structure)
   var cum=0,rows=capProjMonths().map(function(mo){
     var active=roster.filter(function(pn){return capPersonActive(pn,mo.y,mo.m);});
     var baseRev=0;
@@ -2899,21 +2960,18 @@ function capProjData(roster,multPct,opts){
     oppRev=Math.round(oppRev);
     // Marines win: add ARR revenue + delivery cost (net = 50% margin) from its start month
     if(opts.marinesWon&&marinesStart!=null&&(mo.y*12+mo.m)>=marinesStart){oppRev+=MAR_GROSS;payroll+=MAR_COST;}
-    var rev=baseRev+oppRev,profit=rev-payroll;cum+=profit;
-    return {y:mo.y,m:mo.m,baseRev:baseRev,oppRev:oppRev,rev:rev,payroll:payroll,profit:profit,cum:cum};
+    var rev=baseRev+oppRev,cost=payroll+overhead,profit=rev-cost;cum+=profit;
+    return {y:mo.y,m:mo.m,baseRev:baseRev,oppRev:oppRev,rev:rev,payroll:payroll,overhead:overhead,cost:cost,profit:profit,cum:cum};
   });
-  return {rows:rows,noDate:noDate,modeled:modeled};
+  return {rows:rows,noDate:noDate,modeled:modeled,overhead:overhead};
 }
-/* Fixed monthly cash burden not captured in roster payroll: overhead + parseable
-   corporate debt service (from the Proforma). Editable override via _capBurdenOverride. */
+/* Cash-only financing burden below the operating line: corporate debt service
+   (overhead/G&A is now in operating cost). Editable override via _capBurdenOverride. */
 var _capBurdenOverride=null, _capCashMode=false;
 function capFixedBurden(){
   var extra=(_capV4&&CAP_V4[_capV4])?(CAP_V4[_capV4].extraBurden||0):0;
   if(_capBurdenOverride!=null)return _capBurdenOverride+extra;
-  var P=D.proforma; if(!P)return extra;
-  var oh=(P.costStructure&&P.costStructure.overheadTotal)||0;
-  var debt=0;(P.debt&&P.debt.corporate||[]).forEach(function(x){var n=parseFloat(String(x.monthlyPayment).replace(/[^0-9.]/g,''));if(!isNaN(n)&&/\d/.test(String(x.monthlyPayment))&&!/equiv/i.test(x.monthlyPayment))debt+=n;});
-  return oh+debt+extra;
+  return proformaDebtService()+extra;
 }
 function capOpeningCash(){ var P=D.proforma; return (P&&P.financials&&P.financials.openingCash)||0; }
 function capSetProjMult(v){ _capV4=null;_capProjMult=Math.max(0,Math.min(200,Number(v)||0)); renderView(); }
@@ -2922,8 +2980,8 @@ function capToggleCash(){ _capCashMode=!_capCashMode; renderView(); }
 function capSetBurden(v){ var n=Number(v); _capBurdenOverride=(v===''||isNaN(n))?null:Math.max(0,n); renderView(); }
 function _capProjOpts(){ return _capV4&&CAP_V4[_capV4]?{c1target:CAP_V4[_capV4].c1target,marinesWon:CAP_V4[_capV4].marinesWon}:{}; }
 function _capYearTotals(rows,yr){
-  var r={revenue:0,payroll:0,profit:0,months:0};
-  rows.forEach(function(x){ if(x.y!==yr)return; r.revenue+=x.rev;r.payroll+=x.payroll;r.profit+=x.profit;r.months++; });
+  var r={revenue:0,payroll:0,overhead:0,profit:0,months:0};
+  rows.forEach(function(x){ if(x.y!==yr)return; r.revenue+=x.rev;r.payroll+=x.payroll;r.overhead+=(x.overhead||0);r.profit+=x.profit;r.months++; });
   r.margin=r.revenue?Math.round(r.profit/r.revenue*100):0;
   return r;
 }
@@ -2957,7 +3015,7 @@ function _capProjHTML(roster){
   // cash controls
   var cashPanel=_capCashMode?'<div class="cap-proj-ctl">'
     +'<label>Opening cash</label><span class="cap-proj-prob">'+fmt(opening)+'</span>'
-    +'<label style="margin-left:10px">Other monthly costs</label><input type="number" class="cap-cost" style="width:96px" value="'+Math.round(burden)+'" onchange="capSetBurden(this.value)" title="Overhead + debt service not already in roster payroll (default from Proforma)">'
+    +'<label style="margin-left:10px">Debt service /mo</label><input type="number" class="cap-cost" style="width:96px" value="'+Math.round(burden)+'" onchange="capSetBurden(this.value)" title="Financing cash outflow below the operating line (default = parseable corporate debt service from the Proforma). Overhead/G&A is already in operating cost.">'
     +'<span style="flex:1"></span>'
     +'<span class="cap-stage-leg">'+(gateMet?('&#9989; $'+(Math.round(gate/1000))+'K gate met '+CAP_MONTHS[gateMet.m]+" '"+(gateMet.y%100)+' (cash '+fmt(gateMet.cashBal)+')'):'&#9888; $'+(Math.round(gate/1000))+'K gate not reached by Dec '+rows[rows.length-1].y)+'</span>'
     +'</div>':'';
@@ -2971,6 +3029,7 @@ function _capProjHTML(roster){
       +'<div class="cap-yr-grid">'
       +'<div class="cap-yr-m"><span class="k">Revenue</span><span class="v">'+fmt(t.revenue)+'</span></div>'
       +'<div class="cap-yr-m"><span class="k">Payroll</span><span class="v">'+fmt(t.payroll)+'</span></div>'
+      +'<div class="cap-yr-m"><span class="k">Overhead/G&amp;A</span><span class="v">'+fmt(t.overhead)+'</span></div>'
       +'<div class="cap-yr-m"><span class="k">Profit</span><span class="v '+(t.profit>=0?'cap-pos':'cap-neg')+'">'+fmt(t.profit)+'</span></div>'
       +'<div class="cap-yr-m"><span class="k">Margin</span><span class="v">'+t.margin+'%</span></div>'
       +(_capCashMode?'<div class="cap-yr-m" style="grid-column:1/3"><span class="k">Cash at year-end</span><span class="v '+(endCash>=gate?'cap-pos':'cap-neg')+'">'+fmt(endCash)+'</span></div>':'')
@@ -2983,17 +3042,18 @@ function _capProjHTML(roster){
       +'<td>'+fmt(r.rev)+'</td>'
       +'<td>'+(r.oppRev?'<span class="cap-pos">'+fmt(r.oppRev)+'</span>':'—')+'</td>'
       +'<td>'+fmt(r.payroll)+'</td>'
+      +'<td>'+fmt(r.overhead||0)+'</td>'
       +'<td class="'+(r.profit>=0?'cap-pos':'cap-neg')+'">'+fmt(r.profit)+'</td>'
       +(_capCashMode?'<td class="'+(r.cashBal>=gate?'cap-pos':'cap-neg')+'">'+fmt(r.cashBal)+(gateMet&&gateMet.y===r.y&&gateMet.m===r.m?' &#9989;':'')+'</td>':'<td class="'+(r.cum>=0?'cap-pos':'cap-neg')+'">'+fmt(r.cum)+'</td>')
       +'</tr>';
   }).join('');
   var tbl='<div class="cap-proj-tbl-wrap"><table class="cap-proj-tbl"><thead>'
-    +'<tr><th class="mo">Month</th><th>Revenue</th><th>of which pipeline</th><th>Payroll</th><th>Profit</th><th>'+(_capCashMode?'Cash balance':'Cumulative profit')+'</th></tr></thead>'
+    +'<tr><th class="mo">Month</th><th>Revenue</th><th>of which pipeline</th><th>Payroll</th><th>Overhead/G&amp;A</th><th>Profit</th><th>'+(_capCashMode?'Cash balance':'Cumulative profit')+'</th></tr></thead>'
     +'<tbody>'+body+'</tbody></table></div>';
   var note='<div class="cap-proj-note">Projection starts this month and runs through Dec '+rows[rows.length-1].y+'. '
-    +'Contract revenue is time-phased from the Knowledge Base (FAMS sunset Sep 24, BCLM +25% step, C1FAMS ramp to $100K Oct); payroll counts only people on payroll that month (hires/prospects ramp at their start month; member cost schedules apply). '
+    +'Cost = payroll (people on payroll that month) + Overhead/G&amp;A '+fmt(d.overhead||0)+'/mo (from the Proforma Cost Structure, shown on the Overhead tab under G&amp;A/Operations). Profit and margin are net of all of it. Contract revenue is time-phased from the Knowledge Base (FAMS sunset Sep 24, BCLM +25% step, C1FAMS ramp to $100K Oct). '
     +d.modeled+' opportunit'+(d.modeled===1?'y is':'ies are')+' ramped in at close date, weighted by stage × '+_capProjMult+'% confidence'+(_capProjOpts().marinesWon?' (Marines forced to won)':'')+(_capProjOpts().c1target!=null?' · C1FAMS maturity set to '+fmt(_capProjOpts().c1target):'')+(d.noDate?'; '+d.noDate+' opportunit'+(d.noDate===1?'y':'ies')+' without a close date excluded':'')+'.'
-    +(_capCashMode?' Cash = opening '+fmt(opening)+' + cumulative (profit − other monthly costs '+fmt(burden)+'); the latter is an editable estimate of overhead + debt service not in payroll, so calibrate it to tie to your books.':'')+'</div>';
+    +(_capCashMode?' Cash = opening '+fmt(opening)+' + cumulative (profit − debt service '+fmt(burden)+'/mo).':'')+'</div>';
   var charts='<div class="cap-chart" style="margin-bottom:14px"><div class="cap-chart-h">Cumulative revenue &amp; profit through Dec '+rows[rows.length-1].y+'</div>'+_capProjChart(rows)+'</div>'
     +(_capCashMode?'<div class="cap-chart" style="margin-bottom:14px"><div class="cap-chart-h">Cash balance vs $'+(Math.round(gate/1000))+'K survival gate</div>'+_capCashChart(rows,gate,opening)+'</div>':'');
   return ctl+v4+cashPanel+charts+'<div class="cap-yr-cards">'+yrCards+'</div>'+tbl+note;
@@ -3051,12 +3111,12 @@ function _capProjRowsForExport(){
 function capProjExportCSV(){
   if(!CAP)return;
   var rows=_capProjRowsForExport(),cashMode=_capCashMode;
-  var lines=[['Month','Revenue','Pipeline portion','Payroll','Profit',cashMode?'Net cash Δ':'Cumulative profit',cashMode?'Cash balance':''].filter(function(x){return x!=='';})];
-  rows.forEach(function(r){var row=[CAP_MONTHS[r.m]+" '"+(r.y%100),Math.round(r.rev),Math.round(r.oppRev),Math.round(r.payroll),Math.round(r.profit)];if(cashMode){row.push(Math.round(r.netCash),Math.round(r.cashBal));}else{row.push(Math.round(r.cum));}lines.push(row);});
+  var lines=[['Month','Revenue','Pipeline portion','Payroll','Overhead/G&A','Profit',cashMode?'Net cash Δ':'Cumulative profit',cashMode?'Cash balance':''].filter(function(x){return x!=='';})];
+  rows.forEach(function(r){var row=[CAP_MONTHS[r.m]+" '"+(r.y%100),Math.round(r.rev),Math.round(r.oppRev),Math.round(r.payroll),Math.round(r.overhead||0),Math.round(r.profit)];if(cashMode){row.push(Math.round(r.netCash),Math.round(r.cashBal));}else{row.push(Math.round(r.cum));}lines.push(row);});
   lines.push([]);
   if(_capV4&&CAP_V4[_capV4])lines.push(['Scenario',CAP_V4[_capV4].label,'ref cash @Aug 2027',CAP_V4[_capV4].ref]);
-  lines.push(['Annual total','Revenue','Payroll','Profit','Margin %']);
-  _capProjYears(rows).forEach(function(yr){var t=_capYearTotals(rows,yr);lines.push([yr+(t.months<12?' (partial)':''),Math.round(t.revenue),Math.round(t.payroll),Math.round(t.profit),t.margin]);});
+  lines.push(['Annual total','Revenue','Payroll','Overhead/G&A','Profit','Margin %']);
+  _capProjYears(rows).forEach(function(yr){var t=_capYearTotals(rows,yr);lines.push([yr+(t.months<12?' (partial)':''),Math.round(t.revenue),Math.round(t.payroll),Math.round(t.overhead),Math.round(t.profit),t.margin]);});
   var csv=lines.map(function(row){return row.map(function(c){var s=String(c==null?'':c);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}).join(',');}).join('\r\n');
   var blob=new Blob([csv],{type:'text/csv'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download='atlas_projection_'+new Date().toISOString().slice(0,10)+'.csv';
@@ -3163,6 +3223,25 @@ function capApply(){
 /* ── PROFORMA SECTION (confidential, Admin-only) — read-only V1 ── */
 function pfSetTab(t){ proformaTab=t; renderView(); }
 function _pfMoney(v){ return (v==null||v==='')?'—':fmt(v); }
+/* Forward-looking figures in the Proforma are COMPUTED by Capacity Planning under
+   the selected scenario (past/actuals stay fixed). Uses the live roster so it
+   reflects real data + the chosen scenario, independent of the sandbox. */
+var _pfScenario='base';
+function pfSetScenario(k){ if(CAP_V4[k])_pfScenario=k; renderView(); }
+function _pfScenarioRows(){
+  var s=CAP_V4[_pfScenario]||CAP_V4.base;
+  var rows=capProjData(capBuildRoster(),s.mult,{c1target:s.c1target,marinesWon:s.marinesWon}).rows;
+  var burden=proformaDebtService()+(s.extraBurden||0),cash=capOpeningCash();
+  rows.forEach(function(r){r.netCash=r.profit-burden;cash+=r.netCash;r.cashBal=cash;});
+  return rows;
+}
+function _pfScenarioCashAtHorizon(key){
+  var s=CAP_V4[key]||CAP_V4.base;
+  var rows=capProjData(capBuildRoster(),s.mult,{c1target:s.c1target,marinesWon:s.marinesWon}).rows;
+  var burden=proformaDebtService()+(s.extraBurden||0),cash=capOpeningCash(),gm=null;
+  rows.forEach(function(r){cash+=(r.profit-burden);if(gm===null&&cash>=((D.proforma.financials||{}).cashGateTarget||1500000))gm=r;});
+  return {cash:cash,gateMet:gm};
+}
 /* ── PROFORMA editing engine (Admin-only) — schema-driven generic editors ── */
 var PF_SEL={level:['CRITICAL','HIGH','MEDIUM-HIGH','MEDIUM','LOW','RESOLVED'],priority:['HIGHEST','CRITICAL','HIGH','MEDIUM','LOW'],dstatus:['ACTION','DONE','MILESTONE','UPCOMING','CRITICAL','GATE','STRATEGIC','FUTURE']};
 var PF_FIELDS={
@@ -3263,7 +3342,7 @@ function _pfSnapshotsHTML(P){
   if(!snaps.length)return '<div class="pf-card"><div class="pf-card-h">Snapshots</div><div class="pf-note">No snapshots yet. Click <b>&#128247; Take snapshot</b> above to capture the current Proforma. Take one before each leadership update, then compare here to see exactly what changed.</div></div>';
   var cols=snaps.map(function(s){return {label:s.label,sub:_pfDate(s.ts),kpi:_pfSnapKPIs(s.data)};});
   cols.push({label:'Current',sub:'live',kpi:_pfSnapKPIs(P)});
-  var metrics=[['Cash position','cash',1],['Cash gate','gate',1],['CEO net worth','netWorth',1],['Corporate debt','corpDebt',1],['Monthly profit','mProfit',1],['Monthly profit (Oct+)','mProfitOct',1],['Pipeline EV','pipelineEV',1],['Open risks','risks',0],['Open data gaps','gaps',0]];
+  var metrics=[['Cash position','cash',1],['Cash gate','gate',1],['Corporate debt','corpDebt',1],['Monthly profit','mProfit',1],['Monthly profit (Oct+)','mProfitOct',1],['Pipeline EV','pipelineEV',1],['Open risks','risks',0],['Open data gaps','gaps',0]];
   var thead='<tr><th>Metric</th>'+cols.map(function(cc){return '<th>'+esc(cc.label)+'<div class="pf-sub">'+esc(cc.sub)+'</div></th>';}).join('')+'</tr>';
   var tbody=metrics.map(function(m){return '<tr><td style="text-align:left;font-weight:600">'+m[0]+'</td>'+cols.map(function(cc){var v=cc.kpi[m[1]];return '<td>'+(v==null?'—':(m[2]?fmt(v):v))+'</td>';}).join('')+'</tr>';}).join('');
   var trend='<div class="pf-card"><div class="pf-card-h">Headline trend across snapshots</div><div style="overflow:auto"><table class="pf-tbl pf-trend"><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table></div></div>';
@@ -3289,15 +3368,16 @@ function renderProformaView(q){
   if(!D.proforma)proformaMigrate();
   var P=D.proforma,c=P.company||{},f=P.financials||{},meta=P.meta||{};
   var gateTarget=f.cashGateTarget||1500000,cash=f.openingCash||c.cashPosition||0,pct=Math.max(0,Math.min(100,Math.round(cash/gateTarget*100)));
-  var tabs=[['overview','Overview'],['financials','Financials & Cash'],['scenarios','Scenarios'],['contracts','Contracts'],['debt','Debt & Personal'],['pipeline','Pipeline'],['strategy','Strategy'],['technology','Technology'],['costs','Cost Structure'],['risks','Risks & Dates'],['actuals','Actuals'],['snapshots','Snapshots']];
+  var tabs=[['overview','Overview'],['financials','Financials & Cash'],['scenarios','Scenarios'],['contracts','Contracts'],['debt','Debt'],['pipeline','Pipeline'],['strategy','Strategy'],['technology','Technology'],['costs','Cost Structure'],['risks','Risks & Dates'],['snapshots','Snapshots']];
   var nav='<div class="pf-subtabs">'+tabs.map(function(t){return '<button class="pf-subtab'+(proformaTab===t[0]?' active':'')+'" onclick="pfSetTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
-  var kpis=[['Cash position',_pfMoney(cash)],['Cash gate',_pfMoney(gateTarget)+' · '+pct+'%'],['Monthly profit',_pfMoney(c.monthlyProfit)+' → '+_pfMoney(c.monthlyProfitOct)],['Corporate debt',_pfMoney(c.corporateDebt)],['CEO net worth',_pfMoney(c.ceoNetWorth)],['Gate ETA',esc(c.gateDate||'—')]];
+  var kpis=[['Cash position',_pfMoney(cash)],['Cash gate',_pfMoney(gateTarget)+' · '+pct+'%'],['Monthly profit',_pfMoney(c.monthlyProfit)+' → '+_pfMoney(c.monthlyProfitOct)],['Corporate debt',_pfMoney(c.corporateDebt)],['Gate ETA',esc(c.gateDate||'—')]];
   var kpiBar='<div class="pf-kpis">'+kpis.map(function(k){return '<div class="pf-kpi"><div class="pf-kpi-l">'+k[0]+'</div><div class="pf-kpi-v">'+k[1]+'</div></div>';}).join('')+'</div>';
   var upd=(meta.updatedBy&&meta.updatedBy!=='seed')?(' · last edited by '+esc(meta.updatedBy)+(_pfDate(meta.updatedAt)?(' on '+_pfDate(meta.updatedAt)):'')):'';
   var banner='<div class="pf-banner">&#128274; CONFIDENTIAL — CEO second brain. Restricted to Admin. Not synced externally. <span style="opacity:.8">Source: Knowledge Base '+esc(meta.version||'')+' · as of '+esc(meta.asOf||'')+upd+'</span></div>';
+  var scenSel='<label class="pf-meta" style="margin-left:8px">Forecast scenario <select class="fld-sel" style="width:auto;display:inline-block" onchange="pfSetScenario(this.value)">'+Object.keys(CAP_V4).map(function(k){return '<option value="'+k+'"'+(_pfScenario===k?' selected':'')+'>'+esc(CAP_V4[k].label)+'</option>';}).join('')+'</select></label>';
   var actions='<div class="pf-actions-row"><button class="btn btn-gold btn-sm" onclick="proformaTakeSnapshot()">&#128247; Take snapshot</button>'
-    +'<button class="btn btn-sec btn-sm" onclick="pfEditObj(\'meta\')">Edit doc meta</button>'
-    +'<span class="pf-meta">'+((D.proformaSnapshots||[]).length)+' snapshot'+(((D.proformaSnapshots||[]).length)===1?'':'s')+' on file · edits save to live and stamp who/when</span></div>';
+    +'<button class="btn btn-sec btn-sm" onclick="pfEditObj(\'meta\')">Edit doc meta</button>'+scenSel
+    +'<span class="pf-meta">· forward figures (cash trajectory, scenarios, contracts) are computed by Capacity Planning. Past/actuals are fixed.</span></div>';
   var body='';
   if(proformaTab==='overview'){
     body='<div class="pf-grid">'
@@ -3312,25 +3392,29 @@ function renderProformaView(q){
       +'<div class="pf-card">'+_pfH('Competitive landscape')+_pfTable(['Competitor','Type','Note'],(c.competitors||[]).map(function(x){return [esc(x.name),esc(x.type),esc(x.note)];}),'company.competitors')+'</div>'
       +'</div>';
   } else if(proformaTab==='financials'){
-    body='<div class="pf-card">'+_pfH('Historical performance')+_pfTable(['Year','Revenue','Net income','Op. cash flow','Ending cash'],(f.history||[]).map(function(h){return [esc(h.year),_pfMoney(h.revenue),_pfMoney(h.netIncome),_pfMoney(h.opCashFlow),_pfMoney(h.endingCash)];}),'financials.history')+'</div>'
-      +'<div class="pf-card">'+_pfH('Cash position trajectory (base case)',"pfEditObj('financials')")+_pfTable(['Date','Cash','Monthly Δ','Status','Notes'],(f.cashTrajectory||[]).map(function(r){return [esc(r.date),_pfMoney(r.cash),_pfMoney(r.delta),esc(r.status),esc(r.notes)];}),'financials.cashTrajectory')+'</div>'
+    var projRows=_pfScenarioRows();
+    body='<div class="pf-card">'+_pfH('Cash position — actuals (fixed, past)',"pfEditObj('financials')")+_pfTable(['Date','Cash','Monthly Δ','Status','Notes'],(f.cashTrajectory||[]).map(function(r){return [esc(r.date),_pfMoney(r.cash),_pfMoney(r.delta),'<span class="pf-pill pf-ok">'+esc(r.status||'Actual')+'</span>',esc(r.notes)];}),'financials.cashTrajectory')+'</div>'
+      +'<div class="pf-card">'+_pfH('Projected cash trajectory — computed by Capacity Planning ('+esc(CAP_V4[_pfScenario].label)+')')+_pfTable(['Month','Cash balance','Monthly Δ','Source'],projRows.map(function(r){return [CAP_MONTHS[r.m]+" '"+(r.y%100),_pfMoney(Math.round(r.cashBal)),_pfMoney(Math.round(r.netCash)),'<span class="pf-pill">Projected</span>'];}))+'<div class="pf-note">Opening cash + cumulative (profit − debt service), under the selected forecast scenario (change it in the toolbar above). Edit the inputs in Capacity Planning &amp; Cost Structure — not here.</div></div>'
       +'<div class="pf-card">'+_pfH('Survival-mode exit gates')+_pfTable(['Gate','Status','Projected close','Notes'],(f.gates||[]).map(function(g){return [esc(g.name),esc(g.status),esc(g.projectedClose),esc(g.notes)];}),'financials.gates')+'</div>';
   } else if(proformaTab==='scenarios'){
-    body='<div class="pf-grid">'+(P.scenarios||[]).map(function(s,si){return '<div class="pf-card"><div class="pf-card-h">'+esc(s.name)+_pfEditBtn("pfEditRow('scenarios',"+si+")")+_pfDelBtn("pfDelRow('scenarios',"+si+")")+'</div>'
-      +'<div class="pf-big">'+_pfMoney(s.cashAtHorizon)+'</div><div class="pf-sub">cash at horizon</div>'
-      +'<div class="pf-kv"><span>Gate timing</span><b>'+esc(s.gateTiming)+'</b></div><div class="pf-note">'+esc(s.assumptions)+'</div></div>';}).join('')+'</div>'
-      +_pfAddBtn('scenarios','+ Add scenario')+'<div class="pf-note" style="margin-top:8px">These map onto the Capacity Planning V4 scenario presets.</div>';
+    var assumpByName={};(P.scenarios||[]).forEach(function(s){assumpByName[s.name]=s.assumptions;});
+    var gateT=(P.financials||{}).cashGateTarget||1500000;
+    body='<div class="pf-grid">'+Object.keys(CAP_V4).map(function(k){var s=CAP_V4[k];var r=_pfScenarioCashAtHorizon(k),gm=r.gateMet;
+      return '<div class="pf-card'+(_pfScenario===k?' pf-locked':'')+'"><div class="pf-card-h">'+esc(s.label)+(_pfScenario===k?' <span class="pf-pill pf-ok">active</span>':'')+'</div>'
+       +'<div class="pf-big">'+_pfMoney(Math.round(r.cash))+'</div><div class="pf-sub">computed cash at horizon · workbook ref '+fmt(s.ref)+'</div>'
+       +'<div class="pf-kv"><span>$'+Math.round(gateT/1000)+'K gate</span><b>'+(gm?('met '+CAP_MONTHS[gm.m]+" '"+(gm.y%100)):'not reached')+'</b></div>'
+       +'<div class="pf-note">'+esc(assumpByName[s.label]||'')+'</div>'
+       +'<button class="btn btn-sec btn-sm" style="margin-top:6px" onclick="pfSetScenario(\''+k+'\')">Use this scenario</button></div>';}).join('')+'</div>'
+      +'<div class="pf-note" style="margin-top:8px">Cash-at-horizon is computed live by Capacity Planning under each scenario (contracted revenue + that scenario\'s levers, net of payroll + overhead + debt service).</div>';
   } else if(proformaTab==='contracts'){
-    body='<div class="pf-card">'+_pfH('Contract profitability summary')+_pfTable(['Contract','Monthly rev','Monthly cost','Monthly profit','Margin','Strategic role'],(P.contractEconomics||[]).map(function(x){return [esc(x.contract),_pfMoney(x.rev),_pfMoney(x.cost),_pfMoney(x.profit),Math.round((x.margin||0)*1000)/10+'%',esc(x.role)];}),'contractEconomics')+'</div>'
-      +'<div class="pf-note">Time-phasing (FAMS sunset, BCLM +25%, C1FAMS ramp) is wired onto the operational projects and drives the Capacity Planning forecast.</div>';
+    var contracts=(D.projects||[]).filter(function(p){return p.timeline&&p.timeline.length;});
+    var crows=[];contracts.forEach(function(p){(p.timeline||[]).forEach(function(s){crows.push([esc(p.name),esc(s.from)+(s.to?(' – '+esc(s.to)):' →'),_pfMoney(s.revenue),esc(s.note||'')]);});});
+    body='<div class="pf-card">'+_pfH('Contract revenue — time-phased (drives the Capacity forecast)')+_pfTable(['Contract','Period','Monthly revenue','Note'],crows)+'<div class="pf-note">Forward contract revenue is the time-phasing set on each project (FAMS sunset, BCLM +25%, C1FAMS ramp). Cost &amp; margin are computed net of payroll + overhead in Capacity Planning → Projects.</div></div>'
+      +'<div class="pf-card">'+_pfH('Strategic role')+_pfTable(['Contract','Strategic role'],(P.contractEconomics||[]).map(function(x){return [esc(x.contract),esc(x.role)];}),'contractEconomics')+'</div>';
   } else if(proformaTab==='debt'){
-    var dd=P.debt||{},pers=dd.personal||{};
+    var dd=P.debt||{};
     body='<div class="pf-card">'+_pfH('Corporate debt — total '+_pfMoney(dd.total),"pfEditObj('debt')")+_pfTable(['Lender','Balance','Monthly payment','Rate / term','Status','Notes'],(dd.corporate||[]).map(function(x){return [esc(x.lender),_pfMoney(x.balance),esc(x.monthlyPayment),esc(x.rateTerm),esc(x.status),esc(x.notes)];}),'debt.corporate')+'</div>'
-      +'<div class="pf-card pf-locked">'+_pfH('&#128274; CEO personal financial position — Khaja Syed (most sensitive)',"pfEditObj('debt.personal')")
-      +'<div class="pf-sub">Liquid / retirement</div>'+_pfTable(['Asset','Value'],(pers.liquid||[]).map(function(x){return [esc(x.asset),_pfMoney(x.value)];}),'debt.personal.liquid')
-      +'<div class="pf-kv" style="margin-top:6px"><span>Liquid subtotal</span><b>'+_pfMoney(pers.liquidSubtotal)+'</b></div>'
-      +'<div class="pf-sub" style="margin-top:10px">Real estate</div>'+_pfTable(['Property','Value','Debt','Equity','Notes'],(pers.realEstate||[]).map(function(x){return [esc(x.property),_pfMoney(x.value),_pfMoney(x.debt),_pfMoney(x.equity),esc(x.notes)];}),'debt.personal.realEstate')
-      +'<div class="pf-kv" style="margin-top:8px"><span>Estimated total net worth</span><b>'+_pfMoney(pers.netWorth)+'</b></div></div>';
+      +'<div class="pf-note">Corporate-level financial information only.</div>';
   } else if(proformaTab==='pipeline'){
     var m=P.marines||{},pt=P.pipelineTotals||{};
     body='<div class="pf-card">'+_pfH('Federal pipeline — '+(P.pipeline||[]).length+' active pursuits',"pfEditObj('pipelineTotals')")+_pfTable(['Opportunity','Customer','Vehicle','Value','Pwin','EV','Owner','Next step'],(P.pipeline||[]).map(function(x){return [esc(x.opportunity),esc(x.customer),esc(x.vehicle),_pfMoney(x.value),Math.round((x.pwin||0)*100)+'%',_pfMoney(x.ev),esc(x.owner),esc(x.next)];}),'pipeline')
@@ -3352,18 +3436,14 @@ function renderProformaView(q){
       +'<div class="pf-card">'+_pfH('SBIR Phase III pathway',"pfEditObj('technology.sbir')")+_pfTable(['Attribute','Explanation'],(sb.attributes||[]).map(function(x){return [esc(x.attr),esc(x.explanation)];}),'technology.sbir.attributes')+'<div class="pf-note">'+esc(sb.andrewKirksey||'')+'</div></div>';
   } else if(proformaTab==='costs'){
     var cs=P.costStructure||{};var ohT=(cs.overhead||[]).reduce(function(s,x){return s+(Number(x.monthly)||0);},0),subT=(cs.softwareSubs||[]).reduce(function(s,x){return s+(Number(x.monthly)||0);},0);
-    body='<div class="pf-grid">'
+    body='<div class="pf-note" style="margin-bottom:8px">These are CommunityForce\'s fixed monthly costs. Their total (<b>'+_pfMoney(ohT+subT)+'/mo</b>) flows into the <b>Overhead</b> tab under <b>G&amp;A/Operations</b> and is subtracted as a real cost in the Capacity Planning forecast. Add any new recurring cost here.</div>'
+      +'<div class="pf-grid">'
       +'<div class="pf-card">'+_pfH('Overhead — '+_pfMoney(ohT)+'/mo')+_pfTable(['Category','Monthly','Notes'],(cs.overhead||[]).map(function(x){return [esc(x.category),_pfMoney(x.monthly),esc(x.notes)];}),'costStructure.overhead')+'</div>'
       +'<div class="pf-card">'+_pfH('Software subscriptions — '+_pfMoney(subT)+'/mo')+_pfTable(['Vendor','Monthly'],(cs.softwareSubs||[]).map(function(x){return [esc(x.vendor),_pfMoney(x.monthly)];}),'costStructure.softwareSubs')+'</div></div>';
   } else if(proformaTab==='risks'){
     body='<div class="pf-card">'+_pfH('Critical dates timeline')+_pfTable(['Date','Event','Impact / action','Status'],(P.dates||[]).map(function(x){return [esc(x.date),esc(x.event),esc(x.impact),'<span class="pf-pill">'+esc(x.status)+'</span>'];}),'dates')+'</div>'
       +'<div class="pf-card">'+_pfH('Risk register')+_pfTable(['Risk','Level','Status','Owner','Mitigation'],(P.risks||[]).map(function(x){return [esc(x.risk),'<span class="pf-pill pf-'+(/CRITICAL/.test(x.level)?'crit':/HIGH/.test(x.level)?'high':/RESOLVED/.test(x.level)?'ok':'med')+'">'+esc(x.level)+'</span>',esc(x.status),esc(x.owner),esc(x.mitigation)];}),'risks')+'</div>'
       +'<div class="pf-card">'+_pfH('Data gaps to resolve')+_pfTable(['Gap','Priority','Owner','Impact if unresolved'],(P.dataGaps||[]).map(function(x){return [esc(x.gap),'<span class="pf-pill pf-'+(/HIGHEST|CRITICAL/.test(x.priority)?'crit':/HIGH/.test(x.priority)?'high':'med')+'">'+esc(x.priority)+'</span>',esc(x.owner),esc(x.impact)];}),'dataGaps')+'</div>';
-  } else if(proformaTab==='actuals'){
-    var a=P.actuals||{};var ncT=(a.newCosts||[]).reduce(function(s,x){return s+(Number(x.jun)||0);},0);
-    body='<div class="pf-card">'+_pfH('New costs present in current actuals — not in V4 model',"pfEditObj('actuals')")+_pfTable(['Vendor / cost','Monthly actual','Recurring?','Notes'],(a.newCosts||[]).map(function(x){return [esc(x.vendor),_pfMoney(x.jun),esc(x.recurring),esc(x.notes)];}),'actuals.newCosts')
-      +'<div class="pf-kv" style="margin-top:8px"><span>Subtotal — new / uncaptured</span><b>'+_pfMoney(ncT)+'</b></div>'
-      +'<div class="pf-note">Source: '+esc(a.source||'')+' · '+esc(a.asOf||'')+'. Reconciled (already-in-model) subtotal: '+_pfMoney(a.reconciledSubtotal)+'.</div></div>';
   } else if(proformaTab==='snapshots'){
     body=_pfSnapshotsHTML(P);
   }
