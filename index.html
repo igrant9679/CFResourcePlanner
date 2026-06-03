@@ -2870,7 +2870,7 @@ function renderCapacityView(q){
       +'</div>';
   }).join('');
   // Allocation matrix (people × items), editable %
-  var head='<tr><th class="cap-sticky">Person</th>'+items.map(function(p){var oh=projCat(p)==='overhead';return '<th class="cap-col'+(oh?' cap-col-oh':'')+'" title="'+esc(p.name)+(oh?' — non-project cost center (allocations here count as Other Payroll, not Project Payroll or Overhead)':'')+'">'+esc((p.name||'').slice(0,14))+(p.name.length>14?'…':'')+(oh?' <span class="cap-oh-tag">OTHER</span>':'')+'</th>';}).join('')+'<th>Alloc</th></tr>';
+  var head='<tr><th class="cap-sticky">Person</th>'+items.map(function(p){var oh=projCat(p)!=='project';return '<th class="cap-col'+(oh?' cap-col-oh':'')+'" title="'+esc(p.name)+(oh?' — '+(projCat(p)==='initiative'?'initiative':'non-project cost center')+' (allocations here count as Other Payroll, not Project Payroll or Overhead)':'')+'">'+esc((p.name||'').slice(0,14))+(p.name.length>14?'…':'')+(oh?' <span class="cap-oh-tag">OTHER</span>':'')+'</th>';}).join('')+'<th>Alloc</th></tr>';
   var _rank={ghost:0,prospect:1,member:2};
   var rows=roster.slice().sort(function(a,b){return (_rank[a._origin]||2)-(_rank[b._origin]||2);}).map(function(pn){
     var alloc=capAllocR(pn),over=alloc>100,full=alloc===100;
@@ -2890,7 +2890,7 @@ function renderCapacityView(q){
   var matrix='<div class="cap-matrix-wrap"><table class="cap-matrix"><thead>'+head+'</thead><tbody>'+rows+footFTE+'</tbody></table></div>';
   var toolbar='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px">'
     +'<div><div style="font-size:18px;font-weight:800">Capacity Planning <span style="font-size:12px;font-weight:600;color:var(--text-muted)">· what-if sandbox</span></div>'
-    +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Edit allocation % in the matrix, or drag a person\'s &#9783; handle onto a project/initiative card to allocate their free capacity. Nothing changes live data until you Apply. Initiatives count toward revenue only when staffed. Columns tagged <span class="cap-oh-tag">OTHER</span> (Federal Sales/BD, G&amp;A/Operations, …) are non-project cost centers — allocating there puts that person\'s cost in <b>Other payroll</b>. People on projects/initiatives are <b>Project payroll</b>; the forecast also adds fixed <b>Overhead/G&amp;A</b> from Cost Structure.</div></div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Edit allocation % in the matrix, or drag a person\'s &#9783; handle onto a project/initiative card to allocate their free capacity. Nothing changes live data until you Apply. Initiatives count toward revenue only when staffed. Columns tagged <span class="cap-oh-tag">OTHER</span> (initiatives and overhead cost centers like Federal Sales/BD, G&amp;A/Operations, Management) put that person\'s cost in <b>Other payroll</b>. Only people on <b>Project</b>-type items (BCLM, FAMS, C1FAMS, Awards…) count as <b>Project payroll</b>; the forecast also adds fixed <b>Overhead/G&amp;A</b> from Cost Structure.</div></div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
     +'<button class="btn btn-sec btn-sm" onclick="capAddGhost()">&#43; Hypothetical hire</button>'
     +'<button class="btn btn-sec btn-sm" onclick="capAddProspects()">&#43; Stage prospects</button>'
@@ -3003,7 +3003,7 @@ function capProjData(roster,multPct,opts){
   var MAR_GROSS=41667,MAR_COST=20834;  // $500K ARR / 12 ; 50% margin
   var fixedOh=proformaOverheadMonthly();   // Overhead/G&A = fixed Cost Structure G&A only (no labor; excludes Federal Sales/BD + Management lines)
   var fixedBDMgmt=proformaBDMgmtFixedMonthly();  // Federal Sales/BD + Management fixed lines → Other Payroll
-  var REVIDS=(D.projects||[]).filter(function(p){var c=projCat(p);return c==='project'||c==='initiative';}).map(function(p){return p.id;});
+  var PROJIDS=(D.projects||[]).filter(function(p){return projCat(p)==='project';}).map(function(p){return p.id;});  // Project-type items ONLY → Project Payroll (matches the Projects page)
   var cum=0,rows=capProjMonths().map(function(mo){
     var active=roster.filter(function(pn){return capPersonActive(pn,mo.y,mo.m);});
     var baseRev=0;
@@ -3013,11 +3013,12 @@ function capProjData(roster,multPct,opts){
         baseRev+=rev;}
       else if(c==='initiative'){ if(capItemFTER(active,p.id)>0&&capInWindow(p,mo.y,mo.m))baseRev+=capProjRevAt(p,mo.y,mo.m); }
     });
-    // Split labor: % allocated to projects/initiatives = Project Payroll; everything
-    // else (overhead-item allocations + bench/unallocated) = Other Payroll.
+    // Split labor: % allocated to PROJECT-type items = Project Payroll; everything
+    // else (initiative allocations + overhead-item allocations + bench/unallocated)
+    // = Other Payroll.
     var totalLabor=0,projLabor=0;
     active.forEach(function(pn){var cst=capPersonCostAt(pn,mo.y,mo.m);totalLabor+=cst;
-      var pp=(pn.projects||[]).reduce(function(a,x){return a+(REVIDS.indexOf(x.id)>-1?(Number(x.pct)||0):0);},0);
+      var pp=(pn.projects||[]).reduce(function(a,x){return a+(PROJIDS.indexOf(x.id)>-1?(Number(x.pct)||0):0);},0);
       projLabor+=cst*Math.min(100,pp)/100;});
     var projectPayroll=projLabor;
     var otherPayroll=(totalLabor-projLabor)+fixedBDMgmt;
