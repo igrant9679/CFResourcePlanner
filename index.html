@@ -2177,6 +2177,18 @@ function openModal(id){
 }
 // Esc closes the topmost open modal (accessibility + power-user expectation).
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&_modalStack.length){closeModal(_modalStack[_modalStack.length-1]);}});
+// Don't treat a text-selection drag that *ends* on a modal backdrop as a backdrop
+// click. Each .ov backdrop closes on click; but selecting text in a field and
+// dragging past the edge fires a click whose target is the backdrop (the common
+// ancestor of press+release), closing the modal. Guard: remember where the press
+// started, and cancel the backdrop close-click unless the press also started on
+// that same backdrop. Capture phase so it runs before the inline onclick.
+var _ovMouseDownEl=null;
+document.addEventListener('mousedown',function(e){_ovMouseDownEl=e.target;},true);
+document.addEventListener('click',function(e){
+  var t=e.target;
+  if(t&&t.classList&&t.classList.contains('ov')&&_ovMouseDownEl!==t){e.stopPropagation();}
+},true);
 // Debounced global search (avoids re-rendering the whole view on every keystroke).
 var _searchT=null;
 function _searchDebounced(){if(_searchT)clearTimeout(_searchT);_searchT=setTimeout(function(){_searchT=null;renderView();},180);}
