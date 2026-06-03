@@ -2735,6 +2735,11 @@ function renderMemberAtt(mid){var f=findMember(mid);if(!f)return '';var a=f.m.at
 function memberUpload(mid){var f=findMember(mid);if(!f)return;var inp=document.getElementById('e_att_file');var file=inp&&inp.files&&inp.files[0];if(!file){alert('Choose a file first.');return;}var btn=document.getElementById('e_att_btn');if(btn){btn.disabled=true;btn.textContent='Uploading…';}var fd=new FormData();fd.append('file',file);fetch('/api/attachments',{method:'POST',body:fd}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(function(a){if(!f.m.attachments)f.m.attachments=[];f.m.attachments.push({id:a.id,name:a.name,url:a.url,type:'file',size:a.size});save();document.getElementById('e_att_list').innerHTML=renderMemberAtt(mid);if(inp)inp.value='';}).catch(function(e){alert('Upload failed: '+e.message);}).then(function(){if(btn){btn.disabled=false;btn.innerHTML='&#8593; Upload';}});}
 function memberAddLink(mid){var f=findMember(mid);if(!f)return;var url=gv('e_att_url').trim();if(!url)return;if(!/^https?:\/\//i.test(url))url='https://'+url;var nm=gv('e_att_name').trim()||url;if(!f.m.attachments)f.m.attachments=[];f.m.attachments.push({name:nm,url:url,type:'link'});save();document.getElementById('e_att_list').innerHTML=renderMemberAtt(mid);document.getElementById('e_att_name').value='';document.getElementById('e_att_url').value='';}
 function memberDelAtt(mid,idx){var f=findMember(mid);if(!f)return;var a=(f.m.attachments||[])[idx];if(a&&a.type==='file'&&a.id){fetch('/api/attachments/'+a.id,{method:'DELETE'}).catch(function(){});}(f.m.attachments||[]).splice(idx,1);save();document.getElementById('e_att_list').innerHTML=renderMemberAtt(mid);}
+/* ── ONE-TIME COSTS (single-month commission/bonus; feeds Capacity projections) ── */
+function _otcMonthLbl(ym){var p=String(ym||'').split('-');var mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return (mn[(+p[1])-1]||'?')+" '"+String(p[0]||'').slice(2);}
+function renderMemberOTC(mid){var f=findMember(mid);if(!f)return '';var a=f.m.oneTimeCosts||[];if(!a.length)return '<div style="font-size:11px;color:var(--text-muted)">No one-time costs</div>';return a.map(function(o,i){return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid #F1F5F9;font-size:12px"><span><b>'+_otcMonthLbl(o.month)+'</b> · '+fmt(Number(o.amount)||0)+(o.label?' · <span style="color:var(--text-secondary)">'+esc(o.label)+'</span>':'')+'</span><button class="btn btn-danger-sm btn-sm" onclick="memberDelOTC(\''+mid+'\','+i+')">&#10005;</button></div>';}).join('');}
+function memberAddOTC(mid){var f=findMember(mid);if(!f)return;var month=gv('e_otc_month');var amt=Number(gv('e_otc_amt'))||0;if(!month||!amt){alert('Enter a month and a non-zero amount.');return;}var label=gv('e_otc_label').trim();if(!f.m.oneTimeCosts)f.m.oneTimeCosts=[];f.m.oneTimeCosts.push({month:month,amount:amt,label:label});f.m.oneTimeCosts.sort(function(a,b){return _capYM(a.month)-_capYM(b.month);});save();document.getElementById('e_otc_list').innerHTML=renderMemberOTC(mid);document.getElementById('e_otc_amt').value='';document.getElementById('e_otc_label').value='';}
+function memberDelOTC(mid,idx){var f=findMember(mid);if(!f)return;(f.m.oneTimeCosts||[]).splice(idx,1);save();document.getElementById('e_otc_list').innerHTML=renderMemberOTC(mid);}
 function renderView(){
   if(ME&&!canSee(viewMode)){var f=SECTIONS.find(function(s){return canSee(s.k);});if(f)viewMode=f.k;}
   applyRoleUI();renderStats();
@@ -2761,6 +2766,7 @@ function capBuildRoster(){
   return allM().map(function(m){
     return {id:m.id,name:m.name,role:m.role||'',cost:Number(m.cost)||0,_deptName:m._dn,_origin:'member',
       costSchedule:m.costSchedule?JSON.parse(JSON.stringify(m.costSchedule)):null,
+      oneTimeCosts:m.oneTimeCosts?JSON.parse(JSON.stringify(m.oneTimeCosts)):null,
       projects:(m.projects||[]).map(function(x){return (typeof x==='object')?{id:x.id,pct:Number(x.pct)||0,clinId:x.clinId}:{id:x,pct:100};})};
   });
 }
@@ -2971,11 +2977,21 @@ function capProjRevAt(p,y,m){
 /* Effective monthly cost for a roster person in month (y,m): reads member.costSchedule[]
    (effective-dated; e.g. SpiritOne's Oct step-up) when present, else flat pn.cost. */
 function capPersonCostAt(pn,y,m){
+  var base=Number(pn.cost)||0;
   if(pn.costSchedule&&pn.costSchedule.length){var key=y*12+m,best=null,bk=-Infinity;
     pn.costSchedule.forEach(function(s){var fk=_capYM(s.from);if(fk<=key&&fk>=bk){bk=fk;best=s;}});
-    if(best)return Number(best.cost)||0;
+    if(best)base=Number(best.cost)||0;
   }
-  return Number(pn.cost)||0;
+  return base+capPersonOneTimeAt(pn,y,m);
+}
+/* One-time costs (commission, bonus, signing payment) that hit a SINGLE month only —
+   member.oneTimeCosts[{month:'YYYY-MM',amount,label}]. Added on top of the recurring
+   cost in that month; in the forecast it buckets like the person's allocation. */
+function capPersonOneTimeAt(pn,y,m){
+  if(!pn.oneTimeCosts||!pn.oneTimeCosts.length)return 0;
+  var key=y*12+m,s=0;
+  pn.oneTimeCosts.forEach(function(o){if(_capYM(o.month)===key)s+=Number(o.amount)||0;});
+  return s;
 }
 /* V4 scenario presets (workbook §2) — each adjusts pipeline confidence, the C1FAMS
    maturity target, whether Marines is treated as won, and any extra monthly cash burden. */
@@ -7524,6 +7540,14 @@ document.getElementById('mdlEdit').innerHTML=
 +'<div class="me-pane" data-met="core">'
   +'<div class="fld-row2">'+fT('e_name','Name',m.name)+fT('e_role','Role / Title',m.role)+'</div>'
   +'<div class="fld-row2">'+fN('e_cost','Monthly Cost ($)',m.cost)+fT('e_badge','Badge',m.badge||'')+'</div>'
+  +'<div class="fld"><label class="fld-l">One-time costs <span style="font-weight:400;color:var(--text-muted);font-size:10px">— commission / bonus added to a single month in Capacity projections</span></label>'
+    +'<div id="e_otc_list">'+renderMemberOTC(mid)+'</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center">'
+      +'<input class="fld-i" id="e_otc_month" type="month" style="max-width:150px" title="Month">'
+      +'<input class="fld-i" id="e_otc_amt" type="number" placeholder="Amount $" style="max-width:120px" title="Amount">'
+      +'<input class="fld-i" id="e_otc_label" placeholder="Label (e.g. Oct commission)" style="flex:1;min-width:130px">'
+      +'<button type="button" class="btn btn-sec btn-sm" onclick="memberAddOTC(\''+mid+'\')">+ Add</button>'
+    +'</div></div>'
   +'<div class="fld"><label class="fld-l">Current Department</label><div class="fld-i" style="background:var(--page-bg);font-weight:600;cursor:default">'+esc(dept.name)+'</div></div>'
   +'<div class="fld"><label class="fld-l" for="e_dept_mv">Move to Department</label><select class="fld-sel" id="e_dept_mv"><option value="">— keep in current dept —</option>'+deptMvOpts+'</select></div>'
   +'<div class="fld"><label class="fld-l" for="e_reports">Reports To</label><select class="fld-sel" id="e_reports"><option value="">— none —</option>'+names.map(function(n){return '<option value="'+esc(n)+'"'+(m.reportsTo===n?' selected':'')+'>'+esc(n)+'</option>';}).join('')+'</select></div>'
