@@ -3540,13 +3540,47 @@ function _pfEditBtn(js){return ' <button class="pf-edit-btn" onclick="'+js+'" ti
 function _pfDelBtn(js){return '<button class="pf-edit-btn pf-del" onclick="'+js+'" title="Delete">&times;</button>';}
 function _pfAddBtn(path,label){return '<button class="btn btn-sec btn-sm pf-add" onclick="pfEditRow(\''+path+'\',-1)">'+(label||'+ Add row')+'</button>';}
 function _pfH(t,js){return '<div class="pf-card-h">'+t+(js?_pfEditBtn(js):'')+'</div>';}
-function _pfTable(headers,rows,editPath){
+function _pfTable(headers,rows,editPath,extraAct){
   var hs=headers.slice();if(editPath)hs.push('');
   var body=rows.map(function(r,i){var cells=r.map(function(c){return '<td>'+(c==null?'':c)+'</td>';}).join('');
-    if(editPath)cells+='<td class="pf-row-act">'+_pfEditBtn("pfEditRow('"+editPath+"',"+i+")")+_pfDelBtn("pfDelRow('"+editPath+"',"+i+")")+'</td>';
+    if(editPath)cells+='<td class="pf-row-act">'+(extraAct?extraAct(i):'')+_pfEditBtn("pfEditRow('"+editPath+"',"+i+")")+_pfDelBtn("pfDelRow('"+editPath+"',"+i+")")+'</td>';
     return '<tr>'+cells+'</tr>';}).join('');
   return '<div style="overflow:auto"><table class="pf-tbl"><thead><tr>'+hs.map(function(h){return '<th>'+h+'</th>';}).join('')+'</tr></thead>'
     +'<tbody>'+body+'</tbody></table></div>'+(editPath?_pfAddBtn(editPath):'');
+}
+/* Per-line scheduled increase (fixed-amount steps and/or % escalator) for a cost-
+   structure line. Overrides the schedule-wide escalator for that line; flows into
+   the Capacity forecast via _pfLineMonthlyAt. */
+function _pfLineSchedTag(x){
+  if(!x)return '';var bits=[];
+  if(x.steps&&x.steps.length)bits.push(x.steps.length+' step'+(x.steps.length===1?'':'s'));
+  if(x.escalator&&Number(x.escalator.pct))bits.push(x.escalator.pct+'%/'+(x.escalator.period==='month'?'mo':'yr'));
+  return bits.length?' <span style="font-size:9px;font-weight:700;color:var(--gold);white-space:nowrap" title="Scheduled increase">&#8599; '+esc(bits.join(' · '))+'</span>':'';
+}
+function _pfSchedBtn(path,i){
+  var arr=_pfArr(path),line=arr&&arr[i];
+  var has=line&&((line.steps&&line.steps.length)||(line.escalator&&Number(line.escalator.pct)));
+  return '<button class="pf-edit-btn" onclick="pfLineSchedule(\''+path+'\','+i+')" title="Scheduled increase'+(has?' (active)':'')+'"'+(has?' style="color:var(--gold);font-weight:800"':'')+'>&#8599;</button>';
+}
+function pfLineSchedule(path,idx){
+  var arr=_pfArr(path),line=arr&&arr[idx];if(!line)return;
+  var nm=line.category||line.vendor||'line',e=line.escalator||{};
+  var stepsText=(line.steps||[]).slice().sort(function(a,b){return _capYM(a.from)-_capYM(b.from);}).map(function(s){return s.from+' = '+(Number(s.value)||0);}).join('\n');
+  openFormModal({over:'Cost Structure · '+esc(nm),title:'Scheduled increase — '+esc(nm),
+    intro:'Set effective-dated fixed-amount steps and/or a % escalator for this line. A schedule here overrides the schedule-wide escalator for this line, and flows into the Capacity forecast.',
+    fields:[
+      {key:'steps',label:'Fixed-amount steps — one per line as  YYYY-MM = newMonthly$',type:'textarea',rows:5,value:stepsText,placeholder:'2027-01 = 6500\n2028-01 = 7000'},
+      {key:'pct',label:'% escalator (per period)',type:'number',value:e.pct!=null?e.pct:''},
+      {key:'from',label:'Escalator start month',type:'month',value:e.from||''},
+      {key:'period',label:'Escalator period',type:'select',value:e.period||'year',options:[{value:'year',label:'per year'},{value:'month',label:'per month'}]}
+    ],
+    onSubmit:function(v){
+      var steps=[];String(v.steps||'').split('\n').forEach(function(ln){ln=ln.trim();if(!ln)return;var mm=ln.match(/^(\d{4}-\d{2})\s*=\s*(-?[\d.]+)/);if(mm)steps.push({from:mm[1],value:Number(mm[2])||0});});
+      if(steps.length)line.steps=steps.sort(function(a,b){return _capYM(a.from)-_capYM(b.from);});else delete line.steps;
+      var pct=Number(v.pct)||0;
+      if(pct&&v.from)line.escalator={pct:pct,from:v.from,period:(v.period||'year')};else delete line.escalator;
+      pfTouch();toast('Schedule saved for '+nm+'.','success');
+    }});
 }
 /* ── Snapshots & change reporting ── */
 function proformaTakeSnapshot(){
@@ -3686,8 +3720,8 @@ function renderProformaView(q){
         +(Number(csEsc.pct)?'<button class="btn btn-sec btn-sm" onclick="pfClearCostEscalator()">Clear</button>':'')
         +'</div><div style="font-size:10px;color:var(--text-muted);margin-top:4px">Compounds Overhead/G&amp;A and Payroll-typed lines forward in the Capacity forecast (Debt-typed excluded). Set a per-line override in the data if a single line escalates differently.'+(Number(csEsc.pct)?' <b>Active:</b> '+csEsc.pct+'%/'+(csEsc.period==='month'?'mo':'yr')+' from '+esc(csEsc.from||''):'')+'</div></div>'
       +'<div class="pf-grid">'
-      +'<div class="pf-card">'+_pfH('Overhead lines')+_pfTable(['Category','Monthly','Type','Notes'],(cs.overhead||[]).map(function(x){return [esc(x.category),_pfMoney(x.monthly),tpill(x.category,x.type),esc(x.notes)];}),'costStructure.overhead')+'</div>'
-      +'<div class="pf-card">'+_pfH('Software subscriptions — '+_pfMoney((cs.softwareSubs||[]).reduce(function(s,x){return s+(Number(x.monthly)||0);},0))+'/mo')+_pfTable(['Vendor','Monthly','Type'],(cs.softwareSubs||[]).map(function(x){return [esc(x.vendor),_pfMoney(x.monthly),tpill(x.vendor,x.type)];}),'costStructure.softwareSubs')+'</div></div>';
+      +'<div class="pf-card">'+_pfH('Overhead lines')+_pfTable(['Category','Monthly','Type','Notes'],(cs.overhead||[]).map(function(x){return [esc(x.category),_pfMoney(x.monthly)+_pfLineSchedTag(x),tpill(x.category,x.type),esc(x.notes)];}),'costStructure.overhead',function(i){return _pfSchedBtn('costStructure.overhead',i);})+'</div>'
+      +'<div class="pf-card">'+_pfH('Software subscriptions — '+_pfMoney((cs.softwareSubs||[]).reduce(function(s,x){return s+(Number(x.monthly)||0);},0))+'/mo')+_pfTable(['Vendor','Monthly','Type'],(cs.softwareSubs||[]).map(function(x){return [esc(x.vendor),_pfMoney(x.monthly)+_pfLineSchedTag(x),tpill(x.vendor,x.type)];}),'costStructure.softwareSubs',function(i){return _pfSchedBtn('costStructure.softwareSubs',i);})+'</div></div>';
   } else if(proformaTab==='risks'){
     body='<div class="pf-card">'+_pfH('Critical dates timeline')+_pfTable(['Date','Event','Impact / action','Status'],(P.dates||[]).map(function(x){return [esc(x.date),esc(x.event),esc(x.impact),'<span class="pf-pill">'+esc(x.status)+'</span>'];}),'dates')+'</div>'
       +'<div class="pf-card">'+_pfH('Risk register')+_pfTable(['Risk','Level','Status','Owner','Mitigation'],(P.risks||[]).map(function(x){return [esc(x.risk),'<span class="pf-pill pf-'+(/CRITICAL/.test(x.level)?'crit':/HIGH/.test(x.level)?'high':/RESOLVED/.test(x.level)?'ok':'med')+'">'+esc(x.level)+'</span>',esc(x.status),esc(x.owner),esc(x.mitigation)];}),'risks')+'</div>'
