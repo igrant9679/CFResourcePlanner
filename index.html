@@ -1496,12 +1496,26 @@ function _pfBDMgmt(name){ return /federal|business develop|\bbd\b|management/i.t
    operating profit; the cash view uses the Debt section). Untyped lines fall back
    to the name hint, else 'overhead'. */
 function _pfLineType(name,explicit){ if(explicit==='overhead'||explicit==='payroll'||explicit==='debt')return explicit; return _pfBDMgmt(name)?'payroll':'overhead'; }
-function _pfFixedByType(t){
+/* A cost-structure line's monthly amount at month (y,m): applies its optional
+   steps[{from,value}] + escalator{pct,from,period}. With no (y,m) or no schedule,
+   returns the flat `monthly` — so totals are unchanged for unscheduled lines. */
+function _pfLineMonthlyAt(x,y,m){
+  var base=Number(x.monthly)||0;if(y==null)return base;
+  if(x.steps||x.escalator)return scheduledAmount(base,x.steps,x.escalator,y,m);   // per-line override (data-level)
+  var g=((D.proforma||{}).costStructure||{}).escalator;   // else the cost-structure-wide escalator
+  return scheduledAmount(base,null,g,y,m);
+}
+function _pfFixedByType(t,y,m){
   var cs=(D.proforma||{}).costStructure||{},sum=0;
-  (cs.overhead||[]).forEach(function(x){if(_pfLineType(x.category,x.type)===t)sum+=Number(x.monthly)||0;});
-  (cs.softwareSubs||[]).forEach(function(x){if(_pfLineType(x.vendor,x.type)===t)sum+=Number(x.monthly)||0;});
+  (cs.overhead||[]).forEach(function(x){if(_pfLineType(x.category,x.type)===t)sum+=_pfLineMonthlyAt(x,y,m);});
+  (cs.softwareSubs||[]).forEach(function(x){if(_pfLineType(x.vendor,x.type)===t)sum+=_pfLineMonthlyAt(x,y,m);});
   return Math.round(sum);
 }
+/* Month-aware variants for the Capacity forecast (honor scheduled increases). */
+function proformaOverheadMonthlyAt(y,m){return _pfFixedByType('overhead',y,m);}
+function proformaBDMgmtFixedMonthlyAt(y,m){return _pfFixedByType('payroll',y,m);}
+function pfSetCostEscalator(){var P=D.proforma;if(!P)return;P.costStructure=P.costStructure||{};var pct=Number(gv('cs_esc_pct'))||0;var from=gv('cs_esc_from');if(!pct||!from){alert('Enter a % and a start month.');return;}P.costStructure.escalator={pct:pct,from:from,period:gv('cs_esc_per')||'year'};save();renderView();}
+function pfClearCostEscalator(){var P=D.proforma;if(!P||!P.costStructure)return;delete P.costStructure.escalator;save();renderView();}
 /* Fixed monthly G&A (overhead-typed lines only) — feeds the Overhead/G&A line. */
 function proformaOverheadMonthly(){ return _pfFixedByType('overhead'); }
 /* Payroll-typed Cost Structure lines (people/teams) — counted in Other Payroll. */
@@ -2771,6 +2785,25 @@ function _otcMonthLbl(ym){var p=String(ym||'').split('-');var mn=['Jan','Feb','M
 function renderMemberOTC(mid){var f=findMember(mid);if(!f)return '';var a=f.m.oneTimeCosts||[];if(!a.length)return '<div style="font-size:11px;color:var(--text-muted)">No one-time costs</div>';return a.map(function(o,i){return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:1px solid #F1F5F9;font-size:12px"><span><b>'+_otcMonthLbl(o.month)+'</b> · '+fmt(Number(o.amount)||0)+(o.label?' · <span style="color:var(--text-secondary)">'+esc(o.label)+'</span>':'')+'</span><button class="btn btn-danger-sm btn-sm" onclick="memberDelOTC(\''+mid+'\','+i+')">&#10005;</button></div>';}).join('');}
 function memberAddOTC(mid){var f=findMember(mid);if(!f)return;var month=gv('e_otc_month');var amt=Number(gv('e_otc_amt'))||0;if(!month||!amt){alert('Enter a month and a non-zero amount.');return;}var label=gv('e_otc_label').trim();if(!f.m.oneTimeCosts)f.m.oneTimeCosts=[];f.m.oneTimeCosts.push({month:month,amount:amt,label:label});f.m.oneTimeCosts.sort(function(a,b){return _capYM(a.month)-_capYM(b.month);});save();document.getElementById('e_otc_list').innerHTML=renderMemberOTC(mid);document.getElementById('e_otc_amt').value='';document.getElementById('e_otc_label').value='';}
 function memberDelOTC(mid,idx){var f=findMember(mid);if(!f)return;(f.m.oneTimeCosts||[]).splice(idx,1);save();document.getElementById('e_otc_list').innerHTML=renderMemberOTC(mid);}
+/* ── SCHEDULED COST CHANGES (effective-dated steps + % escalator) ── */
+function renderMemberCostSched(mid){
+  var f=findMember(mid);if(!f)return '';
+  var steps=(f.m.costSchedule||[]).slice().sort(function(a,b){return _capYM(a.from)-_capYM(b.from);});
+  var e=f.m.costEscalator;
+  var stepHtml=steps.length?steps.map(function(s){var i=(f.m.costSchedule||[]).indexOf(s);return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid #F1F5F9;font-size:12px"><span>from <b>'+esc(_otcMonthLbl(s.from))+'</b> → '+fmt(Number(s.cost)||0)+'/mo</span><button class="btn btn-danger-sm btn-sm" onclick="memberDelCostStep(\''+mid+'\','+i+')">&times;</button></div>';}).join(''):'<div style="font-size:11px;color:var(--text-muted)">No step changes — cost stays at the Monthly Cost above until a step or escalator applies.</div>';
+  var escHtml=(e&&Number(e.pct))?'<div style="font-size:11px;color:var(--text-secondary);margin-top:4px">↗ Escalator: <b>'+e.pct+'%</b> per '+(e.period==='month'?'month':'year')+' from '+esc(_otcMonthLbl(e.from))+' <a href="#" onclick="memberClearCostEscalator(\''+mid+'\');return false" style="color:var(--red);margin-left:4px">clear</a></div>':'';
+  return stepHtml+escHtml;
+}
+function memberAddCostStep(mid){
+  var f=findMember(mid);if(!f)return;var month=gv('e_cs_month');var amt=Number(gv('e_cs_amt'))||0;
+  if(!month){alert('Pick an effective month for the step.');return;}
+  var arr=(f.m.costSchedule||[]).filter(function(s){return s.from!==month;});arr.push({from:month,cost:amt});
+  f.m.costSchedule=arr.sort(function(a,b){return _capYM(a.from)-_capYM(b.from);});
+  save();document.getElementById('e_cs_list').innerHTML=renderMemberCostSched(mid);document.getElementById('e_cs_amt').value='';
+}
+function memberDelCostStep(mid,i){var f=findMember(mid);if(!f)return;(f.m.costSchedule||[]).splice(i,1);if(!(f.m.costSchedule||[]).length)delete f.m.costSchedule;save();document.getElementById('e_cs_list').innerHTML=renderMemberCostSched(mid);}
+function memberSetCostEscalator(mid){var f=findMember(mid);if(!f)return;var pct=Number(gv('e_cs_pct'))||0;var from=gv('e_cs_efrom');if(!pct||!from){alert('Enter a % and a start month.');return;}f.m.costEscalator={pct:pct,from:from,period:gv('e_cs_eper')||'year'};save();document.getElementById('e_cs_list').innerHTML=renderMemberCostSched(mid);}
+function memberClearCostEscalator(mid){var f=findMember(mid);if(!f)return;delete f.m.costEscalator;save();document.getElementById('e_cs_list').innerHTML=renderMemberCostSched(mid);}
 function renderView(){
   if(ME&&!canSee(viewMode)){var f=SECTIONS.find(function(s){return canSee(s.k);});if(f)viewMode=f.k;}
   applyRoleUI();renderStats();
@@ -2994,25 +3027,39 @@ function capPersonActive(pn,y,m){
   return y>sy||(y===sy&&m>=sm);
 }
 function _capYM(s){ var p=String(s||'').split('-'); return (+p[0])*12+((+p[1]||1)-1); }
+/* ── SCHEDULED INCREASES (shared) ── effective-dated steps + % escalator.
+   sched = {steps:[{from:'YYYY-MM',value}], escalator:{pct,from:'YYYY-MM',period:'year'|'month'}}.
+   Steps set an absolute value from their month (latest from<=month wins); the escalator
+   then compounds on top from its start month. Returns `base` unchanged when nothing is
+   set — so the forecast is identical for any item without a schedule. */
+function _schedStepAt(base,steps,y,m){
+  var key=y*12+m,v=Number(base)||0;
+  if(steps&&steps.length){var best=null,bk=-Infinity;steps.forEach(function(s){var fk=_capYM(s.from);if(!isNaN(fk)&&fk<=key&&fk>=bk){bk=fk;best=s;}});
+    if(best){var bv=(best.value!=null?best.value:(best.cost!=null?best.cost:best.amount));v=Number(bv)||0;}}
+  return v;
+}
+function _escFactorAt(esc,y,m){
+  if(!esc||!Number(esc.pct))return 1;var fk=_capYM(esc.from);if(isNaN(fk))return 1;
+  var key=y*12+m;if(key<fk)return 1;var per=(esc.period==='month')?1:12;var n=Math.floor((key-fk)/per);
+  if(n<=0)return 1;return Math.pow(1+(Number(esc.pct)||0)/100,n);
+}
+function scheduledAmount(base,steps,esc,y,m){return _schedStepAt(base,steps,y,m)*_escFactorAt(esc,y,m);}
 /* Time-phased revenue for a project in month (y,m): reads project.timeline[] (the
    KB-seeded contract economics — FAMS sunset, BCLM step, C1FAMS ramp) when present,
    else falls back to the flat capItemRevenue. */
 function capProjRevAt(p,y,m){
-  if(p.timeline&&p.timeline.length){var key=y*12+m;
+  var v;
+  if(p.timeline&&p.timeline.length){var key=y*12+m;v=0;
     for(var i=0;i<p.timeline.length;i++){var s=p.timeline[i],fk=_capYM(s.from),tk=s.to?_capYM(s.to):Infinity;
-      if(key>=fk&&key<=tk)return Number(s.revenue)||0;}
-    return 0;
-  }
-  return capItemRevenue(p);
+      if(key>=fk&&key<=tk){v=Number(s.revenue)||0;break;}}
+  } else v=_schedStepAt(capItemRevenue(p),p.revenueSteps,y,m);   // revenueSteps: dated steps for non-timeline projects
+  return v*_escFactorAt(p.revenueEscalator,y,m);                  // revenueEscalator: % increase (no-op when unset)
 }
 /* Effective monthly cost for a roster person in month (y,m): reads member.costSchedule[]
    (effective-dated; e.g. SpiritOne's Oct step-up) when present, else flat pn.cost. */
 function capPersonCostAt(pn,y,m){
-  var base=Number(pn.cost)||0;
-  if(pn.costSchedule&&pn.costSchedule.length){var key=y*12+m,best=null,bk=-Infinity;
-    pn.costSchedule.forEach(function(s){var fk=_capYM(s.from);if(fk<=key&&fk>=bk){bk=fk;best=s;}});
-    if(best)base=Number(best.cost)||0;
-  }
+  // costSchedule[{from,cost}] = effective-dated steps; costEscalator = % increase. Both optional.
+  var base=scheduledAmount(Number(pn.cost)||0,pn.costSchedule,pn.costEscalator,y,m);
   return base+capPersonOneTimeAt(pn,y,m);
 }
 /* One-time costs (commission, bonus, signing payment) that hit a SINGLE month only —
@@ -3048,8 +3095,7 @@ function capProjData(roster,multPct,opts){
   var marinesStart=null;
   if(opts.marinesWon){var mo2=opps.find(function(o){return /marines|dd577/i.test(o.name||'');});var cd=mo2&&mo2.closeDate?new Date(mo2.closeDate):null;marinesStart=(cd&&!isNaN(cd))?cd.getFullYear()*12+cd.getMonth():(2026*12+9);}
   var MAR_GROSS=41667,MAR_COST=20834;  // $500K ARR / 12 ; 50% margin
-  var fixedOh=proformaOverheadMonthly();   // Overhead/G&A = fixed Cost Structure G&A only (no labor; excludes Federal Sales/BD + Management lines)
-  var fixedBDMgmt=proformaBDMgmtFixedMonthly();  // Federal Sales/BD + Management fixed lines → Other Payroll
+  var fixedOh=proformaOverheadMonthly();   // flat reference for the return value; per-month overhead is computed in the loop (honors scheduled increases)
   var PROJIDS=(D.projects||[]).filter(function(p){return projCat(p)==='project';}).map(function(p){return p.id;});  // Project-type items ONLY → Project Payroll (matches the Projects page)
   var cum=0,rows=capProjMonths().map(function(mo){
     var active=roster.filter(function(pn){return capPersonActive(pn,mo.y,mo.m);});
@@ -3069,7 +3115,7 @@ function capProjData(roster,multPct,opts){
       var pProj=Math.round(cst*Math.min(100,pp)/100);  // round per person (mirrors the Projects page) so the buckets are whole dollars and tie out
       projLabor+=pProj; otherLabor+=(cst-pProj);});     // remainder (initiative/overhead/bench labor) → Other Payroll
     var projectPayroll=projLabor;
-    var otherPayroll=otherLabor+fixedBDMgmt;
+    var otherPayroll=otherLabor+proformaBDMgmtFixedMonthlyAt(mo.y,mo.m);   // payroll-typed CS lines, per-month (honors scheduled increases)
     var oppRev=0;
     opps.forEach(function(o){
       if(!o.closeDate)return; var cd=new Date(o.closeDate);if(isNaN(cd))return;
@@ -3080,7 +3126,7 @@ function capProjData(roster,multPct,opts){
     oppRev=Math.round(oppRev);
     // Marines win: add ARR revenue + direct delivery cost (net = 50% margin) from its start month
     if(opts.marinesWon&&marinesStart!=null&&(mo.y*12+mo.m)>=marinesStart){oppRev+=MAR_GROSS;projectPayroll+=MAR_COST;}
-    var overhead=fixedOh;
+    var overhead=proformaOverheadMonthlyAt(mo.y,mo.m);   // Overhead/G&A per-month (honors scheduled increases)
     var rev=baseRev+oppRev,cost=projectPayroll+otherPayroll+overhead,profit=rev-cost;cum+=profit;
     return {y:mo.y,m:mo.m,baseRev:baseRev,oppRev:oppRev,rev:rev,projectPayroll:projectPayroll,otherPayroll:otherPayroll,overhead:overhead,cost:cost,profit:profit,cum:cum};
   });
@@ -3628,7 +3674,17 @@ function renderProformaView(q){
     var cs=P.costStructure||{};
     var byT={overhead:proformaOverheadMonthly(),payroll:proformaBDMgmtFixedMonthly(),debt:proformaCSDebtMonthly()};
     function tpill(name,t){var et=_pfLineType(name,t);return '<span class="pf-pill pf-'+(et==='overhead'?'med':et==='payroll'?'high':'crit')+'">'+et+'</span>';}
+    var csEsc=cs.escalator||{};
     body='<div class="pf-note" style="margin-bottom:8px">Each line has a <b>Type</b>: <b>Overhead</b> (fixed G&amp;A → Overhead/G&amp;A line), <b>Payroll</b> (a person/team → Other Payroll), or <b>Debt</b> (financing → excluded from operating profit; the cash view uses the Debt section). Capacity: Overhead/G&amp;A = '+_pfMoney(byT.overhead)+'/mo · Payroll-typed → Other Payroll '+_pfMoney(byT.payroll)+'/mo · Debt-typed '+_pfMoney(byT.debt)+'/mo (below the line). Edit a line to set its Type.</div>'
+      +'<div class="pf-card" style="margin-bottom:10px"><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px">'
+        +'<b style="margin-right:4px">↗ Scheduled increase (all lines):</b>'
+        +'<input class="fld-i" id="cs_esc_pct" type="number" step="0.1" placeholder="%/yr" style="max-width:90px" value="'+(csEsc.pct||'')+'">'
+        +'<span style="color:var(--text-muted)">from</span>'
+        +'<input class="fld-i" id="cs_esc_from" type="month" style="max-width:150px" value="'+esc(csEsc.from||'')+'">'
+        +'<select class="fld-sel" id="cs_esc_per" style="max-width:120px"><option value="year"'+(csEsc.period!=='month'?' selected':'')+'>per year</option><option value="month"'+(csEsc.period==='month'?' selected':'')+'>per month</option></select>'
+        +'<button class="btn btn-navy btn-sm" onclick="pfSetCostEscalator()">Apply</button>'
+        +(Number(csEsc.pct)?'<button class="btn btn-sec btn-sm" onclick="pfClearCostEscalator()">Clear</button>':'')
+        +'</div><div style="font-size:10px;color:var(--text-muted);margin-top:4px">Compounds Overhead/G&amp;A and Payroll-typed lines forward in the Capacity forecast (Debt-typed excluded). Set a per-line override in the data if a single line escalates differently.'+(Number(csEsc.pct)?' <b>Active:</b> '+csEsc.pct+'%/'+(csEsc.period==='month'?'mo':'yr')+' from '+esc(csEsc.from||''):'')+'</div></div>'
       +'<div class="pf-grid">'
       +'<div class="pf-card">'+_pfH('Overhead lines')+_pfTable(['Category','Monthly','Type','Notes'],(cs.overhead||[]).map(function(x){return [esc(x.category),_pfMoney(x.monthly),tpill(x.category,x.type),esc(x.notes)];}),'costStructure.overhead')+'</div>'
       +'<div class="pf-card">'+_pfH('Software subscriptions — '+_pfMoney((cs.softwareSubs||[]).reduce(function(s,x){return s+(Number(x.monthly)||0);},0))+'/mo')+_pfTable(['Vendor','Monthly','Type'],(cs.softwareSubs||[]).map(function(x){return [esc(x.vendor),_pfMoney(x.monthly),tpill(x.vendor,x.type)];}),'costStructure.softwareSubs')+'</div></div>';
@@ -7962,6 +8018,21 @@ document.getElementById('mdlEdit').innerHTML=
 +'<div class="me-pane" data-met="core">'
   +'<div class="fld-row2">'+fT('e_name','Name',m.name)+fT('e_role','Role / Title',m.role)+'</div>'
   +'<div class="fld-row2">'+fN('e_cost','Monthly Cost ($)',m.cost)+fT('e_badge','Badge',m.badge||'')+'</div>'
+  +'<div class="fld"><label class="fld-l">Scheduled cost changes <span style="font-weight:400;color:var(--text-muted);font-size:10px">— effective-dated steps and/or a % escalator (used by the Capacity forecast)</span></label>'
+    +'<div id="e_cs_list">'+renderMemberCostSched(mid)+'</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center">'
+      +'<input class="fld-i" id="e_cs_month" type="month" style="max-width:150px" title="Effective month">'
+      +'<input class="fld-i" id="e_cs_amt" type="number" placeholder="New monthly $" style="max-width:140px" title="New monthly cost from that month">'
+      +'<button type="button" class="btn btn-sec btn-sm" onclick="memberAddCostStep(\''+mid+'\')">+ Add step</button>'
+    +'</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;font-size:11px">'
+      +'<span style="color:var(--text-muted)">% escalator:</span>'
+      +'<input class="fld-i" id="e_cs_pct" type="number" step="0.1" placeholder="%/yr" style="max-width:90px" value="'+((m.costEscalator&&m.costEscalator.pct)||'')+'">'
+      +'<span style="color:var(--text-muted)">from</span>'
+      +'<input class="fld-i" id="e_cs_efrom" type="month" style="max-width:150px" value="'+esc((m.costEscalator&&m.costEscalator.from)||'')+'">'
+      +'<select class="fld-sel" id="e_cs_eper" style="max-width:120px"><option value="year"'+((!m.costEscalator||m.costEscalator.period!=='month')?' selected':'')+'>per year</option><option value="month"'+((m.costEscalator&&m.costEscalator.period==='month')?' selected':'')+'>per month</option></select>'
+      +'<button type="button" class="btn btn-sec btn-sm" onclick="memberSetCostEscalator(\''+mid+'\')">Apply</button>'
+    +'</div></div>'
   +'<div class="fld"><label class="fld-l">One-time costs <span style="font-weight:400;color:var(--text-muted);font-size:10px">— commission / bonus added to a single month in Capacity projections</span></label>'
     +'<div id="e_otc_list">'+renderMemberOTC(mid)+'</div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center">'
@@ -8279,6 +8350,36 @@ function renderClinsSection(pid){
     +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Break down this contract’s revenue into CLINs and pin resources to each line for profit/loss visibility.</div>'
     +clinTable+asnTable+'</div>';
 }
+/* ── PROJECT SCHEDULED REVENUE / COST CHANGES (steps + escalator) ── */
+function _projEscRow(pid,kind,e){
+  var pre='ep_'+kind,label=kind==='re'?'Revenue':'Cost';
+  return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;font-size:11px">'
+    +'<span style="color:var(--text-muted);min-width:120px">'+label+' % escalator:</span>'
+    +'<input class="fld-i" id="'+pre+'_pct" type="number" step="0.1" placeholder="%/yr" style="max-width:90px" value="'+((e&&e.pct)||'')+'">'
+    +'<span style="color:var(--text-muted)">from</span>'
+    +'<input class="fld-i" id="'+pre+'_from" type="month" style="max-width:150px" value="'+esc((e&&e.from)||'')+'">'
+    +'<select class="fld-sel" id="'+pre+'_per" style="max-width:120px"><option value="year"'+((!e||e.period!=='month')?' selected':'')+'>per year</option><option value="month"'+((e&&e.period==='month')?' selected':'')+'>per month</option></select>'
+    +'<button type="button" class="btn btn-sec btn-sm" onclick="projSetEscalator(\''+pid+'\',\''+kind+'\')">Apply</button>'
+    +((e&&Number(e.pct))?' <a href="#" onclick="projClearEscalator(\''+pid+'\',\''+kind+'\');return false" style="color:var(--red)">clear</a>':'')
+    +'</div>';
+}
+function _projSchedEditorHTML(p){
+  var hasTL=p.timeline&&p.timeline.length;
+  var steps=(p.revenueSteps||[]).slice().sort(function(a,b){return _capYM(a.from)-_capYM(b.from);});
+  var stepHtml=hasTL
+    ?'<div style="font-size:11px;color:var(--text-muted)">This contract uses a time-phased revenue timeline (edit segments in Proforma → Contracts). The escalator below applies on top.</div>'
+    :(steps.length?steps.map(function(s){var i=(p.revenueSteps||[]).indexOf(s);return '<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid #F1F5F9;font-size:12px"><span>from <b>'+esc(_otcMonthLbl(s.from))+'</b> → '+fmt(Number(s.value)||0)+'/mo</span><button class="btn btn-danger-sm btn-sm" onclick="projDelRevStep(\''+p.id+'\','+i+')">&times;</button></div>';}).join(''):'<div style="font-size:11px;color:var(--text-muted)">No revenue steps — revenue stays at the amount above until a step or escalator applies.</div>');
+  var addRow=hasTL?'':'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center"><input class="fld-i" id="ep_rs_month" type="month" style="max-width:150px"><input class="fld-i" id="ep_rs_amt" type="number" placeholder="New revenue/mo $" style="max-width:160px"><button type="button" class="btn btn-sec btn-sm" onclick="projAddRevStep(\''+p.id+'\')">+ Add step</button></div>';
+  return '<div class="fld"><label class="fld-l">Scheduled revenue changes <span style="font-weight:400;color:var(--text-muted);font-size:10px">— used by the Capacity / Strategic forecast</span></label>'
+    +stepHtml+addRow+_projEscRow(p.id,'re',p.revenueEscalator)+'</div>'
+    +'<div class="fld"><label class="fld-l">Scheduled cost change</label>'+_projEscRow(p.id,'ce',p.costEscalator)
+    +'<div style="font-size:10px;color:var(--text-muted);margin-top:3px">In the Capacity forecast a contract\'s cost is the sum of its assigned people — schedule increases on each person. This cost escalator applies to the contract\'s own cost line in the Proforma margin view.</div></div>';
+}
+function _projSchedRerender(pid){var p=D.projects.find(function(x){return x.id===pid;});var w=document.getElementById('ep_sched_wrap');if(p&&w)w.innerHTML=_projSchedEditorHTML(p);}
+function projAddRevStep(pid){var p=D.projects.find(function(x){return x.id===pid;});if(!p)return;var month=gv('ep_rs_month');var amt=Number(gv('ep_rs_amt'))||0;if(!month){alert('Pick an effective month.');return;}var arr=(p.revenueSteps||[]).filter(function(s){return s.from!==month;});arr.push({from:month,value:amt});p.revenueSteps=arr.sort(function(a,b){return _capYM(a.from)-_capYM(b.from);});save();_projSchedRerender(pid);}
+function projDelRevStep(pid,i){var p=D.projects.find(function(x){return x.id===pid;});if(!p)return;(p.revenueSteps||[]).splice(i,1);if(!(p.revenueSteps||[]).length)delete p.revenueSteps;save();_projSchedRerender(pid);}
+function projSetEscalator(pid,kind){var p=D.projects.find(function(x){return x.id===pid;});if(!p)return;var pre='ep_'+kind;var pct=Number(gv(pre+'_pct'))||0;var from=gv(pre+'_from');if(!pct||!from){alert('Enter a % and a start month.');return;}var e={pct:pct,from:from,period:gv(pre+'_per')||'year'};if(kind==='re')p.revenueEscalator=e;else p.costEscalator=e;save();_projSchedRerender(pid);}
+function projClearEscalator(pid,kind){var p=D.projects.find(function(x){return x.id===pid;});if(!p)return;if(kind==='re')delete p.revenueEscalator;else delete p.costEscalator;save();_projSchedRerender(pid);}
 function openEditProject(pid){
 var p=D.projects.find(function(x){return x.id===pid;});if(!p)return;
 var cat=projCat(p);
@@ -8293,6 +8394,7 @@ document.getElementById('mdlDeptEdit').innerHTML=
 +'<div class="fld"><label class="fld-l" for="ep_cat">Category</label><select class="fld-sel" id="ep_cat">'+catOpts+'</select><div style="font-size:9px;color:var(--text-muted);margin-top:3px">Changing category? Save, then reopen to set its revenue.</div></div>'
 +revField
 +(cat!=='opportunity'?('<div class="fld-row2"><div class="fld"><label class="fld-l" for="ep_start">Start month (optional)</label><input class="fld-i" type="month" id="ep_start" value="'+esc(p.startDate||'')+'"></div><div class="fld"><label class="fld-l" for="ep_end">End month (optional)</label><input class="fld-i" type="month" id="ep_end" value="'+esc(p.endDate||'')+'"></div></div><div style="font-size:9px;color:var(--text-muted);margin:-4px 0 8px">Revenue counts in Capacity / Strategic Planning only within this window. Blank = active across the whole horizon.</div>'):'')
++((cat==='project'||cat==='initiative')?'<div id="ep_sched_wrap">'+_projSchedEditorHTML(p)+'</div>':'')
 +(cat==='project'?renderClinsSection(pid):'')
 +(cat==='opportunity'?oppEditFields(p):'')
 +fT('ep_note','Note / Context',p.revenueNote||'')
