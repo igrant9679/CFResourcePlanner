@@ -518,6 +518,8 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .ai-btn{background:linear-gradient(135deg,#7C3AED,#0EA5E9);color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-family:inherit;letter-spacing:0.2px;}
 .ai-btn:hover{filter:brightness(1.08);}
 .ai-btn:disabled{opacity:0.5;cursor:wait;filter:saturate(0.4);}
+.ai-bar{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin:6px 0;font-size:11px;color:#7C3AED;font-weight:700;}
+.ai-mini{padding:3px 8px;font-size:10px;border-radius:5px;background:linear-gradient(135deg,#7C3AED,#0EA5E9);}
 .ai-preview{background:#fff;border:1.5px solid #7C3AED;border-radius:8px;padding:12px 14px;margin-top:8px;}
 .ai-preview-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
 .ai-preview-ttl{font-size:11px;font-weight:800;color:#7C3AED;letter-spacing:0.4px;text-transform:uppercase;}
@@ -1005,6 +1007,8 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 <div class="ov" id="ovIntg" onclick="closeModal('ovIntg')"><div class="mdl" id="mdlIntg" onclick="event.stopPropagation()" style="max-width:560px"></div></div>
 <div class="ov" id="ovCand" onclick="closeModal('ovCand')"><div class="mdl" id="mdlCand" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
 <div class="ov" id="ovCP" onclick="closeModal('ovCP')"><div class="mdl" id="mdlCP" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
+<div class="ov" id="ovOrg" onclick="closeModal('ovOrg')"><div class="mdl" id="mdlOrg" onclick="event.stopPropagation()" style="max-width:720px"></div></div>
+<div class="ov" id="ovPartner" onclick="closeModal('ovPartner')"><div class="mdl" id="mdlPartner" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
 <div class="ov" id="ovCert" onclick="closeModal('ovCert')"><div class="mdl" id="mdlCert" onclick="event.stopPropagation()" style="max-width:720px"></div></div>
 <div class="ov" id="ovTplProp" onclick="closeModal('ovTplProp')"><div class="mdl" id="mdlTplProp" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
 <div class="ov" id="ovKB" onclick="closeModal('ovKB')"><div class="mdl" id="mdlKB" onclick="event.stopPropagation()" style="width:90vw;max-width:900px"></div></div>
@@ -1511,12 +1515,25 @@ function proformaDebtService(){
   (d.corporate||[]).forEach(function(x){var n=parseFloat(String(x.monthlyPayment).replace(/[^0-9.]/g,''));if(!isNaN(n)&&/\d/.test(String(x.monthlyPayment))&&!/equiv/i.test(x.monthlyPayment))t+=n;});
   return Math.round(t);
 }
+/* Org-level AI settings (NEW): a no-limit Master Prompt prepended to EVERY AI
+   system prompt, plus proposal-output branding injected into generation context.
+   See aiBuildSystemPrompt(). Admin-owned via openOrgSettingsManager(). */
+function orgSettingsMigrate(){
+  if(!D.orgSettings)D.orgSettings={};
+  var o=D.orgSettings;
+  if(!('masterPrompt' in o))o.masterPrompt='';
+  if(!o.branding)o.branding={companyName:'',tagline:'',defaultTone:'',defaultVoice:''};
+  if(!('updatedAt' in o))o.updatedAt=0;
+  if(!('updatedBy' in o))o.updatedBy='';
+}
 function proposalsMigrate(){
   if(!D.proposals)D.proposals=[];
   if(!D.proposalTemplates)D.proposalTemplates=[];
   if(!D.corporateCertifications)D.corporateCertifications=[];
   if(!D.companyProfile)D.companyProfile={};
   if(!Array.isArray(D.knowledgeBank))D.knowledgeBank=[];   // Phase 1: proposal Knowledge Bank (metadata only; text lives in knowledge_docs table)
+  if(!Array.isArray(D.partnerBank))D.partnerBank=[];   // Teaming Partner Proposal Bank (metadata; text in knowledge_docs); each {id,partnerName,name,type:'partner-proposal',summary,tags,chars,mime,createdAt,createdBy}
+  orgSettingsMigrate();
   D.proposals.forEach(function(p){
     if(!p.status)p.status='draft';
     if(!p.sections)p.sections=[];
@@ -1530,6 +1547,7 @@ function proposalsMigrate(){
     if(!p.winLoss)p.winLoss=null;
     if(!p.brief)p.brief={text:'',winThemes:'',differentiators:'',updatedAt:0,updatedBy:''};   // Phase 2: BusDev intake
     if(!Array.isArray(p.dossiers))p.dossiers=[];   // Phase 4: key-personnel dossiers for the appendix
+    if(!p.genSources)p.genSources={partnerIds:[],attributePartners:true};   // teaming-partner sources + attribution toggle
     if(!('llmProvider' in p))p.llmProvider='';
     if(!('llmModel' in p))p.llmModel='';
     if(!('createdAt' in p))p.createdAt=Date.now();
@@ -1538,6 +1556,7 @@ function proposalsMigrate(){
   var p=D.companyProfile;
   if(!p.identity)p.identity={legalName:'CommunityForce',dba:'',duns:'',uei:'',cage:'',naics:[],hq:{addr:'',city:'',state:'',zip:''},foundedYear:'',ownershipType:'',employeeCount:''};
   if(!p.voice)p.voice={primaryTone:'',toneTags:[],samples:[],do:[],dont:[]};
+  if(!Array.isArray(p.voice.customToneTags))p.voice.customToneTags=[];   // user-defined tone tags beyond the fixed TONE_TAGS
   if(!Array.isArray(p.boilerplate))p.boilerplate=[];
   if(!Array.isArray(p.services))p.services=[];
   if(!Array.isArray(p.caseStudies))p.caseStudies=[];
@@ -4412,8 +4431,9 @@ function openCompanyProfileManager(){
   if(!canProposal()){alert('You don\'t have permission.');return;}
   var p=D.companyProfile;var i=p.identity||{};var v=p.voice||{};
   var naicsList=(i.naics||[]).join(', ');
-  var toneChecks=TONE_TAGS.map(function(t){var on=(v.toneTags||[]).indexOf(t)>-1;return '<label class="cp-tag '+(on?'cp-tag-on':'')+'" style="cursor:pointer;user-select:none"><input type="checkbox" '+(on?'checked':'')+' value="'+t+'" data-tone="1" style="display:none">'+esc(t)+'</label>';}).join(' ');
-  var samplesHTML=(v.samples||[]).map(function(s,i){return '<div class="cp-row"><div style="flex:1"><div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">'+esc(s.sectionType||'sample')+'</div><div style="font-size:12px;color:var(--text-secondary);line-height:1.5">'+esc(s.text||'').slice(0,300)+(s.text&&s.text.length>300?'…':'')+'</div></div><button class="btn btn-danger-sm btn-sm" onclick="cpDelVoiceSample('+i+')">&times;</button></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:8px 4px">No voice samples yet. Add 3-5 short paragraphs of CF-approved prose so AI can match your tone.</div>';
+  var allTones=TONE_TAGS.concat((v.customToneTags||[]).filter(function(t){return TONE_TAGS.indexOf(t)<0;}));
+  var toneChecks=allTones.map(function(t){var on=(v.toneTags||[]).indexOf(t)>-1;var custom=TONE_TAGS.indexOf(t)<0;return '<label class="cp-tag '+(on?'cp-tag-on':'')+'" style="cursor:pointer;user-select:none"><input type="checkbox" '+(on?'checked':'')+' value="'+esc(t)+'" data-tone="1" style="display:none">'+esc(t)+(custom?' <span onclick="event.stopPropagation();cpDelCustomTone(\''+esc(t).replace(/'/g,"\\'")+'\')" style="margin-left:4px;color:var(--red);font-weight:800" title="Remove custom tag">&times;</span>':'')+'</label>';}).join(' ');
+  var samplesHTML=(v.samples||[]).map(function(s,i){return '<div class="cp-row"><div style="flex:1"><div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">'+esc(s.sectionType||'sample')+'</div><div style="font-size:12px;color:var(--text-secondary);line-height:1.5">'+esc(s.text||'').slice(0,300)+(s.text&&s.text.length>300?'…':'')+'</div></div><div style="display:flex;gap:4px;flex-shrink:0"><button class="btn btn-sec btn-sm" onclick="cpEditVoiceSample('+i+')">Edit</button><button class="btn btn-danger-sm btn-sm" onclick="cpDelVoiceSample('+i+')">&times;</button></div></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:8px 4px">No voice samples yet. Add 3-5 short paragraphs of CF-approved prose so AI can match your tone.</div>';
   var doList=(v.do||[]).map(function(s,i){return '<div class="cp-row"><span style="color:var(--green);font-weight:700">&#10003;</span><span style="flex:1">'+esc(s)+'</span><button class="btn btn-danger-sm btn-sm" onclick="cpDelDo('+i+')">&times;</button></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 4px">No do-rules yet.</div>';
   var dontList=(v.dont||[]).map(function(s,i){return '<div class="cp-row"><span style="color:var(--red);font-weight:700">&times;</span><span style="flex:1">'+esc(s)+'</span><button class="btn btn-danger-sm btn-sm" onclick="cpDelDont('+i+')">&times;</button></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 4px">No don\'t-rules yet.</div>';
   var diffList=(p.differentiators||[]).map(function(s,i){return '<div class="cp-row"><span style="color:var(--gold);font-weight:700">&#9733;</span><span style="flex:1">'+esc(s)+'</span><button class="btn btn-danger-sm btn-sm" onclick="cpDelDiff('+i+')">&times;</button></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 4px">No company differentiators yet — add as many as apply. These feed every proposal draft.</div>';
@@ -4438,9 +4458,11 @@ function openCompanyProfileManager(){
     +'<div class="fld"><label class="fld-l">NAICS Codes (comma-separated)</label><input class="fld-i" id="cp_naics" value="'+esc(naicsList)+'" placeholder="541512, 541611, 611420"></div>'
     +'<div class="fld"><label class="fld-l">Ownership Type</label><input class="fld-i" id="cp_owner" value="'+esc(i.ownershipType||'')+'" placeholder="Small Business / 8(a) / WOSB / etc."></div>'
     +'<span class="fld-section-hdr">Brand Voice</span>'
-    +'<div class="fld"><label class="fld-l">Tone Tags (click to toggle)</label><div id="cp_tones" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px" onclick="cpToggleTone(event)">'+toneChecks+'</div></div>'
+    +'<div class="fld"><label class="fld-l">Tone Tags (click to toggle)</label><div id="cp_tones" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px" onclick="cpToggleTone(event)">'+toneChecks+'</div>'
+    +'<div style="display:flex;gap:6px;margin-top:6px"><input class="fld-i" id="cp_tone_new" placeholder="Add a custom tone tag (e.g. visionary)"><button class="btn btn-sec btn-sm" onclick="cpAddCustomTone()">+ Add tone</button></div></div>'
     +'<div class="fld"><label class="fld-l">Voice Samples (3-5 short paragraphs of CF-approved prose, tagged by section type)</label><div>'+samplesHTML+'</div>'
-    +'<div style="display:flex;gap:6px;margin-top:6px"><select class="fld-sel" id="cp_smp_kind" style="flex:0 0 180px"><option value="executive-summary">Executive Summary</option><option value="technical-approach">Technical Approach</option><option value="past-performance">Past Performance</option><option value="staffing-plan">Staffing Plan</option><option value="general">General</option></select><input class="fld-i" id="cp_smp_text" placeholder="Paste an approved sample paragraph..."><button class="btn btn-sec btn-sm" onclick="cpAddVoiceSample()">+ Add</button></div></div>'
+    +'<div style="display:flex;gap:6px;margin-top:6px"><select class="fld-sel" id="cp_smp_kind" style="flex:0 0 180px"><option value="executive-summary">Executive Summary</option><option value="technical-approach">Technical Approach</option><option value="past-performance">Past Performance</option><option value="staffing-plan">Staffing Plan</option><option value="general">General</option></select><input class="fld-i" id="cp_smp_text" placeholder="Paste an approved sample paragraph..."><button class="btn btn-sec btn-sm" onclick="cpAddVoiceSample()">+ Add</button></div>'
+    +aiBar('cp_smp_text',{fieldLabel:'brand voice sample',outputFormat:'plain'})+'</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
       +'<div class="fld"><label class="fld-l">Do List</label><div>'+doList+'</div><div style="display:flex;gap:6px;margin-top:4px"><input class="fld-i" id="cp_do_inp" placeholder="e.g. use active voice"><button class="btn btn-sec btn-sm" onclick="cpAddDo()">+</button></div></div>'
       +'<div class="fld"><label class="fld-l">Don\'t List</label><div>'+dontList+'</div><div style="display:flex;gap:6px;margin-top:4px"><input class="fld-i" id="cp_dont_inp" placeholder="e.g. never say world-class"><button class="btn btn-sec btn-sm" onclick="cpAddDont()">+</button></div></div>'
@@ -4488,6 +4510,29 @@ function cpSaveIdentity(){
 }
 function cpAddVoiceSample(){var p=D.companyProfile;p.voice=p.voice||{};p.voice.samples=p.voice.samples||[];var t=gv('cp_smp_text').trim();if(!t)return;p.voice.samples.push({id:uid(),sectionType:gv('cp_smp_kind'),text:t});save();openCompanyProfileManager();}
 function cpDelVoiceSample(i){var p=D.companyProfile;p.voice.samples.splice(i,1);save();openCompanyProfileManager();}
+function cpEditVoiceSample(i){
+  var s=(D.companyProfile.voice.samples||[])[i];if(!s)return;
+  openFormModal({over:'Company Profile',title:'Edit Voice Sample',submitLabel:'Save Sample',
+    fields:[
+      {key:'kind',label:'Section type',type:'select',value:s.sectionType||'general',options:[
+        {value:'executive-summary',label:'Executive Summary'},{value:'technical-approach',label:'Technical Approach'},
+        {value:'past-performance',label:'Past Performance'},{value:'staffing-plan',label:'Staffing Plan'},{value:'general',label:'General'}]},
+      {key:'text',label:'Sample text',type:'textarea',rows:9,required:true,value:s.text||''}],
+    onSubmit:function(v){s.sectionType=v.kind;s.text=v.text;save();openCompanyProfileManager();}});
+}
+function cpAddCustomTone(){
+  var v=D.companyProfile.voice;v.customToneTags=v.customToneTags||[];v.toneTags=v.toneTags||[];
+  var t=gv('cp_tone_new').trim().toLowerCase();if(!t)return;
+  if(TONE_TAGS.indexOf(t)<0&&v.customToneTags.indexOf(t)<0)v.customToneTags.push(t);
+  if(v.toneTags.indexOf(t)<0)v.toneTags.push(t);   // newly added tag starts selected
+  save();openCompanyProfileManager();
+}
+function cpDelCustomTone(t){
+  var v=D.companyProfile.voice;
+  v.customToneTags=(v.customToneTags||[]).filter(function(x){return x!==t;});
+  v.toneTags=(v.toneTags||[]).filter(function(x){return x!==t;});
+  save();openCompanyProfileManager();
+}
 function cpAddDo(){var p=D.companyProfile;p.voice=p.voice||{};p.voice.do=p.voice.do||[];var t=gv('cp_do_inp').trim();if(!t)return;p.voice.do.push(t);save();openCompanyProfileManager();}
 function cpDelDo(i){D.companyProfile.voice.do.splice(i,1);save();openCompanyProfileManager();}
 function cpAddDont(){var p=D.companyProfile;p.voice=p.voice||{};p.voice.dont=p.voice.dont||[];var t=gv('cp_dont_inp').trim();if(!t)return;p.voice.dont.push(t);save();openCompanyProfileManager();}
@@ -4774,6 +4819,96 @@ function kbBuildContext(contextStr,maxDocs,perDocChars,cb){
       var block=docs.map(function(d){return '### Source: '+d.name+' ('+kbTypeLabel(d.type)+')\n'+String(d.text||'').slice(0,perDocChars||4000);}).join('\n\n');
       cb(block,ids);
     });
+  });
+}
+
+/* ── TEAMING PARTNER PROPOSAL BANK ──
+   Partner proposals/capabilities uploaded as generation sources, tagged by partner.
+   Reuses the knowledge_docs table + /api/knowledge endpoints; metadata lives in
+   D.partnerBank. At generation time a per-proposal toggle controls whether partner
+   content is attributed to the named partner or absorbed into the team solution. */
+function partnerStatus(msg){var el=document.getElementById('pb_status');if(el)el.textContent=msg||'';}
+function openPartnerBankManager(){
+  if(!canProposal()){alert('You don\'t have permission.');return;}
+  D.partnerBank=D.partnerBank||[];
+  var docs=D.partnerBank.slice().sort(function(a,b){return String(a.partnerName||'').localeCompare(String(b.partnerName||''))||((b.createdAt||0)-(a.createdAt||0));});
+  var rows=docs.length?docs.map(function(d){
+    var tags=(d.tags||[]).map(function(t){return '<span class="kb-tag">'+esc(t)+'</span>';}).join('');
+    var busy=d._busy?'<span style="font-size:11px;color:#7C3AED;margin-left:6px">&#8635; summarizing&hellip;</span>':'';
+    var sum=d.summary?esc(d.summary):'<i style="color:var(--text-muted)">No summary yet &mdash; click Re-summarize.</i>';
+    return '<div class="kb-card">'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="kb-type" style="background:#0d9488;color:#fff">&#129309; '+esc(d.partnerName||'Partner')+'</span><span class="kb-name">'+esc(d.name)+'</span>'+busy+'</div>'
+      +'<div class="kb-sum">'+sum+'</div>'
+      +(tags?'<div class="kb-tags">'+tags+'</div>':'')
+      +'<div class="kb-meta">'+(d.chars||0).toLocaleString()+' chars &middot; added '+(d.createdAt?new Date(d.createdAt).toLocaleDateString():'')+'</div>'
+      +'</div>'
+      +'<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">'
+      +'<a class="btn btn-sec btn-sm" href="/api/knowledge/'+esc(d.id)+'/raw" target="_blank" rel="noopener">Open</a>'
+      +'<button class="btn btn-sec btn-sm" onclick="partnerResummarize(\''+d.id+'\')">Re-summarize</button>'
+      +'<button class="btn btn-danger-sm btn-sm" onclick="partnerDelete(\''+d.id+'\')">Delete</button>'
+      +'</div></div>';
+  }).join(''):'<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:24px">No partner proposals yet. Upload a teaming partner\'s past proposals or capability docs (PDF / DOCX / TXT). When generating a proposal, select partners on the BusDev Brief tab to pull their experience in — with or without attribution.</div>';
+  document.getElementById('mdlPartner').innerHTML=
+    '<div class="mdl-over">Proposals</div><div class="mdl-title">&#129309; Teaming Partner Proposal Bank</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Upload teaming partners\' proposals &amp; capability docs. Atlas extracts and summarizes them; the Proposal Generator can weave a selected partner\'s experience into a new proposal — either attributed ("Our teaming partner X has…") or absorbed into the overall team solution. Choose per proposal on the BusDev Brief tab.</div>'
+    +'<div class="kb-upload-row">'
+    +'<input type="text" id="pb_partner" class="inp" placeholder="Partner name (e.g. Acme Federal)" style="max-width:230px"/>'
+    +'<input type="file" id="pb_file" class="inp" accept=".pdf,.docx,.xlsx,.xls,.txt,.md,.csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain" style="flex:1;min-width:160px"/>'
+    +'<button class="btn btn-gold btn-sm" onclick="partnerUpload()">Upload</button>'
+    +'</div>'
+    +'<div id="pb_status" style="font-size:11px;color:#7C3AED;min-height:16px;margin:6px 2px"></div>'
+    +'<div class="kb-list">'+rows+'</div>'
+    +'<div class="btn-row" style="margin-top:14px"><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovPartner\')">Close</button></div>';
+  openModal('ovPartner');
+}
+function partnerUpload(){
+  var f=document.getElementById('pb_file');var partnerName=(gv('pb_partner')||'').trim();
+  if(!partnerName){alert('Enter the partner name first.');return;}
+  if(!f||!f.files||!f.files[0]){alert('Choose a file first.');return;}
+  var file=f.files[0];
+  partnerStatus('Uploading & extracting text from '+file.name+'…');
+  var fd=new FormData();fd.append('file',file);fd.append('docType','partner-proposal');
+  fetch('/api/knowledge',{method:'POST',body:fd}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||'upload failed');return j;});}).then(function(j){
+    var doc={id:j.id,partnerName:partnerName,name:j.name,type:'partner-proposal',summary:'',tags:[],chars:j.chars||0,mime:j.mime||'',createdAt:Date.now(),createdBy:ME?ME.id:''};
+    D.partnerBank=D.partnerBank||[];D.partnerBank.unshift(doc);save();
+    if(!j.chars){partnerStatus('Uploaded "'+j.name+'", but no text could be extracted (unsupported format or scanned PDF). Kept as a reference.');openPartnerBankManager();return;}
+    partnerSummarizeDoc(doc.id,j.text||'');
+  }).catch(function(e){partnerStatus('');alert('Upload failed: '+e.message);});
+}
+function partnerSummarizeDoc(id,text){
+  var doc=(D.partnerBank||[]).find(function(x){return x.id===id;});if(!doc)return;
+  doc._busy=true;partnerStatus('Summarizing "'+doc.name+'" with AI…');openPartnerBankManager();
+  function run(t){
+    var clipped=String(t||'').slice(0,16000);
+    if(!clipped){delete doc._busy;partnerStatus('No text available to summarize for "'+doc.name+'".');save();openPartnerBankManager();return;}
+    var sys='You catalog a TEAMING PARTNER\'s proposal/capability documents for a federal contractor. Respond ONLY with JSON, no prose.';
+    var instr='Teaming partner: '+(doc.partnerName||'Partner')+'\nDocument: '+doc.name+'\n\nContent (may be truncated):\n"""\n'+clipped+'\n"""\n\nReturn JSON exactly: {"summary":"2-4 sentences on what THIS PARTNER brings — their capabilities, past customers/agencies, differentiators, and the kind of work this proves they can support","tags":["6-10 short lowercase keywords: capabilities, agencies, technologies, contract vehicles"]}';
+    llmComplete({system:sys,messages:[{role:'user',content:instr}],max_tokens:700}).then(function(resp){
+      var j=llmExtractJSON(resp)||{};
+      doc.summary=j.summary||'';doc.tags=Array.isArray(j.tags)?j.tags.map(function(x){return String(x);}):[];
+      delete doc._busy;save();partnerStatus('Summarized "'+doc.name+'".');openPartnerBankManager();
+    }).catch(function(e){delete doc._busy;save();partnerStatus('Summarize failed: '+e.message+' — retry with Re-summarize.');openPartnerBankManager();});
+  }
+  if(text)run(text);
+  else fetch('/api/knowledge/'+id).then(function(r){return r.json();}).then(function(j){run(j&&j.extracted_text||'');}).catch(function(e){delete doc._busy;partnerStatus('Could not load text: '+e.message);openPartnerBankManager();});
+}
+function partnerResummarize(id){partnerSummarizeDoc(id);}
+function partnerDelete(id){
+  if(!confirm('Delete this partner document? This permanently removes the stored file and text.'))return;
+  fetch('/api/knowledge/'+id,{method:'DELETE'}).catch(function(){});
+  D.partnerBank=(D.partnerBank||[]).filter(function(x){return x.id!==id;});
+  save();openPartnerBankManager();
+}
+/* Build an injectable partner-context block for the selected partner docs on a proposal. */
+function _partnerBuildContext(p,cb){
+  var ids=(p.genSources&&p.genSources.partnerIds)||[];
+  var docs=(D.partnerBank||[]).filter(function(d){return ids.indexOf(d.id)>-1;});
+  if(!docs.length){cb('');return;}
+  kbFetchTexts(docs.map(function(d){return d.id;}),function(texts){
+    if(!texts.length){cb('');return;}
+    var block=texts.map(function(t){var meta=docs.find(function(d){return d.id===t.id;})||{};return '### Partner: '+(meta.partnerName||'Partner')+' — '+t.name+'\n'+String(t.text||'').slice(0,3500);}).join('\n\n');
+    cb(block);
   });
 }
 
@@ -5450,8 +5585,8 @@ function _pdRFPHTML(p){
     +'<div class="fld"><label class="fld-l">Contract Vehicle</label><input class="fld-i" id="pd_rfp_contractVehicle" value="'+esc(rfp.contractVehicle||'')+'"></div>'
     +'<div class="fld"><label class="fld-l">Set-Aside Type</label><input class="fld-i" id="pd_rfp_setAsideType" value="'+esc(rfp.setAsideType||'')+'"></div>'
     +'</div>'
-    +'<div class="fld"><label class="fld-l">Summary</label><textarea class="fld-i" rows="2" id="pd_rfp_summary">'+esc(rfp.summary||'')+'</textarea></div>'
-    +'<div class="fld"><label class="fld-l">Scope</label><textarea class="fld-i" rows="6" id="pd_rfp_scope">'+esc(rfp.scope||'')+'</textarea></div>'
+    +'<div class="fld"><label class="fld-l">Summary</label><textarea class="fld-i" rows="2" id="pd_rfp_summary">'+esc(rfp.summary||'')+'</textarea>'+aiBar('pd_rfp_summary',{proposalId:p.id,fieldLabel:'RFP summary',outputFormat:'plain'})+'</div>'
+    +'<div class="fld"><label class="fld-l">Scope</label><textarea class="fld-i" rows="6" id="pd_rfp_scope">'+esc(rfp.scope||'')+'</textarea>'+aiBar('pd_rfp_scope',{proposalId:p.id,fieldLabel:'RFP scope',outputFormat:'plain'})+'</div>'
     +listEdit('requirements','Requirements','One requirement per line')
     +listEdit('requiredCerts','Required Certifications','e.g. FedRAMP Moderate')
     +listEdit('requiredClearances','Required Clearances','e.g. Top Secret')
@@ -5660,6 +5795,7 @@ function _pdSectionsHTML(p,tpl){
       +(activeSec.templatePrompt?'<div style="font-size:10px;color:var(--text-muted);background:var(--page-bg);padding:7px 10px;border-radius:6px;margin-bottom:8px"><b>Template prompt:</b> '+esc(activeSec.templatePrompt.slice(0,260)+(activeSec.templatePrompt.length>260?'…':''))+'</div>':'')
       +(activeSec.evidence&&activeSec.evidence.length?'<div style="font-size:10px;color:var(--text-muted);margin-bottom:8px"><b>Required evidence:</b> '+activeSec.evidence.map(esc).join(' · ')+'</div>':'')
       +richEditor('pd_sec_html',activeSec.html||'',{disabled:activeSec.source==='computed',placeholder:'Section content. Use the AI Draft button above to generate a first draft, then edit freely.',tall:true})
+      +(activeSec.source==='computed'?'':aiBar('pd_sec_html',{proposalId:p.id,fieldLabel:'proposal section "'+(activeSec.title||'').replace(/"/g,'')+'"',outputFormat:'html'}))
       +'</div>';
   }
   // Gap analysis chip
@@ -5719,7 +5855,8 @@ function _propBuildDifferentiatorsCtx(p){
 }
 // Shared section-drafting prompt. kbBlock is an optional Knowledge Bank excerpt
 // block injected by the full-proposal generator (empty for single-section draft).
-function _propSectionPrompt(p,s,kbBlock){
+function _propSectionPrompt(p,s,kbBlock,partnerBlock){
+  var attribute=!(p.genSources&&p.genSources.attributePartners===false);
   var sys='You are an expert federal proposal writer drafting a single section of a US government RFP response. Output ONLY clean HTML (use <p>, <ul>/<li>, <strong>, <em>, <h3> for subsection headers; no markdown, no code fences, no commentary before or after). Match the brand voice exactly. Develop and professionalize the BusDev brief — never contradict it. Cite past performance accurately — never invent customers, contract values, dates, or metrics that aren\'t in the provided materials.';
   var t=(s.title||'').toLowerCase();
   var briefCtx=_propBuildBriefCtx(p);
@@ -5727,6 +5864,10 @@ function _propSectionPrompt(p,s,kbBlock){
     +'\n\nRFP CONTEXT:\n'+_propBuildRFPCtx(p)
     +(briefCtx?'\n\nBUSDEV BRIEF (the capture team\'s intent — expand, enhance, and professionalize this into full prose; honor every point):\n'+briefCtx:'')
     +(kbBlock?'\n\nKNOWLEDGE BANK (excerpts from CommunityForce past proposals & capability docs — reuse relevant facts, proof points, and phrasing, but adapt to THIS customer; do not present another customer\'s work as this one\'s):\n'+kbBlock:'')
+    +(partnerBlock?('\n\nTEAMING PARTNER MATERIAL ('+(attribute
+        ?'ATTRIBUTE this content to the named partner — phrase as "Our teaming partner [Name] brings…/has experience with…". Never present partner work as CommunityForce\'s own.'
+        :'You MAY use these capabilities and facts as part of the overall team solution WITHOUT naming the partner — write in first-person plural as the proposing team. Do NOT claim the partner\'s specific past contracts as CommunityForce\'s own.')
+        +'):\n'+partnerBlock):'')
     +'\n\nBRAND VOICE:\n'+_propBuildVoiceCtx()
     +(_propBuildDifferentiatorsCtx(p)?'\n\nDIFFERENTIATORS & WIN THEMES (weave the relevant ones in naturally; do not list them mechanically):\n'+_propBuildDifferentiatorsCtx(p):'')
     +((t.indexOf('past')>-1||t.indexOf('experience')>-1)?'\n\nPAST PERFORMANCE LIBRARY (use ONLY these — do not invent):\n'+(_propBuildPPCtx(p)||'(none selected; flag this in your output)'):'')
@@ -5745,20 +5886,53 @@ function _pdBriefHTML(p){
   return '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Dump your raw thoughts on what CommunityForce proposes — bullet points, fragments, anything. Atlas develops, enhances, and professionalizes this into full proposal sections using the RFP requirements, the Knowledge Bank (<b>'+kbCount+'</b> source'+(kbCount===1?'':'s')+'), and the CommunityForce brand voice.</div>'
     +tplNote
     +'<div class="fld"><label class="fld-l">What we propose (stream of consciousness)</label>'
-    +richEditor('pd_brief_text',b.text||'',{placeholder:'e.g. Stand up a 4-person agile pod, reuse our DTMO Passport accelerators, lead with FedRAMP experience, phased 30/60/90 ramp, emphasize low-risk transition, cleared staff already on bench...',tall:true})+'</div>'
+    +richEditor('pd_brief_text',b.text||'',{placeholder:'e.g. Stand up a 4-person agile pod, reuse our DTMO Passport accelerators, lead with FedRAMP experience, phased 30/60/90 ramp, emphasize low-risk transition, cleared staff already on bench...',tall:true})
+    +aiBar('pd_brief_text',{proposalId:p.id,fieldLabel:'BusDev brief',outputFormat:'html'})+'</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
-    +'<div class="fld"><label class="fld-l">Win themes (optional, one per line)</label><textarea class="fld-i" id="pd_brief_wt" rows="4" placeholder="Low-risk transition&#10;Deep DTMO domain knowledge&#10;Proven agile delivery">'+esc(b.winThemes||'')+'</textarea></div>'
-    +'<div class="fld"><label class="fld-l">Differentiators (optional, one per line)</label><textarea class="fld-i" id="pd_brief_df" rows="4" placeholder="Reusable accelerators&#10;Cleared staff on bench&#10;Prior work with this customer">'+esc(b.differentiators||'')+'</textarea></div>'
+    +'<div class="fld"><label class="fld-l">Win themes (optional, one per line)</label><textarea class="fld-i" id="pd_brief_wt" rows="4" placeholder="Low-risk transition&#10;Deep DTMO domain knowledge&#10;Proven agile delivery">'+esc(b.winThemes||'')+'</textarea>'+aiBar('pd_brief_wt',{proposalId:p.id,fieldLabel:'win themes',outputFormat:'plain'})+'</div>'
+    +'<div class="fld"><label class="fld-l">Differentiators (optional, one per line)</label><textarea class="fld-i" id="pd_brief_df" rows="4" placeholder="Reusable accelerators&#10;Cleared staff on bench&#10;Prior work with this customer">'+esc(b.differentiators||'')+'</textarea>'+aiBar('pd_brief_df',{proposalId:p.id,fieldLabel:'differentiators',outputFormat:'plain'})+'</div>'
     +'</div>'
+    +_pdPartnerPickerHTML(p)
     +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">'
     +'<button class="btn btn-navy btn-sm" onclick="pdSaveBrief(\''+p.id+'\')">&#128190; Save Brief</button>'
     +'<span id="pd_brief_savemsg" style="font-size:11px;color:var(--green)"></span>'+updated
     +'<span style="flex:1"></span>'
     +'<label style="font-size:11px;display:inline-flex;align-items:center;gap:4px" title="Seed the CF pricing sheet from RFP roles (only if pricing is empty)"><input type="checkbox" id="pd_gen_pricing" checked> Seed pricing</label>'
     +'<label style="font-size:11px;display:inline-flex;align-items:center;gap:4px" title="Generate dossiers for bench members you assigned in the Staffing tab"><input type="checkbox" id="pd_gen_dossiers"> Dossiers (assigned bench)</label>'
+    +'<button type="button" class="btn btn-outline btn-sm" onclick="pdGenerateFromSource(\''+p.id+'\')" title="Analyze a document, the Master Prompt, or a past proposal and fill RFP/brief/sections">&#128229; Generate from source…</button>'
     +'<button id="pd_gen_btn" class="btn btn-gold" onclick="pdGenerateFullProposal(\''+p.id+'\')">&#10024; Generate Full Proposal'+(aiSecs?' ('+aiSecs+' section'+(aiSecs===1?'':'s')+')':'')+'</button>'
     +'</div>'
     +'<div id="pd_gen_status" style="font-size:12px;color:#7C3AED;margin-top:10px;min-height:18px"></div>';
+}
+/* Teaming-partner source picker on the BusDev Brief tab. */
+function _pdPartnerPickerHTML(p){
+  var bank=D.partnerBank||[];
+  p.genSources=p.genSources||{partnerIds:[],attributePartners:true};
+  var sel=p.genSources.partnerIds||[];
+  if(!bank.length)return '<div class="fld" style="margin-top:8px"><label class="fld-l">&#129309; Teaming partner sources</label><div style="font-size:11px;color:var(--text-muted)">No partner proposals uploaded yet. Add them in <b>Admin → Teaming Partner Bank</b> to weave a partner\'s experience into this proposal.</div></div>';
+  var byName={};bank.forEach(function(d){var k=d.partnerName||'Partner';(byName[k]=byName[k]||[]).push(d);});
+  var rows=Object.keys(byName).sort().map(function(nm){
+    return '<div style="margin-top:4px"><div style="font-size:11px;font-weight:700;color:#0d9488">&#129309; '+esc(nm)+'</div>'
+      +byName[nm].map(function(d){var on=sel.indexOf(d.id)>-1;return '<label style="display:flex;gap:6px;align-items:flex-start;font-size:11px;margin:2px 0 2px 12px;cursor:pointer"><input type="checkbox" '+(on?'checked':'')+' onchange="pdTogglePartnerSrc(\''+p.id+'\',\''+d.id+'\',this.checked)"><span><b>'+esc(d.name)+'</b>'+(d.summary?' — <span style="color:var(--text-muted)">'+esc(d.summary.slice(0,120))+(d.summary.length>120?'…':'')+'</span>':'')+'</span></label>';}).join('')+'</div>';
+  }).join('');
+  var attr=p.genSources.attributePartners!==false;
+  return '<div class="fld" style="margin-top:8px;border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--page-bg)">'
+    +'<label class="fld-l" style="display:flex;justify-content:space-between;align-items:center;margin:0">&#129309; Teaming partner sources <span style="font-weight:400;color:var(--text-muted);font-size:10px">selected partners\' experience feeds generation</span></label>'
+    +rows
+    +'<label style="display:flex;gap:6px;align-items:flex-start;font-size:11px;margin-top:8px;cursor:pointer;font-weight:600"><input type="checkbox" '+(attr?'checked':'')+' onchange="pdSetPartnerAttribution(\''+p.id+'\',this.checked)"><span>Attribute content to the partner by name <span style="font-weight:400;color:var(--text-muted)">(e.g. "Our teaming partner X has…"). Uncheck to absorb their capabilities into the team solution without naming them.</span></span></label>'
+    +'</div>';
+}
+function pdTogglePartnerSrc(propId,docId,checked){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  p.genSources=p.genSources||{partnerIds:[],attributePartners:true};
+  var ids=(p.genSources.partnerIds||[]).filter(function(x){return x!==docId;});
+  if(checked)ids.push(docId);
+  p.genSources.partnerIds=ids;save();
+}
+function pdSetPartnerAttribution(propId,checked){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  p.genSources=p.genSources||{partnerIds:[],attributePartners:true};
+  p.genSources.attributePartners=!!checked;save();
 }
 function pdCaptureBrief(p){
   p.brief=p.brief||{text:'',winThemes:'',differentiators:'',updatedAt:0,updatedBy:''};
@@ -5791,6 +5965,7 @@ function pdGenerateFullProposal(id){
   setStatus('Selecting relevant Knowledge Bank sources…');
   var rfp=p.rfp||{};
   var kbCtxStr=[rfp.customer,rfp.summary,rfp.scope,(rfp.requirements||[]).join('; '),_propBuildBriefCtx(p)].filter(Boolean).join('\n').slice(0,6000);
+  _partnerBuildContext(p,function(partnerBlock){
   kbBuildContext(kbCtxStr,4,3500,function(kbBlock,kbIds){
     kbIds=kbIds||[];
     var i=0,errs=0;
@@ -5811,8 +5986,8 @@ function pdGenerateFullProposal(id){
     function next(){
       if(i>=aiSecs.length){done();return;}
       var s=aiSecs[i];
-      setStatus('Drafting '+(i+1)+'/'+aiSecs.length+': <b>'+esc(s.title)+'</b>…'+(kbIds.length?' <span style="color:var(--text-muted)">(using '+kbIds.length+' KB source'+(kbIds.length===1?'':'s')+')</span>':''));
-      var pr=_propSectionPrompt(p,s,kbBlock);
+      setStatus('Drafting '+(i+1)+'/'+aiSecs.length+': <b>'+esc(s.title)+'</b>…'+(kbIds.length?' <span style="color:var(--text-muted)">(using '+kbIds.length+' KB source'+(kbIds.length===1?'':'s')+(partnerBlock?' + partner material':'')+')</span>':''));
+      var pr=_propSectionPrompt(p,s,kbBlock,partnerBlock);
       llmComplete({provider:llm.provider,model:llm.model,system:pr.sys,messages:[{role:'user',content:pr.instruction}],max_tokens:4000})
         .then(function(j){
           var html=llmExtractText(j).trim().replace(/^```html\s*/i,'').replace(/```$/,'').trim();
@@ -5824,6 +5999,106 @@ function pdGenerateFullProposal(id){
     }
     next();
   });
+  });
+}
+/* ── GENERATE FIELDS FROM A SOURCE (uploaded doc / master prompt / past proposal) ── */
+function pdGenerateFromSource(propId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  var kbProps=(D.knowledgeBank||[]).filter(function(d){return d.type==='past-proposal';});
+  var sysProps=(D.proposals||[]).filter(function(x){return x.id!==propId&&(x.sections||[]).some(function(s){return (s.html||'').trim();});});
+  openFormModal({over:'Proposal Generator',title:'Generate fields from a source',
+    intro:'Atlas analyzes a source and proposes content for the RFP details, BusDev brief, and matching sections. You review before anything is applied — only blank fields/sections are filled.',
+    fields:[
+      {key:'source',label:'Source',type:'select',value:'upload',options:[
+        {value:'upload',label:'Upload a document'},
+        {value:'master',label:'Org Master Prompt'},
+        {value:'kb',label:'Past proposal — Knowledge Bank'},
+        {value:'system',label:'Past proposal — already in Atlas'}]},
+      {key:'file',label:'Document (for Upload)',type:'file',accept:'.pdf,.docx,.xlsx,.xls,.txt,.md,.csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain'},
+      {key:'kbId',label:'Knowledge Bank past proposal (for that option)',type:'select',value:'',options:[{value:'',label:'— select —'}].concat(kbProps.map(function(d){return {value:d.id,label:d.name};}))},
+      {key:'sysId',label:'Atlas proposal (for that option)',type:'select',value:'',options:[{value:'',label:'— select —'}].concat(sysProps.map(function(x){return {value:x.id,label:x.title||'(untitled)'};}))},
+      {key:'targets',label:'Populate',type:'checkboxes',value:['rfp','brief','sections'],options:[{value:'rfp',label:'RFP details'},{value:'brief',label:'BusDev brief'},{value:'sections',label:'Matching sections'}]}
+    ],
+    onSubmit:function(v,files,setStatus){
+      var targets=v.targets||[];
+      if(!targets.length){setStatus('Pick at least one thing to populate.');return false;}
+      function analyze(text){if(!text||!text.trim()){setStatus('No source text found.');return;}_pdAnalyzeSource(p,text,targets,setStatus);}
+      setStatus('Gathering source…');
+      if(v.source==='upload'){
+        var f=files&&files.file;if(!f){setStatus('Choose a file to upload.');return false;}
+        var fd=new FormData();fd.append('file',f);fd.append('docType','past-proposal');
+        fetch('/api/knowledge',{method:'POST',body:fd}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||'upload failed');return j;});}).then(function(j){
+          D.knowledgeBank=D.knowledgeBank||[];D.knowledgeBank.unshift({id:j.id,name:j.name,type:'past-proposal',summary:'',tags:[],chars:j.chars||0,mime:j.mime||'',createdAt:Date.now(),createdBy:ME?ME.id:''});save();
+          analyze(j.text||'');
+        }).catch(function(e){setStatus('Upload failed: '+e.message);});
+        return false;
+      } else if(v.source==='master'){analyze((D.orgSettings&&D.orgSettings.masterPrompt)||'');return false;}
+      else if(v.source==='kb'){
+        if(!v.kbId){setStatus('Pick a Knowledge Bank proposal.');return false;}
+        fetch('/api/knowledge/'+v.kbId).then(function(r){return r.json();}).then(function(j){analyze(j&&j.extracted_text||'');}).catch(function(e){setStatus('Load failed: '+e.message);});
+        return false;
+      } else if(v.source==='system'){
+        if(!v.sysId){setStatus('Pick an Atlas proposal.');return false;}
+        var sp=(D.proposals||[]).find(function(x){return x.id===v.sysId;});
+        var txt=sp?((((sp.brief&&sp.brief.text)||'')+'\n\n'+(sp.sections||[]).map(function(s){return (s.title||'')+'\n'+String(s.html||'').replace(/<[^>]+>/g,' ');}).join('\n\n'))):'';
+        analyze(txt);return false;
+      }
+      return false;
+    }
+  });
+}
+function _pdMatchSection(p,title){
+  if(!title)return null;var t=String(title).toLowerCase().trim();
+  return (p.sections||[]).find(function(s){var st=String(s.title||'').toLowerCase().trim();return st&&(st===t||st.indexOf(t)>-1||t.indexOf(st)>-1);});
+}
+function _pdAnalyzeSource(p,text,targets,setStatus){
+  setStatus('Analyzing source with AI…');
+  var want=[];
+  if(targets.indexOf('rfp')>-1)want.push('"rfp":{"customer":"","summary":"","scope":"","pop":"","contractVehicle":"","setAsideType":"","requirements":[],"deliverables":[],"evaluationCriteria":[]}');
+  if(targets.indexOf('brief')>-1)want.push('"brief":{"text":"one-paragraph capture intent","winThemes":[],"differentiators":[]}');
+  if(targets.indexOf('sections')>-1)want.push('"sections":[{"title":"use an exact target section title","html":"<p>...</p>"}]');
+  var secTitles=(p.sections||[]).map(function(s){return s.title;}).filter(Boolean);
+  var sys='You extract reusable proposal content from a source document for a federal contractor. Output ONLY JSON inside a ```json``` block. Do not invent facts, customers, numbers, or dates that are not present in the source.';
+  var instr='SOURCE:\n"""\n'+String(text).slice(0,24000)+'\n"""\n\n'
+    +(secTitles.length?'Target proposal section titles (use these EXACT titles when proposing sections):\n- '+secTitles.join('\n- ')+'\n\n':'')
+    +'Return JSON exactly in this shape (omit any key you have no real content for):\n{'+want.join(',')+'}';
+  llmComplete({system:sys,messages:[{role:'user',content:instr}],max_tokens:4000}).then(function(resp){
+    var j=llmExtractJSON(resp);
+    if(!j){setStatus('Could not parse the AI response — try again.');return;}
+    closeModal('ovForm');_pdPreviewSource(p,j,targets);
+  }).catch(function(e){setStatus('Analysis failed: '+(e&&e.message||e));});
+}
+function _pdPreviewSource(p,j,targets){
+  var rfp=j.rfp||{},brief=j.brief||{},secs=Array.isArray(j.sections)?j.sections:[],parts=[];
+  if(targets.indexOf('rfp')>-1){var rf=[];['customer','summary','scope'].forEach(function(k){if(rfp[k])rf.push('<b>'+k+':</b> '+esc(String(rfp[k]).slice(0,180)));});['requirements','deliverables','evaluationCriteria'].forEach(function(k){if(Array.isArray(rfp[k])&&rfp[k].length)rf.push('<b>'+k+':</b> '+rfp[k].length+' item(s)');});parts.push('<div style="margin-bottom:8px"><div style="font-weight:700">RFP details</div>'+(rf.length?rf.join('<br>'):'<i style="color:var(--text-muted)">nothing extracted</i>')+'</div>');}
+  if(targets.indexOf('brief')>-1){var bf=[];if(brief.text)bf.push('<b>intent:</b> '+esc(String(brief.text).slice(0,180)));if(Array.isArray(brief.winThemes)&&brief.winThemes.length)bf.push('<b>win themes:</b> '+brief.winThemes.length);if(Array.isArray(brief.differentiators)&&brief.differentiators.length)bf.push('<b>differentiators:</b> '+brief.differentiators.length);parts.push('<div style="margin-bottom:8px"><div style="font-weight:700">BusDev brief</div>'+(bf.length?bf.join('<br>'):'<i style="color:var(--text-muted)">nothing extracted</i>')+'</div>');}
+  if(targets.indexOf('sections')>-1){var matched=secs.filter(function(s){var m=_pdMatchSection(p,s.title);return m&&!(m.html||'').trim();});parts.push('<div style="margin-bottom:8px"><div style="font-weight:700">Sections</div>'+(secs.length?(secs.length+' proposed · '+matched.length+' will fill an empty matching section'):'<i style="color:var(--text-muted)">none</i>')+'</div>');}
+  window._pdSourceApply=function(){_pdApplySource(p,j,targets);};
+  document.getElementById('mdlAIPrev').innerHTML=
+    '<div class="mdl-over">Proposal Generator</div><div class="mdl-title">Review extracted content</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Atlas fills <b>only empty</b> RFP fields and empty matching sections; brief content is appended. Existing content is never overwritten.</div>'
+    +parts.join('')
+    +'<div class="btn-row" style="margin-top:14px"><button class="btn btn-navy" style="flex:1" onclick="(window._pdSourceApply&&window._pdSourceApply());closeModal(\'ovAIPrev\')">Apply</button><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovAIPrev\')">Cancel</button></div>';
+  openModal('ovAIPrev');
+}
+function _pdApplySource(p,j,targets){
+  var rfp=j.rfp||{},brief=j.brief||{},secs=Array.isArray(j.sections)?j.sections:[],n=0;
+  if(targets.indexOf('rfp')>-1){
+    p.rfp=p.rfp||{};
+    ['customer','summary','scope','pop','contractVehicle','setAsideType'].forEach(function(k){if(rfp[k]&&!String(p.rfp[k]||'').trim()){p.rfp[k]=String(rfp[k]);n++;}});
+    ['requirements','deliverables','evaluationCriteria','requiredCerts','requiredClearances'].forEach(function(k){if(Array.isArray(rfp[k])&&rfp[k].length){var cur=p.rfp[k]||[];rfp[k].forEach(function(x){x=String(x);if(x&&cur.indexOf(x)<0){cur.push(x);n++;}});p.rfp[k]=cur;}});
+  }
+  if(targets.indexOf('brief')>-1){
+    p.brief=p.brief||{text:'',winThemes:'',differentiators:''};
+    if(brief.text){p.brief.text=(p.brief.text||'')+(p.brief.text?'\n':'')+'<p>'+esc(String(brief.text))+'</p>';n++;}
+    if(Array.isArray(brief.winThemes)&&brief.winThemes.length){p.brief.winThemes=[p.brief.winThemes||'',brief.winThemes.join('\n')].filter(Boolean).join('\n');n++;}
+    if(Array.isArray(brief.differentiators)&&brief.differentiators.length){p.brief.differentiators=[p.brief.differentiators||'',brief.differentiators.join('\n')].filter(Boolean).join('\n');n++;}
+  }
+  if(targets.indexOf('sections')>-1){
+    secs.forEach(function(sec){var m=_pdMatchSection(p,sec.title);if(m&&!(m.html||'').trim()&&sec.html){m.html=sec.html;m.draftedAt=Date.now();m.draftedBy=ME?ME.id:'';n++;}});
+  }
+  p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'proposal.generated-from-source',payload:{targets:targets,changes:n}});
+  save();renderProposalDetail(p.id);toast('Applied '+n+' update'+(n===1?'':'s')+' from source.','success');
 }
 function _genFlag(id,dflt){var el=document.getElementById(id);return el?el.checked:dflt;}
 // Seed the CF pricing sheet from RFP roles — only when pricing is entirely empty
@@ -5908,10 +6183,11 @@ function pdSectionAIDraft(propId,secId){
   var s=p.sections.find(function(x){return x.id===secId;});if(!s)return;
   // Auto-save current editor first to avoid data loss
   var el=document.getElementById('pd_sec_html');if(el&&s.source!=='computed')s.html=el.innerHTML;
-  var pr=_propSectionPrompt(p,s,'');
-  var sys=pr.sys,instruction=pr.instruction;
   var llm=_propLLMOpts(p);
   var btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent='✨ Drafting…';}
+  _partnerBuildContext(p,function(partnerBlock){
+  var pr=_propSectionPrompt(p,s,'',partnerBlock);
+  var sys=pr.sys,instruction=pr.instruction;
   llmComplete({provider:llm.provider,model:llm.model,system:sys,messages:[{role:'user',content:instruction}],max_tokens:4000})
     .then(function(j){
       var html=llmExtractText(j).trim().replace(/^```html\s*/i,'').replace(/```$/,'').trim();
@@ -5931,6 +6207,7 @@ function pdSectionAIDraft(propId,secId){
     })
     .catch(function(e){alert('Section draft failed: '+(e&&e.message||e));})
     .finally(function(){if(btn){btn.disabled=false;btn.textContent='✨ '+(s.draftedAt?'Re-draft':'Draft with AI');}});
+  });
 }
 function pdSectionVoiceRewrite(propId,secId){
   var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
@@ -6064,6 +6341,7 @@ function _pdPricingHTML(p){
       +'<div style="margin-top:14px"><div class="fld-section-hdr" style="margin-top:0;display:flex;justify-content:space-between;align-items:center"><span>Pricing Assumptions &amp; Basis of Estimate</span>'
       +'<button type="button" class="ai-btn" onclick="pdPricingDraftAssumptions(\''+p.id+'\')">&#10024; Draft Assumptions</button></div>'
       +richEditor('pd_pr_assume',pr.assumptionsHtml||'',{placeholder:'Assumptions and exceptions...',tall:false})
+      +aiBar('pd_pr_assume',{proposalId:p.id,fieldLabel:'pricing assumptions / basis of estimate',outputFormat:'html'})
       +'<div class="btn-row" style="margin-top:6px"><button class="btn btn-navy btn-sm" onclick="pdPricingSaveAssumptions(\''+p.id+'\')">Save Assumptions</button></div></div>';
   }
   // Linked project picker
@@ -7004,6 +7282,7 @@ function llmDocComplete(opts){
     provider:(opts&&opts.provider)||(myAcc&&myAcc.defaultLlmProvider)||'anthropic',
     model:(opts&&opts.model)||(myAcc&&myAcc.defaultLlmModel)||''
   },opts||{});
+  var _bs=aiBuildSystemPrompt(body.system||'');if(_bs)body.system=_bs;   // org master prompt + branding on every AI call
   return fetch('/api/llm/with-attachment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||('HTTP '+r.status));return j;});});
 }
@@ -7073,6 +7352,104 @@ function openAIPreview(opts){
 }
 function aiPreviewApply(){if(window._aiPreviewApply)window._aiPreviewApply();}
 function aiPreviewAppend(){if(window._aiPreviewAppend)window._aiPreviewAppend();}
+
+/* ── ORG AI SETTINGS (master prompt + branding) — prepended to EVERY AI system
+   prompt so org instructions and proposal-output branding propagate everywhere. */
+function aiBuildSystemPrompt(baseSystem){
+  var o=D.orgSettings||{},b=o.branding||{},pre=[];
+  if(o.masterPrompt&&o.masterPrompt.trim())pre.push('ORGANIZATION MASTER INSTRUCTIONS (always honor these):\n'+o.masterPrompt.trim());
+  var brand=[];
+  if(b.companyName)brand.push('Company: '+b.companyName);
+  if(b.tagline)brand.push('Tagline: '+b.tagline);
+  if(b.defaultTone)brand.push('Default tone: '+b.defaultTone);
+  if(b.defaultVoice)brand.push('Voice guidance: '+b.defaultVoice);
+  if(brand.length)pre.push('PROPOSAL BRANDING:\n'+brand.join('\n'));
+  return (pre.length?pre.join('\n\n')+'\n\n---\n\n':'')+(baseSystem||'');
+}
+/* Setter counterpart to rtGet — write HTML into a rich editor by id. */
+function rtSet(id,html){var el=document.getElementById(id);if(el)el.innerHTML=html;}
+/* Abstract a text field (rich contenteditable OR plain <input>/<textarea>) so the
+   AI assist control can read/write either uniformly. */
+function aiFieldRef(id){
+  var el=document.getElementById(id);if(!el)return null;
+  var isRich=(el.getAttribute&&el.getAttribute('contenteditable')==='true')||(el.classList&&el.classList.contains('rt-area'));
+  return {el:el,isRich:isRich,
+    read:function(){return isRich?el.innerHTML:el.value;},
+    readText:function(){var h=isRich?el.innerHTML:el.value;return String(h||'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();},
+    write:function(html){if(isRich){el.innerHTML=html;}else{el.value=String(html||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();}}};
+}
+/* Current user's default LLM provider/model (for AI actions not tied to a proposal). */
+function _defaultLLMOpts(){var a=ME?(D.accounts||[]).find(function(x){return x.id===ME.id;}):null;return {provider:(a&&a.defaultLlmProvider)||'anthropic',model:(a&&a.defaultLlmModel)||''};}
+
+/* ── REUSABLE PER-FIELD AI ASSIST (Enhance / Expand / Re-Write / Shorten / Continue) ── */
+function _aiActionInstruction(action,currentText,fieldLabel){
+  var L=fieldLabel||'text';
+  switch(action){
+    case 'enhance':  return 'ENHANCE the following '+L+': sharpen wording, fix grammar and flow, strengthen specificity and impact. Keep the SAME approximate length and structure. Preserve every fact, number, name, and citation; add no new claims.\n\nTEXT:\n'+currentText;
+    case 'expand':   return 'EXPAND the following '+L+': develop each idea with concrete detail, evidence, and proof points; roughly double the length. Preserve all facts; never invent customers, numbers, dates, or credentials.\n\nTEXT:\n'+currentText;
+    case 'rewrite':  return 'RE-WRITE the following '+L+' from scratch for maximum clarity and impact. Preserve every fact, number, and name. Keep roughly the same length and structure.\n\nTEXT:\n'+currentText;
+    case 'shorten':  return 'SHORTEN the following '+L+' to roughly half its length. Keep every essential fact; cut filler, hedging, and redundancy. Stay professional.\n\nTEXT:\n'+currentText;
+    case 'continue': return 'CONTINUE the following '+L+': write the NEXT 1-3 paragraphs that naturally follow on from where it stops. Do not repeat what is already written. Output ONLY the continuation.\n\nEXISTING TEXT:\n'+currentText;
+    default:         return 'Improve the following '+L+'.\n\nTEXT:\n'+currentText;
+  }
+}
+function _aiLogAction(p,fieldId,action){if(!p)return;p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'ai.field-assist',payload:{field:fieldId,action:action}});save();}
+/* Textarea-based preview (openAIPreview is HTML-oriented; plain fields need a plain-text preview). Reuses the ovAIPrev shell. */
+function _aiInlinePreview(title,text,action,onApply){
+  var plain=String(text||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  document.getElementById('mdlAIPrev').innerHTML=
+    '<div class="mdl-over">AI assist</div><div class="mdl-title">'+esc((action||'')+' · '+(title||''))+'</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Edit before applying. Nothing changes until you click Apply.</div>'
+    +'<textarea id="aiprev_ta" class="fld-i" rows="10">'+esc(plain)+'</textarea>'
+    +'<div class="btn-row" style="margin-top:12px"><button class="btn btn-navy" style="flex:1" onclick="_aiInlineApply()">Apply</button>'
+    +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovAIPrev\')">Cancel</button></div>';
+  window._aiInlineApplyFn=function(){var ta=document.getElementById('aiprev_ta');onApply(ta?ta.value:'');closeModal('ovAIPrev');};
+  openModal('ovAIPrev');
+}
+function _aiInlineApply(){if(window._aiInlineApplyFn)window._aiInlineApplyFn();}
+var _aiCtx={};   /* per-field AI context registry (avoids embedding JSON in onclick attributes) */
+function aiAssist(fieldId,action,ctx){
+  ctx=ctx||_aiCtx[fieldId]||{};
+  var ref=aiFieldRef(fieldId);if(!ref){alert('Field not found.');return;}
+  var current=ref.read(),stripped=ref.readText();
+  if(!stripped){alert(action==='continue'?'Write an opening sentence first, then Continue.':'Type some text first, then use '+action+'.');return;}
+  var p=ctx.proposalId?(D.proposals||[]).find(function(x){return x.id===ctx.proposalId;}):null;
+  var llm=p?_propLLMOpts(p):_defaultLLMOpts();
+  var fieldLabel=ctx.fieldLabel||'text';
+  var wantHtml=ref.isRich||ctx.outputFormat==='html';
+  var base='You are an expert federal proposal writer assisting with a single "'+fieldLabel+'" field. '
+    +(wantHtml?'Output ONLY clean HTML (<p>, <ul>/<li>, <strong>, <em>, <h3>; no markdown, no code fences, no commentary).':'Output ONLY plain text (no HTML, no markdown, no commentary, no preamble).');
+  var ctxBlock=[p?'PROPOSAL CONTEXT:\n'+_propBuildRFPCtx(p):'',p?'BUSDEV BRIEF:\n'+_propBuildBriefCtx(p):'','BRAND VOICE:\n'+_propBuildVoiceCtx(),ctx.extraCtx||''].filter(Boolean).join('\n\n');
+  var sys=base+(ctxBlock?'\n\n'+ctxBlock:'');   // aiBuildSystemPrompt is applied centrally inside llmComplete
+  var instruction=_aiActionInstruction(action,wantHtml?current:stripped,fieldLabel);
+  var btn=event&&event.target,prevHTML=btn&&btn.innerHTML;
+  if(btn){btn.disabled=true;btn.textContent='✨…';}
+  llmComplete({provider:llm.provider,model:llm.model,system:sys,messages:[{role:'user',content:instruction}],max_tokens:4000})
+    .then(function(j){
+      var out=llmExtractText(j).trim().replace(/^```html\s*/i,'').replace(/```$/,'').trim();
+      if(!out)throw new Error('Empty response.');
+      var apply=function(finalHtml){ref.write(finalHtml);_aiLogAction(p,fieldId,action);};
+      if(ref.isRich){
+        openAIPreview({title:'AI '+action+' · '+fieldLabel,html:out,
+          onApply:apply,
+          onAppend:function(h){ref.write((ref.read()||'')+(action==='continue'?'':'')+'<p>'+h.replace(/^<p>|<\/p>$/g,'')+'</p>');_aiLogAction(p,fieldId,action);}});
+      } else {
+        _aiInlinePreview(fieldLabel,out,action,function(t){
+          if(action==='continue')ref.write((ref.readText()||'')+'\n'+String(t||''));
+          else ref.write(t);
+          _aiLogAction(p,fieldId,action);});
+      }
+    })
+    .catch(function(e){alert('AI '+action+' failed: '+(e&&e.message||e)+'\n\nCheck that an API key is set in Admin → Integrations.');})
+    .finally(function(){if(btn){btn.disabled=false;btn.innerHTML=prevHTML;}});
+}
+/* Render the 5-button AI bar for a prose/rich field. ctx={proposalId,fieldLabel,outputFormat}
+   is stashed in _aiCtx[fieldId] so the onclick only carries simple identifiers. */
+function aiBar(fieldId,ctx){
+  _aiCtx[fieldId]=ctx||{};
+  function b(a,lbl){return '<button type="button" class="ai-btn ai-mini" onclick="aiAssist(\''+fieldId+'\',\''+a+'\')" title="'+lbl+' with AI">'+lbl+'</button>';}
+  return '<div class="ai-bar">&#10024; '+b('enhance','Enhance')+b('expand','Expand')+b('rewrite','Re-Write')+b('shorten','Shorten')+b('continue','Continue')+'</div>';
+}
 
 /* ── CANDIDATE AI FEATURES ── */
 function candCtx(c){
@@ -7321,6 +7698,37 @@ function llmModelOpts(providerKey,selected){
 function llmProvOpts(selected){
   return LLM_PROVIDER_LIST.map(function(p){return '<option value="'+p.k+'"'+(p.k===selected?' selected':'')+'>'+esc(p.l)+'</option>';}).join('');
 }
+/* ── ORG AI SETTINGS MANAGER (master prompt + proposal branding) ── */
+function openOrgSettingsManager(){
+  if(!canProposal()){alert('You don\'t have permission.');return;}
+  orgSettingsMigrate();var o=D.orgSettings,b=o.branding||{};
+  document.getElementById('mdlOrg').innerHTML=
+    '<div class="mdl-over">Administration · LLM Options</div><div class="mdl-title">&#10024; AI Master Prompt &amp; Branding</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">These apply org-wide and are prepended to <b>every</b> AI action (proposal generation, the per-field Enhance/Re-Write buttons, document analysis). Leave blank to disable.</div>'
+    +'<div class="fld"><label class="fld-l" for="org_master">Master Prompt <span style="font-weight:400;color:var(--text-muted)">— standing instructions for the AI (no length limit)</span></label>'
+      +'<textarea class="fld-i" id="org_master" rows="10" placeholder="e.g. Always write in active voice. Lead every section with the customer mission. Never use the words world-class or synergy. Cite CMMI/ISO certifications where relevant…">'+esc(o.masterPrompt||'')+'</textarea></div>'
+    +'<div style="font-size:13px;font-weight:700;margin:14px 0 6px;color:var(--text-primary)">Proposal-output branding</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Injected into generation context so drafts use your identity and default voice. (Does not change the Atlas interface.)</div>'
+    +'<div class="fld-row2">'
+      +'<div class="fld"><label class="fld-l" for="org_brand_name">Company name</label><input class="fld-i" id="org_brand_name" type="text" value="'+esc(b.companyName||'')+'" placeholder="CommunityForce"></div>'
+      +'<div class="fld"><label class="fld-l" for="org_brand_tagline">Tagline</label><input class="fld-i" id="org_brand_tagline" type="text" value="'+esc(b.tagline||'')+'" placeholder="e.g. Mission-driven federal modernization"></div>'
+    +'</div>'
+    +'<div class="fld-row2">'
+      +'<div class="fld"><label class="fld-l" for="org_brand_tone">Default tone</label><input class="fld-i" id="org_brand_tone" type="text" value="'+esc(b.defaultTone||'')+'" placeholder="e.g. authoritative, plainspoken"></div>'
+      +'<div class="fld"><label class="fld-l" for="org_brand_voice">Voice guidance</label><input class="fld-i" id="org_brand_voice" type="text" value="'+esc(b.defaultVoice||'')+'" placeholder="e.g. concise, evidence-first, no hype"></div>'
+    +'</div>'
+    +(o.updatedAt?'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">Last updated '+new Date(o.updatedAt).toLocaleString()+(o.updatedBy?' by '+esc(((D.accounts||[]).find(function(a){return a.id===o.updatedBy;})||{}).name||o.updatedBy):'')+'</div>':'')
+    +'<div class="btn-row" style="margin-top:16px"><button class="btn btn-navy" style="flex:1" onclick="saveOrgSettings()">Save</button><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovOrg\')">Close</button></div>';
+  openModal('ovOrg');
+}
+function saveOrgSettings(){
+  if(!canProposal()){alert('You don\'t have permission.');return;}
+  orgSettingsMigrate();var o=D.orgSettings;
+  o.masterPrompt=gv('org_master');
+  o.branding={companyName:gv('org_brand_name').trim(),tagline:gv('org_brand_tagline').trim(),defaultTone:gv('org_brand_tone').trim(),defaultVoice:gv('org_brand_voice').trim()};
+  o.updatedAt=Date.now();o.updatedBy=ME?ME.id:'';
+  save();closeModal('ovOrg');toast('AI settings saved — applied to all AI actions.','success');
+}
 function openIntegrationsManager(){
   if(!ME)return;
   var myAcc=(D.accounts||[]).find(function(a){return a.id===ME.id;});
@@ -7386,6 +7794,7 @@ function llmComplete(opts){
     provider:(opts&&opts.provider)||(myAcc&&myAcc.defaultLlmProvider)||'anthropic',
     model:(opts&&opts.model)||(myAcc&&myAcc.defaultLlmModel)||''
   },opts||{});
+  var _bs=aiBuildSystemPrompt(body.system||'');if(_bs)body.system=_bs;   // org master prompt + branding on every AI call
   return fetch('/api/llm/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
     .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||('HTTP '+r.status));return j;});});
 }
@@ -7988,10 +8397,12 @@ function openAdmin(){
       +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openProposalTemplatesManager()">&#128196; Proposal Templates</button>'
       +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openCorporateCertsManager()">&#127942; Corporate Certifications</button>'
       +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openKnowledgeBankManager()">&#128218; Knowledge Bank</button>'
+      +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openPartnerBankManager()">&#129309; Teaming Partner Bank</button>'
       +'</div></div>';
   }
   html+='<div class="admin-menu-sec"><div class="admin-menu-lbl">Integrations</div><div class="admin-menu-row">'
     +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openIntegrationsManager()">&#128274; LLM Providers &amp; API Keys</button>'
+    +(canProposal()?'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openOrgSettingsManager()">&#10024; AI Master Prompt &amp; Branding</button>':'')
     +'</div></div>';
   html+='<div class="admin-menu-sec"><div class="admin-menu-lbl">Data</div><div class="admin-menu-row">'
     +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');exportData()" title="Download backup JSON">&#8595; Export</button>'
