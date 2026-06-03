@@ -2374,7 +2374,7 @@ function renderStats(){
 var hc=0,tc=0,fl=0,oa=0,un=0;
 D.departments.forEach(function(d){hc+=d.members.length;d.members.forEach(function(m){tc+=m.cost;if(m.reassess)fl++;var ta=totalAlloc(m);if(ta>100)oa++;if(ta<=0)un++;});});
 document.getElementById('statsBar').innerHTML=[
-{l:'Headcount',v:hc,u:'people'},{l:'Monthly Cost',v:fmt(tc),u:'/month'},{l:'Projects',v:D.projects.filter(function(p){return projCat(p)==='project';}).length,u:'active'},{l:'Initiatives',v:D.projects.filter(function(p){return projCat(p)==='initiative';}).length,u:'in pipeline'},{l:'Opportunities',v:D.projects.filter(function(p){return projCat(p)==='opportunity';}).length,u:'pursuing'},
+{l:'Headcount',v:hc,u:'people'},{l:'Projects',v:D.projects.filter(function(p){return projCat(p)==='project';}).length,u:'active'},{l:'Initiatives',v:D.projects.filter(function(p){return projCat(p)==='initiative';}).length,u:'in pipeline'},{l:'Opportunities',v:D.projects.filter(function(p){return projCat(p)==='opportunity';}).length,u:'pursuing'},
 {l:'Skills',v:D.skillsets.length,u:'defined'},{l:'Reassess',v:fl,u:'flagged',w:fl>0},{l:'Over-alloc',v:oa,u:'people',w:oa>0},{l:'Unallocated',v:un,u:'unassigned',w:un>0,click:'openUnallocatedModal()'}
 ].map(function(s){return '<div class="st'+(s.w?' warn':'')+'"'+(s.click?' style="cursor:pointer" title="People not allocated to any project or overhead item" onclick="'+s.click+'"':'')+'><div class="st-l">'+s.l+'</div><div class="st-v'+(s.w?' wv':'')+'">'+s.v+'<span class="st-u">'+s.u+'</span></div></div>';}).join('');}
 function openUnallocatedModal(){
@@ -2976,7 +2976,7 @@ function renderCapacityView(q){
     +'<button class="btn btn-sec btn-sm" onclick="capCompare()">&#9878; Compare</button></div>';
   var body=(capTab==='proj')
     ? _capProjHTML(roster)
-    : kpiBar+_capChartsHTML(roster)+'<div class="cap-cards">'+cards+'</div>'+matrix;
+    : _capChartsHTML(roster)+'<div class="cap-cards">'+cards+'</div>'+matrix;
   return '<div style="max-width:1320px;margin:0 auto">'+toolbar+subtabs+scStrip+body+'</div>';
 }
 function capSetTab(t){ capTab=t; renderView(); }
