@@ -4930,6 +4930,8 @@ function kbBuildContext(contextStr,maxDocs,perDocChars,cb){
    D.partnerBank. At generation time a per-proposal toggle controls whether partner
    content is attributed to the named partner or absorbed into the team solution. */
 function partnerStatus(msg){var el=document.getElementById('pb_status');if(el)el.textContent=msg||'';}
+var PARTNER_TYPES=[{k:'partner-proposal',l:'Proposal'},{k:'partner-capability',l:'Capability Statement'},{k:'partner-other',l:'Other'}];
+function partnerTypeLabel(k){var t=PARTNER_TYPES.find(function(x){return x.k===k;});return t?t.l:'Proposal';}
 function openPartnerBankManager(){
   if(!canProposal()){alert('You don\'t have permission.');return;}
   D.partnerBank=D.partnerBank||[];
@@ -4940,7 +4942,7 @@ function openPartnerBankManager(){
     var sum=d.summary?esc(d.summary):'<i style="color:var(--text-muted)">No summary yet &mdash; click Re-summarize.</i>';
     return '<div class="kb-card">'
       +'<div style="flex:1;min-width:0">'
-      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="kb-type" style="background:#0d9488;color:#fff">&#129309; '+esc(d.partnerName||'Partner')+'</span><span class="kb-name">'+esc(d.name)+'</span>'+busy+'</div>'
+      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="kb-type" style="background:#0d9488;color:#fff">&#129309; '+esc(d.partnerName||'Partner')+'</span><span class="kb-type">'+esc(partnerTypeLabel(d.type))+'</span><span class="kb-name">'+esc(d.name)+'</span>'+busy+'</div>'
       +'<div class="kb-sum">'+sum+'</div>'
       +(tags?'<div class="kb-tags">'+tags+'</div>':'')
       +'<div class="kb-meta">'+(d.chars||0).toLocaleString()+' chars &middot; added '+(d.createdAt?new Date(d.createdAt).toLocaleDateString():'')+'</div>'
@@ -4955,8 +4957,9 @@ function openPartnerBankManager(){
     '<div class="mdl-over">Proposals</div><div class="mdl-title">&#129309; Teaming Partner Proposal Bank</div>'
     +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Upload teaming partners\' proposals &amp; capability docs. Atlas extracts and summarizes them; the Proposal Generator can weave a selected partner\'s experience into a new proposal — either attributed ("Our teaming partner X has…") or absorbed into the overall team solution. Choose per proposal on the BusDev Brief tab.</div>'
     +'<div class="kb-upload-row">'
-    +'<input type="text" id="pb_partner" class="inp" placeholder="Partner name (e.g. Acme Federal)" style="max-width:230px"/>'
-    +'<input type="file" id="pb_file" class="inp" accept=".pdf,.docx,.xlsx,.xls,.txt,.md,.csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain" style="flex:1;min-width:160px"/>'
+    +'<input type="text" id="pb_partner" class="inp" placeholder="Partner name (e.g. Acme Federal)" style="max-width:200px"/>'
+    +'<select id="pb_type" class="inp" style="max-width:170px">'+PARTNER_TYPES.map(function(t){return '<option value="'+t.k+'">'+esc(t.l)+'</option>';}).join('')+'</select>'
+    +'<input type="file" id="pb_file" class="inp" accept=".pdf,.docx,.xlsx,.xls,.txt,.md,.csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain" style="flex:1;min-width:150px"/>'
     +'<button class="btn btn-gold btn-sm" onclick="partnerUpload()">Upload</button>'
     +'</div>'
     +'<div id="pb_status" style="font-size:11px;color:#7C3AED;min-height:16px;margin:6px 2px"></div>'
@@ -4965,14 +4968,14 @@ function openPartnerBankManager(){
   openModal('ovPartner');
 }
 function partnerUpload(){
-  var f=document.getElementById('pb_file');var partnerName=(gv('pb_partner')||'').trim();
+  var f=document.getElementById('pb_file');var partnerName=(gv('pb_partner')||'').trim();var ptype=gv('pb_type')||'partner-proposal';
   if(!partnerName){alert('Enter the partner name first.');return;}
   if(!f||!f.files||!f.files[0]){alert('Choose a file first.');return;}
   var file=f.files[0];
   partnerStatus('Uploading & extracting text from '+file.name+'…');
-  var fd=new FormData();fd.append('file',file);fd.append('docType','partner-proposal');
+  var fd=new FormData();fd.append('file',file);fd.append('docType',ptype);
   fetch('/api/knowledge',{method:'POST',body:fd}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||'upload failed');return j;});}).then(function(j){
-    var doc={id:j.id,partnerName:partnerName,name:j.name,type:'partner-proposal',summary:'',tags:[],chars:j.chars||0,mime:j.mime||'',createdAt:Date.now(),createdBy:ME?ME.id:''};
+    var doc={id:j.id,partnerName:partnerName,name:j.name,type:ptype,summary:'',tags:[],chars:j.chars||0,mime:j.mime||'',createdAt:Date.now(),createdBy:ME?ME.id:''};
     D.partnerBank=D.partnerBank||[];D.partnerBank.unshift(doc);save();
     if(!j.chars){partnerStatus('Uploaded "'+j.name+'", but no text could be extracted (unsupported format or scanned PDF). Kept as a reference.');openPartnerBankManager();return;}
     partnerSummarizeDoc(doc.id,j.text||'');
@@ -4984,8 +4987,8 @@ function partnerSummarizeDoc(id,text){
   function run(t){
     var clipped=String(t||'').slice(0,16000);
     if(!clipped){delete doc._busy;partnerStatus('No text available to summarize for "'+doc.name+'".');save();openPartnerBankManager();return;}
-    var sys='You catalog a TEAMING PARTNER\'s proposal/capability documents for a federal contractor. Respond ONLY with JSON, no prose.';
-    var instr='Teaming partner: '+(doc.partnerName||'Partner')+'\nDocument: '+doc.name+'\n\nContent (may be truncated):\n"""\n'+clipped+'\n"""\n\nReturn JSON exactly: {"summary":"2-4 sentences on what THIS PARTNER brings — their capabilities, past customers/agencies, differentiators, and the kind of work this proves they can support","tags":["6-10 short lowercase keywords: capabilities, agencies, technologies, contract vehicles"]}';
+    var sys='You catalog a TEAMING PARTNER\'s '+partnerTypeLabel(doc.type).toLowerCase()+' for a federal contractor. Respond ONLY with JSON, no prose.';
+    var instr='Teaming partner: '+(doc.partnerName||'Partner')+'\nDocument ('+partnerTypeLabel(doc.type)+'): '+doc.name+'\n\nContent (may be truncated):\n"""\n'+clipped+'\n"""\n\nReturn JSON exactly: {"summary":"2-4 sentences on what THIS PARTNER brings — their capabilities, past customers/agencies, differentiators, and the kind of work this proves they can support","tags":["6-10 short lowercase keywords: capabilities, agencies, technologies, contract vehicles"]}';
     llmComplete({system:sys,messages:[{role:'user',content:instr}],max_tokens:700}).then(function(resp){
       var j=llmExtractJSON(resp)||{};
       doc.summary=j.summary||'';doc.tags=Array.isArray(j.tags)?j.tags.map(function(x){return String(x);}):[];
