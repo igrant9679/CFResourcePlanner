@@ -7333,6 +7333,8 @@ function openNotifTarget(notifId){
     if(c)openCandModal(c.recruitingId,c.id);
   } else if(n.refType==='recruiting'){
     openRecruitModal(n.refId);
+  } else if(n.refType==='critical-date'){
+    if(canProforma()){viewMode='proforma';proformaTab='risks';renderView();}
   }
   renderNotifBadge();
 }
@@ -7340,6 +7342,32 @@ function markAllNotifRead(){
   if(!ME||!ME.memberId)return;
   (D.notifications||[]).forEach(function(n){if(n.toMemberId===ME.memberId)n.read=true;});
   save();openNotifications();renderNotifBadge();
+}
+/* Critical-date alerts for admins: when a Proforma critical date is within 30 days
+   (or up to 120 days overdue) and not marked done, notify each admin account once
+   (deduped by date+event), delivered to their linked member. Idempotent. */
+function checkCriticalDateNotifs(){
+  if(!(ME&&ME.role==='admin'))return;   // only an admin generates them — admins are the recipients
+  var P=D.proforma; if(!P||!Array.isArray(P.dates)||!P.dates.length)return;
+  var mids=(D.accounts||[]).filter(function(a){return a.role==='admin'&&a.active!==false&&a.memberId;}).map(function(a){return a.memberId;});
+  mids=mids.filter(function(x,i){return mids.indexOf(x)===i;});
+  if(!mids.length)return;
+  var now=new Date(),pushed=0;
+  P.dates.forEach(function(d){
+    if(!d.date||/done|complete|closed|resolved/i.test(d.status||''))return;
+    var dt=new Date(String(d.date)+'T00:00:00');if(isNaN(dt))return;
+    var diff=Math.round((dt-now)/86400000);
+    if(diff>30||diff<-120)return;   // only within 30 days ahead .. 120 days overdue
+    var refId='cd|'+d.date+'|'+(d.event||'');
+    var label=dt.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+    var when=diff<0?('OVERDUE '+Math.abs(diff)+'d'):(diff===0?'TODAY':'in '+diff+'d');
+    var msg='⚠ Critical date ('+when+') — '+label+': '+(d.event||'(untitled)');
+    mids.forEach(function(mid){
+      if((D.notifications||[]).some(function(n){return n.refType==='critical-date'&&n.refId===refId&&n.toMemberId===mid;}))return;
+      pushNotif(mid,'critical-date','critical-date',refId,msg);pushed++;
+    });
+  });
+  if(pushed){save();renderNotifBadge();}
 }
 
 /* ── LLM HELPERS ── */
@@ -8704,14 +8732,14 @@ function doLogin(){
   var p=document.getElementById('loginPass').value||'';
   var ac=(D.accounts||[]).find(function(a){return a.email.toLowerCase()===u&&a.password===p&&a.active!==false;});
   if(!ac&&u===AUTH_USER&&p===AUTH_PASS)ac=(D.accounts||[]).find(function(a){return a.role==='admin';});
-  if(ac){ME=ac;try{sessionStorage.setItem('cf_user',ac.id);sessionStorage.setItem('cf_auth','1');}catch(e){}document.getElementById('loginOv').style.display='none';renderView();}
+  if(ac){ME=ac;try{sessionStorage.setItem('cf_user',ac.id);sessionStorage.setItem('cf_auth','1');}catch(e){}document.getElementById('loginOv').style.display='none';renderView();checkCriticalDateNotifs();}
   else{document.getElementById('loginErr').textContent='Invalid email or password.';}
 }
 function logout(){try{sessionStorage.removeItem('cf_user');sessionStorage.removeItem('cf_auth');}catch(e){}ME=null;location.reload();}
 async function initApp(){
   await bootstrapData();
   ME=currentAccount();
-  if(ME){document.getElementById('loginOv').style.display='none';renderView();}
+  if(ME){document.getElementById('loginOv').style.display='none';renderView();checkCriticalDateNotifs();}
   else{var ov=document.getElementById('loginOv');ov.style.display='flex';document.getElementById('loginUser').focus();}
 }
 initApp();
