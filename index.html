@@ -3032,12 +3032,13 @@ function capProjData(roster,multPct,opts){
     // Split labor: % allocated to PROJECT-type items = Project Payroll; everything
     // else (initiative allocations + overhead-item allocations + bench/unallocated)
     // = Other Payroll.
-    var totalLabor=0,projLabor=0;
-    active.forEach(function(pn){var cst=capPersonCostAt(pn,mo.y,mo.m);totalLabor+=cst;
+    var projLabor=0,otherLabor=0;
+    active.forEach(function(pn){var cst=capPersonCostAt(pn,mo.y,mo.m);
       var pp=(pn.projects||[]).reduce(function(a,x){return a+(PROJIDS.indexOf(x.id)>-1?(Number(x.pct)||0):0);},0);
-      projLabor+=cst*Math.min(100,pp)/100;});
+      var pProj=Math.round(cst*Math.min(100,pp)/100);  // round per person (mirrors the Projects page) so the buckets are whole dollars and tie out
+      projLabor+=pProj; otherLabor+=(cst-pProj);});     // remainder (initiative/overhead/bench labor) → Other Payroll
     var projectPayroll=projLabor;
-    var otherPayroll=(totalLabor-projLabor)+fixedBDMgmt;
+    var otherPayroll=otherLabor+fixedBDMgmt;
     var oppRev=0;
     opps.forEach(function(o){
       if(!o.closeDate)return; var cd=new Date(o.closeDate);if(isNaN(cd))return;
