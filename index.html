@@ -2843,6 +2843,28 @@ function memberAddCostStep(mid){
 function memberDelCostStep(mid,i){var f=findMember(mid);if(!f)return;(f.m.costSchedule||[]).splice(i,1);if(!(f.m.costSchedule||[]).length)delete f.m.costSchedule;save();document.getElementById('e_cs_list').innerHTML=renderMemberCostSched(mid);}
 function memberSetCostEscalator(mid){var f=findMember(mid);if(!f)return;var pct=Number(gv('e_cs_pct'))||0;var from=gv('e_cs_efrom');if(!pct||!from){alert('Enter a % and a start month.');return;}f.m.costEscalator={pct:pct,from:from,period:gv('e_cs_eper')||'year'};save();document.getElementById('e_cs_list').innerHTML=renderMemberCostSched(mid);}
 function memberClearCostEscalator(mid){var f=findMember(mid);if(!f)return;delete f.m.costEscalator;save();document.getElementById('e_cs_list').innerHTML=renderMemberCostSched(mid);}
+/* ── Time-phased allocation schedule: m.allocSchedule=[{projectId,pct,start,end}] ──
+   Optional. When present it drives the Project Planning "allocation by month"
+   view (each row's % applies only within its start/end), overriding the simple
+   per-project % for that view. Multiple rows for the same project model a
+   change in allocation over time. */
+function _ppProjName(pid){var p=(D.projects||[]).find(function(x){return x.id===pid;});return p?p.name:'(unknown)';}
+function renderMemberAllocSched(mid){
+  var f=findMember(mid);if(!f)return '';
+  var rows=(f.m.allocSchedule||[]);
+  if(!rows.length)return '<div style="font-size:11px;color:var(--text-muted)">No time-phased allocation. The Project Planning month view uses the simple % from Assignments above (within each project\'s start/end). Add rows here to vary the % by date or split across periods.</div>';
+  return rows.slice().map(function(r){var i=rows.indexOf(r);var span=(r.start?_otcMonthLbl(r.start):'start')+' → '+(r.end?_otcMonthLbl(r.end):'open');return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid #F1F5F9;font-size:12px"><span><b>'+esc(_ppProjName(r.projectId))+'</b> — '+(Number(r.pct)||0)+'% <span style="color:var(--text-muted)">('+esc(span)+')</span></span><button class="btn btn-danger-sm btn-sm" onclick="memberDelAllocStep(\''+mid+'\','+i+')">&times;</button></div>';}).join('');
+}
+function memberAddAllocStep(mid){
+  var f=findMember(mid);if(!f)return;
+  var pid=gv('e_alloc_proj');var pct=Math.max(0,Math.min(100,Number(gv('e_alloc_pct'))||0));var start=gv('e_alloc_start');var end=gv('e_alloc_end');
+  if(!pid){alert('Pick a project / initiative / overhead item.');return;}
+  if(start&&end&&_capYM(start)>_capYM(end)){alert('End month must be on or after the start month.');return;}
+  f.m.allocSchedule=(f.m.allocSchedule||[]);f.m.allocSchedule.push({projectId:pid,pct:pct,start:start||'',end:end||''});
+  f.m.allocSchedule.sort(function(a,b){return _capYM(a.start||'0000-01')-_capYM(b.start||'0000-01');});
+  save();document.getElementById('e_alloc_list').innerHTML=renderMemberAllocSched(mid);document.getElementById('e_alloc_pct').value='';
+}
+function memberDelAllocStep(mid,i){var f=findMember(mid);if(!f)return;(f.m.allocSchedule||[]).splice(i,1);if(!(f.m.allocSchedule||[]).length)delete f.m.allocSchedule;save();document.getElementById('e_alloc_list').innerHTML=renderMemberAllocSched(mid);}
 function renderView(){
   if(ME&&!canSee(viewMode)){var f=SECTIONS.find(function(s){return canSee(s.k);});if(f)viewMode=f.k;}
   applyRoleUI();renderStats();
@@ -3781,7 +3803,12 @@ function renderProformaView(q){
    Critical Dates timeline, and an AI planning advisor that reasons over all
    of the above plus PTO. */
 function ppMonthLabel(mo){return CAP_MONTHS[mo.m]+" '"+String(mo.y).slice(2);}
-function ppProjAllocAt(m,mo){var pct=0;(m.projects||[]).forEach(function(e){var pid=typeof e==='string'?e:e.id;var ep=typeof e==='string'?100:(Number(e.pct)||0);var proj=(D.projects||[]).find(function(x){return x.id===pid;});if(!proj)return;if(capInWindow(proj,mo.y,mo.m))pct+=ep;});return pct;}
+function ppProjAllocAt(m,mo){
+  var key=mo.y*12+mo.m;
+  if(m.allocSchedule&&m.allocSchedule.length){
+    return m.allocSchedule.reduce(function(s,r){if(r.start&&_capYM(r.start)>key)return s;if(r.end&&_capYM(r.end)<key)return s;return s+(Number(r.pct)||0);},0);
+  }
+  var pct=0;(m.projects||[]).forEach(function(e){var pid=typeof e==='string'?e:e.id;var ep=typeof e==='string'?100:(Number(e.pct)||0);var proj=(D.projects||[]).find(function(x){return x.id===pid;});if(!proj)return;if(capInWindow(proj,mo.y,mo.m))pct+=ep;});return pct;}
 function ppPeakAlloc(m,months){return months.reduce(function(mx,mo){return Math.max(mx,ppProjAllocAt(m,mo));},0);}
 function ppAllocColor(p){if(p>100)return '#DC2626';if(p>=85)return '#D97706';if(p>0)return '#2D6A4F';return '#94A3B8';}
 function ppAllocBg(p){if(p>100)return 'rgba(220,38,38,0.18)';if(p>=85)return 'rgba(217,119,6,0.15)';if(p>0)return 'rgba(45,106,79,0.10)';return '';}
@@ -3821,7 +3848,7 @@ function renderProjectPlanningView(q){
           +months.map(function(mo){var p=ppProjAllocAt(m,mo);var pto=ptoOverlapsRange(m,new Date(mo.y,mo.m,1),new Date(mo.y,mo.m+1,0));return '<td style="background:'+ppAllocBg(p)+';color:'+ppAllocColor(p)+';font-weight:'+(p>100?'800':'600')+'">'+(p?p+'%':'·')+(pto?' <span title="On PTO this month" style="color:#D97706">◷</span>':'')+'</td>';}).join('')
           +'</tr>';
       }).join('')
-      +'</tbody></table></div><div style="font-size:10px;color:var(--text-muted);margin-top:4px">Allocation counts only projects active that month (by start/end dates). <span style="color:#DC2626;font-weight:700">Red = over 100%</span> · <span style="color:#D97706;font-weight:700">amber = 85–100%</span> · ◷ = on PTO.</div>';
+      +'</tbody></table></div><div style="font-size:10px;color:var(--text-muted);margin-top:4px">Allocation counts only projects active that month (by start/end dates); resources with a time-phased allocation schedule (set in Edit Resource → Projects) use those exact %s and windows. <span style="color:#DC2626;font-weight:700">Red = over 100%</span> · <span style="color:#D97706;font-weight:700">amber = 85–100%</span> · ◷ = on PTO.</div>';
   }
   // ── Project schedule Gantt ──
   var gantt;
@@ -8477,6 +8504,15 @@ document.getElementById('mdlEdit').innerHTML=
 +'</div>'
 +'<div class="me-pane" data-met="proj" style="display:none">'
   +'<div class="fld"><label class="fld-l">Assignments (Projects / Initiatives / Overhead)</label>'+msHTML('e_proj',m.projects||[],D.projects,'proj-chip','Add assignments...')+'<div id="e_proj_alloc"></div></div>'
+  +'<div class="fld"><label class="fld-l">Time-phased allocation <span style="font-weight:400;color:var(--text-muted);font-size:10px">— optional: control the % per project by date. When set, this drives the Project Planning &ldquo;allocation by month&rdquo; view (and overrides the simple % above for that view).</span></label>'
+    +'<div id="e_alloc_list">'+renderMemberAllocSched(mid)+'</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center">'
+      +'<select class="fld-sel" id="e_alloc_proj" style="max-width:210px"><option value="">— project / initiative —</option>'+capItems().map(function(p){return '<option value="'+p.id+'">'+esc(p.name)+'</option>';}).join('')+'</select>'
+      +'<input class="fld-i" id="e_alloc_pct" type="number" min="0" max="100" step="5" placeholder="%" style="max-width:80px" title="Allocation %">'
+      +'<input class="fld-i" id="e_alloc_start" type="month" style="max-width:140px" title="Start month (blank = from the start)">'
+      +'<input class="fld-i" id="e_alloc_end" type="month" style="max-width:140px" title="End month (blank = open-ended)">'
+      +'<button type="button" class="btn btn-sec btn-sm" onclick="memberAddAllocStep(\''+mid+'\')">+ Add allocation</button>'
+    +'</div></div>'
   +'<div class="fld"><label class="fld-l">Skills</label>'+msHTML('e_skill',m.skillsets||[],D.skillsets,'skill-chip','Add skills...')+'</div>'
   +'<div class="fld"><label class="fld-l">Certifications</label>'+msHTML('e_cert',m.certifications||[],D.certifications,'cert-chip','Add certifications...')+'</div>'
 +'</div>'
