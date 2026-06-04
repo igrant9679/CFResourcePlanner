@@ -8993,12 +8993,13 @@ function renderReportsView(q){
   if(RPT_OPEN){var t=(D.reportTemplates||[]).filter(function(x){return x.id===RPT_OPEN;})[0];
     if(t)return '<div style="max-width:1320px;margin:0 auto">'+toolbar+'<div style="margin:4px 0 10px"><button class="btn btn-sec btn-sm" onclick="rptCloseOpen()">&larr; All reports</button> <b style="margin-left:8px;font-size:14px">'+esc(t.name)+'</b> <span class="pf-pill">'+esc(t.kind)+'</span></div><div id="rptOpenBody">'+rptRenderTemplate(t,ctx)+'</div></div>';
     RPT_OPEN=null;}
-  var tpls=(D.reportTemplates||[]).filter(function(t){return canProforma()||!t.financial;});
+  var _qq=(q||'').toLowerCase().trim();
+  var tpls=(D.reportTemplates||[]).filter(function(t){return (canProforma()||!t.financial)&&(!_qq||(t.name||'').toLowerCase().indexOf(_qq)>-1||(t.kind||'').indexOf(_qq)>-1);});
   var tplHtml=tpls.length?('<div class="rpt-sec-h">Saved templates</div>'+tpls.map(function(t){return '<div class="rpt-tpl"><b>'+esc(t.name)+'</b> <span class="pf-pill">'+esc(t.kind)+'</span>'+(t.financial?' <span class="pf-pill pf-crit">financial</span>':'')+'<span style="flex:1"></span><button class="btn btn-sec btn-sm" onclick="rptOpenTemplate(\''+t.id+'\')">Open</button> <button class="btn btn-sec btn-sm" onclick="rptEditTemplate(\''+t.id+'\')">Edit</button> <button class="btn btn-sec btn-sm" onclick="rptDuplicateTemplate(\''+t.id+'\')">Duplicate</button> <button class="btn btn-danger-sm btn-sm" onclick="rptDeleteTemplate(\''+t.id+'\')">&times;</button></div>';}).join('')):'';
-  var order=_rptOrder();
-  var grid='<div class="rpt-sec-h" style="display:flex;align-items:center;gap:8px">All reports <span style="font-weight:400;text-transform:none;color:var(--text-muted)">&middot; drag the &#9783; cards to rearrange (snaps to grid)</span> <button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 7px" onclick="rptResetOrder()">Reset layout</button></div>'
-    +'<div class="pf-grid rpt-cols3" id="rptBuiltinGrid">'+order.map(function(key){var b=rptBuiltin(key);if(!b)return '';
-      return _rptDndWrap(_rptBuiltinCard(b,ctx,true,'builtin'),key,'builtin');}).join('')+'</div>';
+  var order=_rptOrder().filter(function(key){if(!_qq)return true;var b=rptBuiltin(key);return b&&(b.title.toLowerCase().indexOf(_qq)>-1||b.area.toLowerCase().indexOf(_qq)>-1);});
+  var hdr=_qq?('Reports matching "'+esc(_qq)+'" ('+order.length+')'):('All reports <span style="font-weight:400;text-transform:none;color:var(--text-muted)">&middot; drag the &#9783; cards to rearrange (snaps to grid)</span> <button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 7px" onclick="rptResetOrder()">Reset layout</button>');
+  var cardsHtml=order.length?order.map(function(key){var b=rptBuiltin(key);if(!b)return '';return _rptDndWrap(_rptBuiltinCard(b,ctx,!_qq,'builtin'),key,'builtin');}).join(''):'<div class="rpt-empty">No reports match your search.</div>';
+  var grid='<div class="rpt-sec-h" style="display:flex;align-items:center;gap:8px">'+hdr+'</div><div class="pf-grid rpt-cols3" id="rptBuiltinGrid">'+cardsHtml+'</div>';
   return '<div style="max-width:1320px;margin:0 auto" id="rptRoot">'+toolbar+tplHtml+grid+'</div>';}
 function rptCloseOpen(){RPT_OPEN=null;renderView();}
 /* ── Custom templates: persistence + render dispatchers ── */
