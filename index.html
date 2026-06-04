@@ -2904,6 +2904,13 @@ function capEnter(){ if(!Array.isArray(D.scenarios))D.scenarios=[];
   // resources — incl. on Initiatives — flow in). Once edited (dirty) or a saved
   // scenario is loaded, hold the what-if until Reset to live.
   if(!CAP.dirty&&CAP.name==='Working scenario'){var r2=capBuildRoster();CAP.roster=r2;CAP.baseline=capTotals(r2);}
+  else if(CAP.name==='Working scenario'){
+    // Dirtied working scenario: keep the user's pct/cost edits, but allocSchedule
+    // is managed in Project Planning (read-only here), so always refresh it from
+    // live so the Sandbox + Projections reflect schedule edits without a reset.
+    var liveSched={};allM().forEach(function(m){liveSched[m.id]=m.allocSchedule;});
+    CAP.roster.forEach(function(pn){if(pn._origin==='member'&&Object.prototype.hasOwnProperty.call(liveSched,pn.id))pn.allocSchedule=liveSched[pn.id]?JSON.parse(JSON.stringify(liveSched[pn.id])):null;});
+  }
 }
 function capSaveScenario(){
   if(!CAP)return;
