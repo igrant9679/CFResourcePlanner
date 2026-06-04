@@ -722,6 +722,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .rpt-lock{display:flex;align-items:center;justify-content:center;min-height:120px;color:var(--text-muted);font-size:12px;text-align:center;}
 .rpt-tpl{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card-bg);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;}
 .rpt-grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;}
+.rpt-cols3{grid-template-columns:repeat(auto-fit,minmax(400px,1fr));}
 .rpt-dnd{min-width:0;}
 .rpt-dnd.rpt-dragover>.pf-card{outline:2px dashed var(--gold);outline-offset:3px;}
 .rpt-dnd[draggable=true]>.pf-card{cursor:default;}
@@ -8996,7 +8997,7 @@ function renderReportsView(q){
   var tplHtml=tpls.length?('<div class="rpt-sec-h">Saved templates</div>'+tpls.map(function(t){return '<div class="rpt-tpl"><b>'+esc(t.name)+'</b> <span class="pf-pill">'+esc(t.kind)+'</span>'+(t.financial?' <span class="pf-pill pf-crit">financial</span>':'')+'<span style="flex:1"></span><button class="btn btn-sec btn-sm" onclick="rptOpenTemplate(\''+t.id+'\')">Open</button> <button class="btn btn-sec btn-sm" onclick="rptEditTemplate(\''+t.id+'\')">Edit</button> <button class="btn btn-sec btn-sm" onclick="rptDuplicateTemplate(\''+t.id+'\')">Duplicate</button> <button class="btn btn-danger-sm btn-sm" onclick="rptDeleteTemplate(\''+t.id+'\')">&times;</button></div>';}).join('')):'';
   var order=_rptOrder();
   var grid='<div class="rpt-sec-h" style="display:flex;align-items:center;gap:8px">All reports <span style="font-weight:400;text-transform:none;color:var(--text-muted)">&middot; drag the &#9783; cards to rearrange (snaps to grid)</span> <button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 7px" onclick="rptResetOrder()">Reset layout</button></div>'
-    +'<div class="pf-grid" id="rptBuiltinGrid">'+order.map(function(key){var b=rptBuiltin(key);if(!b)return '';
+    +'<div class="pf-grid rpt-cols3" id="rptBuiltinGrid">'+order.map(function(key){var b=rptBuiltin(key);if(!b)return '';
       return _rptDndWrap(_rptBuiltinCard(b,ctx,true,'builtin'),key,'builtin');}).join('')+'</div>';
   return '<div style="max-width:1320px;margin:0 auto" id="rptRoot">'+toolbar+tplHtml+grid+'</div>';}
 function rptCloseOpen(){RPT_OPEN=null;renderView();}
@@ -9024,7 +9025,7 @@ function rptRenderDashboard(t,ctx){var dctx=Object.assign({},ctx,{filters:(t.das
   var banner=fch.length?'<div class="pf-note" style="margin:0 0 8px">Filters · '+esc(fch.join(' · '))+'</div>':'';
   var dc='dash:'+t.id;
   var cards=(t.dashboard.cards||[]).map(function(c){var b=rptBuiltin(c.builtinKey);return b?_rptDndWrap(_rptBuiltinCard(b,dctx,true,dc),c.builtinKey,dc):'';}).join('');
-  return banner+'<div class="pf-grid">'+(cards||'<div class="rpt-empty">No cards selected.</div>')+'</div>';}
+  return banner+'<div class="pf-grid rpt-cols3">'+(cards||'<div class="rpt-empty">No cards selected.</div>')+'</div>';}
 function rptRenderTable(t){var src=rptGetSource(t.table.source);if(src.blocked)return '<div class="rpt-lock">&#128274; Admin only.</div>';
   var cfg=t.table,cols,data;
   if(cfg.groupBy){var measures=cfg.measures&&cfg.measures.length?cfg.measures:[{field:'',agg:'count',label:'Count'}];
