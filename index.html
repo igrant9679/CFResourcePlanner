@@ -722,6 +722,11 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .rpt-lock{display:flex;align-items:center;justify-content:center;min-height:120px;color:var(--text-muted);font-size:12px;text-align:center;}
 .rpt-tpl{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card-bg);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;}
 .rpt-grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;}
+.rpt-dnd{min-width:0;}
+.rpt-dnd.rpt-dragover>.pf-card{outline:2px dashed var(--gold);outline-offset:3px;}
+.rpt-dnd[draggable=true]>.pf-card{cursor:default;}
+.rpt-grip{cursor:grab;color:var(--text-muted);font-size:14px;user-select:none;}
+.rpt-grip:active{cursor:grabbing;}
 .pf-card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px;}
 .pf-card.pf-locked{border-left:3px solid #C5A55A;background:#fffdf7;}
 .pf-card-h{font-size:12px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px;}
@@ -8797,7 +8802,8 @@ function reportTable(cols,rows,opts){opts=opts||{};
   var foot='';if(opts.footTotals){foot='<tr style="font-weight:800;background:#f1f5f9">'+cols.map(function(c,i){if(i===0)return '<td>Total</td>';if(c.total){var sum=rows.reduce(function(a,r){return a+(Number(Array.isArray(r)?r[c.idx]:r[c.key])||0);},0);return '<td style="text-align:right">'+_rptFmt(sum,c.fmt)+'</td>';}return '<td></td>';}).join('')+'</tr>';}
   return '<div style="overflow:auto"><table class="pf-tbl">'+(opts.caption?'<caption style="text-align:left;font-size:11px;color:#64748b;margin:0 0 4px">'+esc(opts.caption)+'</caption>':'')+'<thead>'+head+'</thead><tbody>'+body+'</tbody>'+(foot?'<tfoot>'+foot+'</tfoot>':'')+'</table></div>';}
 function rptCard(title,body,opts){opts=opts||{};var acts=opts.actions?'<span style="margin-left:auto;display:inline-flex;gap:4px">'+opts.actions+'</span>':'';
-  return '<div class="pf-card"><div class="pf-card-h" style="display:flex;align-items:center;gap:8px">'+esc(title)+acts+'</div>'+body+(opts.note?'<div class="pf-note">'+esc(opts.note)+'</div>':'')+'</div>';}
+  var lead=opts.lead||'',badge=opts.badge?'<span class="pf-pill" style="font-weight:700">'+esc(opts.badge)+'</span>':'';
+  return '<div class="pf-card"><div class="pf-card-h" style="display:flex;align-items:center;gap:8px">'+lead+esc(title)+badge+acts+'</div>'+body+(opts.note?'<div class="pf-note">'+esc(opts.note)+'</div>':'')+'</div>';}
 /* ── Aggregation engine: heterogeneous sources → uniform flat rows → group/pivot ── */
 function rptNum(v){var n=Number(v);return isNaN(n)?0:n;}
 function rptRowsPeople(){return allM().map(function(m){return {name:m.name,role:m.role||'',_dept:m._dn||'',cost:rptNum(m.cost),alloc:totalAlloc(m),clearance:_resolveClrName(m.clearance)||m.clearance||'—',location:_resolveLocName(m.location)||m.location||'—',classification:(m.hub?'Hub':m.sme?'SME':m.associate?'Associate':m.proposal?'Proposal':m.recruiter?'Recruiter':'—'),skillCount:(m.skillsets||[]).length};});}
@@ -8941,12 +8947,25 @@ function _rptMonthRows(rows,ctx){var f=_rf(ctx);if(!f.yearFrom&&!f.yearTo)return
 function rptSetFilter(k,v){if(k==='yearFrom'||k==='yearTo')RPT_FILTERS[k]=v?Number(v):null;else RPT_FILTERS[k]=v;renderView();}
 function rptClearFilters(){RPT_FILTERS={dept:'',category:'',yearFrom:null,yearTo:null};renderView();}
 function _rptCtx(filters){var roster=capBuildRoster();return {roster:roster,totals:capTotals(roster),proj:capProjData(roster,0,{}),filters:filters||RPT_FILTERS};}
-function _rptBuiltinCard(b,ctx){var body;
+function _rptBuiltinCard(b,ctx,dnd){var body;
   if(b.financial&&!canProforma())body='<div class="rpt-lock">&#128274; Financial report — admin access required</div>';
   else{try{body=b.fn(ctx);}catch(e){body='<div class="rpt-empty">Could not render: '+esc(e&&e.message||e)+'</div>';}}
   var locked=b.financial&&!canProforma();
   var acts=(!locked&&RPT_CSV[b.key]?'<button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 7px" onclick="rptCsvBuiltin(\''+b.key+'\')">CSV</button> ':'')+'<button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 7px" onclick="rptPrintBuiltin(\''+b.key+'\')">&#128424;</button>';
-  return rptCard(b.title,body,{actions:acts});}
+  return rptCard(b.title,body,{actions:acts,badge:b.area,lead:(dnd?'<span class="rpt-grip" title="Drag to rearrange">&#9783;</span>':'')});}
+/* Persisted built-in report order (drag-and-drop). Missing keys appended; unknown dropped. */
+function _rptOrder(){var saved=Array.isArray(D.reportOrder)?D.reportOrder:[];var keys=RPT_BUILTINS.map(function(b){return b.key;});var out=saved.filter(function(k){return keys.indexOf(k)>-1;});keys.forEach(function(k){if(out.indexOf(k)<0)out.push(k);});return out;}
+var _rptDrag=null;
+function rptDragStart(e,key){_rptDrag=key;if(e.dataTransfer){e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',key);}catch(_){}}}
+function rptDragOver(e){e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect='move';var c=e.currentTarget;if(c&&c.classList)c.classList.add('rpt-dragover');}
+function rptDragLeave(e){var c=e.currentTarget;if(c&&c.classList)c.classList.remove('rpt-dragover');}
+function rptDragEnd(e){var c=e.currentTarget;if(c&&c.classList)c.classList.remove('rpt-dragover');_rptDrag=null;}
+function rptDrop(e,key){e.preventDefault();var c=e.currentTarget;if(c&&c.classList)c.classList.remove('rpt-dragover');
+  var from=_rptDrag||(e.dataTransfer&&e.dataTransfer.getData('text/plain'));_rptDrag=null;
+  if(!from||from===key)return;var order=_rptOrder(),fi=order.indexOf(from);if(fi<0)return;order.splice(fi,1);
+  var ti=order.indexOf(key);if(ti<0)order.push(from);else order.splice(ti,0,from);
+  D.reportOrder=order;save();renderView();}
+function rptResetOrder(){delete D.reportOrder;save();renderView();toast('Report layout reset.','info');}
 function renderReportsView(q){
   var ctx=_rptCtx();
   var newBtns='<button class="btn btn-gold btn-sm" onclick="openReportComposer()">+ Dashboard</button> <button class="btn btn-sec btn-sm" onclick="openTableBuilder()">+ Table</button> <button class="btn btn-sec btn-sm" onclick="openPivotBuilder()">+ Pivot</button>';
@@ -8963,8 +8982,10 @@ function renderReportsView(q){
     RPT_OPEN=null;}
   var tpls=(D.reportTemplates||[]).filter(function(t){return canProforma()||!t.financial;});
   var tplHtml=tpls.length?('<div class="rpt-sec-h">Saved templates</div>'+tpls.map(function(t){return '<div class="rpt-tpl"><b>'+esc(t.name)+'</b> <span class="pf-pill">'+esc(t.kind)+'</span>'+(t.financial?' <span class="pf-pill pf-crit">financial</span>':'')+'<span style="flex:1"></span><button class="btn btn-sec btn-sm" onclick="rptOpenTemplate(\''+t.id+'\')">Open</button> <button class="btn btn-sec btn-sm" onclick="rptEditTemplate(\''+t.id+'\')">Edit</button> <button class="btn btn-sec btn-sm" onclick="rptDuplicateTemplate(\''+t.id+'\')">Duplicate</button> <button class="btn btn-danger-sm btn-sm" onclick="rptDeleteTemplate(\''+t.id+'\')">&times;</button></div>';}).join('')):'';
-  var areas=[];RPT_BUILTINS.forEach(function(b){if(areas.indexOf(b.area)<0)areas.push(b.area);});
-  var grid=areas.map(function(area){return '<div class="rpt-sec-h">'+esc(area)+'</div><div class="pf-grid">'+RPT_BUILTINS.filter(function(b){return b.area===area;}).map(function(b){return _rptBuiltinCard(b,ctx);}).join('')+'</div>';}).join('');
+  var order=_rptOrder();
+  var grid='<div class="rpt-sec-h" style="display:flex;align-items:center;gap:8px">All reports <span style="font-weight:400;text-transform:none;color:var(--text-muted)">&middot; drag the &#9783; cards to rearrange (snaps to grid)</span> <button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 7px" onclick="rptResetOrder()">Reset layout</button></div>'
+    +'<div class="pf-grid" id="rptBuiltinGrid">'+order.map(function(key){var b=rptBuiltin(key);if(!b)return '';
+      return '<div class="rpt-dnd" draggable="true" data-rptkey="'+key+'" ondragstart="rptDragStart(event,\''+key+'\')" ondragover="rptDragOver(event)" ondragleave="rptDragLeave(event)" ondrop="rptDrop(event,\''+key+'\')" ondragend="rptDragEnd(event)">'+_rptBuiltinCard(b,ctx,true)+'</div>';}).join('')+'</div>';
   return '<div style="max-width:1320px;margin:0 auto" id="rptRoot">'+toolbar+tplHtml+grid+'</div>';}
 function rptCloseOpen(){RPT_OPEN=null;renderView();}
 /* ── Custom templates: persistence + render dispatchers ── */
