@@ -9235,12 +9235,14 @@ function svgHeatmap(matrix,opts){opts=opts||{};var rows=matrix.rows||[],cols=mat
   var labW=opts.labW||110,cellW=opts.cellW||Math.max(30,Math.min(64,Math.round((720-labW)/cols.length))),cellH=opts.cellH||20;
   // Header height must fit the rotated column labels, else long names overflow
   // the top and overlap. Scale topH to the longest label at the -42° rotation.
-  var _maxLbl=cols.reduce(function(a,c){return Math.max(a,String(c).slice(0,18).length);},0);
-  var topH=opts.topH||Math.max(46,Math.ceil(_maxLbl*5.4*0.67)+16);
+  var _maxLbl=cols.reduce(function(a,c){return Math.max(a,String(c).slice(0,16).length);},0);
+  var topH=opts.topH||Math.max(48,Math.ceil(_maxLbl*5.6)+14);
   var flat=[];cells.forEach(function(r){(r||[]).forEach(function(v){if(typeof v==='number')flat.push(v);});});
   var mn=opts.min!=null?opts.min:(flat.length?Math.min.apply(null,flat):0),mx=opts.max!=null?opts.max:(flat.length?Math.max.apply(null,flat):1);if(mx===mn)mx=mn+1;
   var w=labW+cols.length*cellW,h=topH+rows.length*cellH,out='';
-  cols.forEach(function(c,ci){var x=labW+ci*cellW+cellW/2;out+='<text x="'+x+'" y="'+(topH-6)+'" text-anchor="end" font-size="10" fill="#64748b" transform="rotate(-42 '+x+' '+(topH-6)+')">'+esc(String(c).slice(0,18))+'</text>';});
+  // Vertical column labels: each stays within its own column width, so they never
+  // overlap regardless of how narrow the columns get.
+  cols.forEach(function(c,ci){var x=labW+ci*cellW+cellW/2;out+='<text x="'+x+'" y="'+(topH-6)+'" text-anchor="start" dominant-baseline="central" font-size="9" fill="#64748b" transform="rotate(-90 '+x+' '+(topH-6)+')">'+esc(String(c).slice(0,16))+'</text>';});
   rows.forEach(function(rn,ri){out+='<text x="'+(labW-6)+'" y="'+(topH+ri*cellH+cellH*0.66)+'" text-anchor="end" font-size="10" fill="#475569">'+esc(String(rn).slice(0,20))+'</text>';
     cols.forEach(function(c,ci){var v=(cells[ri]||[])[ci],x=labW+ci*cellW,y=topH+ri*cellH,fill=(typeof v==='number'&&v!==0)?rptHeatColor((v-mn)/(mx-mn)):'#f1f5f9';
       out+='<rect x="'+x+'" y="'+y+'" width="'+(cellW-1.5)+'" height="'+(cellH-1.5)+'" rx="2" fill="'+fill+'"></rect>';
