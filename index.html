@@ -3815,13 +3815,26 @@ function renderProformaView(q){
    Critical Dates timeline, and an AI planning advisor that reasons over all
    of the above plus PTO. */
 function ppMonthLabel(mo){return CAP_MONTHS[mo.m]+" '"+String(mo.y).slice(2);}
-function ppProjAllocAt(m,mo){
-  var key=mo.y*12+mo.m;
+var PP_CAT_COLOR={project:'#0EA5E9',initiative:'#7C3AED',overhead:'#64748B'};
+var PP_CAT_LABEL={project:'Project',initiative:'Initiative',overhead:'Overhead'};
+/* Allocation for a person in month (y,m), broken out by item category. Honors a
+   time-phased allocSchedule when set, else the static per-project % within each
+   item's start/end window. */
+function ppAllocByCatAt(m,mo){
+  var key=mo.y*12+mo.m,res={project:0,initiative:0,overhead:0,total:0};
+  function add(pid,pct){var p=(D.projects||[]).find(function(x){return x.id===pid;});if(!p)return;var c=projCat(p);if(c==='project'||c==='initiative'||c==='overhead'){res[c]+=pct;res.total+=pct;}}
   if(m.allocSchedule&&m.allocSchedule.length){
-    return m.allocSchedule.reduce(function(s,r){if(r.start&&_capYM(r.start)>key)return s;if(r.end&&_capYM(r.end)<key)return s;return s+(Number(r.pct)||0);},0);
+    m.allocSchedule.forEach(function(r){if(r.start&&_capYM(r.start)>key)return;if(r.end&&_capYM(r.end)<key)return;add(r.projectId,Number(r.pct)||0);});
+  }else{
+    (m.projects||[]).forEach(function(e){var pid=typeof e==='string'?e:e.id;var ep=typeof e==='string'?100:(Number(e.pct)||0);var p=(D.projects||[]).find(function(x){return x.id===pid;});if(!p||!capInWindow(p,mo.y,mo.m))return;add(pid,ep);});
   }
-  var pct=0;(m.projects||[]).forEach(function(e){var pid=typeof e==='string'?e:e.id;var ep=typeof e==='string'?100:(Number(e.pct)||0);var proj=(D.projects||[]).find(function(x){return x.id===pid;});if(!proj)return;if(capInWindow(proj,mo.y,mo.m))pct+=ep;});return pct;}
+  return res;
+}
+function ppProjAllocAt(m,mo){return ppAllocByCatAt(m,mo).total;}
 function ppPeakAlloc(m,months){return months.reduce(function(mx,mo){return Math.max(mx,ppProjAllocAt(m,mo));},0);}
+/* First month in the window where the person is under 100% allocated (i.e. has
+   spare capacity). Returns {mo,pct,i} or null if fully booked across the window. */
+function ppFirstUnder(m,months){for(var i=0;i<months.length;i++){var p=ppProjAllocAt(m,months[i]);if(p<100)return {mo:months[i],pct:p,i:i};}return null;}
 function ppAllocColor(p){if(p>100)return '#DC2626';if(p>=85)return '#D97706';if(p>0)return '#2D6A4F';return '#94A3B8';}
 function ppAllocBg(p){if(p>100)return 'rgba(220,38,38,0.18)';if(p>=85)return 'rgba(217,119,6,0.15)';if(p>0)return 'rgba(45,106,79,0.10)';return '';}
 function ppCritDates(){var d=(D.proforma&&Array.isArray(D.proforma.dates))?D.proforma.dates:[];return d.filter(function(x){return x.date&&planParseDate(x.date);});}
@@ -3857,10 +3870,16 @@ function renderProjectPlanningView(q){
     heat='<div class="pp-wrap"><table class="pp-tbl"><thead><tr><th class="pp-row">Resource</th>'+months.map(function(mo){return '<th'+(ppMonthHasCrit(mo)?' title="Critical date this month"':'')+'>'+ppMonthLabel(mo)+(ppMonthHasCrit(mo)?' <span class="pp-crit"></span>':'')+'</th>';}).join('')+'</tr></thead><tbody>'
       +allocPeople.map(function(m){
         return '<tr><td class="pp-row"><span class="plan-own" onclick="openPersonProfile(\''+m.id+'\')">'+esc(m.name)+'</span></td>'
-          +months.map(function(mo){var p=ppProjAllocAt(m,mo);var pto=ptoOverlapsRange(m,new Date(mo.y,mo.m,1),new Date(mo.y,mo.m+1,0));return '<td style="background:'+ppAllocBg(p)+';color:'+ppAllocColor(p)+';font-weight:'+(p>100?'800':'600')+'">'+(p?p+'%':'·')+(pto?' <span title="On PTO this month" style="color:#D97706">◷</span>':'')+'</td>';}).join('')
+          +months.map(function(mo){
+            var b=ppAllocByCatAt(m,mo),p=b.total,denom=Math.max(100,p);
+            var pto=ptoOverlapsRange(m,new Date(mo.y,mo.m,1),new Date(mo.y,mo.m+1,0));
+            var seg=function(k){return b[k]?'<div title="'+PP_CAT_LABEL[k]+' '+b[k]+'%" style="width:'+(b[k]/denom*100).toFixed(1)+'%;background:'+PP_CAT_COLOR[k]+'"></div>':'';};
+            var bar=p>0?'<div style="display:flex;height:5px;border-radius:3px;overflow:hidden;margin-top:3px;background:#e5e9f0">'+seg('project')+seg('initiative')+seg('overhead')+'</div>':'';
+            return '<td style="'+(p>100?'background:rgba(220,38,38,0.12)':'')+'"><div style="color:'+ppAllocColor(p)+';font-weight:'+(p>100?'800':'600')+'">'+(p?p+'%':'·')+(pto?' <span title="On PTO this month" style="color:#D97706">◷</span>':'')+'</div>'+bar+'</td>';
+          }).join('')
           +'</tr>';
       }).join('')
-      +'</tbody></table></div><div style="font-size:10px;color:var(--text-muted);margin-top:4px">Allocation counts only projects active that month (by start/end dates); resources with a time-phased allocation schedule (set in Edit Resource → Projects) use those exact %s and windows. <span style="color:#DC2626;font-weight:700">Red = over 100%</span> · <span style="color:#D97706;font-weight:700">amber = 85–100%</span> · ◷ = on PTO.</div>';
+      +'</tbody></table></div><div style="font-size:10px;color:var(--text-muted);margin-top:4px">Each bar shows the month\'s allocation split — <span style="color:#0EA5E9;font-weight:800">■ Project</span> <span style="color:#7C3AED;font-weight:800">■ Initiative</span> <span style="color:#64748B;font-weight:800">■ Overhead</span>; the grey remainder is spare capacity. Counts items active that month (or a resource\'s time-phased schedule from Edit Resource → Projects). <span style="color:#DC2626;font-weight:700">Red = over 100%</span> · ◷ = on PTO.</div>';
   }
   // ── Project schedule Gantt ──
   var gantt;
@@ -3884,14 +3903,17 @@ function renderProjectPlanningView(q){
   var availTbl;
   if(!availList.length){availTbl='<div class="rpt-empty">No resources'+(q?' match your search':'')+'.</div>';}
   else{
-    availTbl='<table class="pf-tbl"><thead><tr><th style="text-align:left">Person</th><th style="text-align:left">Role</th><th style="text-align:right">Now</th><th style="text-align:right">Peak</th><th style="text-align:right">Task load</th><th style="text-align:right">PTO ≤90d</th><th style="text-align:left">Status</th></tr></thead><tbody>'
+    availTbl='<table class="pf-tbl"><thead><tr><th style="text-align:left">Person</th><th style="text-align:left">Role</th><th style="text-align:right">Now</th><th style="text-align:right">Peak</th><th style="text-align:left">Spare capacity from</th><th style="text-align:right">Task load</th><th style="text-align:right">PTO ≤90d</th><th style="text-align:left">Status</th></tr></thead><tbody>'
       +availList.map(function(m){
         var now=ppProjAllocAt(m,cur),peak=ppPeakAlloc(m,months),load=planMemberLoad(m.id),ptoD=ptoDaysInRange(m,today,d90);
+        var fu=ppFirstUnder(m,months);
+        var freeFrom=!fu?'<span style="color:var(--text-muted)">fully booked</span>':(fu.i===0?'<b style="color:#2D6A4F">now</b> ('+fu.pct+'%)':ppMonthLabel(fu.mo)+' ('+fu.pct+'%)');
         var status=now>100?'<span class="rq-sla rq-sla-red">Over</span>':now>=85?'<span class="rq-sla rq-sla-warn">Full</span>':now>0?'<span class="rq-sla">Available</span>':'<span class="rq-sla" style="opacity:.6">Bench</span>';
         return '<tr><td style="text-align:left"><span class="plan-own" onclick="openPersonProfile(\''+m.id+'\')">'+esc(m.name)+'</span></td>'
           +'<td style="text-align:left">'+esc(m.role||'')+'</td>'
           +'<td style="text-align:right;color:'+ppAllocColor(now)+';font-weight:'+(now>100?'800':'600')+'">'+now+'%</td>'
           +'<td style="text-align:right;color:'+ppAllocColor(peak)+'">'+peak+'%</td>'
+          +'<td style="text-align:left">'+freeFrom+'</td>'
           +'<td style="text-align:right">'+(load?load+'%':'—')+'</td>'
           +'<td style="text-align:right">'+(ptoD?ptoD+'d':'—')+'</td>'
           +'<td style="text-align:left">'+status+'</td></tr>';
