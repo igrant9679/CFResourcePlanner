@@ -1959,6 +1959,9 @@ function planCardsHTML(acts){
     var prIdx={};planProgramsList().forEach(function(p,i){prIdx[p.id]=i;});
     rowOrder.sort(function(a,b){if(a==='_uncategorized')return 1;if(b==='_uncategorized')return -1;return (prIdx[a]==null?999:prIdx[a])-(prIdx[b]==null?999:prIdx[b]);});
   }
+  // Give each related-item row its own distinct color (projects share one
+  // base hue otherwise); COE program rows keep their program color.
+  if(isProj)rowOrder.forEach(function(rid,i){if(rid!=='_unassigned')rowMeta[rid].color=PALETTE[i%PALETTE.length];});
   var html='<div class="cards-matrix-wrap">';
   // Header row
   html+='<div class="cards-matrix-row cards-matrix-head"><div class="cards-matrix-rowlabel" style="background:transparent">'
@@ -1975,14 +1978,14 @@ function planCardsHTML(acts){
     var rowTotal=rowActs.length;
     var rowDone=rowActs.filter(function(a){return a.status==='done';}).length;
     var pct=rowTotal?Math.round(rowDone/rowTotal*100):0;
-    html+='<div class="cards-matrix-row" style="background:'+meta.color+'1f">'
-      +'<div class="cards-matrix-rowlabel" style="border-left-color:'+meta.color+';background:'+meta.color+'30">'
+    html+='<div class="cards-matrix-row" style="background:'+meta.color+'26">'
+      +'<div class="cards-matrix-rowlabel" style="border-left-color:'+meta.color+';background:'+meta.color+'40">'
         +'<div class="cards-matrix-rowname">'+esc(meta.name)+'</div>'
         +'<div class="cards-matrix-rowmeta">'+rowDone+'/'+rowTotal+' &middot; '+pct+'%</div>'
       +'</div>';
     PLAN_STS.forEach(function(s){
       var cell=rowActs.filter(function(a){return a.status===s.k;});
-      html+='<div class="cards-matrix-cell">';
+      html+='<div class="cards-matrix-cell" style="background:transparent">';
       if(cell.length===0){
         html+='<div class="cards-matrix-empty">—</div>';
       } else {
