@@ -2184,7 +2184,9 @@ function memberMatchesSearch(m,q){return m.name.toLowerCase().indexOf(q)>-1||m.r
 function deptHasMatch(dept,q){if(dept.members.some(function(m){return memberMatchesSearch(m,q);}))return true;return deptChildren(dept.id).some(function(c){return deptHasMatch(c,q);});}
 function deptOptHTML(did,depth,excludeIds){return D.departments.filter(function(d){return d.parentId===did&&excludeIds.indexOf(d.id)===-1;}).map(function(d){var prefix=Array(depth+1).join('\u00a0\u00a0')+(depth>0?'\u21b3 ':'');return '<option value="'+d.id+'">'+prefix+esc(d.name)+'</option>'+deptOptHTML(d.id,depth+1,excludeIds);}).join('');}
 function projIds(m){return(m.projects||[]).map(function(x){return typeof x==='string'?x:x.id;});}
-function projPct(m,pid){var e=(m.projects||[]).find(function(x){return(typeof x==='string'?x:x.id)===pid;});if(!e)return 0;return typeof e==='string'?100:(e.pct||100);}
+function projPct(m,pid){
+  if(m.allocSchedule&&m.allocSchedule.length){var d=new Date(),key=d.getFullYear()*12+d.getMonth(),s=0;m.allocSchedule.forEach(function(r){if(r.projectId!==pid)return;if(r.start&&_capYM(r.start)>key)return;if(r.end&&_capYM(r.end)<key)return;s+=Number(r.pct)||0;});return s;}
+  var e=(m.projects||[]).find(function(x){return(typeof x==='string'?x:x.id)===pid;});if(!e)return 0;return typeof e==='string'?100:(e.pct||100);}
 function save(){
   try{localStorage.setItem(STORE_KEY,JSON.stringify(D));}catch(e){}
   clearTimeout(save._t);
@@ -8475,7 +8477,11 @@ input.placeholder=sel.length?'':'Type to search...';msFilt(fid);updateAllocMeter
 
 function msVal(fid){return JSON.parse(document.getElementById(fid+'_v').value);}
 
-function totalAlloc(m){return(m.projects||[]).reduce(function(s,e){return s+(typeof e==='string'?100:(e.pct||100));},0);}
+function totalAlloc(m){
+  // A time-phased allocSchedule fully overrides the simple per-project % (one or
+  // the other, never additive); static views use the current-month total.
+  if(m.allocSchedule&&m.allocSchedule.length){var d=new Date(),key=d.getFullYear()*12+d.getMonth();return m.allocSchedule.reduce(function(s,r){if(r.start&&_capYM(r.start)>key)return s;if(r.end&&_capYM(r.end)<key)return s;return s+(Number(r.pct)||0);},0);}
+  return(m.projects||[]).reduce(function(s,e){return s+(typeof e==='string'?100:(e.pct||100));},0);}
 
 function updateAllocMeter(fid){
 var el=document.getElementById(fid+'_alloc');if(!el)return;
