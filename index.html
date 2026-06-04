@@ -2894,6 +2894,7 @@ function capBuildRoster(){
     return {id:m.id,name:m.name,role:m.role||'',cost:Number(m.cost)||0,_deptName:m._dn,_origin:'member',
       costSchedule:m.costSchedule?JSON.parse(JSON.stringify(m.costSchedule)):null,
       oneTimeCosts:m.oneTimeCosts?JSON.parse(JSON.stringify(m.oneTimeCosts)):null,
+      allocSchedule:m.allocSchedule?JSON.parse(JSON.stringify(m.allocSchedule)):null,
       projects:(m.projects||[]).map(function(x){return (typeof x==='object')?{id:x.id,pct:Number(x.pct)||0,clinId:x.clinId}:{id:x,pct:100};})};
   });
 }
@@ -2955,6 +2956,14 @@ function capItemRevenue(p){ var c=projCat(p); if(c==='project')return Number(p.r
 function capAllocR(person){ return (person.projects||[]).reduce(function(s,x){return s+(Number(x.pct)||0);},0); }
 function capItemCostR(roster,projId){ return roster.reduce(function(s,pn){var e=(pn.projects||[]).find(function(x){return x.id===projId;});return s+(e?pn.cost*(Number(e.pct)||0)/100:0);},0); }
 function capItemFTER(roster,projId){ return roster.reduce(function(s,pn){var e=(pn.projects||[]).find(function(x){return x.id===projId;});return s+(e?(Number(e.pct)||0)/100:0);},0); }
+/* Month-aware allocation %: honors a person's time-phased allocSchedule when set,
+   else falls back to the static per-project % (so the forecast is unchanged for
+   anyone without a schedule). */
+function capPersonProjPctAt(pn,projId,y,m){
+  if(pn.allocSchedule&&pn.allocSchedule.length){var key=y*12+m,s=0;pn.allocSchedule.forEach(function(r){if(r.projectId!==projId)return;if(r.start&&_capYM(r.start)>key)return;if(r.end&&_capYM(r.end)<key)return;s+=Number(r.pct)||0;});return s;}
+  var e=(pn.projects||[]).find(function(x){return (typeof x==='string'?x:x.id)===projId;});return e?(typeof e==='string'?100:(Number(e.pct)||0)):0;
+}
+function capItemFTERAt(roster,projId,y,m){return roster.reduce(function(s,pn){return s+capPersonProjPctAt(pn,projId,y,m)/100;},0);}
 function capTotals(roster){
   var items=capItems(),revenue=0;
   items.forEach(function(p){var c=projCat(p);
@@ -3167,14 +3176,17 @@ function capProjData(roster,multPct,opts){
       if(c==='project'){var rev=capInWindow(p,mo.y,mo.m)?capProjRevAt(p,mo.y,mo.m):0;
         if(p.id==='p_c1fams'&&opts.c1target!=null&&opts.c1target!==100000&&rev>=100000)rev=opts.c1target;  // only Conservative/Overperformance deliberately change C1FAMS maturity; Base & edits stay authoritative
         baseRev+=rev;}
-      else if(c==='initiative'){ if(capItemFTER(active,p.id)>0&&capInWindow(p,mo.y,mo.m))baseRev+=capProjRevAt(p,mo.y,mo.m); }
+      else if(c==='initiative'){ if(capItemFTERAt(active,p.id,mo.y,mo.m)>0&&capInWindow(p,mo.y,mo.m))baseRev+=capProjRevAt(p,mo.y,mo.m); }
     });
     // Split labor: % allocated to PROJECT-type items = Project Payroll; everything
     // else (initiative allocations + overhead-item allocations + bench/unallocated)
     // = Other Payroll.
     var projLabor=0,otherLabor=0;
+    var _mk=mo.y*12+mo.m;
     active.forEach(function(pn){var cst=capPersonCostAt(pn,mo.y,mo.m);
-      var pp=(pn.projects||[]).reduce(function(a,x){return a+(PROJIDS.indexOf(x.id)>-1?(Number(x.pct)||0):0);},0);
+      var pp;
+      if(pn.allocSchedule&&pn.allocSchedule.length){pp=pn.allocSchedule.reduce(function(a,r){if(PROJIDS.indexOf(r.projectId)===-1)return a;if(r.start&&_capYM(r.start)>_mk)return a;if(r.end&&_capYM(r.end)<_mk)return a;return a+(Number(r.pct)||0);},0);}
+      else pp=(pn.projects||[]).reduce(function(a,x){return a+(PROJIDS.indexOf(x.id)>-1?(Number(x.pct)||0):0);},0);
       var pProj=Math.round(cst*Math.min(100,pp)/100);  // round per person (mirrors the Projects page) so the buckets are whole dollars and tie out
       projLabor+=pProj; otherLabor+=(cst-pProj);});     // remainder (initiative/overhead/bench labor) → Other Payroll
     var projectPayroll=projLabor;
@@ -3868,12 +3880,24 @@ function renderProjectPlanningView(q){
     }).join('')+'</tbody></table></div>';
   }
   // ── Availability snapshot table ──
-  var availRows=allocPeople.concat(people.filter(function(m){return ppProjAllocAt(m,cur)===0;})).map(function(m){
-    var now=ppProjAllocAt(m,cur),peak=ppPeakAlloc(m,months),load=planMemberLoad(m.id),ptoD=ptoDaysInRange(m,today,d90);
-    var status=now>100?'<span class="rq-sla rq-sla-red">Over</span>':now>=85?'<span class="rq-sla rq-sla-warn">Full</span>':now>0?'<span class="rq-sla">Available</span>':'<span class="rq-sla" style="opacity:.6">Bench</span>';
-    return [esc(m.name),esc(m.role||''),now+'%',peak+'%',(load?load+'%':'—'),(ptoD?ptoD+'d':'—'),status];
-  });
-  var availTbl=availRows.length?reportTable([{label:'Person',key:0},{label:'Role',key:1},{label:'Now',key:2,align:'right'},{label:'Peak',key:3,align:'right'},{label:'Task load',key:4,align:'right'},{label:'PTO ≤90d',key:5,align:'right'},{label:'Status',key:6}],availRows):'<div class="rpt-empty">No resources.</div>';
+  var availList=allocPeople.concat(people.filter(function(m){return ppProjAllocAt(m,cur)===0;}));
+  var availTbl;
+  if(!availList.length){availTbl='<div class="rpt-empty">No resources'+(q?' match your search':'')+'.</div>';}
+  else{
+    availTbl='<table class="pf-tbl"><thead><tr><th style="text-align:left">Person</th><th style="text-align:left">Role</th><th style="text-align:right">Now</th><th style="text-align:right">Peak</th><th style="text-align:right">Task load</th><th style="text-align:right">PTO ≤90d</th><th style="text-align:left">Status</th></tr></thead><tbody>'
+      +availList.map(function(m){
+        var now=ppProjAllocAt(m,cur),peak=ppPeakAlloc(m,months),load=planMemberLoad(m.id),ptoD=ptoDaysInRange(m,today,d90);
+        var status=now>100?'<span class="rq-sla rq-sla-red">Over</span>':now>=85?'<span class="rq-sla rq-sla-warn">Full</span>':now>0?'<span class="rq-sla">Available</span>':'<span class="rq-sla" style="opacity:.6">Bench</span>';
+        return '<tr><td style="text-align:left"><span class="plan-own" onclick="openPersonProfile(\''+m.id+'\')">'+esc(m.name)+'</span></td>'
+          +'<td style="text-align:left">'+esc(m.role||'')+'</td>'
+          +'<td style="text-align:right;color:'+ppAllocColor(now)+';font-weight:'+(now>100?'800':'600')+'">'+now+'%</td>'
+          +'<td style="text-align:right;color:'+ppAllocColor(peak)+'">'+peak+'%</td>'
+          +'<td style="text-align:right">'+(load?load+'%':'—')+'</td>'
+          +'<td style="text-align:right">'+(ptoD?ptoD+'d':'—')+'</td>'
+          +'<td style="text-align:left">'+status+'</td></tr>';
+      }).join('')
+      +'</tbody></table>';
+  }
   // ── Critical dates list ──
   var critCard='';
   if(canProforma()){
@@ -4832,7 +4856,7 @@ function propDashboardHTML(props){
   var valGroups=[{name:'Potential value',values:PROP_STATUSES.map(function(s){return byStatus[s.k].reduce(function(t,p){return t+propVal(p);},0);}),color:'#7C3AED'}];
   var valBar=svgBarChart({categories:PROP_STATUSES.map(function(s){return s.l;}),groups:valGroups},{fmt:'money',legend:false,rotate:true,h:220});
   var dueRows=dueSoon.map(function(p){var d=new Date(p.rfp.dueDate);var days=Math.round((d-Date.now())/86400000);return [esc(p.title||'(untitled)'),esc(propStatusCfg(p.status).l),esc(p.rfp.dueDate),(days<0?Math.abs(days)+'d overdue':days+'d'),propVal(p)?fmt(propVal(p)):'—'];});
-  var dueTbl=dueSoon.length?reportTable([{label:'Proposal',key:0},{label:'Status',key:1},{label:'Due',key:2},{label:'In',key:3,align:'right'},{label:'Value',key:4,align:'right'}],dueRows):'<div class="rpt-empty">No proposals due within 30 days.</div>';
+  var dueTbl=dueSoon.length?reportTable([{label:'Proposal',idx:0},{label:'Status',idx:1},{label:'Due',idx:2},{label:'In',idx:3,align:'right'},{label:'Value',idx:4,align:'right'}],dueRows):'<div class="rpt-empty">No proposals due within 30 days.</div>';
   return kpis
     +'<div class="pf-grid rpt-cols3" style="margin-top:12px">'
       +'<div class="pf-card"><div class="pf-card-h">Pipeline funnel</div>'+svgFunnel(funnelStages,{fmt:'int'})+'</div>'
