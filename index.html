@@ -2953,9 +2953,13 @@ function capCompare(){
 function capReset(){ CAP=null;capEnter();toast('Scenario reset to live data.','info');renderView(); }
 function capItems(){ return (D.projects||[]).filter(function(p){var c=projCat(p);return c==='project'||c==='initiative'||c==='overhead';}); }
 function capItemRevenue(p){ var c=projCat(p); if(c==='project')return Number(p.revenue)||0; if(c==='initiative')return Number(p.targetRevenue)||0; return 0; }
-function capAllocR(person){ return (person.projects||[]).reduce(function(s,x){return s+(Number(x.pct)||0);},0); }
-function capItemCostR(roster,projId){ return roster.reduce(function(s,pn){var e=(pn.projects||[]).find(function(x){return x.id===projId;});return s+(e?pn.cost*(Number(e.pct)||0)/100:0);},0); }
-function capItemFTER(roster,projId){ return roster.reduce(function(s,pn){var e=(pn.projects||[]).find(function(x){return x.id===projId;});return s+(e?(Number(e.pct)||0)/100:0);},0); }
+function _capNow(){var d=new Date();return {y:d.getFullYear(),m:d.getMonth()};}
+// Sandbox aggregates reflect the CURRENT-month effective allocation: a person with
+// a time-phased allocSchedule (set in Project Planning → Edit Resource) uses that
+// month's scheduled %; everyone else uses their static per-project %.
+function capAllocR(person){var n=_capNow();if(person.allocSchedule&&person.allocSchedule.length){var key=n.y*12+n.m;return person.allocSchedule.reduce(function(s,r){if(r.start&&_capYM(r.start)>key)return s;if(r.end&&_capYM(r.end)<key)return s;return s+(Number(r.pct)||0);},0);}return (person.projects||[]).reduce(function(s,x){return s+(Number(x.pct)||0);},0);}
+function capItemCostR(roster,projId){var n=_capNow();return roster.reduce(function(s,pn){return s+(Number(pn.cost)||0)*capPersonProjPctAt(pn,projId,n.y,n.m)/100;},0);}
+function capItemFTER(roster,projId){var n=_capNow();return roster.reduce(function(s,pn){return s+capPersonProjPctAt(pn,projId,n.y,n.m)/100;},0);}
 /* Month-aware allocation %: honors a person's time-phased allocSchedule when set,
    else falls back to the static per-project % (so the forecast is unchanged for
    anyone without a schedule). */
@@ -3013,15 +3017,18 @@ function renderCapacityView(q){
   }).join('');
   // Allocation matrix (people × items), editable %
   var head='<tr><th class="cap-sticky">Person</th>'+items.map(function(p){var oh=projCat(p)!=='project';return '<th class="cap-col'+(oh?' cap-col-oh':'')+'" title="'+esc(p.name)+(oh?' — '+(projCat(p)==='initiative'?'initiative':'non-project cost center')+' (allocations here count as Other Payroll, not Project Payroll or Overhead)':'')+'">'+esc((p.name||'').slice(0,14))+(p.name.length>14?'…':'')+(oh?' <span class="cap-oh-tag">OTHER</span>':'')+'</th>';}).join('')+'<th>Alloc</th></tr>';
-  var _rank={ghost:0,prospect:1,member:2};
+  var _rank={ghost:0,prospect:1,member:2},_now=_capNow();
   var rows=roster.slice().sort(function(a,b){return (_rank[a._origin]||2)-(_rank[b._origin]||2);}).map(function(pn){
     var alloc=capAllocR(pn),over=alloc>100,full=alloc===100;
+    var sched=pn.allocSchedule&&pn.allocSchedule.length;
     var cells=items.map(function(p){var oh=projCat(p)==='overhead';
+      if(sched){var sv=capPersonProjPctAt(pn,p.id,_now.y,_now.m);return '<td'+(oh?' class="cap-col-oh"':'')+'><div class="cap-cell'+(sv?' has':'')+'" title="Scheduled in Project Planning — edit there" style="display:flex;align-items:center;justify-content:center;cursor:default;opacity:.9">'+(sv||'')+'</div></td>';}
       var e=(pn.projects||[]).find(function(x){return x.id===p.id;});var v=e?(Number(e.pct)||0):'';
       return '<td'+(oh?' class="cap-col-oh"':'')+'><input class="cap-cell'+(v?' has':'')+(oh?' cap-cell-oh':'')+'" type="number" min="0" max="100" step="5" value="'+v+'" onchange="capSetPct(\''+pn.id+'\',\''+p.id+'\',this.value)"></td>';
     }).join('');
     var barCls=over?'bad':full?'full':'ok';
     var badge=pn._origin!=='member'?' <span class="cap-ghost">'+esc(pn._origin)+'</span>':'';
+    if(sched)badge+=' <span class="cap-ghost" title="Time-phased allocation set in Project Planning → Edit Resource (current-month value shown)">scheduled</span>';
     return '<tr><td class="cap-sticky"><div class="cap-person"><span class="cap-grip" draggable="true" ondragstart="capDragStart(event,\''+pn.id+'\')" title="Drag onto a project/initiative card to allocate free capacity">&#9783;</span>'+esc(pn.name)+badge+'<button class="cap-rm" title="Remove from this scenario" onclick="capRemovePerson(\''+pn.id+'\')">&times;</button></div>'
       +'<div class="cap-person-sub">'+esc(pn.role||pn._deptName||'')+' · $<input class="cap-cost" type="number" min="0" step="100" value="'+(Number(pn.cost)||0)+'" title="Scenario monthly cost" onchange="capSetCost(\''+pn.id+'\',this.value)">/mo'
       +(pn._origin!=='member'?' · starts <input class="cap-start" type="month" value="'+esc(pn.startMonth||'')+'" title="Payroll starts this month in projections (blank = immediately)" onchange="capSetStart(\''+pn.id+'\',this.value)">':'')+'</div></td>'
