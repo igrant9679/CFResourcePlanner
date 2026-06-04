@@ -5058,8 +5058,62 @@ function openPartnerBankManager(){
     +'</div>'
     +'<div id="pb_status" style="font-size:11px;color:#7C3AED;min-height:16px;margin:6px 2px"></div>'
     +'<div class="kb-list">'+rows+'</div>'
-    +'<div class="btn-row" style="margin-top:14px"><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovPartner\')">Close</button></div>';
+    +'<div class="btn-row" style="margin-top:14px"><button class="btn btn-outline btn-sm" style="flex:1" onclick="closeModal(\'ovPartner\');openPartnerKeyPersonnelManager()">&#128100; Key Personnel</button><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovPartner\')">Close</button></div>';
   openModal('ovPartner');
+}
+/* ── PARTNER KEY PERSONNEL (hangs off the Resume Bank; entries tagged with a partner) ── */
+function partnerNameList(){var set={};(D.partnerBank||[]).forEach(function(d){if(d.partnerName)set[d.partnerName]=1;});(D.resumeBank||[]).forEach(function(e){if(e.partner)set[e.partner]=1;});return Object.keys(set).sort();}
+function partnerKeyPersonnel(){return (D.resumeBank||[]).filter(function(e){return e.partner;});}
+function openPartnerKeyPersonnelManager(){
+  if(!canProposal()){alert('You don\'t have permission.');return;}
+  var people=partnerKeyPersonnel().slice().sort(function(a,b){return String(a.partner||'').localeCompare(String(b.partner||''))||String(a.name||'').localeCompare(String(b.name||''));});
+  var rows=people.length?people.map(function(e){
+    var skills=(e.skills||[]).slice(0,8).map(function(s){return '<span class="kb-tag">'+esc(s)+'</span>';}).join('');
+    return '<div class="kb-card" style="border-left-color:#0d9488">'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="kb-type" style="background:#0d9488;color:#fff">&#129309; '+esc(e.partner||'Partner')+'</span><span class="kb-name">'+esc(e.name||'(unnamed)')+'</span></div>'
+      +'<div class="kb-meta" style="margin-top:3px">'+(e.role?esc(e.role):'<i>no role</i>')+(e.clearance?' &middot; &#128274; '+esc(e.clearance):'')+(e.location?' &middot; &#128205; '+esc(e.location):'')+'</div>'
+      +(skills?'<div class="kb-tags">'+skills+'</div>':'')
+      +'</div>'
+      +'<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">'
+      +(e.attachmentId?'<a class="btn btn-sec btn-sm" href="/api/attachments/'+esc(e.attachmentId)+'" target="_blank" rel="noopener">Open</a>':'<span style="font-size:10px;color:var(--text-muted);text-align:center">no file</span>')
+      +'<button class="btn btn-danger-sm btn-sm" onclick="rbDelete(\''+e.id+'\')">Delete</button>'
+      +'</div></div>';
+  }).join(''):'<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:24px">No partner key personnel yet. Add a teaming partner\'s key staff (resume/bio optional). They appear in the Resume Bank tagged to their partner and can be added as key-personnel dossiers on a proposal\'s Staffing tab.</div>';
+  document.getElementById('mdlRB').innerHTML=
+    '<div class="mdl-over">Proposals</div><div class="mdl-title">&#129309; Partner Key Personnel</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Key staff from your teaming partners. Stored in the Resume Bank (tagged to their partner) so they\'re available alongside CF staff when building a proposal\'s key-personnel dossiers.</div>'
+    +'<div class="kb-upload-row"><span style="font-size:11px;color:var(--text-muted)">'+people.length+' partner personnel</span><span style="flex:1"></span><button class="btn btn-gold btn-sm" onclick="pkpUploadPrompt()">+ Add Key Person</button></div>'
+    +'<div class="kb-list" style="margin-top:8px">'+rows+'</div>'
+    +'<div class="btn-row" style="margin-top:14px"><button class="btn btn-outline btn-sm" style="flex:1" onclick="closeModal(\'ovRB\');openPartnerBankManager()">&larr; Partner Bank</button><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovRB\')">Close</button></div>';
+  openModal('ovRB');
+}
+function pkpUploadPrompt(){
+  var known=partnerNameList();
+  openFormModal({over:'Partner Key Personnel',title:'Add Partner Key Person',submitLabel:'Add',
+    intro:known.length?('Known partners: '+known.join(', ')):'',
+    fields:[
+      {key:'partner',label:'Teaming partner',type:'text',required:true,placeholder:'e.g. Acme Federal'},
+      {key:'name',label:'Person name',type:'text',required:true},
+      {key:'role',label:'Proposed role / title',type:'text',placeholder:'e.g. Program Manager'},
+      {key:'clearance',label:'Clearance',type:'text',placeholder:'e.g. Secret'},
+      {key:'location',label:'Location',type:'text'},
+      {key:'skills',label:'Key skills (comma-separated)',type:'text',placeholder:'Cloud, ATO, Section 508'},
+      {key:'file',label:'Resume / bio file (PDF / DOCX) — optional',type:'file',accept:'.pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document'}
+    ],
+    onSubmit:function(v,files,setStatus){
+      function add(attId,attName){
+        D.resumeBank=D.resumeBank||[];
+        D.resumeBank.unshift({id:uid(),partner:(v.partner||'').trim(),isPartner:true,name:v.name.trim(),role:(v.role||'').trim(),clearance:(v.clearance||'').trim(),location:(v.location||'').trim(),skills:(v.skills||'').split(',').map(function(s){return s.trim();}).filter(Boolean),summary:'',attachmentId:attId||'',attachmentName:attName||'',createdAt:Date.now(),createdBy:ME?ME.id:''});
+        save();closeModal('ovForm');toast('Added '+v.name.trim()+' ('+(v.partner||'').trim()+') to partner key personnel.','success');openPartnerKeyPersonnelManager();
+      }
+      var f=files.file;
+      if(f){setStatus('Uploading '+f.name+'…');var fd=new FormData();fd.append('file',f);
+        fetch('/api/attachments',{method:'POST',body:fd}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||'upload failed');return j;});}).then(function(a){add(a.id,a.name);}).catch(function(e){setStatus('Upload failed: '+e.message);});
+      }else{add('','');}
+      return false;
+    }
+  });
 }
 function partnerUpload(){
   var f=document.getElementById('pb_file');var partnerName=(gv('pb_partner')||'').trim();var ptype=gv('pb_type')||'partner-proposal';
@@ -5118,7 +5172,7 @@ function _partnerBuildContext(p,cb){
 function resumeBankAll(){
   var out=[];
   (D.resumeBank||[]).forEach(function(e){
-    out.push({key:'bank:'+e.id,kind:'bank',bankId:e.id,name:e.name||'(unnamed)',role:e.role||'',clearance:e.clearance||'',location:e.location||'',skills:e.skills||[],summary:e.summary||'',attachmentId:e.attachmentId||'',resumeHref:e.attachmentId?('/api/attachments/'+e.attachmentId):''});
+    out.push({key:'bank:'+e.id,kind:'bank',bankId:e.id,name:e.name||'(unnamed)',role:e.role||'',clearance:e.clearance||'',location:e.location||'',skills:e.skills||[],summary:e.summary||'',partner:e.partner||'',attachmentId:e.attachmentId||'',resumeHref:e.attachmentId?('/api/attachments/'+e.attachmentId):''});
   });
   (D.candidates||[]).forEach(function(c){
     if(!c.resume||!c.resume.id)return;
@@ -5145,7 +5199,7 @@ function openResumeBankManager(){
     var skills=(e.skills||[]).slice(0,8).map(function(s){return '<span class="kb-tag">'+esc(s)+'</span>';}).join('');
     return '<div class="kb-card" style="border-left-color:#2D6A4F">'
       +'<div style="flex:1;min-width:0">'
-      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="kb-name">'+esc(e.name)+'</span><span class="kb-type" style="color:#2D6A4F;background:rgba(45,106,79,0.1)">'+esc(kindBadge[e.kind]||e.kind)+'</span></div>'
+      +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="kb-name">'+esc(e.name)+'</span><span class="kb-type" style="color:#2D6A4F;background:rgba(45,106,79,0.1)">'+esc(kindBadge[e.kind]||e.kind)+'</span>'+(e.partner?'<span class="kb-type" style="background:#0d9488;color:#fff">&#129309; '+esc(e.partner)+'</span>':'')+'</div>'
       +'<div class="kb-meta" style="margin-top:3px">'+(e.role?esc(e.role):'<i>no role</i>')+(e.clearance?' &middot; &#128274; '+esc(e.clearance):'')+(e.location?' &middot; &#128205; '+esc(e.location):'')+'</div>'
       +(e.summary?'<div class="kb-sum">'+esc(e.summary.slice(0,200))+'</div>':'')
       +(skills?'<div class="kb-tags">'+skills+'</div>':'')
