@@ -3903,7 +3903,7 @@ function renderProjectPlanningView(q){
   var availTbl;
   if(!availList.length){availTbl='<div class="rpt-empty">No resources'+(q?' match your search':'')+'.</div>';}
   else{
-    availTbl='<table class="pf-tbl"><thead><tr><th style="text-align:left">Person</th><th style="text-align:left">Role</th><th style="text-align:right">Now</th><th style="text-align:right">Peak</th><th style="text-align:left">Spare capacity from</th><th style="text-align:right">Task load</th><th style="text-align:right">PTO ≤90d</th><th style="text-align:left">Status</th></tr></thead><tbody>'
+    availTbl='<table class="pf-tbl"><thead><tr><th style="text-align:left">Person</th><th style="text-align:left">Role</th><th style="text-align:right">Now</th><th style="text-align:right">Peak</th><th style="text-align:left">Spare capacity from</th><th style="text-align:right" title="Sum of the per-owner allocation % from active (not-done) Project Tasks assigned to this person">Task load</th><th style="text-align:right">PTO ≤90d</th><th style="text-align:left" title="Current-month allocation: Over &gt;100% · Full 85–100% · Available 1–84% · Bench 0%">Status</th><th style="text-align:left">Notes / transition</th></tr></thead><tbody>'
       +availList.map(function(m){
         var now=ppProjAllocAt(m,cur),peak=ppPeakAlloc(m,months),load=planMemberLoad(m.id),ptoD=ptoDaysInRange(m,today,d90);
         var fu=ppFirstUnder(m,months);
@@ -3916,7 +3916,8 @@ function renderProjectPlanningView(q){
           +'<td style="text-align:left">'+freeFrom+'</td>'
           +'<td style="text-align:right">'+(load?load+'%':'—')+'</td>'
           +'<td style="text-align:right">'+(ptoD?ptoD+'d':'—')+'</td>'
-          +'<td style="text-align:left">'+status+'</td></tr>';
+          +'<td style="text-align:left">'+status+'</td>'
+          +'<td style="text-align:left;max-width:260px;white-space:normal;font-size:11px;color:var(--text-secondary)"'+(m.note?' title="'+esc(m.note).replace(/"/g,'&quot;')+'"':'')+'>'+(m.note?esc(m.note.length>110?m.note.slice(0,110)+'…':m.note):'<span style="color:var(--text-muted)">—</span>')+'</td></tr>';
       }).join('')
       +'</tbody></table>';
   }
