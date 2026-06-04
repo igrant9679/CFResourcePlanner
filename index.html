@@ -8830,42 +8830,42 @@ function rptPivot(rows,cfg){cfg=cfg||{};var m=cfg.measure||{field:'',agg:'count'
   var cells=rd.map(function(rv){return cd.map(function(cv){return rptAgg(rows.filter(function(r){return String(r[cfg.rowDim]==null||r[cfg.rowDim]===''?'—':r[cfg.rowDim])===rv&&String(r[cfg.colDim]==null||r[cfg.colDim]===''?'—':r[cfg.colDim])===cv;}).map(function(r){return r[m.field];}),m.agg);});});
   return {kind:'2d',rows:rd,cols:cd,cells:cells,measureLabel:m.label||m.agg};}
 /* ── 15 built-in reports (each fn(ctx)→HTML body; ctx={roster,totals,proj,filters}) ── */
-function rpt_hc_by_dept(ctx){var tops=(D.departments||[]).filter(function(d){return !d.parentId;});
+function rpt_hc_by_dept(ctx){var f=_rf(ctx);var tops=(D.departments||[]).filter(function(d){return !d.parentId&&(!f.dept||d.name===f.dept);});
   var data=tops.map(function(d){var r=deptRollup(d.id);return {name:d.name,count:r.count,cost:r.cost,avg:r.count?Math.round(r.cost/r.count):0};}).sort(function(a,b){return b.cost-a.cost;});
   var bar=svgBarChart({categories:data.map(function(d){return d.name;}),groups:[{label:'Monthly cost',values:data.map(function(d){return d.cost;}),color:'#16223C'}]},{fmt:'money',rotate:true,h:260});
   return bar+reportTable([{key:'name',label:'Department'},{key:'count',label:'Headcount',fmt:'int'},{key:'cost',label:'Monthly cost',fmt:'money',total:true},{key:'avg',label:'Avg / person',fmt:'money'}],data,{footTotals:true});}
-function rpt_alloc_heatmap(ctx){var people=allM().filter(function(m){return totalAlloc(m)>0;}).sort(function(a,b){return totalAlloc(b)-totalAlloc(a);}).slice(0,25);
+function rpt_alloc_heatmap(ctx){var people=_rptPeople(ctx).filter(function(m){return totalAlloc(m)>0;}).sort(function(a,b){return totalAlloc(b)-totalAlloc(a);}).slice(0,25);
   var items=capItems();var cells=people.map(function(m){return items.map(function(p){return projPct(m,p.id)||0;});});
   var hm=svgHeatmap({rows:people.map(function(m){return m.name;}),cols:items.map(function(p){return p.name;}),cells:cells,min:0,max:100,fmt:'int'},{});
-  var over=allM().filter(function(m){return totalAlloc(m)>100;}).map(function(m){return {name:m.name,dept:m._dn,alloc:totalAlloc(m)};});
+  var over=_rptPeople(ctx).filter(function(m){return totalAlloc(m)>100;}).map(function(m){return {name:m.name,dept:m._dn,alloc:totalAlloc(m)};});
   var tbl=over.length?('<div style="margin-top:8px"><b style="font-size:11px;color:var(--red)">Over-allocated ('+over.length+')</b>'+reportTable([{key:'name',label:'Name'},{key:'dept',label:'Dept'},{key:'alloc',label:'Total %',fmt:'int'}],over,{})+'</div>'):'';
   return '<div class="pf-note" style="margin:0 0 6px">Top 25 by allocation · green→red = 0→100%+</div>'+hm+tbl;}
-function rpt_bench(ctx){var t=ctx.totals,un=unallocatedMembers();
+function rpt_bench(ctx){var t=ctx.totals,f=_rf(ctx),un=unallocatedMembers().filter(function(m){return !f.dept||m._dn===f.dept;});
   var g=svgGauge(t.util,{label:'Utilization',good:{above:80},danger:{below:50}});
   var byDept={};un.forEach(function(m){byDept[m._dn]=(byDept[m._dn]||0)+1;});var cats=Object.keys(byDept);
   var bar=cats.length?svgBarChart({categories:cats,groups:[{label:'Unallocated',values:cats.map(function(k){return byDept[k];}),color:'#D97706'}]},{fmt:'int',h:200,rotate:true}):'<div class="rpt-empty">Everyone is allocated.</div>';
   var tbl=reportTable([{key:'name',label:'Name'},{key:'dept',label:'Dept'},{key:'cost',label:'Monthly cost',fmt:'money',total:true}],un.map(function(m){return {name:m.name,dept:m._dn,cost:m.cost};}),{footTotals:true,caption:un.length+' unallocated · '+t.benchFTE+' bench FTE'});
   return '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center"><div style="text-align:center;flex:0 0 auto"><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Utilization</div>'+g+'</div><div style="flex:1;min-width:240px">'+bar+'</div></div>'+tbl;}
-function rpt_skills(ctx){var counts={};allM().forEach(function(m){(m.skillsets||[]).forEach(function(sid){var n=sName(sid);counts[n]=(counts[n]||0)+1;});});
+function rpt_skills(ctx){var counts={};_rptPeople(ctx).forEach(function(m){(m.skillsets||[]).forEach(function(sid){var n=sName(sid);counts[n]=(counts[n]||0)+1;});});
   var arr=Object.keys(counts).map(function(k){return {skill:k,n:counts[k]};}).sort(function(a,b){return b.n-a.n;}).slice(0,20);
   if(!arr.length)return '<div class="rpt-empty">No skills assigned.</div>';
   var bar=svgBarChart({categories:arr.map(function(a){return a.skill;}),groups:[{label:'People',values:arr.map(function(a){return a.n;}),color:'#7C5CBF'}]},{fmt:'int',rotate:true,h:280});
   return bar+reportTable([{key:'skill',label:'Skill'},{key:'n',label:'# People',fmt:'int'}],arr,{});}
-function rpt_clearance(ctx){var all=allM(),clr={},cls={};
+function rpt_clearance(ctx){var all=_rptPeople(ctx),clr={},cls={};
   all.forEach(function(m){var c=_resolveClrName(m.clearance)||m.clearance||'None';clr[c]=(clr[c]||0)+1;var k=(m.hub?'Hub':m.sme?'SME':m.associate?'Associate':m.proposal?'Proposal':m.recruiter?'Recruiter':'Standard');cls[k]=(cls[k]||0)+1;});
   function sl(o){return Object.keys(o).map(function(k){return {label:k,value:o[k]};});}
   return '<div class="rpt-grid2"><div><div style="font-size:11px;font-weight:700;margin-bottom:4px">Clearance</div>'+svgDonut(sl(clr),{centerLabel:String(all.length),centerSub:'people'})+'</div><div><div style="font-size:11px;font-weight:700;margin-bottom:4px">Classification</div>'+svgDonut(sl(cls),{})+'</div></div>';}
-function rpt_rev_by_category(ctx){var items=(D.projects||[]).filter(function(p){return projCat(p)!=='overhead';}),byCat={};
+function rpt_rev_by_category(ctx){var items=_rptItems(ctx,['project','initiative','opportunity']),byCat={};
   items.forEach(function(p){var c=projCat(p);byCat[c]=(byCat[c]||0)+(itemRev(p)||0);});
   var tot=Object.keys(byCat).reduce(function(a,k){return a+byCat[k];},0);
   var donut=svgDonut(Object.keys(byCat).map(function(k){return {label:k,value:byCat[k]};}),{fmt:'money',centerLabel:fmt(tot),centerSub:'/mo'});
   var top=items.map(function(p){return {name:p.name,rev:itemRev(p)||0};}).filter(function(p){return p.rev>0;}).sort(function(a,b){return b.rev-a.rev;}).slice(0,12);
   var bar=top.length?svgBarChart({categories:top.map(function(t){return t.name;}),groups:[{label:'Monthly revenue',values:top.map(function(t){return t.rev;}),color:'#2D6A4F'}]},{fmt:'money',rotate:true,h:260}):'';
   return donut+(bar?'<div style="margin-top:10px">'+bar+'</div>':'');}
-function rpt_project_margin(ctx){var rows=rptRowsProjects().filter(function(r){return r.revenue>0||r.cost>0;}).sort(function(a,b){return b.profit-a.profit;});
+function rpt_project_margin(ctx){var f=_rf(ctx);var rows=rptRowsProjects().filter(function(r){return (r.revenue>0||r.cost>0)&&(!f.category||r.category===f.category);}).sort(function(a,b){return b.profit-a.profit;});
   var bar=svgBarChart({categories:rows.map(function(r){return r.name;}),groups:[{label:'Profit',values:rows.map(function(r){return r.profit;}),colorBySign:true}]},{fmt:'money',rotate:true,h:280});
   return bar+reportTable([{key:'name',label:'Project'},{key:'category',label:'Type'},{key:'revenue',label:'Revenue',fmt:'money',total:true},{key:'cost',label:'Cost',fmt:'money',total:true},{key:'profit',label:'Profit',fmt:'money',total:true},{key:'margin',label:'Margin',fmt:'pct'}],rows,{footTotals:true});}
-function rpt_forecast(ctx){var rows=ctx.proj.rows,cumRev=0,labels=[],revCum=[],proCum=[];
+function rpt_forecast(ctx){var rows=_rptMonthRows(ctx.proj.rows,ctx),cumRev=0,labels=[],revCum=[],proCum=[];
   rows.forEach(function(r){cumRev+=r.rev;labels.push(CAP_MONTHS[r.m]+" '"+String(r.y).slice(2));revCum.push(cumRev);proCum.push(r.cum);});
   var line=svgLineChart({labels:labels,lines:[{label:'Cumulative revenue',values:revCum,color:'#C5A55A'},{label:'Cumulative profit',values:proCum,color:'#2D6A4F',area:true}]},{fmt:'money',h:240});
   return line+reportTable([{key:'mo',label:'Month'},{key:'rev',label:'Revenue',fmt:'money',total:true},{key:'cost',label:'Cost',fmt:'money',total:true},{key:'profit',label:'Profit',fmt:'money',total:true}],rows.map(function(r,i){return {mo:labels[i],rev:r.rev,cost:r.cost,profit:r.profit};}),{footTotals:true});}
@@ -8878,7 +8878,7 @@ function rpt_overhead(ctx){var byType=[{label:'Overhead/G&A',value:proformaOverh
   var donut=svgDonut(byType,{fmt:'money',centerLabel:fmt(byType.reduce(function(a,s){return a+s.value;},0)),centerSub:'/mo'});
   var bar=lines.length?svgBarChart({categories:lines.map(function(l){return l.n;}),groups:[{label:'Monthly',values:lines.map(function(l){return l.m;}),color:'#546478'}]},{fmt:'money',rotate:true,h:260}):'';
   return donut+(bar?'<div style="margin-top:10px"><div style="font-size:11px;font-weight:700;margin-bottom:4px">Top lines</div>'+bar+'</div>':'');}
-function rpt_contract_timeline(ctx){var months=capProjMonths(),items=(D.projects||[]).filter(function(p){var c=projCat(p);return c==='project'||c==='initiative';});
+function rpt_contract_timeline(ctx){var months=capProjMonths(),items=_rptItems(ctx,['project','initiative']);
   if(!items.length||!months.length)return '<div class="rpt-empty">No contracts.</div>';
   var n=months.length,w=820,labW=150,rowH=24,padT=24,plotW=w-labW-14,h=padT+items.length*rowH+6,x=function(i){return labW+i/n*plotW;},out='';
   months.forEach(function(mo,i){if(mo.m===0||i===0)out+='<text x="'+x(i).toFixed(0)+'" y="14" font-size="9" fill="#64748b">'+(mo.m===0?mo.y:CAP_MONTHS[mo.m]+" '"+String(mo.y).slice(2))+'</text>';});
@@ -8933,7 +8933,14 @@ var RPT_BUILTINS=[
 function rptBuiltin(key){return RPT_BUILTINS.filter(function(b){return b.key===key;})[0];}
 var RPT_FILTERS={dept:'',category:'',yearFrom:null,yearTo:null};
 var RPT_OPEN=null;
-function _rptCtx(){var roster=capBuildRoster();return {roster:roster,totals:capTotals(roster),proj:capProjData(roster,0,{}),filters:RPT_FILTERS};}
+/* Shared-filter helpers — reports call these so dashboard/toolbar filters flow through. */
+function _rf(ctx){return (ctx&&ctx.filters)||{};}
+function _rptPeople(ctx){var f=_rf(ctx);return f.dept?allM().filter(function(m){return m._dn===f.dept;}):allM();}
+function _rptItems(ctx,cats){var f=_rf(ctx),list=(D.projects||[]).filter(function(p){return cats.indexOf(projCat(p))>-1;});return f.category?list.filter(function(p){return projCat(p)===f.category;}):list;}
+function _rptMonthRows(rows,ctx){var f=_rf(ctx);if(!f.yearFrom&&!f.yearTo)return rows;return rows.filter(function(r){if(f.yearFrom&&r.y<f.yearFrom)return false;if(f.yearTo&&r.y>f.yearTo)return false;return true;});}
+function rptSetFilter(k,v){if(k==='yearFrom'||k==='yearTo')RPT_FILTERS[k]=v?Number(v):null;else RPT_FILTERS[k]=v;renderView();}
+function rptClearFilters(){RPT_FILTERS={dept:'',category:'',yearFrom:null,yearTo:null};renderView();}
+function _rptCtx(filters){var roster=capBuildRoster();return {roster:roster,totals:capTotals(roster),proj:capProjData(roster,0,{}),filters:filters||RPT_FILTERS};}
 function _rptBuiltinCard(b,ctx){var body;
   if(b.financial&&!canProforma())body='<div class="rpt-lock">&#128274; Financial report — admin access required</div>';
   else{try{body=b.fn(ctx);}catch(e){body='<div class="rpt-empty">Could not render: '+esc(e&&e.message||e)+'</div>';}}
@@ -8943,12 +8950,19 @@ function _rptBuiltinCard(b,ctx){var body;
 function renderReportsView(q){
   var ctx=_rptCtx();
   var newBtns='<button class="btn btn-gold btn-sm" onclick="openReportComposer()">+ Dashboard</button> <button class="btn btn-sec btn-sm" onclick="openTableBuilder()">+ Table</button> <button class="btn btn-sec btn-sm" onclick="openPivotBuilder()">+ Pivot</button>';
-  var toolbar='<div class="rpt-toolbar"><b style="font-size:15px">&#128202; Reports</b><span style="font-size:11px;color:var(--text-muted)">'+RPT_BUILTINS.length+' built-in</span><span style="flex:1"></span>'+newBtns+' <button class="btn btn-sec btn-sm" onclick="rptPrintView()">&#128424; Print</button></div>';
+  var f=RPT_FILTERS,depts=(D.departments||[]).map(function(d){return d.name;}),years=[];(capProjMonths()||[]).forEach(function(mo){if(years.indexOf(mo.y)<0)years.push(mo.y);});
+  function _fopt(v,cur,lbl){return '<option value="'+esc(v)+'"'+(String(cur)===String(v)?' selected':'')+'>'+esc(lbl||v)+'</option>';}
+  var filterCtl='<select title="Department filter" onchange="rptSetFilter(\'dept\',this.value)"><option value="">All depts</option>'+depts.map(function(d){return _fopt(d,f.dept);}).join('')+'</select>'
+    +'<select title="Category filter" onchange="rptSetFilter(\'category\',this.value)"><option value="">All categories</option>'+['project','initiative','opportunity','overhead'].map(function(c){return _fopt(c,f.category);}).join('')+'</select>'
+    +'<select title="Year from" onchange="rptSetFilter(\'yearFrom\',this.value)"><option value="">Yr from</option>'+years.map(function(y){return _fopt(y,f.yearFrom);}).join('')+'</select>'
+    +'<select title="Year to" onchange="rptSetFilter(\'yearTo\',this.value)"><option value="">Yr to</option>'+years.map(function(y){return _fopt(y,f.yearTo);}).join('')+'</select>'
+    +((f.dept||f.category||f.yearFrom||f.yearTo)?' <button class="btn btn-sec btn-sm" onclick="rptClearFilters()">Clear filters</button>':'');
+  var toolbar='<div class="rpt-toolbar"><b style="font-size:15px">&#128202; Reports</b>'+filterCtl+'<span style="flex:1"></span>'+newBtns+' <button class="btn btn-sec btn-sm" onclick="rptPrintView()">&#128424; Print</button></div>';
   if(RPT_OPEN){var t=(D.reportTemplates||[]).filter(function(x){return x.id===RPT_OPEN;})[0];
     if(t)return '<div style="max-width:1320px;margin:0 auto">'+toolbar+'<div style="margin:4px 0 10px"><button class="btn btn-sec btn-sm" onclick="rptCloseOpen()">&larr; All reports</button> <b style="margin-left:8px;font-size:14px">'+esc(t.name)+'</b> <span class="pf-pill">'+esc(t.kind)+'</span></div><div id="rptOpenBody">'+rptRenderTemplate(t,ctx)+'</div></div>';
     RPT_OPEN=null;}
   var tpls=(D.reportTemplates||[]).filter(function(t){return canProforma()||!t.financial;});
-  var tplHtml=tpls.length?('<div class="rpt-sec-h">Saved templates</div>'+tpls.map(function(t){return '<div class="rpt-tpl"><b>'+esc(t.name)+'</b> <span class="pf-pill">'+esc(t.kind)+'</span>'+(t.financial?' <span class="pf-pill pf-crit">financial</span>':'')+'<span style="flex:1"></span><button class="btn btn-sec btn-sm" onclick="rptOpenTemplate(\''+t.id+'\')">Open</button> <button class="btn btn-sec btn-sm" onclick="rptDuplicateTemplate(\''+t.id+'\')">Duplicate</button> <button class="btn btn-danger-sm btn-sm" onclick="rptDeleteTemplate(\''+t.id+'\')">&times;</button></div>';}).join('')):'';
+  var tplHtml=tpls.length?('<div class="rpt-sec-h">Saved templates</div>'+tpls.map(function(t){return '<div class="rpt-tpl"><b>'+esc(t.name)+'</b> <span class="pf-pill">'+esc(t.kind)+'</span>'+(t.financial?' <span class="pf-pill pf-crit">financial</span>':'')+'<span style="flex:1"></span><button class="btn btn-sec btn-sm" onclick="rptOpenTemplate(\''+t.id+'\')">Open</button> <button class="btn btn-sec btn-sm" onclick="rptEditTemplate(\''+t.id+'\')">Edit</button> <button class="btn btn-sec btn-sm" onclick="rptDuplicateTemplate(\''+t.id+'\')">Duplicate</button> <button class="btn btn-danger-sm btn-sm" onclick="rptDeleteTemplate(\''+t.id+'\')">&times;</button></div>';}).join('')):'';
   var areas=[];RPT_BUILTINS.forEach(function(b){if(areas.indexOf(b.area)<0)areas.push(b.area);});
   var grid=areas.map(function(area){return '<div class="rpt-sec-h">'+esc(area)+'</div><div class="pf-grid">'+RPT_BUILTINS.filter(function(b){return b.area===area;}).map(function(b){return _rptBuiltinCard(b,ctx);}).join('')+'</div>';}).join('');
   return '<div style="max-width:1320px;margin:0 auto" id="rptRoot">'+toolbar+tplHtml+grid+'</div>';}
@@ -8968,10 +8982,14 @@ function rptSaveTemplate(t){D.reportTemplates=D.reportTemplates||[];t.financial=
   else{t.id=t.id||uid();t.createdAt=Date.now();t.createdBy=ME?ME.id:'';D.reportTemplates.push(t);RPT_OPEN=t.id;}
   save();toast('Report saved.','success');renderView();}
 function rptOpenTemplate(id){RPT_OPEN=id;renderView();}
+function rptEditTemplate(id){var t=(D.reportTemplates||[]).filter(function(x){return x.id===id;})[0];if(!t)return;if(t.kind==='dashboard')openReportComposer(id);else if(t.kind==='table')openTableBuilder(id);else if(t.kind==='pivot')openPivotBuilder(id);}
 function rptDeleteTemplate(id){if(!confirm('Delete this report template?'))return;D.reportTemplates=(D.reportTemplates||[]).filter(function(x){return x.id!==id;});if(RPT_OPEN===id)RPT_OPEN=null;save();renderView();}
 function rptDuplicateTemplate(id){var t=(D.reportTemplates||[]).filter(function(x){return x.id===id;})[0];if(!t)return;var c=JSON.parse(JSON.stringify(t));c.id=uid();c.name=t.name+' (copy)';c.createdAt=Date.now();c.updatedAt=Date.now();D.reportTemplates.push(c);save();toast('Duplicated.','success');renderView();}
 function rptRenderTemplate(t,ctx){ctx=ctx||_rptCtx();if(t.kind==='dashboard')return rptRenderDashboard(t,ctx);if(t.kind==='table')return rptRenderTable(t);if(t.kind==='pivot')return rptRenderPivot(t);return '<div class="rpt-empty">Unknown report kind.</div>';}
-function rptRenderDashboard(t,ctx){var cards=(t.dashboard.cards||[]).map(function(c){var b=rptBuiltin(c.builtinKey);return b?_rptBuiltinCard(b,ctx):'';}).join('');return '<div class="pf-grid">'+(cards||'<div class="rpt-empty">No cards selected.</div>')+'</div>';}
+function rptRenderDashboard(t,ctx){var dctx=Object.assign({},ctx,{filters:(t.dashboard&&t.dashboard.filters)||{}});
+  var fch=[];var fl=dctx.filters;if(fl.dept)fch.push('Dept: '+fl.dept);if(fl.category)fch.push('Category: '+fl.category);if(fl.yearFrom||fl.yearTo)fch.push('Years: '+(fl.yearFrom||'…')+'–'+(fl.yearTo||'…'));
+  var banner=fch.length?'<div class="pf-note" style="margin:0 0 8px">Filters · '+esc(fch.join(' · '))+'</div>':'';
+  var cards=(t.dashboard.cards||[]).map(function(c){var b=rptBuiltin(c.builtinKey);return b?_rptBuiltinCard(b,dctx):'';}).join('');return banner+'<div class="pf-grid">'+(cards||'<div class="rpt-empty">No cards selected.</div>')+'</div>';}
 function rptRenderTable(t){var src=rptGetSource(t.table.source);if(src.blocked)return '<div class="rpt-lock">&#128274; Admin only.</div>';
   var cfg=t.table,cols,data;
   if(cfg.groupBy){var measures=cfg.measures&&cfg.measures.length?cfg.measures:[{field:'',agg:'count',label:'Count'}];
@@ -8998,11 +9016,18 @@ function rptRenderPivot(t){var src=rptGetSource(t.pivot.source);if(src.blocked)r
 /* ── Builders (openFormModal; re-open on source change to refresh field lists) ── */
 function openReportComposer(id){var ex=id?(D.reportTemplates||[]).filter(function(x){return x.id===id;})[0]:null;
   var chosen=((ex&&ex.dashboard&&ex.dashboard.cards)||[]).map(function(c){return c.builtinKey;});
-  openFormModal({over:'Reports',title:(ex?'Edit':'New')+' Dashboard',submitLabel:'Save dashboard',intro:'Pick which reports to assemble into a saved dashboard.',
+  var ef=(ex&&ex.dashboard&&ex.dashboard.filters)||{};
+  var depts=(D.departments||[]).map(function(d){return {value:d.name,label:d.name};}),years=[];(capProjMonths()||[]).forEach(function(mo){if(years.indexOf(mo.y)<0)years.push(mo.y);});
+  openFormModal({over:'Reports',title:(ex?'Edit':'New')+' Dashboard',submitLabel:'Save dashboard',intro:'Pick reports to assemble, and optional shared filters applied to every card.',
     fields:[{key:'name',label:'Name',type:'text',required:true,value:ex?ex.name:''},
-      {key:'cards',label:'Include reports',type:'checkboxes',value:chosen,options:RPT_BUILTINS.filter(function(b){return canProforma()||!b.financial;}).map(function(b){return {value:b.key,label:b.title+(b.financial?' (financial)':'')};})}],
+      {key:'cards',label:'Include reports',type:'checkboxes',value:chosen,options:RPT_BUILTINS.filter(function(b){return canProforma()||!b.financial;}).map(function(b){return {value:b.key,label:b.title+(b.financial?' (financial)':'')};})},
+      {key:'dept',label:'Filter: department (optional)',type:'select',value:ef.dept||'',options:[{value:'',label:'— all —'}].concat(depts)},
+      {key:'category',label:'Filter: category (optional)',type:'select',value:ef.category||'',options:[{value:'',label:'— all —'}].concat(['project','initiative','opportunity','overhead'].map(function(c){return {value:c,label:c};}))},
+      {key:'yearFrom',label:'Filter: year from (optional)',type:'select',value:ef.yearFrom||'',options:[{value:'',label:'— any —'}].concat(years.map(function(y){return {value:y,label:String(y)};}))},
+      {key:'yearTo',label:'Filter: year to (optional)',type:'select',value:ef.yearTo||'',options:[{value:'',label:'— any —'}].concat(years.map(function(y){return {value:y,label:String(y)};}))}],
     onSubmit:function(v){if(!v.cards||!v.cards.length){alert('Pick at least one report.');return false;}
-      rptSaveTemplate({id:ex?ex.id:null,name:v.name.trim(),kind:'dashboard',dashboard:{filters:{},cards:v.cards.map(function(k){return {builtinKey:k,span:1};})}});}});}
+      var filters={dept:v.dept||'',category:v.category||'',yearFrom:v.yearFrom?Number(v.yearFrom):null,yearTo:v.yearTo?Number(v.yearTo):null};
+      rptSaveTemplate({id:ex?ex.id:null,name:v.name.trim(),kind:'dashboard',dashboard:{filters:filters,cards:v.cards.map(function(k){return {builtinKey:k,span:1};})}});}});}
 function openTableBuilder(id,draft){var ex=id?(D.reportTemplates||[]).filter(function(x){return x.id===id;})[0]:null;
   var list=rptSourceList();if(!list.length){toast('No data sources available.','info');return;}
   draft=draft||(ex?{source:ex.table.source,name:ex.name,columns:ex.table.columns,groupBy:ex.table.groupBy,measures:ex.table.measures}:{source:list[0].value});
