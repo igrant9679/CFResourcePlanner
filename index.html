@@ -991,7 +991,6 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
   <div class="stats" id="statsBar"></div>
   <div class="toolbar">
     <div class="tab-bar">
-      <button class="tab active" id="tabOrg" onclick="switchTab('org')">Department View</button>
       <button class="tab" id="tabChart" onclick="switchTab('orgchart')">Org Chart</button>
       <button class="tab" id="tabProj" onclick="switchTab('proj')">Projects</button>
       <button class="tab" id="tabRecruit" onclick="switchTab('recruit')">Recruiting</button>
@@ -999,9 +998,8 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
       <button class="tab" id="tabOpp" onclick="switchTab('opp')">Opportunities</button>
       <button class="tab" id="tabProp" onclick="switchTab('prop')">Proposals</button>
       <button class="tab" id="tabOver" onclick="switchTab('over')">Overhead</button>
-      <button class="tab" id="tabRes" onclick="switchTab('res')">Resources View</button>
+      <button class="tab active" id="tabRes" onclick="switchTab('res')">Resources</button>
       <button class="tab" id="tabCap" onclick="switchTab('cap')">Capacity Planning</button>
-      <button class="tab" id="tabClass" onclick="switchTab('class')">Classification View</button>
       <button class="tab" id="tabPlan" onclick="switchTab('plan')">COE Plan</button>
       <button class="tab" id="tabPTask" onclick="switchTab('ptask')">Project Tasks</button>
       <button class="tab" id="tabReports" onclick="switchTab('reports')">&#128202; Reports</button>
@@ -1045,7 +1043,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 (function(){var svg="<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><rect width='40' height='40' rx='9' fill='#16223C'/><line x1='20' y1='12.5' x2='11' y2='27' stroke='#C5A55A' stroke-width='2.2' stroke-linecap='round'/><line x1='20' y1='12.5' x2='20' y2='27' stroke='#C5A55A' stroke-width='2.2' stroke-linecap='round'/><line x1='20' y1='12.5' x2='29' y2='27' stroke='#C5A55A' stroke-width='2.2' stroke-linecap='round'/><circle cx='20' cy='12' r='5' fill='#C5A55A'/><circle cx='11' cy='28' r='3.7' fill='#fff'/><circle cx='20' cy='28' r='3.7' fill='#fff'/><circle cx='29' cy='28' r='3.7' fill='#fff'/></svg>";var l=document.createElement('link');l.rel='icon';l.type='image/svg+xml';l.href='data:image/svg+xml,'+encodeURIComponent(svg);document.head.appendChild(l);})();
 var STORE_KEY='cf_orgchart_v2';
 var PALETTE=['#2D6A4F','#C5A55A','#7C5CBF','#D97706','#546478','#0D9488','#DC2626','#2563EB','#7C3AED','#059669','#B45309','#6366F1'];
-var D,viewMode='org',collState={},dragInfo=null,MS_REG={},adminTab='skills';
+var D,viewMode='res',collState={},dragInfo=null,MS_REG={},adminTab='skills';
 var CAP=null;  /* Capacity Planning non-destructive sandbox: {name, roster:[...], baseline:{...}} */
 var capTab='sandbox';   /* 'sandbox' | 'proj' — Capacity Planning sub-tab */
 var proformaTab='overview';  /* active sub-tab in the confidential Proforma section */
@@ -3764,8 +3762,24 @@ function renderProformaView(q){
     +kpiBar+actions+nav+body+'</div>';
 }
 
-/* ── RESOURCES VIEW ── */
+/* ── RESOURCES HUB (By Location / Departments / Classifications / PTO) ── */
+var resTab='location';
+function resSetTab(t){resTab=t;renderView();}
+function ptoCanEdit(){return !!(ME&&(ME.role==='admin'||ME.role==='editor'));}
 function renderResourcesView(q){
+  var tabs=[['location','By Location'],['dept','Departments'],['class','Classifications'],['pto','PTO']];
+  var addBtn=(resTab==='pto'&&ptoCanEdit())?'<button class="btn btn-gold btn-sm" onclick="openPTOModal()">+ Add Time Off</button>':'';
+  var nav='<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">'
+    +'<div class="pf-subtabs">'+tabs.map(function(t){return '<button class="pf-subtab'+(resTab===t[0]?' active':'')+'" onclick="resSetTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>'
+    +'<span style="flex:1"></span>'+addBtn+'</div>';
+  var body;
+  if(resTab==='dept')body=renderOrgView(q);
+  else if(resTab==='class')body=renderClassificationView(q);
+  else if(resTab==='pto')body=renderPTOView(q);
+  else body=renderResLocationView(q);
+  return nav+body;
+}
+function renderResLocationView(q){
 var all=allM(),byLoc={},locOrder=[];
 all.forEach(function(m){
   if(q&&!memberMatchesSearch(m,q))return;
@@ -3794,6 +3808,71 @@ locOrder.forEach(function(lid){
   html+='</div>';});
 return html;}
 
+/* ── PTO (Paid Time Off) ──
+   Per-person vacation/leave date ranges: m.pto=[{id,start,end,note}].
+   Feeds resource availability in Project Planning. */
+function memberById(id){return planMembers().find(function(m){return m.id===id;})||null;}
+function ptoEntries(){var out=[];planMembers().forEach(function(m){(m.pto||[]).forEach(function(e){out.push({m:m,e:e});});});return out;}
+function ptoDays(e){var s=planParseDate(e.start),en=planParseDate(e.end||e.start);if(!s||!en)return 0;return Math.max(1,Math.round((en-s)/86400000)+1);}
+function ptoOverlapsRange(m,from,to){return (m.pto||[]).some(function(e){var s=planParseDate(e.start),en=planParseDate(e.end||e.start);if(!s||!en)return false;return s<=to&&en>=from;});}
+function ptoDaysInRange(m,from,to){return (m.pto||[]).reduce(function(sum,e){var s=planParseDate(e.start),en=planParseDate(e.end||e.start);if(!s||!en)return sum;var a=s>from?s:from,b=en<to?en:to;if(a>b)return sum;return sum+Math.round((b-a)/86400000)+1;},0);}
+function renderPTOView(q){
+  var entries=ptoEntries().filter(function(x){return !q||memberMatchesSearch(x.m,q);});
+  var today=new Date();today.setHours(0,0,0,0);
+  entries.sort(function(a,b){return (planParseDate(a.e.start)||today)-(planParseDate(b.e.start)||today);});
+  var upcoming=entries.filter(function(x){var en=planParseDate(x.e.end||x.e.start);return en&&en>=today;});
+  var past=entries.filter(function(x){var en=planParseDate(x.e.end||x.e.start);return !en||en<today;});
+  function row(x){
+    var e=x.e,m=x.m,s=planParseDate(e.start),en=planParseDate(e.end||e.start);
+    var active=s&&en&&s<=today&&en>=today;
+    var span=planFmtShort(s)+(en&&!planSameDay(s,en)?' – '+planFmtShort(en):'')+(s?', '+s.getFullYear():'');
+    return '<tr'+(active?' style="background:rgba(217,119,6,0.08)"':'')+'>'
+      +'<td style="text-align:left"><span class="plan-own" onclick="openPersonProfile(\''+m.id+'\')">'+esc(m.name)+'</span>'+(active?' <span class="rq-sla rq-sla-warn">out now</span>':'')+'</td>'
+      +'<td style="text-align:left">'+esc(span)+'</td>'
+      +'<td style="text-align:right">'+ptoDays(e)+'</td>'
+      +'<td style="text-align:left">'+esc(e.note||'')+'</td>'
+      +'<td style="text-align:right">'+(ptoCanEdit()?'<button class="btn btn-sec btn-sm" onclick="openPTOModal(\''+m.id+'\',\''+e.id+'\')">Edit</button> <button class="btn btn-danger-sm btn-sm" onclick="ptoDelete(\''+m.id+'\',\''+e.id+'\')">&times;</button>':'')+'</td>'
+      +'</tr>';
+  }
+  function tbl(list,label){
+    if(!list.length)return '';
+    return '<div class="pf-card"><div class="pf-card-h">'+label+' ('+list.length+')</div>'
+      +'<table class="pf-tbl"><thead><tr><th style="text-align:left">Person</th><th style="text-align:left">Dates</th><th style="text-align:right">Days</th><th style="text-align:left">Note</th><th></th></tr></thead><tbody>'
+      +list.map(row).join('')+'</tbody></table></div>';
+  }
+  if(!entries.length)return '<div class="empty-msg">'+(q?'No time off matches &ldquo;'+esc(q)+'&rdquo;':'No time off recorded yet.'+(ptoCanEdit()?' Click <b>+ Add Time Off</b> to log a vacation or leave.':''))+'</div>';
+  return tbl(upcoming,'Upcoming &amp; current')+(past.length?'<div style="margin-top:12px"></div>'+tbl(past,'Past'):'');
+}
+function openPTOModal(memberId,entryId){
+  if(!ptoCanEdit()){alert('You don\'t have permission.');return;}
+  var members=planMembers().slice().sort(function(a,b){return a.name.localeCompare(b.name);});
+  var existing=null;
+  if(memberId&&entryId){var m0=memberById(memberId);if(m0)existing=(m0.pto||[]).find(function(e){return e.id===entryId;});}
+  openFormModal({over:'Resources · PTO',title:existing?'Edit Time Off':'Add Time Off',submitLabel:existing?'Save':'Add',
+    fields:[
+      {key:'member',label:'Person',type:'select',value:memberId||(members[0]&&members[0].id),options:members.map(function(m){return {value:m.id,label:m.name+(m.role?' — '+m.role:'')};})},
+      {key:'start',label:'Start date',type:'date',required:true,value:existing?existing.start:''},
+      {key:'end',label:'End date',type:'date',required:true,value:existing?(existing.end||existing.start):''},
+      {key:'note',label:'Note (optional)',type:'text',placeholder:'e.g. Vacation, Parental leave, Conference',value:existing?(existing.note||''):''}
+    ],
+    onSubmit:function(v,files,setStatus){
+      if(planParseDate(v.end)&&planParseDate(v.start)&&planParseDate(v.end)<planParseDate(v.start)){setStatus('End date must be on or after the start date.');return false;}
+      var tgt=memberById(v.member);if(!tgt){setStatus('Person not found.');return false;}
+      tgt.pto=tgt.pto||[];
+      if(existing&&memberId===v.member){existing.start=v.start;existing.end=v.end;existing.note=(v.note||'').trim();}
+      else{if(existing&&memberId!==v.member){var om=memberById(memberId);if(om)om.pto=(om.pto||[]).filter(function(e){return e.id!==entryId;});}
+        tgt.pto.push({id:uid(),start:v.start,end:v.end,note:(v.note||'').trim()});}
+      save();closeModal('ovForm');toast('Time off saved for '+tgt.name+'.','success');renderView();
+    }
+  });
+}
+function ptoDelete(memberId,entryId){
+  if(!ptoCanEdit())return;
+  var m=memberById(memberId);if(!m)return;
+  if(!confirm('Remove this time-off entry?'))return;
+  m.pto=(m.pto||[]).filter(function(e){return e.id!==entryId;});
+  save();renderView();
+}
 /* ── CLASSIFICATION VIEW ── */
 var CLASSIFICATIONS=[
   {k:'sme',l:'SME',c:'#7C5CBF'},
@@ -9267,7 +9346,7 @@ function rptCsvBuiltin(key){var f=RPT_CSV[key],b=rptBuiltin(key);if(!f||(b&&b.fi
 /* ── AUTH & PERMISSIONS (client-side roles only — not API security) ── */
 var AUTH_USER='khaja@communityforce.com',AUTH_PASS='Namtra_CF27',DEFAULT_PW='CommunityForce2026';
 var ME=null;
-var SECTIONS=[{k:'org',tab:'tabOrg',l:'Department View'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources View'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'class',tab:'tabClass',l:'Classification View'},{k:'plan',tab:'tabPlan',l:'COE Plan'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'reports',tab:'tabReports',l:'Reports'},{k:'proforma',tab:'tabProforma',l:'Proforma'}];
+var SECTIONS=[{k:'res',tab:'tabRes',l:'Resources'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'plan',tab:'tabPlan',l:'COE Plan'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'reports',tab:'tabReports',l:'Reports'},{k:'proforma',tab:'tabProforma',l:'Proforma'}];
 function emailFromName(name){var clean=(name||'').replace(/\(.*?\)/g,'').replace(/[^A-Za-z .\-]/g,'').trim();var parts=clean.split(/\s+/).filter(Boolean);var local=parts.length>=2?(parts[0]+'.'+parts[parts.length-1]):(parts[0]||'user');return local.toLowerCase().replace(/[^a-z0-9.]/g,'')+'@communityforce.com';}
 function authMigrate(){
   if(!D.accounts)D.accounts=[];
