@@ -4503,6 +4503,8 @@ var PROP_STATUSES=[
   {k:'no-bid',l:'No Bid',c:'#94A3B8'}
 ];
 var TONE_TAGS=['authoritative','plainspoken','mission-driven','technical','consultative','confident','approachable'];
+var propView='list';
+function propSetView(v){propView=v;renderView();}
 function renderProposalsView(q){
   if(!canProposal())return '<div class="empty-msg">You don\'t have access to the Proposals module.</div>';
   var props=(D.proposals||[]).slice();
@@ -4530,8 +4532,70 @@ function renderProposalsView(q){
       +'<div class="prop-hero-card" onclick="openCorporateCertsManager()" style="border-left-color:#0EA5E9"><div class="prop-hero-ttl">&#127942; Corporate Certifications</div><div class="prop-hero-n">'+certActive+'</div><div class="prop-hero-sub">'+(certExpSoon?'<span style="color:var(--warn-text)">'+certExpSoon+' expiring &lt;60d</span> &middot; ':'')+certs.length+' total</div></div>'
       +'<div class="prop-hero-card" style="border-left-color:var(--gold);cursor:default"><div class="prop-hero-ttl">&#128202; Pipeline</div><div class="prop-hero-n">'+openProps+'</div><div class="prop-hero-sub">'+submitted+' submitted &middot; '+won+' won ('+winRate+'%)</div></div>'
     +'</div>'
-    +(props.length?'<div class="rq-section-lbl">Proposals</div>'+propCardsHTML(props):'<div class="empty-recruit"><div style="font-size:14px;margin-bottom:6px">No proposals yet</div><div style="font-size:12px">Click <b>+ New Proposal</b> to upload an RFP (PDF/DOCX) — Claude will extract the customer, requirements, certifications, roles, scope, period of performance, and key dates. Then Atlas creates or links an opportunity and gives you a tabbed proposal workspace.</div></div>')
+    +(props.length?(
+        '<div class="pf-subtabs" style="margin-top:10px">'+[['list','List'],['pipeline','Pipeline'],['dashboard','Dashboard']].map(function(t){return '<button class="pf-subtab'+(propView===t[0]?' active':'')+'" onclick="propSetView(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>'
+        +(propView==='pipeline'?propPipelineHTML(props):propView==='dashboard'?propDashboardHTML(props):('<div class="rq-section-lbl">Proposals</div>'+propCardsHTML(props)))
+      ):'<div class="empty-recruit"><div style="font-size:14px;margin-bottom:6px">No proposals yet</div><div style="font-size:12px">Click <b>+ New Proposal</b> to upload an RFP (PDF/DOCX) — Claude will extract the customer, requirements, certifications, roles, scope, period of performance, and key dates. Then Atlas creates or links an opportunity and gives you a tabbed proposal workspace.</div></div>')
     +'</div>';
+}
+/* ── Proposals Pipeline (kanban) + Dashboard ── */
+var propDrag=null;
+function _propColId(k){return 'propcol_'+String(k).replace(/[^a-z0-9]/gi,'_');}
+function propDragStart(e,id){propDrag=id;if(e.dataTransfer)e.dataTransfer.effectAllowed='move';}
+function propDragEnd(){propDrag=null;}
+function propDragOver(e,k){e.preventDefault();var el=document.getElementById(_propColId(k));if(el)el.classList.add('over');}
+function propDragLeave(k){var el=document.getElementById(_propColId(k));if(el)el.classList.remove('over');}
+function propDrop(e,k){e.preventDefault();var el=document.getElementById(_propColId(k));if(el)el.classList.remove('over');var id=propDrag;propDrag=null;if(!id)return;var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p||p.status===k)return;var prev=p.status;p.status=k;if(Array.isArray(p.events))p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'',type:'status.changed',payload:{from:prev,to:k}});save();renderView();toastAction('Moved "'+(p.title||'proposal')+'" to '+propStatusCfg(k).l,'Undo',function(){p.status=prev;if(Array.isArray(p.events))p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'',type:'status.changed',payload:{from:k,to:prev}});save();renderView();});}
+function propVal(p){return (p.rfp&&Number(p.rfp.potentialValue))||0;}
+function propDueChip(p){var due=p.rfp&&p.rfp.dueDate?p.rfp.dueDate:'';if(!due)return '';var dd=new Date(due);if(isNaN(dd))return '';var days=Math.round((dd-Date.now())/86400000);if(days<0)return '<span class="rq-sla rq-sla-red">'+Math.abs(days)+'d overdue</span>';if(days<14)return '<span class="rq-sla rq-sla-warn">due '+days+'d</span>';return '<span class="rq-sla">due '+days+'d</span>';}
+function propCardInner(p){
+  var opp=p.opportunityId?D.projects.find(function(x){return x.id===p.opportunityId;}):null;
+  var cust=opp?(opp.customer||opp.name):(p.rfp&&p.rfp.customer?p.rfp.customer:'');
+  return (cust?'<div class="plan-card-prog">'+esc(cust)+'</div>':'')
+    +'<div class="plan-card-sub">'+esc(p.title||'(untitled)')+'</div>'
+    +'<div class="plan-meta" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:4px">'
+    +(propVal(p)?'<span class="plan-chip">'+fmt(propVal(p))+'</span>':'')
+    +propDueChip(p)+'</div>';
+}
+function propPipelineHTML(props){
+  var ed=canProposal();
+  return '<div class="plan-board" style="grid-template-columns:repeat('+PROP_STATUSES.length+',minmax(0,1fr));margin-top:10px">'+PROP_STATUSES.map(function(s){
+    var col=props.filter(function(p){return (p.status||'draft')===s.k;});
+    return '<div class="plan-col" id="'+_propColId(s.k)+'" ondragover="propDragOver(event,\''+s.k+'\')" ondragleave="propDragLeave(\''+s.k+'\')" ondrop="propDrop(event,\''+s.k+'\')">'
+      +'<div class="plan-col-hdr"><span><span class="plan-col-dot" style="background:'+s.c+'"></span>'+esc(s.l)+'</span><span style="color:var(--text-muted)">'+col.length+'</span></div>'
+      +(col.length?col.map(function(p){return '<div class="plan-card" style="border-left-color:'+s.c+'"'+(ed?' draggable="true" ondragstart="propDragStart(event,\''+p.id+'\')" ondragend="propDragEnd()"':'')+' onclick="openProposalDetail(\''+p.id+'\')">'+propCardInner(p)+'</div>';}).join(''):'<div class="cards-matrix-empty">—</div>')
+      +'</div>';
+  }).join('')+'</div>';
+}
+function propDashboardHTML(props){
+  var byStatus={};PROP_STATUSES.forEach(function(s){byStatus[s.k]=props.filter(function(p){return (p.status||'draft')===s.k;});});
+  var won=byStatus.won.length,lost=byStatus.lost.length,winRate=(won+lost)?Math.round(won/(won+lost)*100):0;
+  var openK=['draft','in-review','red-team','submitted'];
+  var openVal=props.filter(function(p){return openK.indexOf(p.status)>-1;}).reduce(function(s,p){return s+propVal(p);},0);
+  var wonVal=byStatus.won.reduce(function(s,p){return s+propVal(p);},0);
+  var dueSoon=props.filter(function(p){var d=p.rfp&&p.rfp.dueDate?new Date(p.rfp.dueDate):null;if(!d||isNaN(d))return false;var days=(d-Date.now())/86400000;return days>=-7&&days<=30&&['won','lost','no-bid'].indexOf(p.status)<0;}).sort(function(a,b){return new Date(a.rfp.dueDate)-new Date(b.rfp.dueDate);});
+  function kpi(lbl,n,sub,col){return '<div class="prop-hero-card" style="border-left-color:'+(col||'var(--gold)')+';cursor:default"><div class="prop-hero-ttl">'+lbl+'</div><div class="prop-hero-n">'+n+'</div><div class="prop-hero-sub">'+(sub||'')+'</div></div>';}
+  var kpis='<div class="prop-hero" style="margin-top:10px">'
+    +kpi('Active',props.length-won-lost-byStatus['no-bid'].length,'in flight','#0EA5E9')
+    +kpi('Open value',fmt(openVal),'unsubmitted + submitted','#7C3AED')
+    +kpi('Won value',fmt(wonVal),won+' won','#16A34A')
+    +kpi('Win rate',winRate+'%',won+' won / '+lost+' lost','var(--gold)')
+    +kpi('Due ≤30d',dueSoon.length,'upcoming deadlines','#D97706')
+    +'</div>';
+  var funnelStages=[['draft','Draft'],['in-review','In Review'],['red-team','Red Team'],['submitted','Submitted'],['won','Won']].map(function(x){return {label:x[1],value:byStatus[x[0]].length,color:propStatusCfg(x[0]).c};});
+  var barGroups=[{name:'Proposals',values:PROP_STATUSES.map(function(s){return byStatus[s.k].length;}),color:'#0d9488'}];
+  var bar=svgBarChart({categories:PROP_STATUSES.map(function(s){return s.l;}),groups:barGroups},{fmt:'int',legend:false,rotate:true,h:220});
+  var valGroups=[{name:'Potential value',values:PROP_STATUSES.map(function(s){return byStatus[s.k].reduce(function(t,p){return t+propVal(p);},0);}),color:'#7C3AED'}];
+  var valBar=svgBarChart({categories:PROP_STATUSES.map(function(s){return s.l;}),groups:valGroups},{fmt:'money',legend:false,rotate:true,h:220});
+  var dueRows=dueSoon.map(function(p){var d=new Date(p.rfp.dueDate);var days=Math.round((d-Date.now())/86400000);return [esc(p.title||'(untitled)'),esc(propStatusCfg(p.status).l),esc(p.rfp.dueDate),(days<0?Math.abs(days)+'d overdue':days+'d'),propVal(p)?fmt(propVal(p)):'—'];});
+  var dueTbl=dueSoon.length?reportTable([{label:'Proposal',key:0},{label:'Status',key:1},{label:'Due',key:2},{label:'In',key:3,align:'right'},{label:'Value',key:4,align:'right'}],dueRows):'<div class="rpt-empty">No proposals due within 30 days.</div>';
+  return kpis
+    +'<div class="pf-grid rpt-cols3" style="margin-top:12px">'
+      +'<div class="pf-card"><div class="pf-card-h">Pipeline funnel</div>'+svgFunnel(funnelStages,{fmt:'int'})+'</div>'
+      +'<div class="pf-card"><div class="pf-card-h">Count by status</div>'+bar+'</div>'
+      +'<div class="pf-card"><div class="pf-card-h">Potential value by status</div>'+valBar+'</div>'
+    +'</div>'
+    +'<div class="pf-card" style="margin-top:12px"><div class="pf-card-h">Due within 30 days</div>'+dueTbl+'</div>';
 }
 function propStatusCfg(k){return (PROP_STATUSES.find(function(s){return s.k===k;}))||PROP_STATUSES[0];}
 function propCardsHTML(props){
