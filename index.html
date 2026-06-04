@@ -722,7 +722,8 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .rpt-lock{display:flex;align-items:center;justify-content:center;min-height:120px;color:var(--text-muted);font-size:12px;text-align:center;}
 .rpt-tpl{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card-bg);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;}
 .rpt-grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;}
-.rpt-cols3{grid-template-columns:repeat(auto-fit,minmax(460px,1fr));}
+.rpt-cols3{grid-template-columns:repeat(2,minmax(0,1fr));}
+@media(max-width:820px){.rpt-cols3{grid-template-columns:1fr;}}
 .rpt-dnd{min-width:0;}
 .rpt-dnd.rpt-dragover>.pf-card{outline:2px dashed var(--gold);outline-offset:3px;}
 .rpt-dnd[draggable=true]>.pf-card{cursor:default;}
@@ -3185,6 +3186,9 @@ function capProjData(roster,multPct,opts){
   var MAR_GROSS=41667,MAR_COST=20834;  // $500K ARR / 12 ; 50% margin
   var fixedOh=proformaOverheadMonthly();   // flat reference for the return value; per-month overhead is computed in the loop (honors scheduled increases)
   var PROJIDS=(D.projects||[]).filter(function(p){return projCat(p)==='project';}).map(function(p){return p.id;});  // Project-type items ONLY → Project Payroll (matches the Projects page)
+  // Unallocated resources (no project / initiative / overhead allocation) are
+  // assumed to roll off, so their payroll is dropped from the forecast beyond 90 days.
+  var _unallocCutKey=(function(){var d=new Date();d=new Date(d.getTime()+90*86400000);return d.getFullYear()*12+d.getMonth();})();
   var cum=0,rows=capProjMonths().map(function(mo){
     var active=roster.filter(function(pn){return capPersonActive(pn,mo.y,mo.m);});
     var baseRev=0;
@@ -3200,6 +3204,7 @@ function capProjData(roster,multPct,opts){
     var projLabor=0,otherLabor=0;
     var _mk=mo.y*12+mo.m;
     active.forEach(function(pn){var cst=capPersonCostAt(pn,mo.y,mo.m);
+      if(_mk>_unallocCutKey&&ppProjAllocAt(pn,mo)<=0)return;  // unallocated (not on a project/initiative/overhead) → dropped from the forecast after 90 days
       var pp;
       if(pn.allocSchedule&&pn.allocSchedule.length){pp=pn.allocSchedule.reduce(function(a,r){if(PROJIDS.indexOf(r.projectId)===-1)return a;if(r.start&&_capYM(r.start)>_mk)return a;if(r.end&&_capYM(r.end)<_mk)return a;return a+(Number(r.pct)||0);},0);}
       else pp=(pn.projects||[]).reduce(function(a,x){return a+(PROJIDS.indexOf(x.id)>-1?(Number(x.pct)||0):0);},0);
@@ -3284,6 +3289,7 @@ function _capProjHTML(roster){
     +'<button class="btn btn-sec btn-sm" onclick="capProjExportCSV()">&#8595; CSV</button>'
     +'<button class="btn btn-sec btn-sm" onclick="capProjPrint()">&#128424; Print</button>'
     +'<div class="cap-stage-leg" style="flex-basis:100%">Effective win odds by stage at '+_capProjMult+'% confidence: '+stageLeg+'</div>'
+    +'<div class="cap-stage-leg" style="flex-basis:100%">&#8505; Unallocated resources (no project, initiative, or overhead allocation) are dropped from the forecast after 90 days.</div>'
     +'</div>';
   // V4 scenario presets (from the Proforma / Knowledge Base)
   var v4='<div class="cap-proj-ctl"><label>V4 scenarios</label>'
