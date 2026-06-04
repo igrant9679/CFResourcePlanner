@@ -735,6 +735,14 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .pf-tbl{width:100%;border-collapse:collapse;font-size:12px;}
 .pf-tbl th,.pf-tbl td{border:1px solid #eef2f7;padding:5px 9px;text-align:left;vertical-align:top;}
 .pf-tbl thead th{background:#f1f5f9;font-size:10px;text-transform:uppercase;letter-spacing:.3px;color:var(--text-muted);}
+.pp-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.pp-tbl{border-collapse:collapse;font-size:11px;min-width:100%;}
+.pp-tbl th,.pp-tbl td{border:1px solid #eef2f7;padding:3px 6px;text-align:center;white-space:nowrap;}
+.pp-tbl thead th{background:#f1f5f9;font-size:10px;font-weight:700;color:var(--text-muted);}
+.pp-tbl .pp-row{text-align:left;position:sticky;left:0;z-index:1;background:#fff;font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;}
+.pp-tbl thead .pp-row{background:#f1f5f9;}
+.pp-bar{height:14px;border-radius:3px;}
+.pp-crit{display:inline-block;width:8px;height:8px;border-radius:50%;background:#DC2626;}
 .pf-tbl tbody tr:nth-child(even){background:#fafbfd;}
 .pf-list{margin:4px 0 0;padding-left:18px;font-size:12px;color:var(--text-secondary);}
 .pf-list li{margin-bottom:3px;}
@@ -1002,6 +1010,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
       <button class="tab" id="tabCap" onclick="switchTab('cap')">Capacity Planning</button>
       <button class="tab" id="tabPlan" onclick="switchTab('plan')">COE Plan</button>
       <button class="tab" id="tabPTask" onclick="switchTab('ptask')">Project Tasks</button>
+      <button class="tab" id="tabPPlan" onclick="switchTab('pplan')">Project Planning</button>
       <button class="tab" id="tabReports" onclick="switchTab('reports')">&#128202; Reports</button>
       <button class="tab tab-confidential" id="tabProforma" onclick="switchTab('proforma')">&#128274; Proforma</button>
     </div>
@@ -2414,7 +2423,7 @@ function openUnallocatedModal(){
   openModal('ovForm');
 }
 
-function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',recruit:'tabRecruit',init:'tabInit',opp:'tabOpp',prop:'tabProp',over:'tabOver',orgchart:'tabChart',res:'tabRes',cap:'tabCap',class:'tabClass',plan:'tabPlan',ptask:'tabPTask',reports:'tabReports'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
+function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',recruit:'tabRecruit',init:'tabInit',opp:'tabOpp',prop:'tabProp',over:'tabOver',orgchart:'tabChart',res:'tabRes',cap:'tabCap',class:'tabClass',plan:'tabPlan',ptask:'tabPTask',pplan:'tabPPlan',reports:'tabReports'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
 
 function cardHTML(m,did){
 var dept=D.departments.find(function(d){return d.id===did;});
@@ -2846,6 +2855,7 @@ function renderView(){
   else if(viewMode==='recruit')html=renderRecruitView(q);
   else if(viewMode==='prop')html=renderProposalsView(q);
   else if(viewMode==='cap')html=renderCapacityView(q);
+  else if(viewMode==='pplan')html=renderProjectPlanningView(q);
   else if(viewMode==='reports')html=renderReportsView(q);
   else if(viewMode==='proforma')html=renderProformaView(q);
   else html=renderResourcesView(q);
@@ -3762,6 +3772,131 @@ function renderProformaView(q){
     +kpiBar+actions+nav+body+'</div>';
 }
 
+/* ── PROJECT PLANNING ──
+   Time-phased resource availability (allocation × project start/end windows),
+   overallocation signals, a project schedule Gantt tied to the Proforma
+   Critical Dates timeline, and an AI planning advisor that reasons over all
+   of the above plus PTO. */
+function ppMonthLabel(mo){return CAP_MONTHS[mo.m]+" '"+String(mo.y).slice(2);}
+function ppProjAllocAt(m,mo){var pct=0;(m.projects||[]).forEach(function(e){var pid=typeof e==='string'?e:e.id;var ep=typeof e==='string'?100:(Number(e.pct)||0);var proj=(D.projects||[]).find(function(x){return x.id===pid;});if(!proj)return;if(capInWindow(proj,mo.y,mo.m))pct+=ep;});return pct;}
+function ppPeakAlloc(m,months){return months.reduce(function(mx,mo){return Math.max(mx,ppProjAllocAt(m,mo));},0);}
+function ppAllocColor(p){if(p>100)return '#DC2626';if(p>=85)return '#D97706';if(p>0)return '#2D6A4F';return '#94A3B8';}
+function ppAllocBg(p){if(p>100)return 'rgba(220,38,38,0.18)';if(p>=85)return 'rgba(217,119,6,0.15)';if(p>0)return 'rgba(45,106,79,0.10)';return '';}
+function ppCritDates(){var d=(D.proforma&&Array.isArray(D.proforma.dates))?D.proforma.dates:[];return d.filter(function(x){return x.date&&planParseDate(x.date);});}
+function ppMonthHasCrit(mo){return ppCritDates().some(function(x){var dt=planParseDate(x.date);return dt&&dt.getFullYear()===mo.y&&dt.getMonth()===mo.m&&!/done|complete|closed|resolved/i.test(x.status||'');});}
+function renderProjectPlanningView(q){
+  if(!canSee('pplan'))return '<div class="empty-msg">No access.</div>';
+  var months=capProjMonths(),cur=months[0];
+  var today=new Date();today.setHours(0,0,0,0);var d90=new Date(today.getTime()+90*86400000);
+  var allPeople=planMembers();
+  var people=allPeople.filter(function(m){return !q||memberMatchesSearch(m,q);});
+  var projects=(D.projects||[]).filter(function(p){var c=projCat(p);return c==='project'||c==='initiative';});
+  var showProjects=projects.filter(function(p){return !q||(p.name||'').toLowerCase().indexOf(q.toLowerCase())>-1||people.length;});
+  var overNow=people.filter(function(m){return ppProjAllocAt(m,cur)>100;});
+  var allocPeople=people.filter(function(m){return ppPeakAlloc(m,months)>0;}).sort(function(a,b){return ppPeakAlloc(b,months)-ppPeakAlloc(a,months);});
+  var benchCount=people.filter(function(m){return ppProjAllocAt(m,cur)===0;}).length;
+  var avgUtil=allPeople.length?Math.round(allPeople.reduce(function(s,m){return s+Math.min(150,ppProjAllocAt(m,cur));},0)/allPeople.length):0;
+  // critical dates
+  var crit=ppCritDates().map(function(x){return {x:x,dt:planParseDate(x.date)};}).filter(function(o){return !/done|complete|closed|resolved/i.test(o.x.status||'');}).sort(function(a,b){return a.dt-b.dt;});
+  var crit30=crit.filter(function(o){var dd=(o.dt-today)/86400000;return dd<=30&&dd>=-30;});
+  var ptoSoon=people.filter(function(m){return ptoOverlapsRange(m,today,d90);}).length;
+  function kpi(lbl,n,sub,col){return '<div class="prop-hero-card" style="border-left-color:'+(col||'var(--gold)')+';cursor:default"><div class="prop-hero-ttl">'+lbl+'</div><div class="prop-hero-n">'+n+'</div><div class="prop-hero-sub">'+(sub||'')+'</div></div>';}
+  var kpis='<div class="prop-hero">'
+    +kpi('Active projects',projects.filter(function(p){return capInWindow(p,cur.y,cur.m);}).length,'in current month','#0EA5E9')
+    +kpi('Overallocated',overNow.length,'people >100% now',overNow.length?'#DC2626':'#2D6A4F')
+    +kpi('Avg utilization',avgUtil+'%',benchCount+' on bench','#7C3AED')
+    +kpi('Critical dates',crit30.length,'within 30 days',crit30.length?'#D97706':'#2D6A4F')
+    +kpi('PTO ≤90d',ptoSoon,'people with time off','#D97706')
+    +'</div>';
+  // ── Allocation heatmap (people × months, time-aware) ──
+  var heat;
+  if(!allocPeople.length){heat='<div class="rpt-empty">No allocated resources'+(q?' match your search':'')+'.</div>';}
+  else{
+    heat='<div class="pp-wrap"><table class="pp-tbl"><thead><tr><th class="pp-row">Resource</th>'+months.map(function(mo){return '<th'+(ppMonthHasCrit(mo)?' title="Critical date this month"':'')+'>'+ppMonthLabel(mo)+(ppMonthHasCrit(mo)?' <span class="pp-crit"></span>':'')+'</th>';}).join('')+'</tr></thead><tbody>'
+      +allocPeople.map(function(m){
+        return '<tr><td class="pp-row"><span class="plan-own" onclick="openPersonProfile(\''+m.id+'\')">'+esc(m.name)+'</span></td>'
+          +months.map(function(mo){var p=ppProjAllocAt(m,mo);var pto=ptoOverlapsRange(m,new Date(mo.y,mo.m,1),new Date(mo.y,mo.m+1,0));return '<td style="background:'+ppAllocBg(p)+';color:'+ppAllocColor(p)+';font-weight:'+(p>100?'800':'600')+'">'+(p?p+'%':'·')+(pto?' <span title="On PTO this month" style="color:#D97706">◷</span>':'')+'</td>';}).join('')
+          +'</tr>';
+      }).join('')
+      +'</tbody></table></div><div style="font-size:10px;color:var(--text-muted);margin-top:4px">Allocation counts only projects active that month (by start/end dates). <span style="color:#DC2626;font-weight:700">Red = over 100%</span> · <span style="color:#D97706;font-weight:700">amber = 85–100%</span> · ◷ = on PTO.</div>';
+  }
+  // ── Project schedule Gantt ──
+  var gantt;
+  if(!showProjects.length){gantt='<div class="rpt-empty">No projects to schedule.</div>';}
+  else{
+    gantt='<div class="pp-wrap"><table class="pp-tbl"><thead><tr><th class="pp-row">Project</th>'+months.map(function(mo){return '<th>'+ppMonthLabel(mo)+'</th>';}).join('')+'</tr></thead><tbody>';
+    // critical-dates marker row (proforma-gated)
+    if(canProforma()&&crit.length){
+      gantt+='<tr><td class="pp-row" style="color:#DC2626">⚑ Critical dates</td>'+months.map(function(mo){var hits=crit.filter(function(o){return o.dt.getFullYear()===mo.y&&o.dt.getMonth()===mo.m;});return '<td'+(hits.length?' title="'+esc(hits.map(function(o){return o.x.date+': '+(o.x.event||'');}).join(' | ').replace(/"/g,'&quot;'))+'"':'')+'>'+(hits.length?'<span class="pp-crit"></span>'+(hits.length>1?' '+hits.length:''):'')+'</td>';}).join('')+'</tr>';
+    }
+    gantt+=showProjects.map(function(p){
+      var col=projCat(p)==='initiative'?'#7C3AED':'#0EA5E9';
+      var fte=capItemFTER(allPeople,p.id);
+      return '<tr><td class="pp-row" style="border-left:3px solid '+col+'"><span class="plan-own" onclick="openEditProject(\''+p.id+'\')">'+esc(p.name)+'</span>'+(fte?' <span style="font-size:9px;color:var(--text-muted)">'+fte.toFixed(1)+' FTE</span>':'')+'</td>'
+        +months.map(function(mo){var on=capInWindow(p,mo.y,mo.m);return '<td>'+(on?'<div class="pp-bar" style="background:'+col+'"></div>':'')+'</td>';}).join('')
+        +'</tr>';
+    }).join('')+'</tbody></table></div>';
+  }
+  // ── Availability snapshot table ──
+  var availRows=allocPeople.concat(people.filter(function(m){return ppProjAllocAt(m,cur)===0;})).map(function(m){
+    var now=ppProjAllocAt(m,cur),peak=ppPeakAlloc(m,months),load=planMemberLoad(m.id),ptoD=ptoDaysInRange(m,today,d90);
+    var status=now>100?'<span class="rq-sla rq-sla-red">Over</span>':now>=85?'<span class="rq-sla rq-sla-warn">Full</span>':now>0?'<span class="rq-sla">Available</span>':'<span class="rq-sla" style="opacity:.6">Bench</span>';
+    return [esc(m.name),esc(m.role||''),now+'%',peak+'%',(load?load+'%':'—'),(ptoD?ptoD+'d':'—'),status];
+  });
+  var availTbl=availRows.length?reportTable([{label:'Person',key:0},{label:'Role',key:1},{label:'Now',key:2,align:'right'},{label:'Peak',key:3,align:'right'},{label:'Task load',key:4,align:'right'},{label:'PTO ≤90d',key:5,align:'right'},{label:'Status',key:6}],availRows):'<div class="rpt-empty">No resources.</div>';
+  // ── Critical dates list ──
+  var critCard='';
+  if(canProforma()){
+    var critRows=crit.slice(0,40).map(function(o){var dd=Math.round((o.dt-today)/86400000);var when=dd<0?(Math.abs(dd)+'d ago'):(dd===0?'today':'in '+dd+'d');return '<tr><td style="text-align:left">'+esc(o.x.date)+'</td><td style="text-align:left">'+esc(o.x.event||'')+'</td><td style="text-align:left">'+esc(o.x.impact||'')+'</td><td style="text-align:left"><span class="pf-pill">'+esc(o.x.status||'')+'</span></td><td style="text-align:right;white-space:nowrap">'+when+'</td></tr>';}).join('');
+    critCard='<div class="pf-card" style="margin-top:12px"><div class="pf-card-h" style="display:flex;align-items:center;gap:8px">Critical dates timeline <button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 7px" onclick="switchTab(\'proforma\');pfSetTab(\'risks\')">Open in Proforma →</button></div>'
+      +(crit.length?'<table class="pf-tbl"><thead><tr><th style="text-align:left">Date</th><th style="text-align:left">Event</th><th style="text-align:left">Impact / action</th><th style="text-align:left">Status</th><th style="text-align:right">When</th></tr></thead><tbody>'+critRows+'</tbody></table>':'<div class="rpt-empty">No critical dates set. Add them in Proforma → Risks &amp; Dates.</div>')+'</div>';
+  } else {
+    critCard='<div class="pf-card" style="margin-top:12px"><div class="pf-card-h">Critical dates timeline</div><div class="rpt-empty">The critical-dates timeline lives in the Proforma (restricted). Ask an admin for access to factor it into planning.</div></div>';
+  }
+  return '<div style="width:90%;max-width:1500px;margin:0 auto">'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:6px">'
+      +'<div><div style="font-size:18px;font-weight:800">Project Planning</div>'
+      +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Resource availability over time, overallocation signals, the project schedule, and AI guidance tied to your critical dates.</div></div>'
+      +'<button class="btn btn-gold btn-sm" onclick="ppAIAdvise()">&#10024; AI Planning Advice</button>'
+    +'</div>'
+    +kpis
+    +'<div id="pplanAdvice" style="margin-top:10px"></div>'
+    +'<div class="pf-card" style="margin-top:12px"><div class="pf-card-h">Resource allocation by month</div>'+heat+'</div>'
+    +'<div class="pf-card" style="margin-top:12px"><div class="pf-card-h">Project schedule</div>'+gantt+'</div>'
+    +'<div class="pf-card" style="margin-top:12px"><div class="pf-card-h">Resource availability snapshot</div>'+availTbl+'</div>'
+    +critCard
+    +'</div>';
+}
+function ppBuildAIContext(){
+  var months=capProjMonths(),cur=months[0],today=new Date();today.setHours(0,0,0,0);var d60=new Date(today.getTime()+60*86400000),d90=new Date(today.getTime()+90*86400000);
+  var people=planMembers(),lines=[];
+  lines.push('TODAY: '+today.toISOString().slice(0,10));
+  var over=[];people.forEach(function(m){var peak=ppPeakAlloc(m,months),now=ppProjAllocAt(m,cur);if(peak>100)over.push(m.name+' (now '+now+'%, peak '+peak+'%)');});
+  lines.push('\nOVERALLOCATED RESOURCES (>100% in some month): '+(over.length?over.join('; '):'none'));
+  var bench=people.filter(function(m){return ppProjAllocAt(m,cur)===0;}).map(function(m){return m.name+(m.role?' ('+m.role+')':'');});
+  lines.push('\nBENCH / UNALLOCATED NOW: '+(bench.length?bench.slice(0,20).join('; '):'none'));
+  var projects=(D.projects||[]).filter(function(p){var c=projCat(p);return c==='project'||c==='initiative';});
+  var ending=projects.filter(function(p){if(!p.endDate)return false;var e=planParseDate(p.endDate+'-01');return e&&e>=today&&e<=d90;}).map(function(p){return p.name+' ends '+p.endDate+' ('+capItemFTER(people,p.id).toFixed(1)+' FTE rolling off)';});
+  var starting=projects.filter(function(p){if(!p.startDate)return false;var s=planParseDate(p.startDate+'-01');return s&&s>=today&&s<=d90;}).map(function(p){return p.name+' starts '+p.startDate;});
+  lines.push('\nPROJECTS ENDING ≤90d: '+(ending.length?ending.join('; '):'none'));
+  lines.push('PROJECTS STARTING ≤90d: '+(starting.length?starting.join('; '):'none'));
+  var pto=[];people.forEach(function(m){(m.pto||[]).forEach(function(e){var s=planParseDate(e.start);if(s&&s<=d60&&(planParseDate(e.end||e.start)||s)>=today)pto.push(m.name+': '+e.start+(e.end&&e.end!==e.start?'→'+e.end:'')+(e.note?' ('+e.note+')':''));});});
+  lines.push('\nUPCOMING PTO ≤60d: '+(pto.length?pto.join('; '):'none'));
+  if(canProforma()){
+    var crit=ppCritDates().filter(function(x){var dt=planParseDate(x.date);return dt&&(dt-today)/86400000<=90&&!/done|complete|closed|resolved/i.test(x.status||'');}).map(function(x){return x.date+' — '+(x.event||'')+(x.impact?' [impact: '+x.impact+']':'');});
+    lines.push('\nCRITICAL DATES ≤90d (Proforma): '+(crit.length?crit.join('; '):'none'));
+  }
+  return lines.join('\n');
+}
+function ppAIAdvise(){
+  var box=document.getElementById('pplanAdvice');if(!box)return;
+  box.innerHTML='<div class="pf-card" style="border-left:3px solid var(--gold)"><div style="font-size:12px;color:#7C3AED">&#10024; Analyzing schedule, allocations, PTO'+(canProforma()?', and critical dates':'')+'…</div></div>';
+  var sys='You are a senior program & resource manager advising CommunityForce, a small federal IT services business. From the planning context, give concise, prioritized, ACTIONABLE guidance. Cover: (1) overallocation risks — who is over 100% and how to rebalance; (2) staffing roll-off and ramp tied to project start/end dates; (3) PTO conflicts with allocations or critical dates; (4) timing risks from critical dates. Reference specific names, projects, and dates. Keep it tight. Output ONLY clean HTML using <h4>, <p>, <ul>, <li>, <strong> — no markdown, no code fences.';
+  llmComplete({system:sys,messages:[{role:'user',content:ppBuildAIContext()}],max_tokens:1400}).then(function(resp){
+    var html=llmExtractText(resp).replace(/```html?/gi,'').replace(/```/g,'').trim();
+    box.innerHTML='<div class="pf-card" style="border-left:3px solid var(--gold)"><div class="pf-card-h" style="display:flex;align-items:center;justify-content:space-between">&#10024; AI Planning Advisor <button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 7px" onclick="ppAIAdvise()">↻ Refresh</button></div><div style="font-size:13px;line-height:1.5">'+(html||'<i>No guidance returned.</i>')+'</div></div>';
+  }).catch(function(e){box.innerHTML='<div class="pf-card" style="border-left:3px solid var(--red)"><div style="font-size:12px;color:var(--red)">AI advice failed: '+esc(e.message)+'. Add an API key in Admin → Integrations (or set the org ANTHROPIC_API_KEY).</div></div>';});
+}
 /* ── RESOURCES HUB (By Location / Departments / Classifications / PTO) ── */
 var resTab='location';
 function resSetTab(t){resTab=t;renderView();}
@@ -9346,7 +9481,7 @@ function rptCsvBuiltin(key){var f=RPT_CSV[key],b=rptBuiltin(key);if(!f||(b&&b.fi
 /* ── AUTH & PERMISSIONS (client-side roles only — not API security) ── */
 var AUTH_USER='khaja@communityforce.com',AUTH_PASS='Namtra_CF27',DEFAULT_PW='CommunityForce2026';
 var ME=null;
-var SECTIONS=[{k:'res',tab:'tabRes',l:'Resources'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'plan',tab:'tabPlan',l:'COE Plan'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'reports',tab:'tabReports',l:'Reports'},{k:'proforma',tab:'tabProforma',l:'Proforma'}];
+var SECTIONS=[{k:'res',tab:'tabRes',l:'Resources'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'plan',tab:'tabPlan',l:'COE Plan'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'pplan',tab:'tabPPlan',l:'Project Planning'},{k:'reports',tab:'tabReports',l:'Reports'},{k:'proforma',tab:'tabProforma',l:'Proforma'}];
 function emailFromName(name){var clean=(name||'').replace(/\(.*?\)/g,'').replace(/[^A-Za-z .\-]/g,'').trim();var parts=clean.split(/\s+/).filter(Boolean);var local=parts.length>=2?(parts[0]+'.'+parts[parts.length-1]):(parts[0]||'user');return local.toLowerCase().replace(/[^a-z0-9.]/g,'')+'@communityforce.com';}
 function authMigrate(){
   if(!D.accounts)D.accounts=[];
