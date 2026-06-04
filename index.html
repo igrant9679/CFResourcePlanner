@@ -9341,6 +9341,68 @@ function rpt_overhead(ctx){var byType=[{label:'Overhead/G&A',value:proformaOverh
   var donut=svgDonut(byType,{fmt:'money',centerLabel:fmt(byType.reduce(function(a,s){return a+s.value;},0)),centerSub:'/mo'});
   var bar=lines.length?svgBarChart({categories:lines.map(function(l){return l.n;}),groups:[{label:'Monthly',values:lines.map(function(l){return l.m;}),color:'#546478'}]},{fmt:'money',rotate:true,h:260}):'';
   return donut+(bar?'<div style="margin-top:10px"><div style="font-size:11px;font-weight:700;margin-bottom:4px">Top lines</div>'+bar+'</div>':'');}
+function _capTimelineSegAt(p,y,m){if(!p.timeline||!p.timeline.length)return null;var key=y*12+m;for(var i=0;i<p.timeline.length;i++){var s=p.timeline[i],fk=_capYM(s.from),tk=s.to?_capYM(s.to):Infinity;if(key>=fk&&key<=tk)return s;}return null;}
+/* Walk the forecast window and surface month-over-month REVENUE and COST changes
+   with their reasons (project timeline notes, scheduled steps/escalators, one-time
+   costs, payroll start/roll-off). */
+function _rptTrendEvents(ctx){
+  var months=_rptMonthRows(capProjMonths(),ctx);
+  var revItems=_rptItems(ctx,['project','initiative']),revEvents=[];
+  revItems.forEach(function(p){var prev=null;
+    months.forEach(function(mo,i){
+      var on=capInWindow(p,mo.y,mo.m),rev=on?capProjRevAt(p,mo.y,mo.m):0;
+      if(prev!==null&&Math.round(rev)!==Math.round(prev)){
+        var seg=_capTimelineSegAt(p,mo.y,mo.m),reason;
+        if(seg&&seg.note)reason=seg.note;
+        else if(rev<=0&&prev>0)reason='Contract / window ends';
+        else if(prev<=0&&rev>0)reason='Begins / restarts';
+        else if(p.revenueEscalator&&Number(p.revenueEscalator.pct))reason='Escalator '+p.revenueEscalator.pct+'%';
+        else reason='Revenue step';
+        revEvents.push({y:mo.y,m:mo.m,name:p.name,delta:rev-prev,reason:reason});
+      }
+      prev=rev;
+    });
+  });
+  var roster=ctx.roster||capBuildRoster(),costEvents=[];
+  roster.forEach(function(pn){var prev=null,prevActive=false;
+    months.forEach(function(mo,i){
+      var active=capPersonActive(pn,mo.y,mo.m),c=active?capPersonCostAt(pn,mo.y,mo.m):0,key=mo.y*12+mo.m;
+      if(prev!==null&&Math.round(c)!==Math.round(prev)){
+        var otc=(pn.oneTimeCosts||[]).filter(function(o){return _capYM(o.month)===key;});
+        var prevKey=months[i-1].y*12+months[i-1].m;
+        var otcPrev=(pn.oneTimeCosts||[]).filter(function(o){return _capYM(o.month)===prevKey;});
+        var step=(pn.costSchedule||[]).filter(function(s){return _capYM(s.from)===key;})[0],reason;
+        if(active&&!prevActive)reason='Starts payroll';
+        else if(!active&&prevActive)reason='Rolls off payroll';
+        else if(otc.length)reason='One-time: '+otc.map(function(o){return o.label||'cost';}).join(', ');
+        else if(otcPrev.length)reason='One-time cost ended';
+        else if(step)reason='Cost step to '+fmt(Number(step.cost)||0);
+        else if(pn.costEscalator&&Number(pn.costEscalator.pct))reason='Escalator '+pn.costEscalator.pct+'% / '+(pn.costEscalator.period==='month'?'mo':'yr');
+        else reason='Cost change';
+        costEvents.push({y:mo.y,m:mo.m,name:pn.name,delta:c-prev,reason:reason});
+      }
+      prev=c;prevActive=active;
+    });
+  });
+  return {months:months,revEvents:revEvents,costEvents:costEvents};
+}
+function rpt_rev_cost_trends(ctx){
+  var rows=_rptMonthRows(ctx.proj.rows,ctx);
+  if(!rows.length)return '<div class="rpt-empty">No forecast months.</div>';
+  var labels=rows.map(function(r){return CAP_MONTHS[r.m]+" '"+String(r.y).slice(2);});
+  var line=svgLineChart({labels:labels,lines:[{label:'Revenue',values:rows.map(function(r){return r.rev;}),color:'#2D6A4F',area:true},{label:'Cost',values:rows.map(function(r){return r.cost;}),color:'#DC2626'}]},{fmt:'money',h:240});
+  var t=_rptTrendEvents(ctx);
+  function lbl(e){return CAP_MONTHS[e.m]+" '"+String(e.y).slice(2);}
+  function tbl(events,dl){
+    if(!events.length)return '<div class="rpt-empty">No notable changes in the window.</div>';
+    var ev=events.slice().sort(function(a,b){return (a.y*12+a.m)-(b.y*12+b.m);}).slice(0,24);
+    var more=events.length>24?'<div style="font-size:10px;color:var(--text-muted);margin-top:3px">Showing first 24 of '+events.length+' changes — export CSV for the full list.</div>':'';
+    return reportTable([{key:'mo',label:'Month'},{key:'name',label:'Item / person'},{key:'delta',label:dl,fmt:'money'},{key:'reason',label:'Reason'}],ev.map(function(e){return {mo:lbl(e),name:e.name,delta:Math.round(e.delta),reason:e.reason};}))+more;
+  }
+  return line
+    +'<div class="rpt-sec-h" style="margin:14px 0 4px">Revenue changes &amp; reasons</div>'+tbl(t.revEvents,'Δ Revenue')
+    +'<div class="rpt-sec-h" style="margin:16px 0 4px">Cost changes &amp; reasons</div>'+tbl(t.costEvents,'Δ Cost');
+}
 function rpt_contract_timeline(ctx){var months=capProjMonths(),items=_rptItems(ctx,['project','initiative']);
   if(!items.length||!months.length)return '<div class="rpt-empty">No contracts.</div>';
   var n=months.length,w=820,labW=150,rowH=24,padT=24,plotW=w-labW-14,h=padT+items.length*rowH+6,x=function(i){return labW+i/n*plotW;},out='';
@@ -9388,6 +9450,7 @@ var RPT_BUILTINS=[
  {key:'forecast',title:'18-Month Revenue & Profit Forecast',area:'Financials',financial:true,fn:rpt_forecast},
  {key:'cash',title:'Cash Runway',area:'Financials',financial:true,fn:rpt_cash},
  {key:'overhead',title:'Overhead / G&A Breakdown',area:'Financials',financial:true,fn:rpt_overhead},
+ {key:'rev_cost_trends',title:'Revenue & Cost Trends + Reasons',area:'Financials',financial:true,fn:rpt_rev_cost_trends},
  {key:'pipeline',title:'Opportunity Pipeline Funnel',area:'Pipeline',financial:false,fn:rpt_pipeline},
  {key:'recruiting',title:'Recruiting Pipeline',area:'Recruiting',financial:false,fn:rpt_recruiting},
  {key:'proposals',title:'Proposals Status & Value',area:'Proposals',financial:false,fn:rpt_proposals},
@@ -9582,6 +9645,7 @@ var RPT_CSV={
  forecast:function(){var rows=capProjData(capBuildRoster(),0,{}).rows;return {headers:['Month','Revenue','Cost','Profit','Cumulative'],rows:rows.map(function(r){return [CAP_MONTHS[r.m]+" '"+String(r.y).slice(2),r.rev,r.cost,r.profit,r.cum];})};},
  cash:function(){var rows=capProjData(capBuildRoster(),0,{}).rows,b=proformaDebtService(),bal=capOpeningCash();return {headers:['Month','Op. profit','Cash balance'],rows:rows.map(function(r){bal+=(r.profit-b);return [CAP_MONTHS[r.m]+" '"+String(r.y).slice(2),r.profit,Math.round(bal)];})};},
  overhead:function(){var cs=((D.proforma||{}).costStructure||{});return {headers:['Line','Monthly'],rows:(cs.overhead||[]).map(function(x){return [x.category,rptNum(x.monthly)];}).concat((cs.softwareSubs||[]).map(function(x){return [x.vendor,rptNum(x.monthly)];}))};},
+ rev_cost_trends:function(){var t=_rptTrendEvents(_rptCtx()),rows=[];function lbl(e){return CAP_MONTHS[e.m]+" '"+String(e.y).slice(2);}t.revEvents.forEach(function(e){rows.push([lbl(e),'Revenue',e.name,Math.round(e.delta),e.reason]);});t.costEvents.forEach(function(e){rows.push([lbl(e),'Cost',e.name,Math.round(e.delta),e.reason]);});return {headers:['Month','Type','Item / person','Delta','Reason'],rows:rows};},
  pipeline:function(){return {headers:['Opportunity','Stage','Value','Weighted EV'],rows:(D.projects||[]).filter(function(p){return projCat(p)==='opportunity';}).map(function(o){var pot=rptNum(o.potential||(o.rfp&&o.rfp.potentialValue));return [o.name,capOppStage(o),pot,Math.round(pot*capOppEffProb(o,100))];})};},
  recruiting:function(){var byS={};(D.candidates||[]).forEach(function(c){byS[c.status||'new']=(byS[c.status||'new']||0)+1;});return {headers:['Candidate status','Count'],rows:Object.keys(byS).map(function(k){return [k,byS[k]];})};},
  proposals:function(){return {headers:['Proposal','Status','Due','Value'],rows:(D.proposals||[]).map(function(p){return [p.title||(p.rfp&&p.rfp.customer)||'(untitled)',p.status||'draft',(p.rfp&&p.rfp.dueDate)||p.dueDate||'',rptNum(p.rfp&&p.rfp.potentialValue)];})};},
