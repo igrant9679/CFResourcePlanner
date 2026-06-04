@@ -3772,9 +3772,12 @@ function renderProformaView(q){
   } else if(proformaTab==='contracts'){
     var contracts=(D.projects||[]).filter(function(p){return p.timeline&&p.timeline.length;});
     var tlBody='';contracts.forEach(function(p){(p.timeline||[]).forEach(function(s,si){
-      tlBody+='<tr><td>'+esc(p.name)+'</td><td>'+esc(s.from)+(s.to?(' – '+esc(s.to)):' →')+'</td><td>'+_pfMoney(s.revenue)+'</td><td>'+esc(s.note||'')+'</td>'
+      var startC=s.from?esc(_otcMonthLbl(s.from)):'<span style="color:var(--text-muted)">—</span>';
+      var endC=s.to?esc(_otcMonthLbl(s.to)):'<span style="color:var(--text-muted)">Ongoing</span>';
+      tlBody+='<tr><td>'+esc(p.name)+'</td><td style="white-space:nowrap">'+startC+'</td><td style="white-space:nowrap">'+endC+'</td><td style="text-align:right;white-space:nowrap">'+_pfMoney(s.revenue)+'</td><td>'+esc(s.note||'')+'</td>'
         +'<td class="pf-row-act">'+_pfEditBtn("pfTimelineEdit('"+p.id+"',"+si+")")+_pfDelBtn("pfTimelineDel('"+p.id+"',"+si+")")+'</td></tr>';});});
-    var tlTable='<div style="overflow:auto"><table class="pf-tbl"><thead><tr><th>Contract</th><th>Period</th><th>Monthly revenue</th><th>Note</th><th></th></tr></thead><tbody>'+tlBody+'</tbody></table></div>'
+    if(!tlBody)tlBody='<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:14px">No time-phased contracts yet. Click <b>+ Add timeline segment</b> to add a contract revenue period.</td></tr>';
+    var tlTable='<div style="overflow:auto"><table class="pf-tbl"><thead><tr><th>Contract</th><th>Start</th><th>End</th><th style="text-align:right">Monthly revenue</th><th>Note</th><th></th></tr></thead><tbody>'+tlBody+'</tbody></table></div>'
       +'<button class="btn btn-sec btn-sm pf-add" onclick="pfTimelineAdd()">+ Add timeline segment</button>';
     body='<div class="pf-card">'+_pfH('Contract revenue — time-phased (drives the Capacity forecast)')+tlTable+'<div class="pf-note">Edit a row to change when each contract earns and how much; the Capacity forecast updates from this. Cost &amp; margin are computed net of payroll + overhead in Capacity Planning → Projects.</div></div>'
       +'<div class="pf-card">'+_pfH('Strategic role')+_pfTable(['Contract','Strategic role'],(P.contractEconomics||[]).map(function(x){return [esc(x.contract),esc(x.role)];}),'contractEconomics')+'</div>';
@@ -9229,11 +9232,15 @@ function svgLineChart(series,opts){opts=opts||{};var labels=series.labels||[],li
   return '<svg width="100%" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="xMinYMin meet" style="max-height:'+h+'px">'+zero+thr+yLab+xLab+areas+polys+'</svg>'+leg;}
 function svgHeatmap(matrix,opts){opts=opts||{};var rows=matrix.rows||[],cols=matrix.cols||[],cells=matrix.cells||[];
   if(!rows.length||!cols.length)return '<div class="rpt-empty">No data.</div>';
-  var labW=opts.labW||110,cellW=opts.cellW||Math.max(30,Math.min(64,Math.round((720-labW)/cols.length))),cellH=opts.cellH||20,topH=opts.topH||42;
+  var labW=opts.labW||110,cellW=opts.cellW||Math.max(30,Math.min(64,Math.round((720-labW)/cols.length))),cellH=opts.cellH||20;
+  // Header height must fit the rotated column labels, else long names overflow
+  // the top and overlap. Scale topH to the longest label at the -42° rotation.
+  var _maxLbl=cols.reduce(function(a,c){return Math.max(a,String(c).slice(0,18).length);},0);
+  var topH=opts.topH||Math.max(46,Math.ceil(_maxLbl*5.4*0.67)+16);
   var flat=[];cells.forEach(function(r){(r||[]).forEach(function(v){if(typeof v==='number')flat.push(v);});});
   var mn=opts.min!=null?opts.min:(flat.length?Math.min.apply(null,flat):0),mx=opts.max!=null?opts.max:(flat.length?Math.max.apply(null,flat):1);if(mx===mn)mx=mn+1;
   var w=labW+cols.length*cellW,h=topH+rows.length*cellH,out='';
-  cols.forEach(function(c,ci){var x=labW+ci*cellW+cellW/2;out+='<text x="'+x+'" y="'+(topH-6)+'" text-anchor="end" font-size="11" fill="#64748b" transform="rotate(-40 '+x+' '+(topH-6)+')">'+esc(String(c).slice(0,14))+'</text>';});
+  cols.forEach(function(c,ci){var x=labW+ci*cellW+cellW/2;out+='<text x="'+x+'" y="'+(topH-6)+'" text-anchor="end" font-size="10" fill="#64748b" transform="rotate(-42 '+x+' '+(topH-6)+')">'+esc(String(c).slice(0,18))+'</text>';});
   rows.forEach(function(rn,ri){out+='<text x="'+(labW-6)+'" y="'+(topH+ri*cellH+cellH*0.66)+'" text-anchor="end" font-size="10" fill="#475569">'+esc(String(rn).slice(0,20))+'</text>';
     cols.forEach(function(c,ci){var v=(cells[ri]||[])[ci],x=labW+ci*cellW,y=topH+ri*cellH,fill=(typeof v==='number'&&v!==0)?rptHeatColor((v-mn)/(mx-mn)):'#f1f5f9';
       out+='<rect x="'+x+'" y="'+y+'" width="'+(cellW-1.5)+'" height="'+(cellH-1.5)+'" rx="2" fill="'+fill+'"></rect>';
