@@ -725,7 +725,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .rpt-dnd{min-width:0;}
 .rpt-dnd.rpt-dragover>.pf-card{outline:2px dashed var(--gold);outline-offset:3px;}
 .rpt-dnd[draggable=true]>.pf-card{cursor:default;}
-.rpt-grip{cursor:grab;color:var(--text-muted);font-size:14px;user-select:none;}
+.rpt-grip{cursor:grab;color:var(--text-muted);font-size:14px;user-select:none;touch-action:none;padding:0 2px;}
 .rpt-grip:active{cursor:grabbing;}
 .pf-card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px;}
 .pf-card.pf-locked{border-left:3px solid #C5A55A;background:#fffdf7;}
@@ -8947,25 +8947,37 @@ function _rptMonthRows(rows,ctx){var f=_rf(ctx);if(!f.yearFrom&&!f.yearTo)return
 function rptSetFilter(k,v){if(k==='yearFrom'||k==='yearTo')RPT_FILTERS[k]=v?Number(v):null;else RPT_FILTERS[k]=v;renderView();}
 function rptClearFilters(){RPT_FILTERS={dept:'',category:'',yearFrom:null,yearTo:null};renderView();}
 function _rptCtx(filters){var roster=capBuildRoster();return {roster:roster,totals:capTotals(roster),proj:capProjData(roster,0,{}),filters:filters||RPT_FILTERS};}
-function _rptBuiltinCard(b,ctx,dnd){var body;
+function _rptBuiltinCard(b,ctx,dnd,dndCtx){var body;
   if(b.financial&&!canProforma())body='<div class="rpt-lock">&#128274; Financial report — admin access required</div>';
   else{try{body=b.fn(ctx);}catch(e){body='<div class="rpt-empty">Could not render: '+esc(e&&e.message||e)+'</div>';}}
   var locked=b.financial&&!canProforma();
   var acts=(!locked&&RPT_CSV[b.key]?'<button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 7px" onclick="rptCsvBuiltin(\''+b.key+'\')">CSV</button> ':'')+'<button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 7px" onclick="rptPrintBuiltin(\''+b.key+'\')">&#128424;</button>';
-  return rptCard(b.title,body,{actions:acts,badge:b.area,lead:(dnd?'<span class="rpt-grip" title="Drag to rearrange">&#9783;</span>':'')});}
-/* Persisted built-in report order (drag-and-drop). Missing keys appended; unknown dropped. */
-function _rptOrder(){var saved=Array.isArray(D.reportOrder)?D.reportOrder:[];var keys=RPT_BUILTINS.map(function(b){return b.key;});var out=saved.filter(function(k){return keys.indexOf(k)>-1;});keys.forEach(function(k){if(out.indexOf(k)<0)out.push(k);});return out;}
-var _rptDrag=null;
-function rptDragStart(e,key){_rptDrag=key;if(e.dataTransfer){e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',key);}catch(_){}}}
+  var grip=dnd?'<span class="rpt-grip" title="Drag to rearrange" ontouchstart="rptTouchStart(event,\''+b.key+'\',\''+(dndCtx||'builtin')+'\')" ontouchmove="rptTouchMove(event)" ontouchend="rptTouchEnd(event)">&#9783;</span>':'';
+  return rptCard(b.title,body,{actions:acts,badge:b.area,lead:grip});}
+/* Draggable wrapper used by both the built-in gallery and saved dashboards. */
+function _rptDndWrap(inner,key,ctx){return '<div class="rpt-dnd" draggable="true" data-rptkey="'+key+'" ondragstart="rptDragStart(event,\''+key+'\',\''+ctx+'\')" ondragover="rptDragOver(event)" ondragleave="rptDragLeave(event)" ondrop="rptDrop(event,\''+key+'\',\''+ctx+'\')" ondragend="rptDragEnd(event)">'+inner+'</div>';}
+/* Per-user built-in report order (falls back to legacy global, then default). */
+function _rptOrder(){var saved=(ME&&Array.isArray(ME.reportOrder))?ME.reportOrder:(Array.isArray(D.reportOrder)?D.reportOrder:[]);var keys=RPT_BUILTINS.map(function(b){return b.key;});var out=saved.filter(function(k){return keys.indexOf(k)>-1;});keys.forEach(function(k){if(out.indexOf(k)<0)out.push(k);});return out;}
+function _rptIdxByKey(arr,key){for(var i=0;i<arr.length;i++){if(arr[i].builtinKey===key)return i;}return -1;}
+/* Shared reorder for ctx 'builtin' (per-user order) or 'dash:<id>' (that dashboard's cards). */
+function rptReorder(from,key,ctx){if(!from||from===key)return;
+  if(ctx&&ctx.indexOf('dash:')===0){var t=(D.reportTemplates||[]).filter(function(x){return x.id===ctx.slice(5);})[0];if(!t||!t.dashboard)return;var arr=t.dashboard.cards||[];var fi=_rptIdxByKey(arr,from);if(fi<0)return;var it=arr.splice(fi,1)[0];var ti=_rptIdxByKey(arr,key);if(ti<0)arr.push(it);else arr.splice(ti,0,it);t.dashboard.cards=arr;t.updatedAt=Date.now();save();renderView();return;}
+  var order=_rptOrder(),fi2=order.indexOf(from);if(fi2<0)return;order.splice(fi2,1);var ti2=order.indexOf(key);if(ti2<0)order.push(from);else order.splice(ti2,0,from);
+  if(ME)ME.reportOrder=order;else D.reportOrder=order;save();renderView();}
+var _rptDrag=null,_rptDragCtx=null;
+function rptDragStart(e,key,ctx){_rptDrag=key;_rptDragCtx=ctx||'builtin';if(e.dataTransfer){e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',key);}catch(_){}}}
 function rptDragOver(e){e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect='move';var c=e.currentTarget;if(c&&c.classList)c.classList.add('rpt-dragover');}
 function rptDragLeave(e){var c=e.currentTarget;if(c&&c.classList)c.classList.remove('rpt-dragover');}
-function rptDragEnd(e){var c=e.currentTarget;if(c&&c.classList)c.classList.remove('rpt-dragover');_rptDrag=null;}
-function rptDrop(e,key){e.preventDefault();var c=e.currentTarget;if(c&&c.classList)c.classList.remove('rpt-dragover');
-  var from=_rptDrag||(e.dataTransfer&&e.dataTransfer.getData('text/plain'));_rptDrag=null;
-  if(!from||from===key)return;var order=_rptOrder(),fi=order.indexOf(from);if(fi<0)return;order.splice(fi,1);
-  var ti=order.indexOf(key);if(ti<0)order.push(from);else order.splice(ti,0,from);
-  D.reportOrder=order;save();renderView();}
-function rptResetOrder(){delete D.reportOrder;save();renderView();toast('Report layout reset.','info');}
+function rptDragEnd(e){var c=e.currentTarget;if(c&&c.classList)c.classList.remove('rpt-dragover');_rptDrag=null;_rptDragCtx=null;}
+function rptDrop(e,key,ctx){e.preventDefault();var c=e.currentTarget;if(c&&c.classList)c.classList.remove('rpt-dragover');
+  var from=_rptDrag||(e.dataTransfer&&e.dataTransfer.getData('text/plain')),fc=_rptDragCtx||ctx;_rptDrag=null;_rptDragCtx=null;rptReorder(from,key,fc||ctx);}
+function rptResetOrder(){if(ME)delete ME.reportOrder;delete D.reportOrder;save();renderView();toast('Report layout reset.','info');}
+/* Touch drag (HTML5 DnD doesn't fire on touch). Grip starts it; we track the finger. */
+function _rptClosestKey(el){while(el&&el!==document.body){if(el.classList&&el.classList.contains('rpt-dnd'))return el.getAttribute('data-rptkey');el=el.parentNode;}return null;}
+function _rptClearHL(){var ns=document.querySelectorAll('.rpt-dnd.rpt-dragover');for(var i=0;i<ns.length;i++)ns[i].classList.remove('rpt-dragover');}
+function rptTouchStart(e,key,ctx){_rptDrag=key;_rptDragCtx=ctx||'builtin';}
+function rptTouchMove(e){if(!_rptDrag)return;e.preventDefault();var t=e.touches&&e.touches[0];if(!t)return;_rptClearHL();var el=document.elementFromPoint(t.clientX,t.clientY);while(el&&el!==document.body){if(el.classList&&el.classList.contains('rpt-dnd')){el.classList.add('rpt-dragover');break;}el=el.parentNode;}}
+function rptTouchEnd(e){if(!_rptDrag)return;var t=e.changedTouches&&e.changedTouches[0];var key=t?_rptClosestKey(document.elementFromPoint(t.clientX,t.clientY)):null;_rptClearHL();var from=_rptDrag,ctx=_rptDragCtx;_rptDrag=null;_rptDragCtx=null;if(key)rptReorder(from,key,ctx);}
 function renderReportsView(q){
   var ctx=_rptCtx();
   var newBtns='<button class="btn btn-gold btn-sm" onclick="openReportComposer()">+ Dashboard</button> <button class="btn btn-sec btn-sm" onclick="openTableBuilder()">+ Table</button> <button class="btn btn-sec btn-sm" onclick="openPivotBuilder()">+ Pivot</button>';
@@ -8985,7 +8997,7 @@ function renderReportsView(q){
   var order=_rptOrder();
   var grid='<div class="rpt-sec-h" style="display:flex;align-items:center;gap:8px">All reports <span style="font-weight:400;text-transform:none;color:var(--text-muted)">&middot; drag the &#9783; cards to rearrange (snaps to grid)</span> <button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 7px" onclick="rptResetOrder()">Reset layout</button></div>'
     +'<div class="pf-grid" id="rptBuiltinGrid">'+order.map(function(key){var b=rptBuiltin(key);if(!b)return '';
-      return '<div class="rpt-dnd" draggable="true" data-rptkey="'+key+'" ondragstart="rptDragStart(event,\''+key+'\')" ondragover="rptDragOver(event)" ondragleave="rptDragLeave(event)" ondrop="rptDrop(event,\''+key+'\')" ondragend="rptDragEnd(event)">'+_rptBuiltinCard(b,ctx,true)+'</div>';}).join('')+'</div>';
+      return _rptDndWrap(_rptBuiltinCard(b,ctx,true,'builtin'),key,'builtin');}).join('')+'</div>';
   return '<div style="max-width:1320px;margin:0 auto" id="rptRoot">'+toolbar+tplHtml+grid+'</div>';}
 function rptCloseOpen(){RPT_OPEN=null;renderView();}
 /* ── Custom templates: persistence + render dispatchers ── */
@@ -9010,7 +9022,9 @@ function rptRenderTemplate(t,ctx){ctx=ctx||_rptCtx();if(t.kind==='dashboard')ret
 function rptRenderDashboard(t,ctx){var dctx=Object.assign({},ctx,{filters:(t.dashboard&&t.dashboard.filters)||{}});
   var fch=[];var fl=dctx.filters;if(fl.dept)fch.push('Dept: '+fl.dept);if(fl.category)fch.push('Category: '+fl.category);if(fl.yearFrom||fl.yearTo)fch.push('Years: '+(fl.yearFrom||'…')+'–'+(fl.yearTo||'…'));
   var banner=fch.length?'<div class="pf-note" style="margin:0 0 8px">Filters · '+esc(fch.join(' · '))+'</div>':'';
-  var cards=(t.dashboard.cards||[]).map(function(c){var b=rptBuiltin(c.builtinKey);return b?_rptBuiltinCard(b,dctx):'';}).join('');return banner+'<div class="pf-grid">'+(cards||'<div class="rpt-empty">No cards selected.</div>')+'</div>';}
+  var dc='dash:'+t.id;
+  var cards=(t.dashboard.cards||[]).map(function(c){var b=rptBuiltin(c.builtinKey);return b?_rptDndWrap(_rptBuiltinCard(b,dctx,true,dc),c.builtinKey,dc):'';}).join('');
+  return banner+'<div class="pf-grid">'+(cards||'<div class="rpt-empty">No cards selected.</div>')+'</div>';}
 function rptRenderTable(t){var src=rptGetSource(t.table.source);if(src.blocked)return '<div class="rpt-lock">&#128274; Admin only.</div>';
   var cfg=t.table,cols,data;
   if(cfg.groupBy){var measures=cfg.measures&&cfg.measures.length?cfg.measures:[{field:'',agg:'count',label:'Count'}];
