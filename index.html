@@ -1190,13 +1190,14 @@ async function serverSave(opts){
     else if(res.status===409){
       try{var body=await res.json();}catch(_){body={};}
       if(body.conflict){
-        // Optimistic-lock conflict — someone else saved since we loaded.
-        syncSetStatus('Conflict — another user saved','#FCA5A5');
-        var cmsg='⚠ Another user saved changes since you loaded this page.\n\n'
-          +'Click OK to reload their latest version (any unsaved changes in this tab will be lost).\n\n'
-          +'Click Cancel to keep YOUR version — your next save will overwrite their changes.';
-        if(confirm(cmsg)){location.reload();}
-        else{_serverUpdatedAt=body.serverUpdatedAt||_serverUpdatedAt;saveQueued=true;syncSetStatus('Overwriting on save…','#FBBF24');}
+        // Optimistic-lock conflict — another session (usually a second open tab)
+        // saved since this tab loaded. This is a single shared workspace, so
+        // auto-resolve without interrupting: adopt the server's version stamp and
+        // re-save so this tab's edit persists. The protected-array guardrail below
+        // still hard-blocks a stale tab from wiping a whole list to zero.
+        _serverUpdatedAt=body.serverUpdatedAt||_serverUpdatedAt;
+        saveQueued=true;
+        syncSetStatus('Synced over another session','#FBBF24');
       } else {
         // Guardrail rejection — incoming D would wipe a protected array.
         syncSetStatus('Save blocked — refresh to recover','#FCA5A5');
