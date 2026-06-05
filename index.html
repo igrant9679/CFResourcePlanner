@@ -2184,7 +2184,17 @@ function deptRollup(did){var dept=D.departments.find(function(d){return d.id===d
 function memberMatchesSearch(m,q){return m.name.toLowerCase().indexOf(q)>-1||m.role.toLowerCase().indexOf(q)>-1||projIds(m).some(function(pid){return pName(pid).toLowerCase().indexOf(q)>-1;})||(m.skillsets||[]).some(function(sid){return sName(sid).toLowerCase().indexOf(q)>-1;})||(m.certifications||[]).some(function(cid){var c=D.certifications.find(function(x){return x.id===cid;});return c&&c.name.toLowerCase().indexOf(q)>-1;})||(m.pastClients||[]).some(function(pcid){var pc=D.pastClients.find(function(x){return x.id===pcid;});return pc&&pc.name.toLowerCase().indexOf(q)>-1;});}
 function deptHasMatch(dept,q){if(dept.members.some(function(m){return memberMatchesSearch(m,q);}))return true;return deptChildren(dept.id).some(function(c){return deptHasMatch(c,q);});}
 function deptOptHTML(did,depth,excludeIds){return D.departments.filter(function(d){return d.parentId===did&&excludeIds.indexOf(d.id)===-1;}).map(function(d){var prefix=Array(depth+1).join('\u00a0\u00a0')+(depth>0?'\u21b3 ':'');return '<option value="'+d.id+'">'+prefix+esc(d.name)+'</option>'+deptOptHTML(d.id,depth+1,excludeIds);}).join('');}
-function projIds(m){return(m.projects||[]).map(function(x){return typeof x==='string'?x:x.id;});}
+function projIds(m){
+  // A time-phased allocSchedule fully overrides base assignments: a resource is
+  // "assigned" to the projects its schedule references (so they appear on those
+  // project cards even when the period is future/past). Else base m.projects.
+  if(m.allocSchedule&&m.allocSchedule.length){var seen={},out=[];m.allocSchedule.forEach(function(r){if(r.projectId&&!seen[r.projectId]){seen[r.projectId]=1;out.push(r.projectId);}});return out;}
+  return(m.projects||[]).map(function(x){return typeof x==='string'?x:x.id;});}
+// % to show for a member on a project card: the scheduled % for that project
+// (max across its rows) when a schedule exists, else the static/current %.
+function projDisplayPct(m,pid){
+  if(m.allocSchedule&&m.allocSchedule.length){var s=0;m.allocSchedule.forEach(function(r){if(r.projectId===pid)s=Math.max(s,Number(r.pct)||0);});return s;}
+  return projPct(m,pid);}
 function projPct(m,pid){
   if(m.allocSchedule&&m.allocSchedule.length){var d=new Date(),key=d.getFullYear()*12+d.getMonth(),s=0;m.allocSchedule.forEach(function(r){if(r.projectId!==pid)return;if(r.start&&_capYM(r.start)>key)return;if(r.end&&_capYM(r.end)<key)return;s+=Number(r.pct)||0;});return s;}
   var e=(m.projects||[]).find(function(x){return(typeof x==='string'?x:x.id)===pid;});if(!e)return 0;return typeof e==='string'?100:(e.pct||100);}
@@ -2516,7 +2526,7 @@ function projRollupData(pid,all){
   var proj=D.projects.find(function(p){return p.id===pid;});
   var rev=itemRev(proj);
   var pm=all.filter(function(m){return projIds(m).indexOf(pid)>-1;});
-  var cost=pm.reduce(function(s,m){return s+Math.round(m.cost*(projPct(m,pid)/100));},0);
+  var cost=pm.reduce(function(s,m){return s+Math.round(m.cost*(projDisplayPct(m,pid)/100));},0);
   var memberSet={};pm.forEach(function(m){memberSet[m.id]=true;});
   projChildren(pid).forEach(function(c){
     var cr=projRollupData(c.id,all);rev+=cr.revenue;cost+=cr.cost;
@@ -2531,11 +2541,15 @@ function togSubProj(id){
   var open=el.style.display==='block';el.style.display=open?'none':'block';
   var ch=document.getElementById('spch_'+id);if(ch)ch.innerHTML=open?'&#9658;':'&#9660;';}
 function projMemRowHTML(m,projId){
-  var pct=projPct(m,projId),allocCost=Math.round(m.cost*(pct/100)),oa=totalAlloc(m)>100;
+  var sched=!!(m.allocSchedule&&m.allocSchedule.length);
+  var pct=projDisplayPct(m,projId),allocCost=Math.round(m.cost*(pct/100)),oa=totalAlloc(m)>100;
+  var pctCtl=sched
+    ? '<b>'+pct+'</b>% allocated <span style="font-size:9px;color:var(--gold);font-weight:700" title="Time-phased allocation — edit in Resource Planning → Edit Resource">&#8599; scheduled</span>'
+    : '<input type="number" class="pct-input" value="'+pct+'" min="1" max="100" title="% allocation to this item — edit to change" onclick="event.stopPropagation()" onchange="setMemberProjPct(\''+m.id+'\',\''+projId+'\',this.value)">% allocated';
   return '<div class="proj-mem"><div style="min-width:0;flex:1"><div class="proj-mem-nm">'
     +'<span class="proj-mem-link" onclick="openPersonProfile(\''+m.id+'\')">'+esc(m.name)+'</span>'
     +(oa?'<span style="color:var(--red);margin-left:4px;font-size:11px;font-weight:800" title="Over-allocated ('+totalAlloc(m)+'% total)">⚠</span>':'')+'</div>'
-    +'<div class="proj-mem-dept">'+esc(m._dn)+' &middot; <input type="number" class="pct-input" value="'+pct+'" min="1" max="100" title="% allocation to this item — edit to change" onclick="event.stopPropagation()" onchange="setMemberProjPct(\''+m.id+'\',\''+projId+'\',this.value)">% allocated</div></div>'
+    +'<div class="proj-mem-dept">'+esc(m._dn)+' &middot; '+pctCtl+'</div></div>'
     +'<div class="proj-mem-cost">'+fmt(allocCost)+(pct<100?'<div style="font-size:9px;color:var(--text-muted);text-align:right">of '+fmt(m.cost)+'</div>':'')+'</div></div>';}
 function setMemberProjPct(mid,projId,val){
   var pct=Math.max(1,Math.min(100,Math.round(Number(val)||0)));
