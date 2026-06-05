@@ -8522,16 +8522,33 @@ function totalAlloc(m){
    recommended for furlough. m.furloughDate (YYYY-MM-DD) records when they will
    be / were furloughed. Status: Furloughed (date passed) | Scheduled (future) |
    Recommended (unallocated, no date) | '' (allocated). */
+// First month in the forecast window where the resource has ZERO project /
+// initiative / overhead allocation — i.e. when they become unassigned. Catches
+// people allocated now whose contract/option-year ends later. null = always allocated.
+function furloughUnassignedAt(m){
+  var months=capProjMonths();
+  for(var i=0;i<months.length;i++){if(ppAllocByCatAt(m,months[i]).total<=0)return months[i];}
+  return null;
+}
+function _furloughDateFromMo(mo){return mo?(mo.y+'-'+String(mo.m+1).padStart(2,'0')+'-01'):'';}
+function _furloughWhen(mo){if(!mo)return '';var nowK=(function(){var d=new Date();return d.getFullYear()*12+d.getMonth();})();return (mo.y*12+mo.m)<=nowK?'now':_otcMonthLbl(mo.y+'-'+String(mo.m+1).padStart(2,'0'));}
 function furloughStatus(m){
   if(m.furloughDate){var d=planParseDate(m.furloughDate);if(d){var t=new Date();t.setHours(0,0,0,0);d.setHours(0,0,0,0);return d<=t?'Furloughed':'Scheduled';}}
-  return totalAlloc(m)<=0?'Recommended':'';
+  // Recommended if unassigned now OR will become unassigned anywhere in the window.
+  return furloughUnassignedAt(m)?'Recommended':'';
 }
 function openFurloughModal(mid){
   if(!(ME&&(ME.role==='admin'||ME.role==='editor'))){alert('You don\'t have permission.');return;}
   var f=findMember(mid);if(!f)return;var m=f.m;
+  var unMo=furloughUnassignedAt(m),when=_furloughWhen(unMo);
+  var intro;
+  if(unMo&&when==='now')intro='This resource has no project / initiative / overhead allocation. ';
+  else if(unMo)intro='This resource is allocated now but loses all project / initiative / overhead allocation from '+when+'. ';
+  else intro='';
+  intro+='Set the date they will be furloughed (clear it to cancel).';
   openFormModal({over:'Resources',title:'Schedule furlough — '+esc(m.name),submitLabel:'Save',
-    intro:'This resource has no project, initiative, or overhead allocation. Set the date they will be furloughed (clear it to cancel).',
-    fields:[{key:'date',label:'Furlough date',type:'date',value:m.furloughDate||''}],
+    intro:intro,
+    fields:[{key:'date',label:'Furlough date',type:'date',value:m.furloughDate||_furloughDateFromMo(unMo)}],
     onSubmit:function(v){m.furloughDate=(v.date||'').trim();save();renderView();toast(m.furloughDate?('Furlough '+(planParseDate(m.furloughDate)<=new Date()?'recorded':'scheduled')+' for '+m.name+'.'):'Furlough cleared for '+m.name+'.','success');}
   });
 }
@@ -8681,7 +8698,7 @@ var newDid=gv('e_dept_mv');
 if(newDid&&newDid!==did){var toDept=D.departments.find(function(d){return d.id===newDid;});if(toDept){fromDept.members=fromDept.members.filter(function(x){return x.id!==mid;});toDept.members.push(m);}}
 closeModal('ovEdit');save();renderView();
 // Recommend furlough as soon as a resource has no project/initiative/overhead allocation.
-if(totalAlloc(m)<=0&&!m.furloughDate)toastAction(m.name+' has no project/initiative/overhead allocation — recommend furlough.','Schedule furlough',function(){openFurloughModal(mid);});}
+var _unMo=furloughUnassignedAt(m);if(_unMo&&!m.furloughDate){var _w=_furloughWhen(_unMo);toastAction(m.name+(_w==='now'?' has no project/initiative/overhead allocation':' becomes unassigned '+_w)+' — recommend furlough.','Schedule furlough',function(){openFurloughModal(mid);});}}
 
 function delMem(mid,did){var dept=D.departments.find(function(d){return d.id===did;});if(!dept)return;dept.members=dept.members.filter(function(m){return m.id!==mid;});closeModal('ovEdit');save();renderView();}
 
@@ -9417,7 +9434,7 @@ function rpt_furlough(ctx){
     +'<td style="text-align:left">'+esc(m._dn||'')+'</td>'
     +'<td style="text-align:right;white-space:nowrap">'+fmt(Number(m.cost)||0)+'</td>'
     +'<td style="text-align:left">'+pill(x.st)+'</td>'
-    +'<td style="text-align:left;white-space:nowrap">'+(m.furloughDate?esc(_otcMonthLbl((m.furloughDate||'').slice(0,7))):'<span style="color:var(--text-muted)">—</span>')+(x.st==='Recommended'?' <button class="btn btn-sec btn-sm" style="font-size:10px;padding:1px 6px" onclick="openFurloughModal(\''+m.id+'\')">Schedule</button>':'')+'</td></tr>';}).join('');
+    +'<td style="text-align:left;white-space:nowrap">'+(m.furloughDate?esc(_otcMonthLbl((m.furloughDate||'').slice(0,7))):(x.st==='Recommended'?('<span style="color:var(--text-muted)">unassigned '+esc(_furloughWhen(furloughUnassignedAt(m)))+'</span> <button class="btn btn-sec btn-sm" style="font-size:10px;padding:1px 6px" onclick="openFurloughModal(\''+m.id+'\')">Schedule</button>'):'<span style="color:var(--text-muted)">—</span>'))+'</td></tr>';}).join('');
   var summary='<div class="pf-note" style="margin:0 0 8px">'+counts.Recommended+' recommended · '+counts.Scheduled+' scheduled · '+counts.Furloughed+' furloughed · <b>'+fmt(pend)+'/mo</b> payroll on resources not yet furloughed</div>';
   return summary+'<div style="overflow:auto"><table class="pf-tbl"><thead><tr><th style="text-align:left">Resource</th><th style="text-align:left">Dept</th><th style="text-align:right">Monthly cost</th><th style="text-align:left">Status</th><th style="text-align:left">Furlough date</th></tr></thead><tbody>'+body+'</tbody></table></div>';
 }
