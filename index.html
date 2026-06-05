@@ -2191,20 +2191,35 @@ function deptRollup(did){var dept=D.departments.find(function(d){return d.id===d
 function memberMatchesSearch(m,q){return m.name.toLowerCase().indexOf(q)>-1||m.role.toLowerCase().indexOf(q)>-1||projIds(m).some(function(pid){return pName(pid).toLowerCase().indexOf(q)>-1;})||(m.skillsets||[]).some(function(sid){return sName(sid).toLowerCase().indexOf(q)>-1;})||(m.certifications||[]).some(function(cid){var c=D.certifications.find(function(x){return x.id===cid;});return c&&c.name.toLowerCase().indexOf(q)>-1;})||(m.pastClients||[]).some(function(pcid){var pc=D.pastClients.find(function(x){return x.id===pcid;});return pc&&pc.name.toLowerCase().indexOf(q)>-1;});}
 function deptHasMatch(dept,q){if(dept.members.some(function(m){return memberMatchesSearch(m,q);}))return true;return deptChildren(dept.id).some(function(c){return deptHasMatch(c,q);});}
 function deptOptHTML(did,depth,excludeIds){return D.departments.filter(function(d){return d.parentId===did&&excludeIds.indexOf(d.id)===-1;}).map(function(d){var prefix=Array(depth+1).join('\u00a0\u00a0')+(depth>0?'\u21b3 ':'');return '<option value="'+d.id+'">'+prefix+esc(d.name)+'</option>'+deptOptHTML(d.id,depth+1,excludeIds);}).join('');}
-function projIds(m){
-  // A time-phased allocSchedule fully overrides base assignments: a resource is
-  // "assigned" to the projects its schedule references (so they appear on those
-  // project cards even when the period is future/past). Else base m.projects.
-  if(m.allocSchedule&&m.allocSchedule.length){var seen={},out=[];m.allocSchedule.forEach(function(r){if(r.projectId&&!seen[r.projectId]){seen[r.projectId]=1;out.push(r.projectId);}});return out;}
-  return(m.projects||[]).map(function(x){return typeof x==='string'?x:x.id;});}
-// % to show for a member on a project card: the scheduled % for that project
-// (max across its rows) when a schedule exists, else the static/current %.
+function _memberSchedRows(m,pid){return (m.allocSchedule||[]).filter(function(r){return r.projectId===pid;});}
+function _memberHasSched(m,pid){return (m.allocSchedule||[]).some(function(r){return r.projectId===pid;});}
+// Distinct items a member is on — union of base assignments AND the time-phased
+// schedule. PER-ITEM override: a schedule row replaces the base % for the SAME
+// item, but a base assignment to an item the schedule doesn't mention still
+// counts (so a resource scheduled on projects still shows on their initiatives/
+// overhead). This is the "ignore the Assignment % only where a schedule exists".
+function _memberAllPids(m){
+  var seen={},out=[];
+  (m.projects||[]).forEach(function(x){var id=typeof x==='string'?x:x.id;if(id&&!seen[id]){seen[id]=1;out.push(id);}});
+  (m.allocSchedule||[]).forEach(function(r){if(r.projectId&&!seen[r.projectId]){seen[r.projectId]=1;out.push(r.projectId);}});
+  return out;}
+function projIds(m){return _memberAllPids(m);}
+// Effective % for a member on one item in month (y,mo): schedule rows for that
+// item (if any) override the base entry; base counts only while the item is
+// within its start/end window.
+function memberProjPctAt(m,pid,y,mo){
+  var rows=_memberSchedRows(m,pid),key=y*12+mo;
+  if(rows.length){var s=0;rows.forEach(function(r){if(r.start&&_capYM(r.start)>key)return;if(r.end&&_capYM(r.end)<key)return;s+=Number(r.pct)||0;});return s;}
+  var e=(m.projects||[]).find(function(x){return(typeof x==='string'?x:x.id)===pid;});if(!e)return 0;
+  var proj=(D.projects||[]).find(function(p){return p.id===pid;});if(proj&&!capInWindow(proj,y,mo))return 0;
+  return typeof e==='string'?100:(Number(e.pct)||100);}
+function projPct(m,pid){var d=new Date();return memberProjPctAt(m,pid,d.getFullYear(),d.getMonth());}
+// % to show on a project card (period-independent): scheduled max for the item
+// if scheduled, else the base assignment %.
 function projDisplayPct(m,pid){
-  if(m.allocSchedule&&m.allocSchedule.length){var s=0;m.allocSchedule.forEach(function(r){if(r.projectId===pid)s=Math.max(s,Number(r.pct)||0);});return s;}
-  return projPct(m,pid);}
-function projPct(m,pid){
-  if(m.allocSchedule&&m.allocSchedule.length){var d=new Date(),key=d.getFullYear()*12+d.getMonth(),s=0;m.allocSchedule.forEach(function(r){if(r.projectId!==pid)return;if(r.start&&_capYM(r.start)>key)return;if(r.end&&_capYM(r.end)<key)return;s+=Number(r.pct)||0;});return s;}
-  var e=(m.projects||[]).find(function(x){return(typeof x==='string'?x:x.id)===pid;});if(!e)return 0;return typeof e==='string'?100:(e.pct||100);}
+  var rows=_memberSchedRows(m,pid);
+  if(rows.length){var s=0;rows.forEach(function(r){s=Math.max(s,Number(r.pct)||0);});return s;}
+  var e=(m.projects||[]).find(function(x){return(typeof x==='string'?x:x.id)===pid;});return e?(typeof e==='string'?100:(Number(e.pct)||100)):0;}
 function save(){
   try{localStorage.setItem(STORE_KEY,JSON.stringify(D));}catch(e){}
   clearTimeout(save._t);
@@ -2548,7 +2563,7 @@ function togSubProj(id){
   var open=el.style.display==='block';el.style.display=open?'none':'block';
   var ch=document.getElementById('spch_'+id);if(ch)ch.innerHTML=open?'&#9658;':'&#9660;';}
 function projMemRowHTML(m,projId){
-  var sched=!!(m.allocSchedule&&m.allocSchedule.length);
+  var sched=_memberHasSched(m,projId);
   var pct=projDisplayPct(m,projId),allocCost=Math.round(m.cost*(pct/100)),oa=totalAlloc(m)>100;
   var pctCtl=sched
     ? '<b>'+pct+'</b>% allocated <span style="font-size:9px;color:var(--gold);font-weight:700" title="Time-phased allocation — edit in Resource Planning → Edit Resource">&#8599; scheduled</span>'
@@ -2988,16 +3003,13 @@ function _capNow(){var d=new Date();return {y:d.getFullYear(),m:d.getMonth()};}
 // Sandbox aggregates reflect the CURRENT-month effective allocation: a person with
 // a time-phased allocSchedule (set in Resource Planning → Edit Resource) uses that
 // month's scheduled %; everyone else uses their static per-project %.
-function capAllocR(person){var n=_capNow();if(person.allocSchedule&&person.allocSchedule.length){var key=n.y*12+n.m;return person.allocSchedule.reduce(function(s,r){if(r.start&&_capYM(r.start)>key)return s;if(r.end&&_capYM(r.end)<key)return s;return s+(Number(r.pct)||0);},0);}return (person.projects||[]).reduce(function(s,x){return s+(Number(x.pct)||0);},0);}
+function capAllocR(person){var n=_capNow();return _memberAllPids(person).reduce(function(s,pid){return s+memberProjPctAt(person,pid,n.y,n.m);},0);}
 function capItemCostR(roster,projId){var n=_capNow();return roster.reduce(function(s,pn){return s+(Number(pn.cost)||0)*capPersonProjPctAt(pn,projId,n.y,n.m)/100;},0);}
 function capItemFTER(roster,projId){var n=_capNow();return roster.reduce(function(s,pn){return s+capPersonProjPctAt(pn,projId,n.y,n.m)/100;},0);}
 /* Month-aware allocation %: honors a person's time-phased allocSchedule when set,
    else falls back to the static per-project % (so the forecast is unchanged for
    anyone without a schedule). */
-function capPersonProjPctAt(pn,projId,y,m){
-  if(pn.allocSchedule&&pn.allocSchedule.length){var key=y*12+m,s=0;pn.allocSchedule.forEach(function(r){if(r.projectId!==projId)return;if(r.start&&_capYM(r.start)>key)return;if(r.end&&_capYM(r.end)<key)return;s+=Number(r.pct)||0;});return s;}
-  var e=(pn.projects||[]).find(function(x){return (typeof x==='string'?x:x.id)===projId;});return e?(typeof e==='string'?100:(Number(e.pct)||0)):0;
-}
+function capPersonProjPctAt(pn,projId,y,m){return memberProjPctAt(pn,projId,y,m);}
 function capItemFTERAt(roster,projId,y,m){return roster.reduce(function(s,pn){return s+capPersonProjPctAt(pn,projId,y,m)/100;},0);}
 function capTotals(roster){
   var items=capItems(),revenue=0;
@@ -3227,9 +3239,7 @@ function capProjData(roster,multPct,opts){
     var _mk=mo.y*12+mo.m;
     active.forEach(function(pn){var cst=capPersonCostAt(pn,mo.y,mo.m);
       if(ppProjAllocAt(pn,mo)<=0)return;  // resources not assigned to a project / initiative / overhead this month are NOT counted as a cost in the forecast
-      var pp;
-      if(pn.allocSchedule&&pn.allocSchedule.length){pp=pn.allocSchedule.reduce(function(a,r){if(PROJIDS.indexOf(r.projectId)===-1)return a;if(r.start&&_capYM(r.start)>_mk)return a;if(r.end&&_capYM(r.end)<_mk)return a;return a+(Number(r.pct)||0);},0);}
-      else pp=(pn.projects||[]).reduce(function(a,x){return a+(PROJIDS.indexOf(x.id)>-1?(Number(x.pct)||0):0);},0);
+      var pp=PROJIDS.reduce(function(a,pid){return a+memberProjPctAt(pn,pid,mo.y,mo.m);},0);  // % on PROJECT-type items this month (per-item: schedule overrides base)
       var pProj=Math.round(cst*Math.min(100,pp)/100);  // round per person (mirrors the Projects page) so the buckets are whole dollars and tie out
       projLabor+=pProj; otherLabor+=(cst-pProj);});     // remainder (initiative/overhead/bench labor) → Other Payroll
     var projectPayroll=projLabor;
@@ -3869,15 +3879,11 @@ var PP_CAT_LABEL={project:'Project',initiative:'Initiative',overhead:'Overhead'}
    time-phased allocSchedule when set, else the static per-project % within each
    item's start/end window. */
 function ppAllocByCatAt(m,mo){
-  var key=mo.y*12+mo.m,res={project:0,initiative:0,overhead:0,total:0};
-  function add(pid,pct){var p=(D.projects||[]).find(function(x){return x.id===pid;});if(!p)return;var c=projCat(p);if(c==='project'||c==='initiative'||c==='overhead'){res[c]+=pct;res.total+=pct;}}
-  if(m.allocSchedule&&m.allocSchedule.length){
-    m.allocSchedule.forEach(function(r){if(r.start&&_capYM(r.start)>key)return;if(r.end&&_capYM(r.end)<key)return;add(r.projectId,Number(r.pct)||0);});
-  }else{
-    (m.projects||[]).forEach(function(e){var pid=typeof e==='string'?e:e.id;var ep=typeof e==='string'?100:(Number(e.pct)||0);var p=(D.projects||[]).find(function(x){return x.id===pid;});if(!p||!capInWindow(p,mo.y,mo.m))return;add(pid,ep);});
-  }
+  var res={project:0,initiative:0,overhead:0,total:0};
+  _memberAllPids(m).forEach(function(pid){var p=(D.projects||[]).find(function(x){return x.id===pid;});if(!p)return;var c=projCat(p);if(c!=='project'&&c!=='initiative'&&c!=='overhead')return;var pct=memberProjPctAt(m,pid,mo.y,mo.m);if(pct){res[c]+=pct;res.total+=pct;}});
   return res;
 }
+function ppJump(id){var el=document.getElementById(id);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}
 function ppProjAllocAt(m,mo){return ppAllocByCatAt(m,mo).total;}
 function ppPeakAlloc(m,months){return months.reduce(function(mx,mo){return Math.max(mx,ppProjAllocAt(m,mo));},0);}
 /* First month in the window where the person is under 100% allocated (i.e. has
@@ -3977,10 +3983,10 @@ function renderProjectPlanningView(q){
   var critCard='';
   if(canProforma()){
     var critRows=crit.slice(0,40).map(function(o){var dd=Math.round((o.dt-today)/86400000);var when=dd<0?(Math.abs(dd)+'d ago'):(dd===0?'today':'in '+dd+'d');return '<tr><td style="text-align:left">'+esc(o.x.date)+'</td><td style="text-align:left">'+esc(o.x.event||'')+'</td><td style="text-align:left">'+esc(o.x.impact||'')+'</td><td style="text-align:left"><span class="pf-pill">'+esc(o.x.status||'')+'</span></td><td style="text-align:right;white-space:nowrap">'+when+'</td></tr>';}).join('');
-    critCard='<div class="pf-card" style="margin-top:12px"><div class="pf-card-h" style="display:flex;align-items:center;gap:8px">Critical dates timeline <button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 7px" onclick="switchTab(\'proforma\');pfSetTab(\'risks\')">Open in Proforma →</button></div>'
+    critCard='<div class="pf-card" id="pp_crit" style="margin-top:12px;scroll-margin-top:48px"><div class="pf-card-h" style="display:flex;align-items:center;gap:8px">Critical dates timeline <button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 7px" onclick="switchTab(\'proforma\');pfSetTab(\'risks\')">Open in Proforma →</button></div>'
       +(crit.length?'<table class="pf-tbl"><thead><tr><th style="text-align:left">Date</th><th style="text-align:left">Event</th><th style="text-align:left">Impact / action</th><th style="text-align:left">Status</th><th style="text-align:right">When</th></tr></thead><tbody>'+critRows+'</tbody></table>':'<div class="rpt-empty">No critical dates set. Add them in Proforma → Risks &amp; Dates.</div>')+'</div>';
   } else {
-    critCard='<div class="pf-card" style="margin-top:12px"><div class="pf-card-h">Critical dates timeline</div><div class="rpt-empty">The critical-dates timeline lives in the Proforma (restricted). Ask an admin for access to factor it into planning.</div></div>';
+    critCard='<div class="pf-card" id="pp_crit" style="margin-top:12px;scroll-margin-top:48px"><div class="pf-card-h">Critical dates timeline</div><div class="rpt-empty">The critical-dates timeline lives in the Proforma (restricted). Ask an admin for access to factor it into planning.</div></div>';
   }
   return '<div style="width:90%;max-width:1500px;margin:0 auto">'
     +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:6px">'
@@ -3989,10 +3995,17 @@ function renderProjectPlanningView(q){
       +'<button class="btn btn-gold btn-sm" onclick="ppAIAdvise()">&#10024; AI Planning Advice</button>'
     +'</div>'
     +kpis
-    +'<div id="pplanAdvice" style="margin-top:10px"></div>'
-    +'<div class="pf-card" style="margin-top:12px"><div class="pf-card-h">Resource allocation by month</div>'+heat+'</div>'
-    +'<div class="pf-card" style="margin-top:12px"><div class="pf-card-h">Project schedule</div>'+gantt+'</div>'
-    +'<div class="pf-card" style="margin-top:12px"><div class="pf-card-h">Resource availability snapshot</div>'+availTbl+'</div>'
+    +'<div class="pf-subtabs" id="pp_jump" style="margin:12px 0 2px;position:sticky;top:0;z-index:6;background:var(--page-bg);flex-wrap:wrap">'
+      +'<button class="pf-subtab" onclick="ppJump(\'pp_heat\')">Allocation by month</button>'
+      +'<button class="pf-subtab" onclick="ppJump(\'pp_gantt\')">Project schedule</button>'
+      +'<button class="pf-subtab" onclick="ppJump(\'pp_avail\')">Availability snapshot</button>'
+      +'<button class="pf-subtab" onclick="ppJump(\'pp_crit\')">Critical dates</button>'
+      +'<button class="pf-subtab" onclick="if(!document.getElementById(\'pplanAdvice\').innerHTML.trim())ppAIAdvise();ppJump(\'pplanAdvice\')">&#10024; AI advice</button>'
+    +'</div>'
+    +'<div id="pplanAdvice" style="margin-top:8px"></div>'
+    +'<div class="pf-card" id="pp_heat" style="margin-top:12px;scroll-margin-top:48px"><div class="pf-card-h">Resource allocation by month</div>'+heat+'</div>'
+    +'<div class="pf-card" id="pp_gantt" style="margin-top:12px;scroll-margin-top:48px"><div class="pf-card-h">Project schedule</div>'+gantt+'</div>'
+    +'<div class="pf-card" id="pp_avail" style="margin-top:12px;scroll-margin-top:48px"><div class="pf-card-h">Resource availability snapshot</div>'+availTbl+'</div>'
     +critCard
     +'</div>';
 }
@@ -8514,10 +8527,10 @@ input.placeholder=sel.length?'':'Type to search...';msFilt(fid);updateAllocMeter
 function msVal(fid){return JSON.parse(document.getElementById(fid+'_v').value);}
 
 function totalAlloc(m){
-  // A time-phased allocSchedule fully overrides the simple per-project % (one or
-  // the other, never additive); static views use the current-month total.
-  if(m.allocSchedule&&m.allocSchedule.length){var d=new Date(),key=d.getFullYear()*12+d.getMonth();return m.allocSchedule.reduce(function(s,r){if(r.start&&_capYM(r.start)>key)return s;if(r.end&&_capYM(r.end)<key)return s;return s+(Number(r.pct)||0);},0);}
-  return(m.projects||[]).reduce(function(s,e){return s+(typeof e==='string'?100:(e.pct||100));},0);}
+  // Per-item: schedule % overrides base for the same item; base assignments to
+  // items not in the schedule still count (current-month effective total).
+  var d=new Date(),y=d.getFullYear(),mo=d.getMonth();
+  return _memberAllPids(m).reduce(function(s,pid){return s+memberProjPctAt(m,pid,y,mo);},0);}
 /* Furlough: a resource with no project / initiative / overhead allocation is
    recommended for furlough. m.furloughDate (YYYY-MM-DD) records when they will
    be / were furloughed. Status: Furloughed (date passed) | Scheduled (future) |
@@ -8642,7 +8655,7 @@ document.getElementById('mdlEdit').innerHTML=
 +'</div>'
 +'<div class="me-pane" data-met="proj" style="display:none">'
   +'<div class="fld"><label class="fld-l">Assignments (Projects / Initiatives / Overhead)</label>'+msHTML('e_proj',m.projects||[],D.projects,'proj-chip','Add assignments...')+'<div id="e_proj_alloc"></div>'
-    +((m.allocSchedule&&m.allocSchedule.length)?'<div style="font-size:10px;color:var(--gold);font-weight:700;margin-top:5px">&#8505; A time-phased allocation schedule is set below — it OVERRIDES these Assignment %s in all planning, capacity, and forecast views (the simple % here is ignored while a schedule exists).</div>':'')+'</div>'
+    +((m.allocSchedule&&m.allocSchedule.length)?'<div style="font-size:10px;color:var(--gold);font-weight:700;margin-top:5px">&#8505; A time-phased allocation schedule is set below — for any item it lists, the schedule % OVERRIDES the Assignment % above. Assignments to items the schedule doesn\'t list still apply.</div>':'')+'</div>'
   +'<div class="fld"><label class="fld-l">Time-phased allocation <span style="font-weight:400;color:var(--text-muted);font-size:10px">— optional: control the % per project by date. When set, this drives the Resource Planning &ldquo;allocation by month&rdquo; view (and overrides the simple % above for that view).</span></label>'
     +'<div id="e_alloc_list">'+renderMemberAllocSched(mid)+'</div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center">'
