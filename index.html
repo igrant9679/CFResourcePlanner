@@ -3897,6 +3897,9 @@ function ppAllocByCatAt(m,mo){
 }
 var ppTab='alloc';
 function ppSetTab(t){ppTab=t;renderView();}
+// Availability-snapshot sort. Default: most available first (lowest current alloc on top).
+var ppAvailSort={col:'now',dir:'asc'};
+function ppAvailSetSort(c){if(ppAvailSort.col===c)ppAvailSort.dir=(ppAvailSort.dir==='asc'?'desc':'asc');else ppAvailSort={col:c,dir:'asc'};renderView();}
 function ppProjAllocAt(m,mo){return ppAllocByCatAt(m,mo).total;}
 function ppPeakAlloc(m,months){return months.reduce(function(mx,mo){return Math.max(mx,ppProjAllocAt(m,mo));},0);}
 /* First month in the window where the person is under 100% allocated (i.e. has
@@ -3966,15 +3969,20 @@ function renderProjectPlanningView(q){
     }).join('')+'</tbody></table></div>';
   }
   // ── Availability snapshot table ──
-  // Availability snapshot: hide fully-booked resources (no spare capacity in any
-  // month of the window); sort by peak so the busiest with spare show first.
-  var availList=people.filter(function(m){return ppFirstUnder(m,months)!==null;}).sort(function(a,b){return ppPeakAlloc(b,months)-ppPeakAlloc(a,months);});
+  // Availability snapshot: hide fully-booked resources; sortable (default: most
+  // available first — lowest current allocation on top).
+  var availRows=people.filter(function(m){return ppFirstUnder(m,months)!==null;}).map(function(m){
+    var fu=ppFirstUnder(m,months),now=ppProjAllocAt(m,cur);
+    return {m:m,now:now,peak:ppPeakAlloc(m,months),load:planMemberLoad(m.id),pto:ptoDaysInRange(m,today,d90),spare:fu?fu.i:999,name:(m.name||'').toLowerCase(),role:(m.role||'').toLowerCase(),status:now};
+  });
+  var _sc=ppAvailSort.col,_sd=(ppAvailSort.dir==='asc')?1:-1;
+  availRows.sort(function(a,b){var av=a[_sc],bv=b[_sc];if(typeof av==='string')return _sd*av.localeCompare(bv);return _sd*((av||0)-(bv||0));});
   var availTbl;
-  if(!availList.length){availTbl='<div class="rpt-empty">No resources'+(q?' match your search':'')+'.</div>';}
+  if(!availRows.length){availTbl='<div class="rpt-empty">No resources'+(q?' match your search':'')+'.</div>';}
   else{
-    availTbl='<table class="pf-tbl"><thead><tr><th style="text-align:left">Person</th><th style="text-align:left">Role</th><th style="text-align:right">Now</th><th style="text-align:right">Peak</th><th style="text-align:left">Spare capacity from</th><th style="text-align:right" title="Sum of the per-owner allocation % from active (not-done) Project Tasks assigned to this person">Task load</th><th style="text-align:right">PTO ≤90d</th><th style="text-align:left" title="Current-month allocation: Over &gt;100% · Full 85–100% · Available 1–84% · Bench 0%">Status</th><th style="text-align:left">Notes / transition</th></tr></thead><tbody>'
-      +availList.map(function(m){
-        var now=ppProjAllocAt(m,cur),peak=ppPeakAlloc(m,months),load=planMemberLoad(m.id),ptoD=ptoDaysInRange(m,today,d90);
+    function _ah(label,col,align,title){var ar=ppAvailSort.col===col?(ppAvailSort.dir==='asc'?' ▲':' ▼'):'';return '<th style="text-align:'+(align||'left')+';cursor:pointer;white-space:nowrap"'+(title?' title="'+title+'"':'')+' onclick="ppAvailSetSort(\''+col+'\')">'+label+ar+'</th>';}
+    availTbl='<table class="pf-tbl"><thead><tr>'+_ah('Person','name')+_ah('Role','role')+_ah('Now','now','right')+_ah('Peak','peak','right')+_ah('Spare capacity from','spare')+_ah('Task load','load','right','Sum of the per-owner allocation % from active (not-done) Project Tasks assigned to this person')+_ah('PTO ≤90d','pto','right')+_ah('Status','status','left','Current-month allocation: Over &gt;100% · Full 85–100% · Available 1–84% · Bench 0%')+'<th style="text-align:left">Notes / transition</th></tr></thead><tbody>'
+      +availRows.map(function(r){var m=r.m,now=r.now,peak=r.peak,load=r.load,ptoD=r.pto;
         var fu=ppFirstUnder(m,months);
         var freeFrom=!fu?'<span style="color:var(--text-muted)">fully booked</span>':(fu.i===0?'<b style="color:#2D6A4F">now</b> ('+fu.pct+'%)':ppMonthLabel(fu.mo)+' ('+fu.pct+'%)');
         var status=now>100?'<span class="rq-sla rq-sla-red">Over</span>':now>=85?'<span class="rq-sla rq-sla-warn">Full</span>':now>0?'<span class="rq-sla">Available</span>':'<span class="rq-sla" style="opacity:.6">Bench</span>';
