@@ -1011,7 +1011,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
       <button class="tab" id="tabCap" onclick="switchTab('cap')">Capacity Planning</button>
       <button class="tab" id="tabPlan" onclick="switchTab('plan')">COE Plan</button>
       <button class="tab" id="tabPTask" onclick="switchTab('ptask')">Project Tasks</button>
-      <button class="tab" id="tabPPlan" onclick="switchTab('pplan')">Project Planning</button>
+      <button class="tab" id="tabPPlan" onclick="switchTab('pplan')">Resource Planning</button>
       <button class="tab" id="tabReports" onclick="switchTab('reports')">&#128202; Reports</button>
       <button class="tab tab-confidential" id="tabProforma" onclick="switchTab('proforma')">&#128274; Proforma</button>
     </div>
@@ -2847,7 +2847,7 @@ function memberDelCostStep(mid,i){var f=findMember(mid);if(!f)return;(f.m.costSc
 function memberSetCostEscalator(mid){var f=findMember(mid);if(!f)return;var pct=Number(gv('e_cs_pct'))||0;var from=gv('e_cs_efrom');if(!pct||!from){alert('Enter a % and a start month.');return;}f.m.costEscalator={pct:pct,from:from,period:gv('e_cs_eper')||'year'};save();document.getElementById('e_cs_list').innerHTML=renderMemberCostSched(mid);}
 function memberClearCostEscalator(mid){var f=findMember(mid);if(!f)return;delete f.m.costEscalator;save();document.getElementById('e_cs_list').innerHTML=renderMemberCostSched(mid);}
 /* ── Time-phased allocation schedule: m.allocSchedule=[{projectId,pct,start,end}] ──
-   Optional. When present it drives the Project Planning "allocation by month"
+   Optional. When present it drives the Resource Planning "allocation by month"
    view (each row's % applies only within its start/end), overriding the simple
    per-project % for that view. Multiple rows for the same project model a
    change in allocation over time. */
@@ -2855,7 +2855,7 @@ function _ppProjName(pid){var p=(D.projects||[]).find(function(x){return x.id===
 function renderMemberAllocSched(mid){
   var f=findMember(mid);if(!f)return '';
   var rows=(f.m.allocSchedule||[]);
-  if(!rows.length)return '<div style="font-size:11px;color:var(--text-muted)">No time-phased allocation. The Project Planning month view uses the simple % from Assignments above (within each project\'s start/end). Add rows here to vary the % by date or split across periods.</div>';
+  if(!rows.length)return '<div style="font-size:11px;color:var(--text-muted)">No time-phased allocation. The Resource Planning month view uses the simple % from Assignments above (within each project\'s start/end). Add rows here to vary the % by date or split across periods.</div>';
   return rows.slice().map(function(r){var i=rows.indexOf(r);var span=(r.start?_otcMonthLbl(r.start):'start')+' → '+(r.end?_otcMonthLbl(r.end):'open');return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid #F1F5F9;font-size:12px"><span><b>'+esc(_ppProjName(r.projectId))+'</b> — '+(Number(r.pct)||0)+'% <span style="color:var(--text-muted)">('+esc(span)+')</span></span><button class="btn btn-danger-sm btn-sm" onclick="memberDelAllocStep(\''+mid+'\','+i+')">&times;</button></div>';}).join('');
 }
 function memberAddAllocStep(mid){
@@ -2909,7 +2909,7 @@ function capEnter(){ if(!Array.isArray(D.scenarios))D.scenarios=[];
   if(!CAP.dirty&&CAP.name==='Working scenario'){var r2=capBuildRoster();CAP.roster=r2;CAP.baseline=capTotals(r2);}
   else if(CAP.name==='Working scenario'){
     // Dirtied working scenario: keep the user's pct/cost edits, but allocSchedule
-    // is managed in Project Planning (read-only here), so always refresh it from
+    // is managed in Resource Planning (read-only here), so always refresh it from
     // live so the Sandbox + Projections reflect schedule edits without a reset.
     var liveSched={};allM().forEach(function(m){liveSched[m.id]=m.allocSchedule;});
     CAP.roster.forEach(function(pn){if(pn._origin==='member'&&Object.prototype.hasOwnProperty.call(liveSched,pn.id))pn.allocSchedule=liveSched[pn.id]?JSON.parse(JSON.stringify(liveSched[pn.id])):null;});
@@ -2965,7 +2965,7 @@ function capItems(){ return (D.projects||[]).filter(function(p){var c=projCat(p)
 function capItemRevenue(p){ var c=projCat(p); if(c==='project')return Number(p.revenue)||0; if(c==='initiative')return Number(p.targetRevenue)||0; return 0; }
 function _capNow(){var d=new Date();return {y:d.getFullYear(),m:d.getMonth()};}
 // Sandbox aggregates reflect the CURRENT-month effective allocation: a person with
-// a time-phased allocSchedule (set in Project Planning → Edit Resource) uses that
+// a time-phased allocSchedule (set in Resource Planning → Edit Resource) uses that
 // month's scheduled %; everyone else uses their static per-project %.
 function capAllocR(person){var n=_capNow();if(person.allocSchedule&&person.allocSchedule.length){var key=n.y*12+n.m;return person.allocSchedule.reduce(function(s,r){if(r.start&&_capYM(r.start)>key)return s;if(r.end&&_capYM(r.end)<key)return s;return s+(Number(r.pct)||0);},0);}return (person.projects||[]).reduce(function(s,x){return s+(Number(x.pct)||0);},0);}
 function capItemCostR(roster,projId){var n=_capNow();return roster.reduce(function(s,pn){return s+(Number(pn.cost)||0)*capPersonProjPctAt(pn,projId,n.y,n.m)/100;},0);}
@@ -3032,13 +3032,13 @@ function renderCapacityView(q){
     var alloc=capAllocR(pn),over=alloc>100,full=alloc===100;
     var sched=pn.allocSchedule&&pn.allocSchedule.length;
     var cells=items.map(function(p){var oh=projCat(p)==='overhead';
-      if(sched){var sv=capPersonProjPctAt(pn,p.id,_now.y,_now.m);return '<td'+(oh?' class="cap-col-oh"':'')+'><div class="cap-cell'+(sv?' has':'')+'" title="Scheduled in Project Planning — edit there" style="display:flex;align-items:center;justify-content:center;cursor:default;opacity:.9">'+(sv||'')+'</div></td>';}
+      if(sched){var sv=capPersonProjPctAt(pn,p.id,_now.y,_now.m);return '<td'+(oh?' class="cap-col-oh"':'')+'><div class="cap-cell'+(sv?' has':'')+'" title="Scheduled in Resource Planning — edit there" style="display:flex;align-items:center;justify-content:center;cursor:default;opacity:.9">'+(sv||'')+'</div></td>';}
       var e=(pn.projects||[]).find(function(x){return x.id===p.id;});var v=e?(Number(e.pct)||0):'';
       return '<td'+(oh?' class="cap-col-oh"':'')+'><input class="cap-cell'+(v?' has':'')+(oh?' cap-cell-oh':'')+'" type="number" min="0" max="100" step="5" value="'+v+'" onchange="capSetPct(\''+pn.id+'\',\''+p.id+'\',this.value)"></td>';
     }).join('');
     var barCls=over?'bad':full?'full':'ok';
     var badge=pn._origin!=='member'?' <span class="cap-ghost">'+esc(pn._origin)+'</span>':'';
-    if(sched)badge+=' <span class="cap-ghost" title="Time-phased allocation set in Project Planning → Edit Resource (current-month value shown)">scheduled</span>';
+    if(sched)badge+=' <span class="cap-ghost" title="Time-phased allocation set in Resource Planning → Edit Resource (current-month value shown)">scheduled</span>';
     return '<tr><td class="cap-sticky"><div class="cap-person"><span class="cap-grip" draggable="true" ondragstart="capDragStart(event,\''+pn.id+'\')" title="Drag onto a project/initiative card to allocate free capacity">&#9783;</span>'+esc(pn.name)+badge+'<button class="cap-rm" title="Remove from this scenario" onclick="capRemovePerson(\''+pn.id+'\')">&times;</button></div>'
       +'<div class="cap-person-sub">'+esc(pn.role||pn._deptName||'')+' · $<input class="cap-cost" type="number" min="0" step="100" value="'+(Number(pn.cost)||0)+'" title="Scenario monthly cost" onchange="capSetCost(\''+pn.id+'\',this.value)">/mo'
       +(pn._origin!=='member'?' · starts <input class="cap-start" type="month" value="'+esc(pn.startMonth||'')+'" title="Payroll starts this month in projections (blank = immediately)" onchange="capSetStart(\''+pn.id+'\',this.value)">':'')+'</div></td>'
@@ -3186,9 +3186,6 @@ function capProjData(roster,multPct,opts){
   var MAR_GROSS=41667,MAR_COST=20834;  // $500K ARR / 12 ; 50% margin
   var fixedOh=proformaOverheadMonthly();   // flat reference for the return value; per-month overhead is computed in the loop (honors scheduled increases)
   var PROJIDS=(D.projects||[]).filter(function(p){return projCat(p)==='project';}).map(function(p){return p.id;});  // Project-type items ONLY → Project Payroll (matches the Projects page)
-  // Unallocated resources (no project / initiative / overhead allocation) are
-  // assumed to roll off, so their payroll is dropped from the forecast beyond 90 days.
-  var _unallocCutKey=(function(){var d=new Date();d=new Date(d.getTime()+90*86400000);return d.getFullYear()*12+d.getMonth();})();
   var cum=0,rows=capProjMonths().map(function(mo){
     var active=roster.filter(function(pn){return capPersonActive(pn,mo.y,mo.m);});
     var baseRev=0;
@@ -3204,7 +3201,7 @@ function capProjData(roster,multPct,opts){
     var projLabor=0,otherLabor=0;
     var _mk=mo.y*12+mo.m;
     active.forEach(function(pn){var cst=capPersonCostAt(pn,mo.y,mo.m);
-      if(_mk>_unallocCutKey&&ppProjAllocAt(pn,mo)<=0)return;  // unallocated (not on a project/initiative/overhead) → dropped from the forecast after 90 days
+      if(ppProjAllocAt(pn,mo)<=0)return;  // resources not assigned to a project / initiative / overhead this month are NOT counted as a cost in the forecast
       var pp;
       if(pn.allocSchedule&&pn.allocSchedule.length){pp=pn.allocSchedule.reduce(function(a,r){if(PROJIDS.indexOf(r.projectId)===-1)return a;if(r.start&&_capYM(r.start)>_mk)return a;if(r.end&&_capYM(r.end)<_mk)return a;return a+(Number(r.pct)||0);},0);}
       else pp=(pn.projects||[]).reduce(function(a,x){return a+(PROJIDS.indexOf(x.id)>-1?(Number(x.pct)||0):0);},0);
@@ -3289,7 +3286,7 @@ function _capProjHTML(roster){
     +'<button class="btn btn-sec btn-sm" onclick="capProjExportCSV()">&#8595; CSV</button>'
     +'<button class="btn btn-sec btn-sm" onclick="capProjPrint()">&#128424; Print</button>'
     +'<div class="cap-stage-leg" style="flex-basis:100%">Effective win odds by stage at '+_capProjMult+'% confidence: '+stageLeg+'</div>'
-    +'<div class="cap-stage-leg" style="flex-basis:100%">&#8505; Unallocated resources (no project, initiative, or overhead allocation) are dropped from the forecast after 90 days.</div>'
+    +'<div class="cap-stage-leg" style="flex-basis:100%">&#8505; Resources not assigned to a project, initiative, or overhead are not counted as a cost in the forecast (the Furlough report tracks them for furlough).</div>'
     +'</div>';
   // V4 scenario presets (from the Proforma / Knowledge Base)
   var v4='<div class="cap-proj-ctl"><label>V4 scenarios</label>'
@@ -3934,6 +3931,10 @@ function renderProjectPlanningView(q){
         var fu=ppFirstUnder(m,months);
         var freeFrom=!fu?'<span style="color:var(--text-muted)">fully booked</span>':(fu.i===0?'<b style="color:#2D6A4F">now</b> ('+fu.pct+'%)':ppMonthLabel(fu.mo)+' ('+fu.pct+'%)');
         var status=now>100?'<span class="rq-sla rq-sla-red">Over</span>':now>=85?'<span class="rq-sla rq-sla-warn">Full</span>':now>0?'<span class="rq-sla">Available</span>':'<span class="rq-sla" style="opacity:.6">Bench</span>';
+        var fs=furloughStatus(m);
+        if(fs==='Furloughed')status+=' <span class="rq-sla" style="background:#475569;color:#fff" title="Furloughed '+esc(m.furloughDate||'')+'">Furloughed</span>';
+        else if(fs==='Scheduled')status+=' <span class="rq-sla rq-sla-warn" style="cursor:pointer" title="Scheduled furlough — click to edit" onclick="event.stopPropagation();openFurloughModal(\''+m.id+'\')">Furlough '+esc(_otcMonthLbl((m.furloughDate||'').slice(0,7)))+'</span>';
+        else if(fs==='Recommended')status+=' <span class="rq-sla rq-sla-red" style="cursor:pointer" title="No project/initiative/overhead — click to schedule furlough" onclick="event.stopPropagation();openFurloughModal(\''+m.id+'\')">&#9888; Furlough?</span>';
         return '<tr><td style="text-align:left"><span class="plan-own" onclick="openPersonProfile(\''+m.id+'\')">'+esc(m.name)+'</span></td>'
           +'<td style="text-align:left">'+esc(m.role||'')+'</td>'
           +'<td style="text-align:right;color:'+ppAllocColor(now)+';font-weight:'+(now>100?'800':'600')+'">'+now+'%</td>'
@@ -3957,7 +3958,7 @@ function renderProjectPlanningView(q){
   }
   return '<div style="width:90%;max-width:1500px;margin:0 auto">'
     +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:6px">'
-      +'<div><div style="font-size:18px;font-weight:800">Project Planning</div>'
+      +'<div><div style="font-size:18px;font-weight:800">Resource Planning</div>'
       +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Resource availability over time, overallocation signals, the project schedule, and AI guidance tied to your critical dates.</div></div>'
       +'<button class="btn btn-gold btn-sm" onclick="ppAIAdvise()">&#10024; AI Planning Advice</button>'
     +'</div>'
@@ -4047,7 +4048,7 @@ return html;}
 
 /* ── PTO (Paid Time Off) ──
    Per-person vacation/leave date ranges: m.pto=[{id,start,end,note}].
-   Feeds resource availability in Project Planning. */
+   Feeds resource availability in Resource Planning. */
 function memberById(id){return planMembers().find(function(m){return m.id===id;})||null;}
 function ptoEntries(){var out=[];planMembers().forEach(function(m){(m.pto||[]).forEach(function(e){out.push({m:m,e:e});});});return out;}
 function ptoDays(e){var s=planParseDate(e.start),en=planParseDate(e.end||e.start);if(!s||!en)return 0;return Math.max(1,Math.round((en-s)/86400000)+1);}
@@ -8491,6 +8492,23 @@ function totalAlloc(m){
   // the other, never additive); static views use the current-month total.
   if(m.allocSchedule&&m.allocSchedule.length){var d=new Date(),key=d.getFullYear()*12+d.getMonth();return m.allocSchedule.reduce(function(s,r){if(r.start&&_capYM(r.start)>key)return s;if(r.end&&_capYM(r.end)<key)return s;return s+(Number(r.pct)||0);},0);}
   return(m.projects||[]).reduce(function(s,e){return s+(typeof e==='string'?100:(e.pct||100));},0);}
+/* Furlough: a resource with no project / initiative / overhead allocation is
+   recommended for furlough. m.furloughDate (YYYY-MM-DD) records when they will
+   be / were furloughed. Status: Furloughed (date passed) | Scheduled (future) |
+   Recommended (unallocated, no date) | '' (allocated). */
+function furloughStatus(m){
+  if(m.furloughDate){var d=planParseDate(m.furloughDate);if(d){var t=new Date();t.setHours(0,0,0,0);d.setHours(0,0,0,0);return d<=t?'Furloughed':'Scheduled';}}
+  return totalAlloc(m)<=0?'Recommended':'';
+}
+function openFurloughModal(mid){
+  if(!(ME&&(ME.role==='admin'||ME.role==='editor'))){alert('You don\'t have permission.');return;}
+  var f=findMember(mid);if(!f)return;var m=f.m;
+  openFormModal({over:'Resources',title:'Schedule furlough — '+esc(m.name),submitLabel:'Save',
+    intro:'This resource has no project, initiative, or overhead allocation. Set the date they will be furloughed (clear it to cancel).',
+    fields:[{key:'date',label:'Furlough date',type:'date',value:m.furloughDate||''}],
+    onSubmit:function(v){m.furloughDate=(v.date||'').trim();save();renderView();toast(m.furloughDate?('Furlough '+(planParseDate(m.furloughDate)<=new Date()?'recorded':'scheduled')+' for '+m.name+'.'):'Furlough cleared for '+m.name+'.','success');}
+  });
+}
 
 function updateAllocMeter(fid){
 var el=document.getElementById(fid+'_alloc');if(!el)return;
@@ -8577,10 +8595,12 @@ document.getElementById('mdlEdit').innerHTML=
   +'<div class="fld"><label class="fld-l">Current Department</label><div class="fld-i" style="background:var(--page-bg);font-weight:600;cursor:default">'+esc(dept.name)+'</div></div>'
   +'<div class="fld"><label class="fld-l" for="e_dept_mv">Move to Department</label><select class="fld-sel" id="e_dept_mv"><option value="">— keep in current dept —</option>'+deptMvOpts+'</select></div>'
   +'<div class="fld"><label class="fld-l" for="e_reports">Reports To</label><select class="fld-sel" id="e_reports"><option value="">— none —</option>'+names.map(function(n){return '<option value="'+esc(n)+'"'+(m.reportsTo===n?' selected':'')+'>'+esc(n)+'</option>';}).join('')+'</select></div>'
+  +'<div class="fld"><label class="fld-l" for="e_furlough">Furlough date <span style="font-weight:400;color:var(--text-muted);font-size:10px">— set when a resource with no project/initiative/overhead is furloughed (blank = none)</span></label><input class="fld-i" type="date" id="e_furlough" value="'+esc(m.furloughDate||'')+'"></div>'
 +'</div>'
 +'<div class="me-pane" data-met="proj" style="display:none">'
-  +'<div class="fld"><label class="fld-l">Assignments (Projects / Initiatives / Overhead)</label>'+msHTML('e_proj',m.projects||[],D.projects,'proj-chip','Add assignments...')+'<div id="e_proj_alloc"></div></div>'
-  +'<div class="fld"><label class="fld-l">Time-phased allocation <span style="font-weight:400;color:var(--text-muted);font-size:10px">— optional: control the % per project by date. When set, this drives the Project Planning &ldquo;allocation by month&rdquo; view (and overrides the simple % above for that view).</span></label>'
+  +'<div class="fld"><label class="fld-l">Assignments (Projects / Initiatives / Overhead)</label>'+msHTML('e_proj',m.projects||[],D.projects,'proj-chip','Add assignments...')+'<div id="e_proj_alloc"></div>'
+    +((m.allocSchedule&&m.allocSchedule.length)?'<div style="font-size:10px;color:var(--gold);font-weight:700;margin-top:5px">&#8505; A time-phased allocation schedule is set below — it OVERRIDES these Assignment %s in all planning, capacity, and forecast views (the simple % here is ignored while a schedule exists).</div>':'')+'</div>'
+  +'<div class="fld"><label class="fld-l">Time-phased allocation <span style="font-weight:400;color:var(--text-muted);font-size:10px">— optional: control the % per project by date. When set, this drives the Resource Planning &ldquo;allocation by month&rdquo; view (and overrides the simple % above for that view).</span></label>'
     +'<div id="e_alloc_list">'+renderMemberAllocSched(mid)+'</div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center">'
       +'<select class="fld-sel" id="e_alloc_proj" style="max-width:210px"><option value="">— project / initiative —</option>'+capItems().map(function(p){return '<option value="'+p.id+'">'+esc(p.name)+'</option>';}).join('')+'</select>'
@@ -8630,9 +8650,12 @@ m.reportsTo=gv('e_reports');var __prev=m.projects||[];var __np=msVal('e_proj');_
 m.certifications=msVal('e_cert');m.pastProjects=msVal('e_ppj');m.pastClients=msVal('e_pcl');
 m.location=gv('e_loc');m.clearance=gv('e_clr');m.resumeLink=gv('e_resume');
 m.hub=gc('e_hub');m.sme=gc('e_sme');m.associate=gc('e_assoc');m.proposal=gc('e_prop');m.recruiter=gc('e_recr');m.note=gv('e_note');m.reassess=gc('e_reassess');
+var _fd=document.getElementById('e_furlough');if(_fd)m.furloughDate=(_fd.value||'').trim();
 var newDid=gv('e_dept_mv');
 if(newDid&&newDid!==did){var toDept=D.departments.find(function(d){return d.id===newDid;});if(toDept){fromDept.members=fromDept.members.filter(function(x){return x.id!==mid;});toDept.members.push(m);}}
-closeModal('ovEdit');save();renderView();}
+closeModal('ovEdit');save();renderView();
+// Recommend furlough as soon as a resource has no project/initiative/overhead allocation.
+if(totalAlloc(m)<=0&&!m.furloughDate)toastAction(m.name+' has no project/initiative/overhead allocation — recommend furlough.','Schedule furlough',function(){openFurloughModal(mid);});}
 
 function delMem(mid,did){var dept=D.departments.find(function(d){return d.id===did;});if(!dept)return;dept.members=dept.members.filter(function(m){return m.id!==mid;});closeModal('ovEdit');save();renderView();}
 
@@ -9318,6 +9341,22 @@ function rpt_bench(ctx){var t=ctx.totals,f=_rf(ctx),un=unallocatedMembers().filt
   var bar=cats.length?svgBarChart({categories:cats,groups:[{label:'Unallocated',values:cats.map(function(k){return byDept[k];}),color:'#D97706'}]},{fmt:'int',h:200,rotate:true}):'<div class="rpt-empty">Everyone is allocated.</div>';
   var tbl=reportTable([{key:'name',label:'Name'},{key:'dept',label:'Dept'},{key:'cost',label:'Monthly cost',fmt:'money',total:true}],un.map(function(m){return {name:m.name,dept:m._dn,cost:m.cost};}),{footTotals:true,caption:un.length+' unallocated · '+t.benchFTE+' bench FTE'});
   return '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center"><div style="text-align:center;flex:0 0 auto"><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">Utilization</div>'+g+'</div><div style="flex:1;min-width:240px">'+bar+'</div></div>'+tbl;}
+function rpt_furlough(ctx){
+  var people=_rptPeople(ctx).map(function(m){return {m:m,st:furloughStatus(m)};}).filter(function(x){return x.st;});
+  if(!people.length)return '<div class="rpt-empty">No resources recommended, scheduled, or furloughed — everyone is allocated to a project, initiative, or overhead.</div>';
+  var order={Recommended:0,Scheduled:1,Furloughed:2};
+  people.sort(function(a,b){return (order[a.st]-order[b.st])||a.m.name.localeCompare(b.m.name);});
+  var counts={Recommended:0,Scheduled:0,Furloughed:0},pend=0;
+  people.forEach(function(x){counts[x.st]++;if(x.st!=='Furloughed')pend+=(Number(x.m.cost)||0);});
+  function pill(st){return st==='Furloughed'?'<span class="pf-pill" style="background:#475569;color:#fff">Furloughed</span>':st==='Scheduled'?'<span class="pf-pill pf-high">Scheduled</span>':'<span class="pf-pill pf-crit">Recommended</span>';}
+  var body=people.map(function(x){var m=x.m;return '<tr><td style="text-align:left"><span class="plan-own" onclick="openPersonProfile(\''+m.id+'\')">'+esc(m.name)+'</span></td>'
+    +'<td style="text-align:left">'+esc(m._dn||'')+'</td>'
+    +'<td style="text-align:right;white-space:nowrap">'+fmt(Number(m.cost)||0)+'</td>'
+    +'<td style="text-align:left">'+pill(x.st)+'</td>'
+    +'<td style="text-align:left;white-space:nowrap">'+(m.furloughDate?esc(_otcMonthLbl((m.furloughDate||'').slice(0,7))):'<span style="color:var(--text-muted)">—</span>')+(x.st==='Recommended'?' <button class="btn btn-sec btn-sm" style="font-size:10px;padding:1px 6px" onclick="openFurloughModal(\''+m.id+'\')">Schedule</button>':'')+'</td></tr>';}).join('');
+  var summary='<div class="pf-note" style="margin:0 0 8px">'+counts.Recommended+' recommended · '+counts.Scheduled+' scheduled · '+counts.Furloughed+' furloughed · <b>'+fmt(pend)+'/mo</b> payroll on resources not yet furloughed</div>';
+  return summary+'<div style="overflow:auto"><table class="pf-tbl"><thead><tr><th style="text-align:left">Resource</th><th style="text-align:left">Dept</th><th style="text-align:right">Monthly cost</th><th style="text-align:left">Status</th><th style="text-align:left">Furlough date</th></tr></thead><tbody>'+body+'</tbody></table></div>';
+}
 function rpt_skills(ctx){var counts={};_rptPeople(ctx).forEach(function(m){(m.skillsets||[]).forEach(function(sid){var n=sName(sid);counts[n]=(counts[n]||0)+1;});});
   var arr=Object.keys(counts).map(function(k){return {skill:k,n:counts[k]};}).sort(function(a,b){return b.n-a.n;}).slice(0,20);
   if(!arr.length)return '<div class="rpt-empty">No skills assigned.</div>';
@@ -9451,6 +9490,7 @@ var RPT_BUILTINS=[
  {key:'hc_by_dept',title:'Headcount & Cost by Department',area:'Workforce',financial:false,fn:rpt_hc_by_dept},
  {key:'alloc_heatmap',title:'Allocation Heatmap',area:'Workforce',financial:false,fn:rpt_alloc_heatmap},
  {key:'bench',title:'Bench & Utilization',area:'Workforce',financial:false,fn:rpt_bench},
+ {key:'furlough',title:'Furlough — Recommended / Scheduled',area:'Workforce',financial:false,fn:rpt_furlough},
  {key:'skills',title:'Skills Coverage',area:'Workforce',financial:false,fn:rpt_skills},
  {key:'clearance',title:'Clearance & Classification Mix',area:'Workforce',financial:false,fn:rpt_clearance},
  {key:'rev_by_category',title:'Revenue by Category',area:'Projects',financial:false,fn:rpt_rev_by_category},
@@ -9648,6 +9688,7 @@ var RPT_CSV={
  alloc_heatmap:function(){var people=allM().filter(function(m){return totalAlloc(m)>0;}),items=capItems();return {headers:['Person'].concat(items.map(function(p){return p.name;})),rows:people.map(function(m){return [m.name].concat(items.map(function(p){return projPct(m,p.id)||0;}));})};},
  skills:function(){var c={};allM().forEach(function(m){(m.skillsets||[]).forEach(function(s){var n=sName(s);c[n]=(c[n]||0)+1;});});return {headers:['Skill','# People'],rows:Object.keys(c).map(function(k){return [k,c[k]];})};},
  bench:function(){return {headers:['Name','Dept','Monthly cost'],rows:unallocatedMembers().map(function(m){return [m.name,m._dn,m.cost];})};},
+ furlough:function(){var ppl=allM().map(function(m){return {m:m,st:furloughStatus(m)};}).filter(function(x){return x.st;});return {headers:['Resource','Dept','Monthly cost','Status','Furlough date'],rows:ppl.map(function(x){return [x.m.name,x.m._dn||'',Number(x.m.cost)||0,x.st,x.m.furloughDate||''];})};},
  clearance:function(){var clr={};allM().forEach(function(m){var c=_resolveClrName(m.clearance)||m.clearance||'None';clr[c]=(clr[c]||0)+1;});return {headers:['Clearance','# People'],rows:Object.keys(clr).map(function(k){return [k,clr[k]];})};},
  rev_by_category:function(){return {headers:['Project','Category','Monthly revenue'],rows:(D.projects||[]).filter(function(p){return projCat(p)!=='overhead';}).map(function(p){return [p.name,projCat(p),itemRev(p)||0];})};},
  project_margin:function(){return {headers:['Project','Type','Revenue','Cost','Profit','Margin %'],rows:rptRowsProjects().map(function(r){return [r.name,r.category,r.revenue,r.cost,r.profit,r.margin];})};},
@@ -9666,7 +9707,7 @@ function rptCsvBuiltin(key){var f=RPT_CSV[key],b=rptBuiltin(key);if(!f||(b&&b.fi
 /* ── AUTH & PERMISSIONS (client-side roles only — not API security) ── */
 var AUTH_USER='khaja@communityforce.com',AUTH_PASS='Namtra_CF27',DEFAULT_PW='CommunityForce2026';
 var ME=null;
-var SECTIONS=[{k:'res',tab:'tabRes',l:'Resources'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'plan',tab:'tabPlan',l:'COE Plan'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'pplan',tab:'tabPPlan',l:'Project Planning'},{k:'reports',tab:'tabReports',l:'Reports'},{k:'proforma',tab:'tabProforma',l:'Proforma'}];
+var SECTIONS=[{k:'res',tab:'tabRes',l:'Resources'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'plan',tab:'tabPlan',l:'COE Plan'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'pplan',tab:'tabPPlan',l:'Resource Planning'},{k:'reports',tab:'tabReports',l:'Reports'},{k:'proforma',tab:'tabProforma',l:'Proforma'}];
 function emailFromName(name){var clean=(name||'').replace(/\(.*?\)/g,'').replace(/[^A-Za-z .\-]/g,'').trim();var parts=clean.split(/\s+/).filter(Boolean);var local=parts.length>=2?(parts[0]+'.'+parts[parts.length-1]):(parts[0]||'user');return local.toLowerCase().replace(/[^a-z0-9.]/g,'')+'@communityforce.com';}
 function authMigrate(){
   if(!D.accounts)D.accounts=[];
