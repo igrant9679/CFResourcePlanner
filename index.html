@@ -1057,7 +1057,7 @@ var D,viewMode='res',collState={},dragInfo=null,MS_REG={},adminTab='skills';
 var CAP=null;  /* Capacity Planning non-destructive sandbox: {name, roster:[...], baseline:{...}} */
 var capTab='sandbox';   /* 'sandbox' | 'proj' — Capacity Planning sub-tab */
 var proformaTab='overview';  /* active sub-tab in the confidential Proforma section */
-var _capProjMult=100;   /* pipeline confidence multiplier (%) applied to per-stage win odds in projections */
+var _capProjMult=0;   /* pipeline confidence multiplier (%); default 0 = No Pipeline (contracted revenue only) in projections */
 /* Per-stage base win probability for the projections pipeline ramp. Effective
    odds for an opp = clamp(stageProb * _capProjMult/100, 0, 1). */
 var CAP_STAGE_PROB={'Lead Gen':0.10,'Presales':0.25,'Sales':0.50,'Delivery':0.80,'Won':1,'Lost':0};
