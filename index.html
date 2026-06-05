@@ -1250,6 +1250,13 @@ async function bootstrapData(){
   }
 }
 function migrate(){
+  if(!Array.isArray(D.dataIssues))D.dataIssues=[];
+  if(!D.dataIssuesSeeded){
+    D.dataIssues.push({id:uid(),title:'Opportunities duplicate active contracts (forecast double-count)',
+      detail:'These opportunities share a name with an active contract project, so the Capacity forecast was counting them twice (committed contract revenue + weighted pipeline): FAMS ($200K, Delivery), C1FAMS FY26 ($150K, Delivery), BCLM ($50K, Delivery), AFOSI ($50K, Sales). The projection now excludes Won/Delivery-stage opportunities from pipeline revenue, but the duplicate opportunity records still remain in the Opportunities list/funnel. ACTION: re-stage or delete the duplicates (or confirm AFOSI is a genuine separate recompete).',
+      severity:'high',source:'Pipeline review',createdAt:Date.now(),status:'open',resolvedAt:null});
+    D.dataIssuesSeeded=true;
+  }
   D.departments.forEach(function(d){if(!('parentId' in d))d.parentId=null;});
   D.departments.forEach(function(d){d.members.forEach(function(m){m.projects=(m.projects||[]).map(function(x){return typeof x==='string'?{id:x,pct:100}:x;});});});
   D.projects.forEach(function(p){if(!('parentId' in p))p.parentId=null;});
@@ -3193,7 +3200,11 @@ function capProjData(roster,multPct,opts){
   var items=capItems();
   var opps=(D.projects||[]).filter(function(p){return projCat(p)==='opportunity';});
   var noDate=0,modeled=0;
-  opps.forEach(function(o){ if(capOppStage(o)==='Lost')return; if(!o.closeDate){noDate++;return;} modeled++; });
+  // Won/Delivery = awarded & actively delivering (counted as contracts via their
+  // timelines), so they are NOT speculative pipeline; Lost = none. Only Lead Gen /
+  // Presales / Sales ramp into projected pipeline revenue.
+  function _oppSpeculative(o){var s=capOppStage(o);return s!=='Won'&&s!=='Delivery'&&s!=='Lost';}
+  opps.forEach(function(o){ if(!_oppSpeculative(o))return; if(!o.closeDate){noDate++;return;} modeled++; });
   // Marines win lever (workbook §2): $500K ARR at 50% margin from the opp's close month.
   var marinesStart=null;
   if(opts.marinesWon){var mo2=opps.find(function(o){return /marines|dd577/i.test(o.name||'');});var cd=mo2&&mo2.closeDate?new Date(mo2.closeDate):null;marinesStart=(cd&&!isNaN(cd))?cd.getFullYear()*12+cd.getMonth():(2026*12+9);}
@@ -3225,6 +3236,7 @@ function capProjData(roster,multPct,opts){
     var otherPayroll=otherLabor+proformaBDMgmtFixedMonthlyAt(mo.y,mo.m);   // payroll-typed CS lines, per-month (honors scheduled increases)
     var oppRev=0;
     opps.forEach(function(o){
+      if(!_oppSpeculative(o))return;  // Won/Delivery already counted as contract revenue — exclude from pipeline to avoid double-counting
       if(!o.closeDate)return; var cd=new Date(o.closeDate);if(isNaN(cd))return;
       var live=mo.y>cd.getFullYear()||(mo.y===cd.getFullYear()&&mo.m>=cd.getMonth());
       if(!live)return;
@@ -3357,7 +3369,7 @@ function _capProjHTML(roster){
     +'<tbody>'+body+'</tbody></table></div>';
   var note='<div class="cap-proj-note">Projection starts this month and runs through Dec '+rows[rows.length-1].y+'. '
     +'Cost = Project payroll + Other payroll + Overhead/G&amp;A. <b>Project payroll</b> = labor allocated to projects/initiatives. <b>Other payroll</b> = all non-project labor (people on overhead items like G&amp;A/Operations, bench, plus Federal Sales/BD &amp; Management). <b>Overhead/G&amp;A</b> = '+fmt(d.overheadFixed||0)+'/mo fixed costs from the Proforma Cost Structure only (no people). Profit and margin are net of all three. Contract revenue is time-phased from the Knowledge Base (FAMS sunset Sep 24, BCLM +25% step, C1FAMS ramp to $100K Oct). '
-    +d.modeled+' opportunit'+(d.modeled===1?'y is':'ies are')+' ramped in at close date, weighted by stage × '+_capProjMult+'% confidence'+(_capProjOpts().marinesWon?' (Marines forced to won)':'')+(_capProjOpts().c1target!=null?' · C1FAMS maturity set to '+fmt(_capProjOpts().c1target):'')+(d.noDate?'; '+d.noDate+' opportunit'+(d.noDate===1?'y':'ies')+' without a close date excluded':'')+'.'
+    +d.modeled+' opportunit'+(d.modeled===1?'y is':'ies are')+' ramped in at close date, weighted by stage × '+_capProjMult+'% confidence'+(_capProjOpts().marinesWon?' (Marines forced to won)':'')+(_capProjOpts().c1target!=null?' · C1FAMS maturity set to '+fmt(_capProjOpts().c1target):'')+(d.noDate?'; '+d.noDate+' opportunit'+(d.noDate===1?'y':'ies')+' without a close date excluded':'')+'. Won &amp; Delivery opportunities are excluded (counted as contracts).'
     +(_capCashMode?' Cash = opening '+fmt(opening)+' + cumulative (profit − debt service '+fmt(burden)+'/mo).':'')+'</div>';
   var charts='<div class="cap-chart" style="margin-bottom:14px"><div class="cap-chart-h">Cumulative revenue &amp; profit through Dec '+rows[rows.length-1].y+'</div>'+_capProjChart(rows)+'</div>'
     +(_capCashMode?'<div class="cap-chart" style="margin-bottom:14px"><div class="cap-chart-h">Cash balance vs $'+(Math.round(gate/1000))+'K survival gate</div>'+_capCashChart(rows,gate,opening)+'</div>':'');
@@ -9058,6 +9070,43 @@ openModal('ovAdmin');}
 
 function openManageSkills(){openAdminLibrary();}
 
+/* ── DATA ISSUE LOG — data-quality issues found by review or flagged manually ── */
+function dataIssueSummary(){return (D.dataIssues||[]).filter(function(x){return x.status!=='done';}).length;}
+function openDataIssueLog(){
+  if(!ME)return;D.dataIssues=D.dataIssues||[];
+  var sev={high:0,med:1,low:2};
+  var open=D.dataIssues.filter(function(x){return x.status!=='done';}).sort(function(a,b){return (sev[a.severity]||1)-(sev[b.severity]||1)||(b.createdAt||0)-(a.createdAt||0);});
+  var done=D.dataIssues.filter(function(x){return x.status==='done';}).sort(function(a,b){return (b.resolvedAt||0)-(a.resolvedAt||0);});
+  function pill(s){return '<span class="pf-pill '+(s==='high'?'pf-crit':s==='med'?'pf-high':'pf-med')+'">'+esc(s||'med')+'</span>';}
+  function card(x){return '<div class="kb-card" style="border-left-color:'+(x.status==='done'?'#2D6A4F':x.severity==='high'?'#DC2626':'#D97706')+(x.status==='done'?';opacity:.7':'')+'">'
+    +'<div style="flex:1;min-width:0">'
+    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="kb-name"'+(x.status==='done'?' style="text-decoration:line-through"':'')+'>'+esc(x.title)+'</span>'+pill(x.severity)+(x.source?'<span class="kb-type">'+esc(x.source)+'</span>':'')+'</div>'
+    +(x.detail?'<div class="kb-sum">'+esc(x.detail)+'</div>':'')
+    +'<div class="kb-meta">'+(x.createdAt?'logged '+new Date(x.createdAt).toLocaleDateString():'')+(x.status==='done'&&x.resolvedAt?' · resolved '+new Date(x.resolvedAt).toLocaleDateString():'')+'</div>'
+    +'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">'
+    +'<button class="btn '+(x.status==='done'?'btn-sec':'btn-navy')+' btn-sm" onclick="dataIssueToggle(\''+x.id+'\')">'+(x.status==='done'?'Reopen':'Mark done')+'</button>'
+    +'<button class="btn btn-danger-sm btn-sm" onclick="dataIssueDelete(\''+x.id+'\')">Delete</button>'
+    +'</div></div>';}
+  var body=(open.length?open.map(card).join(''):'<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:18px">No open data issues. &#127881;</div>')
+    +(done.length?'<div class="rpt-sec-h" style="margin-top:12px">Resolved ('+done.length+')</div>'+done.map(card).join(''):'');
+  document.getElementById('mdlRB').innerHTML=
+    '<div class="mdl-over">Admin</div><div class="mdl-title">&#9888; Data Issue Log</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Data-quality issues found in the workspace (by review or flagged manually). Mark them done as you resolve them.</div>'
+    +'<div class="kb-upload-row"><span style="font-size:11px;color:var(--text-muted)">'+open.length+' open · '+done.length+' resolved</span><span style="flex:1"></span><button class="btn btn-gold btn-sm" onclick="dataIssueAdd()">+ Add issue</button></div>'
+    +'<div class="kb-list" style="margin-top:8px">'+body+'</div>'
+    +'<div class="btn-row" style="margin-top:14px"><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovRB\')">Close</button></div>';
+  openModal('ovRB');
+}
+function dataIssueAdd(){
+  openFormModal({over:'Data Issue Log',title:'Add data issue',submitLabel:'Add',
+    fields:[{key:'title',label:'Title',type:'text',required:true},{key:'detail',label:'Detail / action',type:'textarea',rows:3},{key:'severity',label:'Severity',type:'select',value:'med',options:[{value:'high',label:'High'},{value:'med',label:'Medium'},{value:'low',label:'Low'}]}],
+    onSubmit:function(v){D.dataIssues=D.dataIssues||[];D.dataIssues.push({id:uid(),title:v.title.trim(),detail:(v.detail||'').trim(),severity:v.severity||'med',source:'Manual',createdAt:Date.now(),createdBy:ME?ME.id:'',status:'open',resolvedAt:null});save();closeModal('ovForm');openDataIssueLog();}
+  });
+}
+function dataIssueToggle(id){var x=(D.dataIssues||[]).find(function(i){return i.id===id;});if(!x)return;x.status=x.status==='done'?'open':'done';x.resolvedAt=x.status==='done'?Date.now():null;save();openDataIssueLog();}
+function dataIssueDelete(id){if(!confirm('Delete this data issue from the log?'))return;D.dataIssues=(D.dataIssues||[]).filter(function(i){return i.id!==id;});save();openDataIssueLog();}
+
 function openAdmin(){
   if(!ME)return;
   var canG=can('globals'),canA=can('accounts'),canI=can('import');
@@ -9098,6 +9147,7 @@ function openAdmin(){
     +(canProposal()?'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openOrgSettingsManager()">&#10024; AI Master Prompt &amp; Branding</button>':'')
     +'</div></div>';
   html+='<div class="admin-menu-sec"><div class="admin-menu-lbl">Data</div><div class="admin-menu-row">'
+    +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openDataIssueLog()" title="Data-quality issues found by review or flagged manually">&#9888; Data Issue Log'+(dataIssueSummary()?' ('+dataIssueSummary()+')':'')+'</button>'
     +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');exportData()" title="Download backup JSON">&#8595; Export</button>'
     +(canI?'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');importData()" title="Restore from JSON file">&#8593; Import</button>':'')
     +'</div></div>';
