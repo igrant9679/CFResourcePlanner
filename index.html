@@ -3697,7 +3697,7 @@ function _pfLineSchedTag(x){
 }
 function _pfSchedBtn(path,i){
   var arr=_pfArr(path),line=arr&&arr[i];
-  var has=line&&((line.steps&&line.steps.length)||(line.escalator&&Number(line.escalator.pct)));
+  var has=line&&((line.steps&&line.steps.length)||(line.escalator&&Number(line.escalator.pct))||line.start||line.end);
   return '<button class="pf-edit-btn" onclick="pfLineSchedule(\''+path+'\','+i+')" title="Scheduled increase'+(has?' (active)':'')+'"'+(has?' style="color:var(--gold);font-weight:800"':'')+'>&#8599;</button>';
 }
 function pfLineSchedule(path,idx){
@@ -3705,14 +3705,18 @@ function pfLineSchedule(path,idx){
   var nm=line.category||line.vendor||'line',e=line.escalator||{};
   var stepsText=(line.steps||[]).slice().sort(function(a,b){return _capYM(a.from)-_capYM(b.from);}).map(function(s){return s.from+' = '+(Number(s.value)||0);}).join('\n');
   openFormModal({over:'Cost Structure · '+esc(nm),title:'Scheduled increase — '+esc(nm),
-    intro:'Set effective-dated fixed-amount steps and/or a % escalator for this line. A schedule here overrides the schedule-wide escalator for this line, and flows into the Capacity forecast.',
+    intro:'Set the active window (start/end), effective-dated fixed-amount steps, and/or a % escalator for this line. All of these flow into the Capacity forecast; outside the active window the line costs $0.',
     fields:[
+      {key:'winStart',label:'Active from month (blank = always)',type:'month',value:line.start||''},
+      {key:'winEnd',label:'Active until month (blank = ongoing)',type:'month',value:line.end||''},
       {key:'steps',label:'Fixed-amount steps — one per line as  YYYY-MM = newMonthly$',type:'textarea',rows:5,value:stepsText,placeholder:'2027-01 = 6500\n2028-01 = 7000'},
       {key:'pct',label:'% escalator (per period)',type:'number',value:e.pct!=null?e.pct:''},
       {key:'from',label:'Escalator start month',type:'month',value:e.from||''},
       {key:'period',label:'Escalator period',type:'select',value:e.period||'year',options:[{value:'year',label:'per year'},{value:'month',label:'per month'}]}
     ],
     onSubmit:function(v){
+      line.start=(v.winStart||'').trim();if(!line.start)delete line.start;
+      line.end=(v.winEnd||'').trim();if(!line.end)delete line.end;
       var steps=[];String(v.steps||'').split('\n').forEach(function(ln){ln=ln.trim();if(!ln)return;var mm=ln.match(/^(\d{4}-\d{2})\s*=\s*(-?[\d.]+)/);if(mm)steps.push({from:mm[1],value:Number(mm[2])||0});});
       if(steps.length)line.steps=steps.sort(function(a,b){return _capYM(a.from)-_capYM(b.from);});else delete line.steps;
       var pct=Number(v.pct)||0;
