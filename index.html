@@ -1181,6 +1181,9 @@ async function serverSave(opts){
   syncing=true;
   syncSetStatus('Saving…','rgba(255,255,255,0.55)');
   try{
+    // Bake the pre-computed bundle for the read-only LevelUp Atlas mirror so it
+    // ships in /api/atlas-snapshot. Never let a compute error block the save.
+    try{D.atlasComputed=buildAtlasComputed();}catch(_){}
     var force=!!(opts&&opts.force);
     var url='/api/data'+(force?'?force=1':'');
     var headers={'Content-Type':'application/json'};
@@ -1243,7 +1246,11 @@ async function bootstrapData(){
   if(r.reachable&&r.data){
     var needsSeed=!r.data.overheadSeeded||!r.data.planSeeded||!r.data.accounts||!r.data.programs||!r.data.oppSeeded||!r.data.accountsSeeded||!r.data.oppEnriched;
     D=r.data;migrate();try{localStorage.setItem(STORE_KEY,JSON.stringify(D));}catch(e){}
-    if(needsSeed)serverSave();else syncSetStatus('Cloud sync on','rgba(255,255,255,0.38)');
+    if(needsSeed)serverSave();
+    else{syncSetStatus('Cloud sync on','rgba(255,255,255,0.38)');
+      // First load after the LevelUp-mirror feature deploys: populate the
+      // pre-computed bundle once so /api/atlas-snapshot has it without an edit.
+      if(!D.atlasComputed)setTimeout(function(){serverSave();},2500);}
   }else if(r.reachable){
     loadLocal();syncSetStatus('Initializing cloud storage…','rgba(255,255,255,0.55)');serverSave();
   }else{
@@ -9690,6 +9697,59 @@ function _rptClearHL(){var ns=document.querySelectorAll('.rpt-dnd.rpt-dragover')
 function rptTouchStart(e,key,ctx){_rptDrag=key;_rptDragCtx=ctx||'builtin';}
 function rptTouchMove(e){if(!_rptDrag)return;e.preventDefault();var t=e.touches&&e.touches[0];if(!t)return;_rptClearHL();var el=document.elementFromPoint(t.clientX,t.clientY);while(el&&el!==document.body){if(el.classList&&el.classList.contains('rpt-dnd')){el.classList.add('rpt-dragover');break;}el=el.parentNode;}}
 function rptTouchEnd(e){if(!_rptDrag)return;var t=e.changedTouches&&e.changedTouches[0];var key=t?_rptClosestKey(document.elementFromPoint(t.clientX,t.clientY)):null;_rptClearHL();var from=_rptDrag,ctx=_rptDragCtx;_rptDrag=null;_rptDragCtx=null;if(key)rptReorder(from,key,ctx);}
+/* ── Pre-computed bundle for the read-only LevelUp Atlas mirror ──
+   Runs the existing capacity/forecast/report helpers and bakes structured
+   results + rendered report HTML onto D.atlasComputed so /api/atlas-snapshot
+   can ship them. DOM-free (the rpt_* fns + svg/table helpers are pure string
+   builders). Called from serverSave() (always fresh) + once on boot if absent. */
+function buildAtlasComputed(){
+  var out={generatedAt:new Date().toISOString()};
+  var months=[];try{months=capProjMonths()||[];}catch(e){}
+  var moLabel=function(mo){return CAP_MONTHS[mo.m]+" '"+String(mo.y).slice(2);};
+  // Capacity / forecast
+  try{
+    var roster=capBuildRoster();
+    var totals=capTotals(roster);
+    var proj=capProjData(roster,0,{});
+    var capProjects=capItems().map(function(p){
+      var rev=capItemRevenue(p),cost=capItemCostR(roster,p.id),fte=capItemFTER(roster,p.id);
+      return {id:p.id,name:p.name,category:projCat(p),revenue:rev,cost:cost,profit:rev-cost,
+        margin:rev?Math.round((rev-cost)/rev*100):0,fte:Math.round(fte*10)/10};
+    }).sort(function(a,b){return b.profit-a.profit;});
+    out.capacity={totals:totals,projects:capProjects,noDate:proj.noDate,modeled:proj.modeled,
+      forecast:(proj.rows||[]).map(function(r){return {label:moLabel(r),y:r.y,m:r.m,revenue:r.rev,
+        baseRev:r.baseRev,oppRev:r.oppRev,projectPayroll:r.projectPayroll,otherPayroll:r.otherPayroll,
+        overhead:r.overhead,cost:r.cost,profit:r.profit,cum:r.cum};})};
+  }catch(e){out.capacityError=String(e&&e.message||e);}
+  // Proforma summary (the raw D.proforma model ships separately in the snapshot)
+  try{out.proforma={openingCash:capOpeningCash(),debtService:proformaDebtService(),overheadMonthly:proformaOverheadMonthly()};}
+  catch(e){out.proformaError=String(e&&e.message||e);}
+  // Resource planning: allocation heatmap (12 mo) + availability snapshot
+  try{
+    var heatMonths=months.slice(0,12),allMembers=allM();
+    out.resourcePlanning={
+      months:heatMonths.map(function(mo){return {label:moLabel(mo),y:mo.y,m:mo.m};}),
+      heatmap:allMembers.map(function(m){return {id:m.id,name:m.name,dept:m._dn||'',
+        cells:heatMonths.map(function(mo){var byCat=null;try{byCat=ppAllocByCatAt(m,mo);}catch(e){}
+          return {pct:byCat?Math.round(byCat.total):0,byCat:byCat};})};}),
+      availability:allMembers.map(function(m){
+        var fu=null;try{fu=ppFirstUnder(m,heatMonths);}catch(e){}
+        var fur=null;try{fur=furloughStatus(m);}catch(e){}
+        return {id:m.id,name:m.name,dept:m._dn||'',note:m.note||'',
+          firstUnder:fu?{label:moLabel(fu.mo),pct:Math.round(fu.pct)}:null,furlough:fur};
+      }).filter(function(r){return r.firstUnder;})
+    };
+  }catch(e){out.rpError=String(e&&e.message||e);}
+  // Reports: render the 17 builtins to HTML (full picture — unfiltered)
+  try{
+    var ctx=_rptCtx({dept:'',category:'',yearFrom:null,yearTo:null});
+    out.reports=RPT_BUILTINS.map(function(b){
+      var html;try{html=b.fn(ctx);}catch(e){html='<div class="rpt-empty">Could not render: '+esc(e&&e.message||e)+'</div>';}
+      return {key:b.key,title:b.title,area:b.area,financial:!!b.financial,html:html};
+    });
+  }catch(e){out.reportsError=String(e&&e.message||e);}
+  return out;
+}
 function renderReportsView(q){
   var ctx=_rptCtx();
   var newBtns='<button class="btn btn-gold btn-sm" onclick="openReportComposer()">+ Dashboard</button> <button class="btn btn-sec btn-sm" onclick="openTableBuilder()">+ Table</button> <button class="btn btn-sec btn-sm" onclick="openPivotBuilder()">+ Pivot</button>';

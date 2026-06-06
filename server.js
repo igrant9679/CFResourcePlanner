@@ -563,6 +563,13 @@ app.get('/api/atlas-snapshot', async (req, res) => {
         pastClients: m.pastClients || [],
         resumeLink: m.resumeLink || '',
         attachments: m.attachments || [],
+        // Financial / time-phased fields (for Resource Planning + Capacity mirror)
+        pto: m.pto || [],
+        furloughDate: m.furloughDate || '',
+        allocSchedule: m.allocSchedule || [],
+        costSchedule: m.costSchedule || [],
+        costEscalator: m.costEscalator || null,
+        oneTimeCosts: m.oneTimeCosts || [],
       })),
     }));
 
@@ -592,6 +599,12 @@ app.get('/api/atlas-snapshot', async (req, res) => {
       potential: p.potential || 0,
       closeDate: p.closeDate || '',
       changeRequested: p.changeRequested || '',
+      // Scheduling / time-phased revenue (for Capacity + Resource Planning mirror)
+      startDate: p.startDate || '',
+      endDate: p.endDate || '',
+      timeline: p.timeline || [],
+      revenueSteps: p.revenueSteps || [],
+      revenueEscalator: p.revenueEscalator || null,
     }));
 
     // Activities — exclude any tied to recruitings (workflow-internal) by templateId; include COE + project kinds
@@ -692,6 +705,17 @@ app.get('/api/atlas-snapshot', async (req, res) => {
       proposals,
       companyProfile,
       corporateCertifications,
+      // Recruiting (requisitions + candidate pipeline + resume bank)
+      recruitings: data.recruitings || [],
+      candidates: data.candidates || [],
+      resumeBank: data.resumeBank || [],
+      // Financial model (Proforma page) + saved Capacity scenarios + custom reports
+      proforma: data.proforma || null,
+      scenarios: data.scenarios || [],
+      reportTemplates: data.reportTemplates || [],
+      // Pre-computed bundle (capacity/forecast/resource-planning data + rendered
+      // report HTML) baked by the Atlas client's buildAtlasComputed().
+      atlasComputed: data.atlasComputed || null,
     });
   } catch (e) {
     console.error('GET /api/atlas-snapshot failed:', e.message);
