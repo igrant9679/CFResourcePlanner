@@ -4353,6 +4353,7 @@ function rqCardHTML(r){
     +'<div class="rq-card-title">'+(r.jdTitle?esc(r.jdTitle):'<span style="color:var(--text-muted)">Untitled requisition</span>')+'</div>'
     +'<div class="rq-card-sub">'+rqParentLabel(r)+'</div>'
     +'<div class="rq-card-meta">'
+    +(r.startDate?'<span title="Target start date">📅 '+esc(_otcMonthLbl(String(r.startDate).slice(0,7)))+'</span>':'')
     +(bd?'<span title="BusDev">📋 '+esc(bd.m.name)+'</span>':'')
     +(pm?'<span title="PM">👤 '+esc(pm.m.name)+'</span>':'')
     +'<span>'+cnt+' candidate'+(cnt===1?'':'s')+'</span>'
@@ -4366,13 +4367,17 @@ function renderRecruitView(q){
   rs.sort(function(a,b){var ord={open:0,'on-hold':1,filled:2,cancelled:3};return (ord[a.status]||0)-(ord[b.status]||0)||((b.createdAt||0)-(a.createdAt||0));});
   var filterChip=rqFilter.taskId?(function(){var t=D.activities.find(function(x){return x.id===rqFilter.taskId;});var lbl=t?esc(t.subtask||'task'):'task';return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px"><span style="color:var(--text-muted)">Filtered to task:</span><span class="plan-chip" style="border-color:var(--gold);color:var(--gold)">'+lbl+'</span><button class="btn btn-sec btn-sm" onclick="rqClearFilter()">Clear</button></div>';})():'';
   var addBtn='<div style="display:flex;gap:6px"><button class="btn btn-outline btn-sm" onclick="openResumeBankManager()">&#128196; Resume Bank</button><button class="btn btn-gold btn-sm" onclick="openRecruitModal()">+ New Requisition</button></div>';
-  var groups={};RQ_STATUSES.forEach(function(s){groups[s.k]=[];});rs.forEach(function(r){(groups[r.status]||groups.open).push(r);});
+  var groupToggle='<div class="pf-subtabs" style="margin-bottom:10px"><button class="pf-subtab'+(recruitGroupBy==='status'?' active':'')+'" onclick="recruitSetGroup(\'status\')">By status</button><button class="pf-subtab'+(recruitGroupBy==='month'?' active':'')+'" onclick="recruitSetGroup(\'month\')">By start month</button></div>';
+  function _rqGroupBlock(lbl,arr){return '<div class="rq-section-lbl">'+esc(lbl)+'<span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);margin-left:6px">'+arr.length+'</span></div><div class="rq-grid">'+arr.map(rqCardHTML).join('')+'</div>';}
   var body='';
-  RQ_STATUSES.forEach(function(s){
-    if(!groups[s.k].length)return;
-    body+='<div class="rq-section-lbl">'+s.l+'<span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted);margin-left:6px">'+groups[s.k].length+'</span></div>'
-      +'<div class="rq-grid">'+groups[s.k].map(rqCardHTML).join('')+'</div>';
-  });
+  if(recruitGroupBy==='month'){
+    var byM={},mOrder=[];rs.forEach(function(r){var key=r.startDate?String(r.startDate).slice(0,7):'none';if(!byM[key]){byM[key]=[];mOrder.push(key);}byM[key].push(r);});
+    mOrder.sort(function(a,b){if(a==='none')return 1;if(b==='none')return -1;return a<b?-1:1;});
+    mOrder.forEach(function(key){body+=_rqGroupBlock(key==='none'?'No start date set':_otcMonthLbl(key),byM[key]);});
+  }else{
+    var groups={};RQ_STATUSES.forEach(function(s){groups[s.k]=[];});rs.forEach(function(r){(groups[r.status]||groups.open).push(r);});
+    RQ_STATUSES.forEach(function(s){if(groups[s.k].length)body+=_rqGroupBlock(s.l,groups[s.k]);});
+  }
   if(!rs.length)body='<div class="empty-recruit">No requisitions yet. Click <b>+ New Requisition</b> to create one — or open a <i>Perform Recruiting</i> task from any Opportunity and click <b>Open Recruiting</b>.</div>';
   return '<div style="max-width:1280px;margin:0 auto">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
@@ -4381,8 +4386,11 @@ function renderRecruitView(q){
     +addBtn+'</div>'
     +rqFunnelHTML(rs)
     +filterChip
+    +(rs.length?groupToggle:'')
     +body+'</div>';
 }
+var recruitGroupBy='status';
+function recruitSetGroup(g){recruitGroupBy=g;renderView();}
 function rqClearFilter(){rqFilter.taskId='';renderView();}
 function rqMemberOpts(selId,placeholderLabel){
   var opts='<option value="">'+(placeholderLabel||'— none —')+'</option>';
@@ -4424,6 +4432,7 @@ function openRecruitModal(id){
     '<div class="mdl-over">Recruiting</div><div class="mdl-title">'+(existing?'Edit Requisition':'New Requisition')+'</div>'
     +'<div style="display:flex;gap:10px">'
       +'<div class="fld" style="flex:1"><label class="fld-l">Status</label><select class="fld-sel" id="rq_status">'+stsOpts+'</select></div>'
+      +'<div class="fld" style="flex:1"><label class="fld-l">Target start date</label><input class="fld-i" type="date" id="rq_startdate" value="'+esc(r.startDate||'')+'"></div>'
       +'<div class="fld" style="flex:1"><label class="fld-l">Linked Task</label><select class="fld-sel" id="rq_task">'+taskOpts+'</select></div>'
     +'</div>'
     +'<div style="display:flex;gap:10px">'
@@ -4463,6 +4472,7 @@ function rqUpdateParentOpts(){
 function saveRecruit(id){
   var data={
     status:gv('rq_status')||'open',
+    startDate:gv('rq_startdate')||'',
     taskId:gv('rq_task')||'',
     jdTitle:gv('rq_jdtitle').trim(),
     jdDescription:rtGet('rq_jddesc'),
