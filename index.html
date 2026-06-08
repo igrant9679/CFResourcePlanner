@@ -1058,6 +1058,7 @@ var CAP=null;  /* Capacity Planning non-destructive sandbox: {name, roster:[...]
 var capTab='sandbox';   /* 'sandbox' | 'proj' — Capacity Planning sub-tab */
 var proformaTab='overview';  /* active sub-tab in the confidential Proforma section */
 var _capProjMult=0;   /* pipeline confidence multiplier (%); default 0 = No Pipeline (contracted revenue only) in projections */
+var _capNoPipeline=true; /* Pipeline Forecast: exclude all pipeline (contracted revenue only) — DEFAULT */
 var _capInclWon=false;   /* Pipeline Forecast: include Closed Won opportunities */
 var _capInclNeg=false;   /* Pipeline Forecast: include In-Negotiation opportunities */
 /* Per-stage base win probability for the projections pipeline ramp. Effective
@@ -3041,7 +3042,7 @@ function capCompare(){
     return '<tr><td style="text-align:left;font-weight:600">'+m[0]+'</td>'+totals.map(function(t){var val=t[m[1]];return '<td>'+(m[2]?fmt(val):val)+'</td>';}).join('')+'</tr>';
   }).join('');
   // forecast section: per-column confidence + annual profit through the horizon
-  var pipeLbl='Active pipeline'+(_capInclWon?' + Closed Won':'')+(_capInclNeg?' + In Negotiation':'')+' · weighted by Probability of Close';
+  var pipeLbl=_capPipeLbl()+(_capNoPipeline?'':' · weighted by Probability of Close');
   body+='<tr><td style="text-align:left;font-weight:700;background:#16223C;color:#fff" colspan="'+(cols.length+1)+'">Forecast — '+esc(pipeLbl)+'</td></tr>';
   years.forEach(function(yr,yi){
     body+='<tr><td style="text-align:left;font-weight:600">Forecast profit '+yr+'</td>'+projs.map(function(rows){var t=_capYearTotals(rows,yr);return '<td>'+fmt(t.profit)+'</td>';}).join('')+'</tr>';
@@ -3278,7 +3279,8 @@ function capProjData(roster,multPct,opts){
   // old stage × confidence-multiplier behavior.
   var _probMode=opts.pipelineMode==='prob';
   function _oppIncluded(o){var s=capOppStage(o);if(s==='Lost')return false;
-    if(_probMode){var st=(o.status||'').toLowerCase();
+    if(_probMode){if(opts.noPipeline)return false;   // No pipeline → contracted revenue only
+      var st=(o.status||'').toLowerCase();
       if(s==='Lead Gen'||s==='Presales'||s==='Sales')return true;
       if((s==='Won'||st==='closed won')&&opts.inclWon)return true;
       if(st==='negotiation'&&opts.inclNeg)return true;
@@ -3362,11 +3364,15 @@ function capOpeningCash(){
   return Number(P.financials.openingCash)||0;
 }
 function capSetProjMult(v){ _capV4=null;_capProjMult=Math.max(0,Math.min(200,Number(v)||0)); renderView(); }
+function capToggleNoPipeline(){ _capNoPipeline=!_capNoPipeline; renderView(); }
 function capToggleInclWon(){ _capInclWon=!_capInclWon; renderView(); }
 function capToggleInclNeg(){ _capInclNeg=!_capInclNeg; renderView(); }
+/* Human label for the current pipeline-inclusion setting (used by the caption,
+   CSV, print, and the scenario comparison). */
+function _capPipeLbl(){ if(_capNoPipeline)return 'No pipeline (contracted revenue only)'; return 'Active pipeline'+(_capInclWon?' + Closed Won':'')+(_capInclNeg?' + In Negotiation':''); }
 /* Opts for the Capacity Pipeline Forecast: per-opp probability weighting + the
    Include Closed Won / In Negotiation toggles. */
-function _capPipeOpts(){ return {pipelineMode:'prob',inclWon:_capInclWon,inclNeg:_capInclNeg}; }
+function _capPipeOpts(){ return {pipelineMode:'prob',noPipeline:_capNoPipeline,inclWon:_capInclWon,inclNeg:_capInclNeg}; }
 function capSetV4(k){ _capV4=(k===_capV4?null:k); if(_capV4&&CAP_V4[_capV4]){_capProjMult=CAP_V4[_capV4].mult;} renderView(); }
 function capToggleCash(){ _capCashMode=!_capCashMode; renderView(); }
 function capSetBurden(v){ var n=Number(v); _capBurdenOverride=(v===''||isNaN(n))?null:Math.max(0,n); renderView(); }
@@ -3384,16 +3390,17 @@ function _capProjHTML(roster){
   var burden=capFixedBurden(),opening=capOpeningCash(),gate=(D.proforma&&D.proforma.financials&&D.proforma.financials.cashGateTarget)||1500000;
   var cash=opening,gateMet=null;
   rows.forEach(function(r){ r.netCash=r.profit-burden; cash+=r.netCash; r.cashBal=cash; if(gateMet===null&&cash>=gate)gateMet=r; });
-  var ckbx=function(on,fn,lbl){return '<label class="cap-proj-chip'+(on?' on':'')+'" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px"><input type="checkbox" '+(on?'checked':'')+' onchange="'+fn+'()" style="margin:0">'+lbl+'</label>';};
+  var ckbx=function(on,fn,lbl,disabled){return '<label class="cap-proj-chip'+(on?' on':'')+'" style="cursor:'+(disabled?'not-allowed':'pointer')+';opacity:'+(disabled?'.45':'1')+';display:inline-flex;align-items:center;gap:6px"><input type="checkbox" '+(on?'checked':'')+(disabled?' disabled':'')+' onchange="'+fn+'()" style="margin:0">'+lbl+'</label>';};
   var ctl='<div class="cap-proj-ctl">'
     +'<label>Pipeline forecast</label>'
-    +ckbx(_capInclWon,'capToggleInclWon','Include Closed Won')
-    +ckbx(_capInclNeg,'capToggleInclNeg','In Negotiation')
+    +ckbx(_capNoPipeline,'capToggleNoPipeline','No pipeline (contracted only)',false)
+    +ckbx(_capInclWon,'capToggleInclWon','Include Closed Won',_capNoPipeline)
+    +ckbx(_capInclNeg,'capToggleInclNeg','In Negotiation',_capNoPipeline)
     +'<span style="flex:1"></span>'
     +'<button class="cap-proj-chip'+(_capCashMode?' on':'')+'" onclick="capToggleCash()">&#128181; Cash gate</button>'
     +'<button class="btn btn-sec btn-sm" onclick="capProjExportCSV()">&#8595; CSV</button>'
     +'<button class="btn btn-sec btn-sm" onclick="capProjPrint()">&#128424; Print</button>'
-    +'<div class="cap-stage-leg" style="flex-basis:100%">Active pipeline (Lead&nbsp;Gen, Presales, Sales) is always counted, each opportunity weighted by its <b>Probability of Close</b> (stage default when blank). Tick a box to also include <b>Closed&nbsp;Won</b> and/or <b>In&#8209;Negotiation</b> deals. Delivery &amp; Lost are excluded.</div>'
+    +'<div class="cap-stage-leg" style="flex-basis:100%">'+(_capNoPipeline?'<b>No pipeline</b> — contracted revenue only; no opportunities are forecast. Uncheck it to count active pipeline (Lead&nbsp;Gen, Presales, Sales), each weighted by its <b>Probability of Close</b> (stage default when blank), and optionally add Closed&nbsp;Won / In&#8209;Negotiation.':'Active pipeline (Lead&nbsp;Gen, Presales, Sales) is counted, each opportunity weighted by its <b>Probability of Close</b> (stage default when blank). Tick a box to also include <b>Closed&nbsp;Won</b> and/or <b>In&#8209;Negotiation</b> deals. Delivery &amp; Lost are excluded.')+'</div>'
     +'<div class="cap-stage-leg" style="flex-basis:100%">&#8505; Resources not assigned to a project, initiative, or overhead are not counted as a cost in the forecast (the Furlough report tracks them for furlough).</div>'
     +'</div>';
   var v4='';   // V4 scenario chips removed from the Pipeline Forecast (still used by the Proforma scenario selector)
@@ -3448,7 +3455,7 @@ function _capProjHTML(roster){
     +'<tbody>'+body+'</tbody></table></div>';
   var note='<div class="cap-proj-note">Projection starts this month and runs through Dec '+rows[rows.length-1].y+'. '
     +'Cost = Project payroll + Other payroll + Overhead/G&amp;A. <b>Project payroll</b> = labor allocated to projects/initiatives. <b>Other payroll</b> = all non-project labor (people on overhead items like G&amp;A/Operations, bench, plus Federal Sales/BD &amp; Management). <b>Overhead/G&amp;A</b> = '+fmt(d.overheadFixed||0)+'/mo fixed costs from the Proforma Cost Structure only (no people). Profit and margin are net of all three. Contract revenue is time-phased from the Knowledge Base (FAMS sunset Sep 24, BCLM +25% step, C1FAMS ramp to $100K Oct). '
-    +d.modeled+' opportunit'+(d.modeled===1?'y is':'ies are')+' ramped in at close date, weighted by each one’s Probability of Close (stage default when blank)'+(d.noDate?'; '+d.noDate+' opportunit'+(d.noDate===1?'y':'ies')+' without a close date excluded':'')+'. Included: active pipeline'+(_capInclWon?' + Closed Won':'')+(_capInclNeg?' + In Negotiation':'')+'. Delivery &amp; Lost are excluded.'
+    +(_capNoPipeline?'Pipeline excluded — contracted revenue only (No pipeline). Uncheck “No pipeline” to forecast opportunities.':(d.modeled+' opportunit'+(d.modeled===1?'y is':'ies are')+' ramped in at close date, weighted by each one’s Probability of Close (stage default when blank)'+(d.noDate?'; '+d.noDate+' opportunit'+(d.noDate===1?'y':'ies')+' without a close date excluded':'')+'. Included: active pipeline'+(_capInclWon?' + Closed Won':'')+(_capInclNeg?' + In Negotiation':'')+'. Delivery &amp; Lost are excluded.'))
     +(_capCashMode?' Cash = opening '+fmt(opening)+' + cumulative (profit − debt service '+fmt(burden)+'/mo).':'')+'</div>';
   var charts='<div class="cap-chart" style="margin-bottom:14px"><div class="cap-chart-h">Cumulative revenue &amp; profit through Dec '+rows[rows.length-1].y+'</div>'+_capProjChart(rows)+'</div>'
     +(_capCashMode?'<div class="cap-chart" style="margin-bottom:14px"><div class="cap-chart-h">Cash balance vs $'+(Math.round(gate/1000))+'K survival gate</div>'+_capCashChart(rows,gate,opening)+'</div>':'');
@@ -3510,7 +3517,7 @@ function capProjExportCSV(){
   var lines=[['Month','Revenue','Pipeline portion','Project payroll','Other payroll','Overhead/G&A','Profit',cashMode?'Net cash Δ':'Cumulative profit',cashMode?'Cash balance':''].filter(function(x){return x!=='';})];
   rows.forEach(function(r){var row=[CAP_MONTHS[r.m]+" '"+(r.y%100),Math.round(r.rev),Math.round(r.oppRev),Math.round(r.projectPayroll||0),Math.round(r.otherPayroll||0),Math.round(r.overhead||0),Math.round(r.profit)];if(cashMode){row.push(Math.round(r.netCash),Math.round(r.cashBal));}else{row.push(Math.round(r.cum));}lines.push(row);});
   lines.push([]);
-  lines.push(['Pipeline','Active pipeline'+(_capInclWon?' + Closed Won':'')+(_capInclNeg?' + In Negotiation':''),'weighted by Probability of Close']);
+  lines.push(['Pipeline',_capPipeLbl(),_capNoPipeline?'':'weighted by Probability of Close']);
   lines.push(['Annual total','Revenue','Project payroll','Other payroll','Overhead/G&A','Profit','Margin %']);
   _capProjYears(rows).forEach(function(yr){var t=_capYearTotals(rows,yr);lines.push([yr+(t.months<12?' (partial)':''),Math.round(t.revenue),Math.round(t.projectPayroll),Math.round(t.otherPayroll),Math.round(t.overhead),Math.round(t.profit),t.margin]);});
   var csv=lines.map(function(row){return row.map(function(c){var s=String(c==null?'':c);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}).join(',');}).join('\r\n');
@@ -3523,7 +3530,7 @@ function capProjPrint(){
   if(!CAP)return;
   var rows=_capProjRowsForExport(),cashMode=_capCashMode;
   var name=(CAP.name&&CAP.name!=='Working scenario')?CAP.name:'Working scenario';
-  var pipeLbl='active pipeline'+(_capInclWon?' + Closed Won':'')+(_capInclNeg?' + In Negotiation':'');
+  var pipeLbl=_capPipeLbl();
   var lastCol=cashMode?'Cash balance':'Cumulative profit';
   var yrRows=_capProjYears(rows).map(function(yr){var t=_capYearTotals(rows,yr);return '<tr><td>'+yr+(t.months<12?' (partial year)':'')+'</td><td>'+fmt(t.revenue)+'</td><td>'+fmt(t.projectPayroll)+'</td><td>'+fmt(t.otherPayroll)+'</td><td>'+fmt(t.overhead)+'</td><td>'+fmt(t.profit)+'</td><td>'+t.margin+'%</td></tr>';}).join('');
   var moRows=rows.map(function(r,i){var yrEnd=(i<rows.length-1&&rows[i+1].y!==r.y);return '<tr'+(yrEnd?' class="ye"':'')+'><td>'+CAP_MONTHS[r.m]+" '"+(r.y%100)+'</td><td>'+fmt(r.rev)+'</td><td>'+fmt(r.oppRev)+'</td><td>'+fmt(r.projectPayroll||0)+'</td><td>'+fmt(r.otherPayroll||0)+'</td><td>'+fmt(r.overhead||0)+'</td><td>'+fmt(r.profit)+'</td><td>'+fmt(cashMode?r.cashBal:r.cum)+'</td></tr>';}).join('');
@@ -3532,7 +3539,7 @@ function capProjPrint(){
     +'<style>body{font-family:Arial,Helvetica,sans-serif;color:#16223C;margin:32px;}h1{font-size:18px;margin:0 0 2px;}.sub{color:#64748b;font-size:12px;margin-bottom:18px;}'
     +'table{border-collapse:collapse;width:100%;font-size:12px;margin-bottom:22px;}th,td{border:1px solid #d0d7e2;padding:5px 9px;text-align:right;}th{background:#16223C;color:#fff;}td:first-child,th:first-child{text-align:left;}'
     +'tr.ye td{border-bottom:2px solid #94a3b8;}h2{font-size:13px;margin:0 0 6px;}@media print{body{margin:12mm;}}</style></head><body>'
-    +'<h1>Capacity Projection</h1><div class="sub">Scenario: '+esc(name)+' · pipeline: '+esc(pipeLbl)+' (weighted by Probability of Close) · generated '+new Date().toLocaleDateString()+'</div>'
+    +'<h1>Capacity Projection</h1><div class="sub">Scenario: '+esc(name)+' · pipeline: '+esc(pipeLbl)+(_capNoPipeline?'':' (weighted by Probability of Close)')+' · generated '+new Date().toLocaleDateString()+'</div>'
     +'<h2>Annual roll-up</h2><table><thead><tr><th>Year</th><th>Revenue</th><th>Project payroll</th><th>Other payroll</th><th>Overhead/G&amp;A</th><th>Profit</th><th>Margin</th></tr></thead><tbody>'+yrRows+'</tbody></table>'
     +'<h2>Monthly detail</h2><table><thead><tr><th>Month</th><th>Revenue</th><th>Pipeline</th><th>Project payroll</th><th>Other payroll</th><th>Overhead/G&amp;A</th><th>Profit</th><th>'+lastCol+'</th></tr></thead><tbody>'+moRows+'</tbody></table>'
     +'<script>window.onload=function(){window.print();};<\/script></body></html>';
