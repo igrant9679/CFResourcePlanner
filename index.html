@@ -2875,7 +2875,7 @@ function oppEditFields(p){
     +'<div class="fld"><label class="fld-l">Stage</label><select class="fld-sel" id="ep_stage">'+stageOpts+'</select></div></div>'
     +'<div class="fld-row2"><div class="fld"><label class="fld-l">Potential $ (yearly)</label><input class="fld-i" id="ep_potential" type="number" min="0" value="'+(Number(p.potential)||0)+'"></div>'
     +'<div class="fld"><label class="fld-l">Status</label><select class="fld-sel" id="ep_status">'+[''].concat(OPP_STATUSES).concat((p.status&&OPP_STATUSES.indexOf(p.status)===-1)?[p.status]:[]).map(function(s){return '<option value="'+esc(s)+'"'+((p.status||'')===s?' selected':'')+'>'+(s||'— none —')+'</option>';}).join('')+'</select></div></div>'
-    +'<div class="fld-row2"><div class="fld"><label class="fld-l">Probability of Close (%)</label><input class="fld-i" id="ep_prob" type="number" min="0" max="100" step="5" value="'+(p.probabilityClose===''||p.probabilityClose==null?'':Number(p.probabilityClose))+'" placeholder="stage default"><div style="font-size:10px;color:var(--text-muted);margin-top:2px">Weights this opp in the Capacity Pipeline Forecast. Blank = use the stage default.</div></div><div class="fld"></div></div>'
+    +'<div class="fld-row2"><div class="fld"><label class="fld-l">Probability of Close (%)</label><input class="fld-i" id="ep_prob" type="number" min="0" max="100" step="5" value="'+(p.probabilityClose===''||p.probabilityClose==null?'':Number(p.probabilityClose))+'" placeholder="stage default"><div style="font-size:10px;color:var(--text-muted);margin-top:2px">Reference only — the Capacity forecast counts included opportunities at full Potential value (no probability discount).</div></div><div class="fld"></div></div>'
     +'<div class="fld-row2"><div class="fld"><label class="fld-l">Lead Gen</label><input class="fld-i" id="ep_lg" value="'+esc(p.leadGen||'')+'"></div>'
     +'<div class="fld"><label class="fld-l">Presales</label><input class="fld-i" id="ep_ps" value="'+esc(p.presales||'')+'"></div></div>'
     +'<div class="fld-row2"><div class="fld"><label class="fld-l">Sales</label><input class="fld-i" id="ep_sales" value="'+esc(p.sales||'')+'"></div>'
@@ -3042,7 +3042,7 @@ function capCompare(){
     return '<tr><td style="text-align:left;font-weight:600">'+m[0]+'</td>'+totals.map(function(t){var val=t[m[1]];return '<td>'+(m[2]?fmt(val):val)+'</td>';}).join('')+'</tr>';
   }).join('');
   // forecast section: per-column confidence + annual profit through the horizon
-  var pipeLbl=_capPipeLbl()+(_capNoPipeline?'':' · weighted by Probability of Close');
+  var pipeLbl=_capPipeLbl()+(_capNoPipeline?'':' · full Potential value');
   body+='<tr><td style="text-align:left;font-weight:700;background:#16223C;color:#fff" colspan="'+(cols.length+1)+'">Forecast — '+esc(pipeLbl)+'</td></tr>';
   years.forEach(function(yr,yi){
     body+='<tr><td style="text-align:left;font-weight:600">Forecast profit '+yr+'</td>'+projs.map(function(rows){var t=_capYearTotals(rows,yr);return '<td>'+fmt(t.profit)+'</td>';}).join('')+'</tr>';
@@ -3286,9 +3286,7 @@ function capProjData(roster,multPct,opts){
       if(st==='negotiation'&&opts.inclNeg)return true;
       return false;}
     return s!=='Won'&&s!=='Delivery'&&s!=='Lost';}
-  function _oppWeight(o){if(_probMode){var pc=o.probabilityClose;
-      if(pc!=null&&pc!==''&&!isNaN(Number(pc)))return Math.max(0,Math.min(1,Number(pc)/100));
-      var b=CAP_STAGE_PROB[capOppStage(o)];return b==null?0:Math.max(0,Math.min(1,b));}
+  function _oppWeight(o){if(_probMode)return 1;   // no discount — included opps count at full Potential
     return capOppEffProb(o,multPct);}
   opps.forEach(function(o){ if(!_oppIncluded(o))return; if(!o.closeDate){noDate++;return;} modeled++; });
   // Marines win lever (workbook §2): $500K ARR at 50% margin from the opp's close month.
@@ -3400,7 +3398,7 @@ function _capProjHTML(roster){
     +'<button class="cap-proj-chip'+(_capCashMode?' on':'')+'" onclick="capToggleCash()">&#128181; Cash gate</button>'
     +'<button class="btn btn-sec btn-sm" onclick="capProjExportCSV()">&#8595; CSV</button>'
     +'<button class="btn btn-sec btn-sm" onclick="capProjPrint()">&#128424; Print</button>'
-    +'<div class="cap-stage-leg" style="flex-basis:100%">Forecast shows revenue from existing <b>Projects</b> only. Tick <b>Include Closed Won</b> and/or <b>Include In Negotiation</b> to add those opportunities on top (each weighted by its <b>Probability of Close</b>, stage default when blank). Nothing else from the pipeline is counted.</div>'
+    +'<div class="cap-stage-leg" style="flex-basis:100%">Forecast shows revenue from existing <b>Projects</b> only. Tick <b>Include Closed Won</b> and/or <b>Include In Negotiation</b> to add those opportunities on top at their <b>full Potential value</b> (no probability discount; the monthly figure is Potential&nbsp;$&divide;12, counted from each opp’s close date). Nothing else from the pipeline is counted.</div>'
     +'<div class="cap-stage-leg" style="flex-basis:100%">&#8505; Resources not assigned to a project, initiative, or overhead are not counted as a cost in the forecast (the Furlough report tracks them for furlough).</div>'
     +'</div>';
   var v4='';   // V4 scenario chips removed from the Pipeline Forecast (still used by the Proforma scenario selector)
@@ -3457,7 +3455,7 @@ function _capProjHTML(roster){
     +'Cost = Project payroll + Other payroll + Overhead/G&amp;A. <b>Project payroll</b> = labor allocated to projects/initiatives. <b>Other payroll</b> = all non-project labor (people on overhead items like G&amp;A/Operations, bench, plus Federal Sales/BD &amp; Management). <b>Overhead/G&amp;A</b> = '+fmt(d.overheadFixed||0)+'/mo fixed costs from the Proforma Cost Structure only (no people). Profit and margin are net of all three. Contract revenue is time-phased from the Knowledge Base (FAMS sunset Sep 24, BCLM +25% step, C1FAMS ramp to $100K Oct). '
     +((function(){var added=[];if(!_capNoPipeline){if(_capInclWon)added.push('Closed Won');if(_capInclNeg)added.push('In Negotiation');}
        if(!added.length)return 'Existing Projects revenue only — no pipeline included. Tick Include Closed Won or Include In Negotiation to add those opportunities.';
-       return d.modeled+' '+added.join(' + ')+' opportunit'+(d.modeled===1?'y is':'ies are')+' added on top of existing Projects revenue, ramped in at close date and weighted by each one’s Probability of Close (stage default when blank)'+(d.noDate?'; '+d.noDate+' without a close date excluded':'')+'.';})())
+       return d.modeled+' '+added.join(' + ')+' opportunit'+(d.modeled===1?'y is':'ies are')+' added on top of existing Projects revenue at full Potential value (monthly = Potential ÷ 12, from each opp’s close date)'+(d.noDate?'; '+d.noDate+' without a close date excluded':'')+'.';})())
     +(_capCashMode?' Cash = opening '+fmt(opening)+' + cumulative (profit − debt service '+fmt(burden)+'/mo).':'')+'</div>';
   var charts='<div class="cap-chart" style="margin-bottom:14px"><div class="cap-chart-h">Cumulative revenue &amp; profit through Dec '+rows[rows.length-1].y+'</div>'+_capProjChart(rows)+'</div>'
     +(_capCashMode?'<div class="cap-chart" style="margin-bottom:14px"><div class="cap-chart-h">Cash balance vs $'+(Math.round(gate/1000))+'K survival gate</div>'+_capCashChart(rows,gate,opening)+'</div>':'');
@@ -3519,7 +3517,7 @@ function capProjExportCSV(){
   var lines=[['Month','Revenue','Pipeline portion','Project payroll','Other payroll','Overhead/G&A','Profit',cashMode?'Net cash Δ':'Cumulative profit',cashMode?'Cash balance':''].filter(function(x){return x!=='';})];
   rows.forEach(function(r){var row=[CAP_MONTHS[r.m]+" '"+(r.y%100),Math.round(r.rev),Math.round(r.oppRev),Math.round(r.projectPayroll||0),Math.round(r.otherPayroll||0),Math.round(r.overhead||0),Math.round(r.profit)];if(cashMode){row.push(Math.round(r.netCash),Math.round(r.cashBal));}else{row.push(Math.round(r.cum));}lines.push(row);});
   lines.push([]);
-  lines.push(['Pipeline',_capPipeLbl(),_capNoPipeline?'':'weighted by Probability of Close']);
+  lines.push(['Pipeline',_capPipeLbl(),_capNoPipeline?'':'full Potential value']);
   lines.push(['Annual total','Revenue','Project payroll','Other payroll','Overhead/G&A','Profit','Margin %']);
   _capProjYears(rows).forEach(function(yr){var t=_capYearTotals(rows,yr);lines.push([yr+(t.months<12?' (partial)':''),Math.round(t.revenue),Math.round(t.projectPayroll),Math.round(t.otherPayroll),Math.round(t.overhead),Math.round(t.profit),t.margin]);});
   var csv=lines.map(function(row){return row.map(function(c){var s=String(c==null?'':c);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}).join(',');}).join('\r\n');
@@ -3541,7 +3539,7 @@ function capProjPrint(){
     +'<style>body{font-family:Arial,Helvetica,sans-serif;color:#16223C;margin:32px;}h1{font-size:18px;margin:0 0 2px;}.sub{color:#64748b;font-size:12px;margin-bottom:18px;}'
     +'table{border-collapse:collapse;width:100%;font-size:12px;margin-bottom:22px;}th,td{border:1px solid #d0d7e2;padding:5px 9px;text-align:right;}th{background:#16223C;color:#fff;}td:first-child,th:first-child{text-align:left;}'
     +'tr.ye td{border-bottom:2px solid #94a3b8;}h2{font-size:13px;margin:0 0 6px;}@media print{body{margin:12mm;}}</style></head><body>'
-    +'<h1>Capacity Projection</h1><div class="sub">Scenario: '+esc(name)+' · pipeline: '+esc(pipeLbl)+(_capNoPipeline?'':' (weighted by Probability of Close)')+' · generated '+new Date().toLocaleDateString()+'</div>'
+    +'<h1>Capacity Projection</h1><div class="sub">Scenario: '+esc(name)+' · pipeline: '+esc(pipeLbl)+(_capNoPipeline?'':' (full Potential value)')+' · generated '+new Date().toLocaleDateString()+'</div>'
     +'<h2>Annual roll-up</h2><table><thead><tr><th>Year</th><th>Revenue</th><th>Project payroll</th><th>Other payroll</th><th>Overhead/G&amp;A</th><th>Profit</th><th>Margin</th></tr></thead><tbody>'+yrRows+'</tbody></table>'
     +'<h2>Monthly detail</h2><table><thead><tr><th>Month</th><th>Revenue</th><th>Pipeline</th><th>Project payroll</th><th>Other payroll</th><th>Overhead/G&amp;A</th><th>Profit</th><th>'+lastCol+'</th></tr></thead><tbody>'+moRows+'</tbody></table>'
     +'<script>window.onload=function(){window.print();};<\/script></body></html>';
