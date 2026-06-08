@@ -3279,9 +3279,9 @@ function capProjData(roster,multPct,opts){
   // old stage × confidence-multiplier behavior.
   var _probMode=opts.pipelineMode==='prob';
   function _oppIncluded(o){var s=capOppStage(o);if(s==='Lost')return false;
-    if(_probMode){if(opts.noPipeline)return false;   // No pipeline → contracted revenue only
+    if(_probMode){if(opts.noPipeline)return false;   // No pipeline → existing Projects revenue only
+      // Baseline is Projects only; the only pipeline that's added is what's ticked.
       var st=(o.status||'').toLowerCase();
-      if(s==='Lead Gen'||s==='Presales'||s==='Sales')return true;
       if((s==='Won'||st==='closed won')&&opts.inclWon)return true;
       if(st==='negotiation'&&opts.inclNeg)return true;
       return false;}
@@ -3369,7 +3369,7 @@ function capToggleInclWon(){ _capInclWon=!_capInclWon; renderView(); }
 function capToggleInclNeg(){ _capInclNeg=!_capInclNeg; renderView(); }
 /* Human label for the current pipeline-inclusion setting (used by the caption,
    CSV, print, and the scenario comparison). */
-function _capPipeLbl(){ if(_capNoPipeline)return 'No pipeline (contracted revenue only)'; return 'Active pipeline'+(_capInclWon?' + Closed Won':'')+(_capInclNeg?' + In Negotiation':''); }
+function _capPipeLbl(){ var adds=[];if(!_capNoPipeline){if(_capInclWon)adds.push('Closed Won');if(_capInclNeg)adds.push('In Negotiation');} return adds.length?('Projects + '+adds.join(' + ')):'Projects only (no pipeline)'; }
 /* Opts for the Capacity Pipeline Forecast: per-opp probability weighting + the
    Include Closed Won / In Negotiation toggles. */
 function _capPipeOpts(){ return {pipelineMode:'prob',noPipeline:_capNoPipeline,inclWon:_capInclWon,inclNeg:_capInclNeg}; }
@@ -3393,14 +3393,14 @@ function _capProjHTML(roster){
   var ckbx=function(on,fn,lbl,disabled){return '<label class="cap-proj-chip'+(on?' on':'')+'" style="cursor:'+(disabled?'not-allowed':'pointer')+';opacity:'+(disabled?'.45':'1')+';display:inline-flex;align-items:center;gap:6px"><input type="checkbox" '+(on?'checked':'')+(disabled?' disabled':'')+' onchange="'+fn+'()" style="margin:0">'+lbl+'</label>';};
   var ctl='<div class="cap-proj-ctl">'
     +'<label>Pipeline forecast</label>'
-    +ckbx(_capNoPipeline,'capToggleNoPipeline','No pipeline (contracted only)',false)
+    +ckbx(_capNoPipeline,'capToggleNoPipeline','No pipeline (Projects only)',false)
     +ckbx(_capInclWon,'capToggleInclWon','Include Closed Won',_capNoPipeline)
-    +ckbx(_capInclNeg,'capToggleInclNeg','In Negotiation',_capNoPipeline)
+    +ckbx(_capInclNeg,'capToggleInclNeg','Include In Negotiation',_capNoPipeline)
     +'<span style="flex:1"></span>'
     +'<button class="cap-proj-chip'+(_capCashMode?' on':'')+'" onclick="capToggleCash()">&#128181; Cash gate</button>'
     +'<button class="btn btn-sec btn-sm" onclick="capProjExportCSV()">&#8595; CSV</button>'
     +'<button class="btn btn-sec btn-sm" onclick="capProjPrint()">&#128424; Print</button>'
-    +'<div class="cap-stage-leg" style="flex-basis:100%">'+(_capNoPipeline?'<b>No pipeline</b> — contracted revenue only; no opportunities are forecast. Uncheck it to count active pipeline (Lead&nbsp;Gen, Presales, Sales), each weighted by its <b>Probability of Close</b> (stage default when blank), and optionally add Closed&nbsp;Won / In&#8209;Negotiation.':'Active pipeline (Lead&nbsp;Gen, Presales, Sales) is counted, each opportunity weighted by its <b>Probability of Close</b> (stage default when blank). Tick a box to also include <b>Closed&nbsp;Won</b> and/or <b>In&#8209;Negotiation</b> deals. Delivery &amp; Lost are excluded.')+'</div>'
+    +'<div class="cap-stage-leg" style="flex-basis:100%">Forecast shows revenue from existing <b>Projects</b> only. Tick <b>Include Closed Won</b> and/or <b>Include In Negotiation</b> to add those opportunities on top (each weighted by its <b>Probability of Close</b>, stage default when blank). Nothing else from the pipeline is counted.</div>'
     +'<div class="cap-stage-leg" style="flex-basis:100%">&#8505; Resources not assigned to a project, initiative, or overhead are not counted as a cost in the forecast (the Furlough report tracks them for furlough).</div>'
     +'</div>';
   var v4='';   // V4 scenario chips removed from the Pipeline Forecast (still used by the Proforma scenario selector)
@@ -3455,7 +3455,9 @@ function _capProjHTML(roster){
     +'<tbody>'+body+'</tbody></table></div>';
   var note='<div class="cap-proj-note">Projection starts this month and runs through Dec '+rows[rows.length-1].y+'. '
     +'Cost = Project payroll + Other payroll + Overhead/G&amp;A. <b>Project payroll</b> = labor allocated to projects/initiatives. <b>Other payroll</b> = all non-project labor (people on overhead items like G&amp;A/Operations, bench, plus Federal Sales/BD &amp; Management). <b>Overhead/G&amp;A</b> = '+fmt(d.overheadFixed||0)+'/mo fixed costs from the Proforma Cost Structure only (no people). Profit and margin are net of all three. Contract revenue is time-phased from the Knowledge Base (FAMS sunset Sep 24, BCLM +25% step, C1FAMS ramp to $100K Oct). '
-    +(_capNoPipeline?'Pipeline excluded — contracted revenue only (No pipeline). Uncheck “No pipeline” to forecast opportunities.':(d.modeled+' opportunit'+(d.modeled===1?'y is':'ies are')+' ramped in at close date, weighted by each one’s Probability of Close (stage default when blank)'+(d.noDate?'; '+d.noDate+' opportunit'+(d.noDate===1?'y':'ies')+' without a close date excluded':'')+'. Included: active pipeline'+(_capInclWon?' + Closed Won':'')+(_capInclNeg?' + In Negotiation':'')+'. Delivery &amp; Lost are excluded.'))
+    +((function(){var added=[];if(!_capNoPipeline){if(_capInclWon)added.push('Closed Won');if(_capInclNeg)added.push('In Negotiation');}
+       if(!added.length)return 'Existing Projects revenue only — no pipeline included. Tick Include Closed Won or Include In Negotiation to add those opportunities.';
+       return d.modeled+' '+added.join(' + ')+' opportunit'+(d.modeled===1?'y is':'ies are')+' added on top of existing Projects revenue, ramped in at close date and weighted by each one’s Probability of Close (stage default when blank)'+(d.noDate?'; '+d.noDate+' without a close date excluded':'')+'.';})())
     +(_capCashMode?' Cash = opening '+fmt(opening)+' + cumulative (profit − debt service '+fmt(burden)+'/mo).':'')+'</div>';
   var charts='<div class="cap-chart" style="margin-bottom:14px"><div class="cap-chart-h">Cumulative revenue &amp; profit through Dec '+rows[rows.length-1].y+'</div>'+_capProjChart(rows)+'</div>'
     +(_capCashMode?'<div class="cap-chart" style="margin-bottom:14px"><div class="cap-chart-h">Cash balance vs $'+(Math.round(gate/1000))+'K survival gate</div>'+_capCashChart(rows,gate,opening)+'</div>':'');
