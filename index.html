@@ -3867,6 +3867,12 @@ function renderProformaView(q){
       +'<div class="pf-card">'+_pfH('SBIR Phase III pathway',"pfEditObj('technology.sbir')")+_pfTable(['Attribute','Explanation'],(sb.attributes||[]).map(function(x){return [esc(x.attr),esc(x.explanation)];}),'technology.sbir.attributes')+'<div class="pf-note">'+esc(sb.andrewKirksey||'')+'</div></div>';
   } else if(proformaTab==='costs'){
     var cs=P.costStructure||{};
+    // Sort cost lines by monthly cost, highest on top. In-place so the row index
+    // _pfTable passes to edit/delete/schedule still maps to the right entry. (No
+    // manual ordering exists for these lines, so re-sorting is non-destructive.)
+    var _byMonthlyDesc=function(a,b){return (Number(b.monthly)||0)-(Number(a.monthly)||0);};
+    if(Array.isArray(cs.overhead))cs.overhead.sort(_byMonthlyDesc);
+    if(Array.isArray(cs.softwareSubs))cs.softwareSubs.sort(_byMonthlyDesc);
     var byT={overhead:proformaOverheadMonthly(),payroll:proformaBDMgmtFixedMonthly(),debt:proformaCSDebtMonthly()};
     function tpill(name,t){var et=_pfLineType(name,t);return '<span class="pf-pill pf-'+(et==='overhead'?'med':et==='payroll'?'high':'crit')+'">'+et+'</span>';}
     var csEsc=cs.escalator||{};
