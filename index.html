@@ -9205,7 +9205,8 @@ document.getElementById('mdlDeptEdit').innerHTML=
 +'<button class="btn btn-sec btn-sm" style="margin-top:6px" onclick="addItemAttachment(\''+pid+'\')">+ Add link</button></div>'
 +'<div class="fld"><label class="fld-l" for="ep_parent">Parent</label><select class="fld-sel" id="ep_parent">'+parentOpts+'</select></div>'
 +'<div class="btn-row"><button class="btn btn-navy" style="flex:1" onclick="saveEditProject(\''+pid+'\')">Save</button>'
-+'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovDeptEdit\')">Cancel</button></div>';
++'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovDeptEdit\')">Cancel</button>'
++'<button class="btn btn-danger-sm" onclick="confirmDeleteProject(\''+pid+'\')">Delete '+labels[cat]+'</button></div>';
 openModal('ovDeptEdit');}
 function fmtSize(b){if(!b)return '';var u=['B','KB','MB'],i=0;while(b>=1024&&i<2){b/=1024;i++;}return (b<10&&i>0?b.toFixed(1):Math.round(b))+u[i];}
 function renderAttList(pid){
@@ -9261,6 +9262,14 @@ var toDelete=projDescendantIds(pid);
 D.projects=D.projects.filter(function(p){return toDelete.indexOf(p.id)===-1;});
 D.departments.forEach(function(d){d.members.forEach(function(m){m.projects=(m.projects||[]).filter(function(x){return toDelete.indexOf(typeof x==='string'?x:x.id)===-1;});});});
 save();renderView();}
+/* Confirm + delete from the edit modal (used for opportunities and any item). */
+function confirmDeleteProject(pid){
+var p=D.projects.find(function(x){return x.id===pid;});if(!p)return;
+var lbl={project:'project',initiative:'initiative',overhead:'overhead item',opportunity:'opportunity'}[projCat(p)]||'item';
+var extra=projDescendantIds(pid).length-1;
+if(!confirm('Delete this '+lbl+(extra>0?' and its '+extra+' sub-item'+(extra===1?'':'s'):'')+'?\n\n“'+(p.name||'')+'”\n\nThis cannot be undone.'))return;
+deleteProject(pid);closeModal('ovDeptEdit');
+toast('Deleted '+lbl+': '+(p.name||''),'info');}
 
 /* ── ADMIN (manage all lists) ── */
 var ADMIN_TABS=[
