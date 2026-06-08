@@ -1244,7 +1244,7 @@ async function bootstrapData(){
   syncSetStatus('Loading…','rgba(255,255,255,0.55)');
   var r=await serverLoad();
   if(r.reachable&&r.data){
-    var needsSeed=!r.data.overheadSeeded||!r.data.planSeeded||!r.data.accounts||!r.data.programs||!r.data.oppSeeded||!r.data.accountsSeeded||!r.data.oppEnriched;
+    var needsSeed=!r.data.overheadSeeded||!r.data.planSeeded||!r.data.accounts||!r.data.programs||!r.data.oppSeeded||!r.data.accountsSeeded||!r.data.oppEnriched||!r.data.clinReqsBackfilled;
     D=r.data;migrate();try{localStorage.setItem(STORE_KEY,JSON.stringify(D));}catch(e){}
     if(needsSeed)serverSave();
     else{syncSetStatus('Cloud sync on','rgba(255,255,255,0.38)');
@@ -1696,6 +1696,17 @@ function recruitMigrate(){
     if(!('filledBy' in c))c.filledBy='';
     if(!('requisitionId' in c))c.requisitionId='';
   });});
+  // One-time backfill: auto-create a job requisition for every existing CLIN
+  // that doesn't already have one, then reflect any current assignments
+  // (already-staffed CLINs become filled). Idempotent + flag-guarded.
+  if(!D.clinReqsBackfilled){
+    (D.projects||[]).forEach(function(p){(p.clins||[]).forEach(function(c){
+      var hasReq=c.requisitionId&&D.recruitings.some(function(r){return r.id===c.requisitionId;});
+      if(!hasReq)clinEnsureReq(p.id,c.id);
+      _clinSyncFilled(p.id,c.id);
+    });});
+    D.clinReqsBackfilled=true;
+  }
   D.candidates.forEach(function(c){
     if(!c.status)c.status='new';
     if(!c.interviews)c.interviews=[];
