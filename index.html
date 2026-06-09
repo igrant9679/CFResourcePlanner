@@ -9325,7 +9325,7 @@ function dataIssueToggle(id){var x=(D.dataIssues||[]).find(function(i){return i.
 function dataIssueDelete(id){if(!confirm('Delete this data issue from the log?'))return;D.dataIssues=(D.dataIssues||[]).filter(function(i){return i.id!==id;});save();openDataIssueLog();}
 
 function openAdmin(){
-  if(!ME)return;
+  if(!(ME&&ME.role==='admin'))return;   // Admin-only
   var canG=can('globals'),canA=can('accounts'),canI=can('import');
   var html='<div class="mdl-over">Administration</div><div class="mdl-title">Admin</div>';
   if(canG){
@@ -10099,7 +10099,7 @@ function can(act,ctx){
   }
 }
 function applyRoleUI(){
-  var adm=document.getElementById('hb_admin');if(adm)adm.style.display=ME?'':'none';
+  var adm=document.getElementById('hb_admin');if(adm)adm.style.display=(ME&&ME.role==='admin')?'':'none';
   var bell=document.getElementById('hb_bell');if(bell)bell.style.display=ME?'':'none';
   SECTIONS.forEach(function(s){var el=document.getElementById(s.tab);if(el){el.style.display=canSee(s.k)?'':'none';el.className='tab'+(viewMode===s.k?' active':'');}});
   var badge=document.getElementById('userBadge');if(badge&&ME)badge.innerHTML=esc(ME.name)+' <span style="opacity:0.7">· '+ROLE_LABELS[ME.role]+'</span>';
