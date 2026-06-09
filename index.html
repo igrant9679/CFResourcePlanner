@@ -1196,14 +1196,25 @@ async function serverSave(opts){
     else if(res.status===409){
       try{var body=await res.json();}catch(_){body={};}
       if(body.conflict){
-        // Optimistic-lock conflict — another session (usually a second open tab)
-        // saved since this tab loaded. This is a single shared workspace, so
-        // auto-resolve without interrupting: adopt the server's version stamp and
-        // re-save so this tab's edit persists. The protected-array guardrail below
-        // still hard-blocks a stale tab from wiping a whole list to zero.
-        _serverUpdatedAt=body.serverUpdatedAt||_serverUpdatedAt;
-        saveQueued=true;
-        syncSetStatus('Synced over another session','#FBBF24');
+        // Optimistic-lock conflict — another user/session saved since this browser
+        // loaded. The OLD behavior re-saved this browser's full (possibly stale)
+        // snapshot, which reverted other users' work. Instead, the SERVER wins:
+        // reload its authoritative data so a stale browser can never overwrite
+        // newer changes. Only this browser's last in-flight edit is dropped
+        // (re-apply it); committed data is never lost.
+        var fresh=await serverLoad();
+        if(fresh&&fresh.reachable&&fresh.data){
+          D=fresh.data;migrate();
+          try{localStorage.setItem(STORE_KEY,JSON.stringify(D));}catch(_){}
+          saveQueued=false;
+          renderView();
+          syncSetStatus('Reloaded — another user had newer changes','#FBBF24');
+          toast('Another user saved changes, so the latest version was reloaded. Re-apply your last edit if it didn’t stick.','warn',8000);
+        } else {
+          saveQueued=false;
+          syncSetStatus('Sync conflict — please refresh','#FCA5A5');
+          toast('A sync conflict occurred and the latest data could not be loaded. Refresh the page to get the current version before editing.','error',8000);
+        }
       } else {
         // Guardrail rejection — incoming D would wipe a protected array.
         syncSetStatus('Save blocked — refresh to recover','#FCA5A5');

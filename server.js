@@ -8,7 +8,13 @@ const PORT = process.env.PORT || 3000;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
 
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static(__dirname));
+app.use(express.static(__dirname, {
+  // HTML must always be revalidated so a deploy reaches every browser on next
+  // load (no stale cached app logic). ETag/Last-Modified still allow 304s.
+  setHeaders: function (res, filePath) {
+    if (/\.html$/i.test(filePath)) res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+  },
+}));
 
 const dbUrl = process.env.DATABASE_URL;
 const useSsl = !!dbUrl && !/railway\.internal/.test(dbUrl) && !/localhost|127\.0\.0\.1/.test(dbUrl);
@@ -723,7 +729,10 @@ app.get('/api/atlas-snapshot', async (req, res) => {
   }
 });
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.get('/', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 initDb()
   .then(() => app.listen(PORT, () => console.log('Server listening on ' + PORT)))
