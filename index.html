@@ -2266,13 +2266,33 @@ function projDisplayPct(m,pid){
   if(rows.length){var s=0;rows.forEach(function(r){s=Math.max(s,Number(r.pct)||0);});return s;}
   var e=(m.projects||[]).find(function(x){return(typeof x==='string'?x:x.id)===pid;});return e?(typeof e==='string'?100:(Number(e.pct)||100)):0;}
 function save(){
-  try{localStorage.setItem(STORE_KEY,JSON.stringify(D));}catch(e){}
+  try{localStorage.setItem(STORE_KEY,JSON.stringify(D));}catch(e){console.warn('localStorage mirror failed (quota?) — server save still runs:',e&&e.message);}
   clearTimeout(save._t);
   save._t=setTimeout(function(){serverSave();},1000);
 }
 function resetData(){if(confirm('Reset all data to defaults? This cannot be undone.')){D=defaultData();save();collState={};renderView();}}
 function esc(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
-function plainToRich(s){if(!s)return '';if(/<(p|br|div|ul|ol|li|b|i|u|strong|em|a|h[1-6])\b/i.test(s))return s;return esc(s).replace(/\n/g,'<br>');}
+// Strip active content from rich HTML before it touches the DOM. Section/brief/
+// dossier bodies originate from LLM output and uploaded documents (untrusted),
+// so scripts, event handlers, and javascript: URLs must never execute.
+function sanitizeHTML(html){
+  if(!html)return '';
+  var tpl=document.createElement('template');tpl.innerHTML=String(html);
+  var BAD_TAGS={SCRIPT:1,STYLE:1,IFRAME:1,OBJECT:1,EMBED:1,LINK:1,META:1,BASE:1,FORM:1};
+  (function walk(node){
+    Array.prototype.slice.call(node.children||[]).forEach(function(el){
+      if(BAD_TAGS[el.tagName]){el.parentNode.removeChild(el);return;}
+      Array.prototype.slice.call(el.attributes).forEach(function(a){
+        var n=a.name.toLowerCase(),v=String(a.value||'');
+        if(n.indexOf('on')===0||n==='srcdoc')el.removeAttribute(a.name);
+        else if((n==='href'||n==='src'||n==='xlink:href'||n==='action'||n==='formaction')&&/^\s*(javascript|vbscript|data:\s*text\/html)/i.test(v))el.removeAttribute(a.name);
+      });
+      walk(el);
+    });
+  })(tpl.content);
+  return tpl.innerHTML;
+}
+function plainToRich(s){if(!s)return '';if(/<(p|br|div|ul|ol|li|b|i|u|strong|em|a|h[1-6])\b/i.test(s))return sanitizeHTML(s);return esc(s).replace(/\n/g,'<br>');}
 function rtExec(cmd){if(cmd==='createLink'){var url=prompt('Link URL:');if(!url)return;document.execCommand(cmd,false,url);}else{document.execCommand(cmd,false,null);}}
 function richEditor(id,value,opts){
   opts=opts||{};var disabled=!!opts.disabled,ph=opts.placeholder||'',extra=opts.tall?' rt-tall':'';
@@ -2490,6 +2510,7 @@ openModal('ovProfile');}
 
 function unallocatedMembers(){return allM().filter(function(m){return totalAlloc(m)<=0;});}
 function renderStats(){
+if(!D)return;
 var hc=0,tc=0,fl=0,oa=0,un=0;
 D.departments.forEach(function(d){hc+=d.members.length;d.members.forEach(function(m){tc+=m.cost;if(m.reassess)fl++;var ta=totalAlloc(m);if(ta>100)oa++;if(ta<=0)un++;});});
 document.getElementById('statsBar').innerHTML=[
@@ -2973,6 +2994,9 @@ function memberAddAllocStep(mid){
 }
 function memberDelAllocStep(mid,i){var f=findMember(mid);if(!f)return;(f.m.allocSchedule||[]).splice(i,1);if(!(f.m.allocSchedule||[]).length)delete f.m.allocSchedule;save();document.getElementById('e_alloc_list').innerHTML=renderMemberAllocSched(mid);}
 function renderView(){
+  // Data not loaded yet (nav click during boot): skip — initApp calls
+  // renderView() after bootstrapData, which then renders the clicked tab.
+  if(!D)return;
   if(ME&&!canSee(viewMode)){var f=SECTIONS.find(function(s){return canSee(s.k);});if(f)viewMode=f.k;}
   applyRoleUI();renderStats();
   var q=(document.getElementById('searchInput').value||'').toLowerCase().trim();var html;
@@ -5783,7 +5807,7 @@ function _dossGenerateOne(p,e,cb){
   var profile='Name: '+e.name+'\nProposed role: '+(e.role||'(map to the best-fitting RFP role)')+'\nClearance: '+(e.clearance||'(unspecified)')+'\nLocation: '+(e.location||'(unspecified)')+'\nKnown skills: '+((e.skills||[]).join(', ')||'(none captured)')+(e.summary?'\nProfile note: '+e.summary:'');
   var ask='Write a one-page dossier tailored to this proposal. Structure: a 2-3 sentence summary paragraph, then <h4>Relevant Experience</h4> (bullets), <h4>Key Skills</h4> (bullets), and a <h4>Education, Certifications &amp; Clearance</h4> block. Emphasize fit for the RFP role(s) ['+(roleCtx||'the required roles')+'] and customer ['+(rfp.customer||'the customer')+']. Factual and confident.';
   var instr='RFP CONTEXT:\n'+_propBuildRFPCtx(p)+'\n\nCANDIDATE PROFILE:\n'+profile+'\n\n'+ask;
-  function finish(j){cb(llmExtractText(j).trim().replace(/^```html\s*/i,'').replace(/```$/,'').trim());}
+  function finish(j){cb(sanitizeHTML(llmExtractText(j).trim().replace(/^```html\s*/i,'').replace(/```$/,'').trim()));}
   function fail(){cb('');}
   if(e.attachmentId&&(llm.provider==='anthropic'||llm.provider==='google')){
     llmDocComplete({provider:llm.provider,model:llm.model,attachmentId:e.attachmentId,system:sys,instruction:instr+'\n\nUse the ATTACHED resume as the primary source of facts.',max_tokens:1800}).then(finish).catch(fail);
@@ -6225,6 +6249,9 @@ var _pdTab='overview';
 function openProposalDetail(id){
   if(!canProposal()){alert('You don\'t have permission.');return;}
   var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
+  // Opening a different proposal starts at Overview — don't inherit the last
+  // proposal's tab/section position.
+  if(_pdOpenId&&_pdOpenId!==id){_pdTab='overview';_pdActiveSection='';}
   _pdTab=_pdTab||'overview';
   renderProposalDetail(id);
   openModal('ovProp');
@@ -6718,7 +6745,7 @@ function _pdSectionsHTML(p,tpl){
   }
   return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">'
     +'<div style="font-size:12px;color:var(--text-muted)">Section-by-section authoring. Pick a section, draft with AI, edit in place, rewrite in CF voice, then run Gap Analysis to verify every RFP requirement is covered.</div>'
-    +'<div style="text-align:right"><button id="pd_gen_btn" type="button" class="btn btn-gold btn-sm" onclick="pdGenerateFullProposal(\''+p.id+'\')" title="Draft all AI sections from the BusDev Brief + RFP + Knowledge Bank">&#10024; Generate All</button> '+gapBtn+gapSummary+'<div id="pd_gen_status" style="font-size:11px;color:#7C3AED;margin-top:4px"></div></div>'
+    +'<div style="text-align:right"><button id="pd_gen_btn2" type="button" class="btn btn-gold btn-sm" onclick="pdGenerateFullProposal(\''+p.id+'\')" title="Draft all AI sections from the BusDev Brief + RFP + Knowledge Bank">&#10024; Generate All</button> '+gapBtn+gapSummary+'<div id="pd_gen_status2" style="font-size:11px;color:#7C3AED;margin-top:4px"></div></div>'
     +'</div>'
     +'<div class="sec-layout">'
     +'<div class="sec-list">'+sidebar+'</div>'
@@ -6771,6 +6798,20 @@ function _propSectionPrompt(p,s,kbBlock,partnerBlock){
   var sys='You are an expert federal proposal writer drafting a single section of a US government RFP response. Output ONLY clean HTML (use <p>, <ul>/<li>, <strong>, <em>, <h3> for subsection headers; no markdown, no code fences, no commentary before or after). Match the brand voice exactly. Develop and professionalize the BusDev brief — never contradict it. Cite past performance accurately — never invent customers, contract values, dates, or metrics that aren\'t in the provided materials.';
   var t=(s.title||'').toLowerCase();
   var briefCtx=_propBuildBriefCtx(p);
+  // Winning examples: sections promoted from won proposals via the Win/Loss
+  // debrief. Match on section title; cap at 2 excerpts to protect the budget.
+  var winBlock='';
+  if(p.templateId){
+    var winTpl=(D.proposalTemplates||[]).find(function(x){return x.id===p.templateId;});
+    var wins=((winTpl&&winTpl.winningExamples)||[]).filter(function(w){
+      var a=String(w.sectionTitle||'').toLowerCase().trim();
+      return a&&t&&(a===t||a.indexOf(t)>-1||t.indexOf(a)>-1);
+    }).slice(-2);
+    winBlock=wins.map(function(w){
+      return 'From the winning proposal "'+(w.fromProposalTitle||'(untitled)')+'" — section "'+(w.sectionTitle||'')+'":\n'
+        +String(w.html||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,1500);
+    }).join('\n\n');
+  }
   var instruction='SECTION TO DRAFT: "'+s.title+'"\n\nPER-SECTION INSTRUCTION (from the proposal template — primary guidance):\n'+(s.templatePrompt||'(no template instruction; write a strong default '+s.title+' section)')
     +'\n\nRFP CONTEXT:\n'+_propBuildRFPCtx(p)
     +(briefCtx?'\n\nBUSDEV BRIEF (the capture team\'s intent — expand, enhance, and professionalize this into full prose; honor every point):\n'+briefCtx:'')
@@ -6779,6 +6820,7 @@ function _propSectionPrompt(p,s,kbBlock,partnerBlock){
         ?'ATTRIBUTE this content to the named partner — phrase as "Our teaming partner [Name] brings…/has experience with…". Never present partner work as CommunityForce\'s own.'
         :'You MAY use these capabilities and facts as part of the overall team solution WITHOUT naming the partner — write in first-person plural as the proposing team. Do NOT claim the partner\'s specific past contracts as CommunityForce\'s own.')
         +'):\n'+partnerBlock):'')
+    +(winBlock?'\n\nWINNING EXAMPLES (the same section from proposals that WON — emulate their structure, specificity, and tone; never copy another customer\'s facts into this proposal):\n'+winBlock:'')
     +'\n\nBRAND VOICE:\n'+_propBuildVoiceCtx()
     +(_propBuildDifferentiatorsCtx(p)?'\n\nDIFFERENTIATORS & WIN THEMES (weave the relevant ones in naturally; do not list them mechanically):\n'+_propBuildDifferentiatorsCtx(p):'')
     +((t.indexOf('past')>-1||t.indexOf('experience')>-1)?'\n\nPAST PERFORMANCE LIBRARY (use ONLY these — do not invent):\n'+(_propBuildPPCtx(p)||'(none selected; flag this in your output)'):'')
@@ -6874,8 +6916,17 @@ function pdGenerateFullProposal(id){
   var already=aiSecs.filter(function(s){return (s.html||'').trim();}).length;
   if(!confirm('Generate '+aiSecs.length+' section'+(aiSecs.length===1?'':'s')+' with AI from the BusDev brief, the RFP, and the Knowledge Bank?'+(already?'\n\n'+already+' section'+(already===1?'':'s')+' already have content — existing text will be used as a starting point and rewritten.':'')))return;
   var llm=_propLLMOpts(p);
-  var btn=document.getElementById('pd_gen_btn');if(btn){btn.disabled=true;btn.textContent='Generating…';}
-  function setStatus(msg){var el=document.getElementById('pd_gen_status');if(el)el.innerHTML=msg;}
+  // The Generate controls render in two places (Brief tab and Sections header)
+  // under distinct ids; drive whichever is currently in the DOM.
+  function genBusy(busy){
+    ['pd_gen_btn','pd_gen_btn2'].forEach(function(bid){
+      var b=document.getElementById(bid);if(!b)return;
+      if(busy){if(!b.dataset.prevLabel)b.dataset.prevLabel=b.textContent;b.disabled=true;b.textContent='Generating…';}
+      else{b.disabled=false;if(b.dataset.prevLabel){b.textContent=b.dataset.prevLabel;delete b.dataset.prevLabel;}}
+    });
+  }
+  genBusy(true);
+  function setStatus(msg){['pd_gen_status','pd_gen_status2'].forEach(function(sid){var el=document.getElementById(sid);if(el)el.innerHTML=msg;});}
   setStatus('Selecting relevant Knowledge Bank sources…');
   var rfp=p.rfp||{};
   var kbCtxStr=[rfp.customer,rfp.summary,rfp.scope,(rfp.requirements||[]).join('; '),_propBuildBriefCtx(p)].filter(Boolean).join('\n').slice(0,6000);
@@ -6887,7 +6938,7 @@ function pdGenerateFullProposal(id){
   function reResolve(){
     var live=(D.proposals||[]).find(function(x){return x.id===id;});
     if(!live){
-      if(btn){btn.disabled=false;btn.textContent='✨ Generate Full Proposal';}
+      genBusy(false);
       setStatus('This proposal no longer exists (deleted or reloaded) — generation stopped.');
       return null;
     }
@@ -6903,7 +6954,7 @@ function pdGenerateFullProposal(id){
       var doDoss=_genFlag('pd_gen_dossiers',false);
       var pricingMsg=doPricing&&_genSeedPricing(p)?' · pricing seeded':'';
       function finalize(dossCount){
-        if(btn){btn.disabled=false;btn.textContent='✨ Generate Full Proposal';}
+        genBusy(false);
         if(!reResolve())return;
         p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'proposal.generated',payload:{sections:total,errors:errs,kbSources:kbIds.length,pricingSeeded:!!pricingMsg,dossiers:dossCount}});
         save();
@@ -6928,7 +6979,7 @@ function pdGenerateFullProposal(id){
           var live=(D.proposals||[]).find(function(x){return x.id===id;});
           var ls=live?(live.sections||[]).find(function(x){return x.id===secIds[i];}):null;
           if(!ls){errs++;return;}
-          ls.html=html;ls.draftedAt=Date.now();ls.draftedBy=ME?ME.id:'';ls.draftedWith={provider:llm.provider,model:llm.model||j.model||''};
+          ls.html=sanitizeHTML(html);ls.draftedAt=Date.now();ls.draftedBy=ME?ME.id:'';ls.draftedWith={provider:llm.provider,model:llm.model||j.model||''};
         })
         .catch(function(){errs++;})
         .finally(function(){i++;save();next();});
@@ -7031,7 +7082,7 @@ function _pdApplySource(p,j,targets){
     if(Array.isArray(brief.differentiators)&&brief.differentiators.length){p.brief.differentiators=[p.brief.differentiators||'',brief.differentiators.join('\n')].filter(Boolean).join('\n');n++;}
   }
   if(targets.indexOf('sections')>-1){
-    secs.forEach(function(sec){var m=_pdMatchSection(p,sec.title);if(m&&!(m.html||'').trim()&&sec.html){m.html=sec.html;m.draftedAt=Date.now();m.draftedBy=ME?ME.id:'';n++;}});
+    secs.forEach(function(sec){var m=_pdMatchSection(p,sec.title);if(m&&!(m.html||'').trim()&&sec.html){m.html=sanitizeHTML(sec.html);m.draftedAt=Date.now();m.draftedBy=ME?ME.id:'';n++;}});
   }
   p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'proposal.generated-from-source',payload:{targets:targets,changes:n}});
   save();renderProposalDetail(p.id);toast('Applied '+n+' update'+(n===1?'':'s')+' from source.','success');
@@ -7695,7 +7746,8 @@ function pdScoreBench(propId){
   var roles=(p.rfp&&p.rfp.requiredRoles)||[];
   if(!roles.length){alert('No required roles to score against.');return;}
   // Build compact member roster (cap at 60 to stay within token budget)
-  var members=allM().slice(0,60).map(function(m){
+  var roster=allM();
+  var members=roster.slice(0,60).map(function(m){
     return {
       id:m.id,name:m.name,role:m.role||'',
       skills:_resolveSkillsetNames(m.skillsets),
@@ -7727,8 +7779,9 @@ function pdScoreBench(propId){
         p.staffing.roleMatches[idx].candidates=(m.candidates||[]).filter(function(c){return allM().find(function(mm){return mm.id===c.memberId;});});
       });
       p.staffing.generatedAt=Date.now();
-      p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'staffing.scored',payload:{roles:roles.length}});
+      p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'staffing.scored',payload:{roles:roles.length,membersScored:members.length,membersTotal:roster.length}});
       save();renderProposalDetail(propId);
+      if(roster.length>60)toast('Scored the first 60 of '+roster.length+' org members (token-budget cap) — people beyond that were not considered.','warn',6000);
     })
     .catch(function(e){alert('Bench scoring failed: '+(e&&e.message||e));})
     .finally(function(){if(btn){btn.disabled=false;btn.textContent='↻ Re-score bench';}});
@@ -7995,10 +8048,10 @@ function _buildProposalPrintHTML(p){
   var num=0;
   var sectionsHTML=sections.map(function(s){
     if(isCoverSec(s))return '';   // represented by the generated cover page
-    var html=s.html||'';
+    var html=sanitizeHTML(s.html||'');
     if(s.source==='computed'){
       if(/cert|capabilit/i.test(s.title))html='<p>CommunityForce holds the following active corporate certifications and designations:</p>'+(certs.length?'<ul>'+certs.map(function(c){return '<li>'+esc(c.name)+(c.number?' — '+esc(c.number):'')+(c.issuer?' ('+esc(c.issuer)+')':'')+'</li>';}).join('')+'</ul>':'<p><i>(none on file)</i></p>');
-      else if(/resume/i.test(s.title))html=(p.dossiers&&p.dossiers.length)?p.dossiers.map(function(d){return '<div style="page-break-inside:avoid;margin-bottom:18px"><h3>'+esc(d.name)+(d.role?' — '+esc(d.role):'')+'</h3>'+(d.html||'')+'</div>';}).join(''):'<p><i>No key-personnel dossiers selected. Add them in the Staffing tab → Key Personnel Dossiers.</i></p>';
+      else if(/resume/i.test(s.title))html=(p.dossiers&&p.dossiers.length)?p.dossiers.map(function(d){return '<div style="page-break-inside:avoid;margin-bottom:18px"><h3>'+esc(d.name)+(d.role?' — '+esc(d.role):'')+'</h3>'+sanitizeHTML(d.html||'')+'</div>';}).join(''):'<p><i>No key-personnel dossiers selected. Add them in the Staffing tab → Key Personnel Dossiers.</i></p>';
     }
     num++;
     return '<div class="print-page"><h2><span class="sec-num">'+num+'.</span> '+esc(s.title)+'</h2>'+(html||'<p><i>(empty)</i></p>')+'</div>';
@@ -8010,13 +8063,13 @@ function _buildProposalPrintHTML(p){
   var pricingHTML;
   if(pr.mode==='cf-monthly'){
     pricingHTML=_cfPricingPrintHTML(p);
-    if(pricingHTML&&(pr.paymentTerms||pr.assumptionsHtml))pricingHTML=pricingHTML.replace('</div>',(pr.paymentTerms?'<p><b>Payment Terms:</b> '+esc(pr.paymentTerms)+'</p>':'')+(pr.assumptionsHtml?'<h3>Basis of Estimate &amp; Assumptions</h3>'+pr.assumptionsHtml:'')+'</div>');
+    if(pricingHTML&&(pr.paymentTerms||pr.assumptionsHtml))pricingHTML=pricingHTML.replace('</div>',(pr.paymentTerms?'<p><b>Payment Terms:</b> '+esc(pr.paymentTerms)+'</p>':'')+(pr.assumptionsHtml?'<h3>Basis of Estimate &amp; Assumptions</h3>'+sanitizeHTML(pr.assumptionsHtml):'')+'</div>');
   } else {
     pricingHTML=items.length?'<div class="print-page"><h2>Pricing</h2><table><thead><tr><th>Phase</th><th>LCAT / Role</th><th>Description</th><th style="text-align:right">Hours</th><th style="text-align:right">Rate</th><th style="text-align:right">Fee</th></tr></thead><tbody>'
       +items.map(function(i){return '<tr><td>'+esc(i.phase||'')+'</td><td>'+esc(i.lcat||'')+'</td><td>'+esc(i.description||'')+'</td><td style="text-align:right">'+(i.hours||0)+'</td><td style="text-align:right">$'+(Number(i.rate)||0)+'</td><td style="text-align:right">$'+(Number(i.fee)||0).toLocaleString()+'</td></tr>';}).join('')
       +'<tr style="background:#f1f5f9;font-weight:700"><td colspan="5" style="text-align:right">TOTAL</td><td style="text-align:right">$'+total.toLocaleString()+'</td></tr></tbody></table>'
       +(pr.paymentTerms?'<p><b>Payment Terms:</b> '+esc(pr.paymentTerms)+'</p>':'')
-      +(pr.assumptionsHtml?'<h3>Basis of Estimate &amp; Assumptions</h3>'+pr.assumptionsHtml:'')
+      +(pr.assumptionsHtml?'<h3>Basis of Estimate &amp; Assumptions</h3>'+sanitizeHTML(pr.assumptionsHtml):'')
       +'</div>':'';
   }
   var hasPricing=!!pricingHTML;
@@ -8314,7 +8367,7 @@ function openAIPreview(opts){
     '<div class="mdl-over">Anthropic Claude</div><div class="mdl-title">'+esc(opts.title||'AI Preview')+'</div>'
     +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Review the generated text below — edit anything you like before applying. Nothing changes until you click Apply.</div>'
     +'<div class="ai-preview"><div class="ai-preview-hdr"><span class="ai-preview-ttl">Generated</span></div>'
-    +'<div id="'+id+'" class="ai-preview-body" contenteditable="true">'+(opts.html||'')+'</div></div>'
+    +'<div id="'+id+'" class="ai-preview-body" contenteditable="true">'+sanitizeHTML(opts.html||'')+'</div></div>'
     +'<div class="btn-row" style="margin-top:14px">'
     +'<button class="btn btn-navy" style="flex:1" onclick="aiPreviewApply()">Apply (replace)</button>'
     +(opts.onAppend?'<button class="btn btn-sec" onclick="aiPreviewAppend()">Append</button>':'')
@@ -8341,7 +8394,7 @@ function aiBuildSystemPrompt(baseSystem){
   return (pre.length?pre.join('\n\n')+'\n\n---\n\n':'')+(baseSystem||'');
 }
 /* Setter counterpart to rtGet — write HTML into a rich editor by id. */
-function rtSet(id,html){var el=document.getElementById(id);if(el)el.innerHTML=html;}
+function rtSet(id,html){var el=document.getElementById(id);if(el)el.innerHTML=sanitizeHTML(html);}
 /* Abstract a text field (rich contenteditable OR plain <input>/<textarea>) so the
    AI assist control can read/write either uniformly. */
 function aiFieldRef(id){
@@ -8350,7 +8403,7 @@ function aiFieldRef(id){
   return {el:el,isRich:isRich,
     read:function(){return isRich?el.innerHTML:el.value;},
     readText:function(){var h=isRich?el.innerHTML:el.value;return String(h||'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();},
-    write:function(html){if(isRich){el.innerHTML=html;}else{el.value=String(html||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();}}};
+    write:function(html){if(isRich){el.innerHTML=sanitizeHTML(html);}else{el.value=String(html||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();}}};
 }
 /* Current user's default LLM provider/model (for AI actions not tied to a proposal). */
 function _defaultLLMOpts(){var a=ME?(D.accounts||[]).find(function(x){return x.id===ME.id;}):null;return {provider:(a&&a.defaultLlmProvider)||'anthropic',model:(a&&a.defaultLlmModel)||''};}
