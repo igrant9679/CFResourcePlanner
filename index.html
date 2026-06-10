@@ -2295,8 +2295,8 @@ function uid(){return 'id_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)
 function pName(pid){var p=D.projects.find(function(x){return x.id===pid;});return p?p.name:pid;}
 function sName(sid){var s=D.skillsets.find(function(x){return x.id===sid;});return s?s.name:sid;}
 function allM(){var r=[];D.departments.forEach(function(d){d.members.forEach(function(m){r.push(Object.assign({},m,{_dept:d.id,_dn:d.name}));});});return r;}
-var _modalZ=100,_modalStack=[],_modalPrevFocus={};
-function closeModal(id){var el=document.getElementById(id);if(!el)return;el.classList.remove('show');el.style.zIndex='';el.removeAttribute('aria-modal');var i=_modalStack.indexOf(id);if(i>-1)_modalStack.splice(i,1);var prev=_modalPrevFocus[id];delete _modalPrevFocus[id];if(prev&&prev.focus){try{prev.focus();}catch(_){}}}
+var _modalZ=100,_modalStack=[],_modalPrevFocus={},_modalCloseHooks={};
+function closeModal(id){var el=document.getElementById(id);if(!el)return;if(el.classList.contains('show')){try{var hk=_modalCloseHooks[id];if(hk)hk();}catch(_){}}el.classList.remove('show');el.style.zIndex='';el.removeAttribute('aria-modal');var i=_modalStack.indexOf(id);if(i>-1)_modalStack.splice(i,1);var prev=_modalPrevFocus[id];delete _modalPrevFocus[id];if(prev&&prev.focus){try{prev.focus();}catch(_){}}}
 function openModal(id){
   _modalZ+=1;var el=document.getElementById(id);if(!el)return;
   var wasShown=el.classList.contains('show');
@@ -5009,7 +5009,7 @@ function renderProposalsView(q){
   return '<div style="max-width:1280px;margin:0 auto">'
     +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:6px">'
       +'<div><div style="font-size:18px;font-weight:800">Proposals</div>'
-      +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Author RFP responses, manage templates, and keep the corporate profile current. RFP intake and AI drafting arrive in Phase B.</div></div>'
+      +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Author RFP responses with AI drafting, manage templates, and keep the corporate profile current.</div></div>'
       +(canProposal()?'<button class="btn btn-gold btn-sm" onclick="openNewProposalModal()">+ New Proposal</button>':'')
     +'</div>'
     +'<div class="prop-hero">'
@@ -5833,7 +5833,7 @@ function openProposalTemplatesManager(){
   }).join(''):'<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:24px">No templates yet. Click <b>+ Add Template</b> to create one for each major service line (Federal Services / Awards Software / Salesforce-Tableau Practice / ATO-as-a-Service / etc.).</div>';
   document.getElementById('mdlTplProp').innerHTML=
     '<div class="mdl-over">Administration</div><div class="mdl-title">Proposal Templates</div>'
-    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Templates are the section-by-section recipe for a proposal. In Phase B, Claude reads the Company Profile + RFP + chosen template and drafts each AI-fillable section.</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Templates are the section-by-section recipe for a proposal. Claude reads the Company Profile + RFP + chosen template and drafts each AI-fillable section.</div>'
     +'<div>'+rows+'</div>'
     +'<div class="btn-row" style="margin-top:14px">'
     +'<button class="btn btn-gold" style="flex:1" onclick="propTplAdd()">+ Add Template</button>'
@@ -6021,7 +6021,9 @@ function _npUploadRFP(){
   });
 }
 function _npReextract(){if(!_npState.rfpAttachmentId)return;_npState.extracting=true;_npState.extracted=null;renderNewProposalModal();_npExtractRFP(_npState.rfpAttachmentId).catch(function(e){_npState.extracting=false;alert('Re-extraction failed: '+(e&&e.message||e));renderNewProposalModal();});}
-function _npExtractRFP(attachmentId){
+// Shared RFP-extraction prompt — used by the New Proposal flow and by
+// "attach an RFP later" on the proposal detail Files tab.
+function _rfpExtractPrompt(){
   var sys='You are extracting structured data from a federal government Request for Proposal (RFP), RFI, RFQ, or Statement of Work for a US consulting firm. Output ONLY a JSON object inside a ```json``` code block. Return null for any field you cannot determine from the document. Do not invent.';
   var schema=JSON.stringify({
     customer:'agency or company issuing the RFP',
@@ -6041,12 +6043,16 @@ function _npExtractRFP(attachmentId){
     keyDates:[{label:'Q&A deadline',date:'YYYY-MM-DD'}]
   });
   var instruction='Read the attached RFP document. Extract these fields and return ONLY this JSON shape:\n\n'+schema+'\n\nFor lists like requirements/deliverables, return distinct line items (do not bundle multiple into one). For requiredRoles, infer based on staffing/key-personnel sections — return an empty array if none specified. No prose outside the JSON code block.';
+  return {sys:sys,instruction:instruction};
+}
+function _npExtractRFP(attachmentId){
+  var pr=_rfpExtractPrompt();
   return llmDocComplete({
     attachmentId:attachmentId,
     provider:_npState.provider||undefined,
     model:_npState.model||undefined,
-    system:sys,
-    instruction:instruction,
+    system:pr.sys,
+    instruction:pr.instruction,
     max_tokens:4000
   }).then(function(j){
     var parsed=llmExtractJSON(j);
@@ -6223,9 +6229,41 @@ function openProposalDetail(id){
   renderProposalDetail(id);
   openModal('ovProp');
 }
-function pdSetTab(id,tab){_pdTab=tab;renderProposalDetail(id);}
+// Capture any live (unsaved) editor content for the currently rendered tab back
+// into the proposal before a re-render or close would discard it. Returns true
+// if anything actually changed (so callers can skip pointless saves).
+function _pdCaptureLive(p){
+  if(!p)return false;
+  var changed=false;
+  if(_pdTab==='sections'&&p.sections&&p.sections.length){
+    var cur=p.sections.find(function(s){return s.id===_pdActiveSection;});
+    var el=document.getElementById('pd_sec_html');
+    if(cur&&cur.source!=='computed'&&el&&(cur.html||'')!==el.innerHTML){cur.html=el.innerHTML;changed=true;}
+  }else if(_pdTab==='brief'){
+    var b=p.brief||{};
+    var te=document.getElementById('pd_brief_text'),wt=document.getElementById('pd_brief_wt'),df=document.getElementById('pd_brief_df');
+    if((te&&te.innerHTML!==(b.text||''))||(wt&&wt.value!==(b.winThemes||''))||(df&&df.value!==(b.differentiators||''))){pdCaptureBrief(p);changed=true;}
+  }else if(_pdTab==='pricing'){
+    var pa=document.getElementById('pd_pr_assume');
+    if(pa){p.pricing=p.pricing||{};if((p.pricing.assumptionsHtml||'')!==pa.innerHTML){p.pricing.assumptionsHtml=pa.innerHTML;changed=true;}}
+  }
+  return changed;
+}
+var _pdOpenId='';
+// Closing the proposal modal by any route (Close button, Esc, backdrop click)
+// must not discard live editor content.
+_modalCloseHooks.ovProp=function(){
+  var p=(D.proposals||[]).find(function(x){return x.id===_pdOpenId;});
+  if(p&&_pdCaptureLive(p))save();
+};
+function pdSetTab(id,tab){
+  var p=(D.proposals||[]).find(function(x){return x.id===id;});
+  if(p&&_pdCaptureLive(p))save();
+  _pdTab=tab;renderProposalDetail(id);
+}
 function renderProposalDetail(id){
   var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
+  _pdOpenId=id;
   var s=propStatusCfg(p.status);
   var opp=p.opportunityId?D.projects.find(function(x){return x.id===p.opportunityId;}):null;
   var tpl=p.templateId?(D.proposalTemplates||[]).find(function(x){return x.id===p.templateId;}):null;
@@ -6272,6 +6310,7 @@ function renderProposalDetail(id){
 function pdSetStatus(id,k){
   var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
   if(p.status===k)return;
+  _pdCaptureLive(p); // status change re-renders — don't drop live editor content
   var from=p.status;
   p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'status.changed',payload:{from:from,to:k}});
   p.status=k;save();renderProposalDetail(id);renderView();
@@ -6314,7 +6353,9 @@ function _pdRFPHTML(p){
       +'<textarea class="fld-i" rows="'+Math.max(3,Math.min(items.length+1,10))+'" id="pd_rfp_'+field+'" placeholder="'+esc(placeholder)+'">'+esc(items.join('\n'))+'</textarea>'
       +'<div style="font-size:10px;color:var(--text-muted);margin-top:2px">One per line.</div></div>';
   }
-  var rolesHTML=(rfp.requiredRoles||[]).map(function(r,i){return '<div class="role-chip-line"><strong>'+esc(r.title||'?')+'</strong> × '+(r.count||1)+(r.clearance?' · '+esc(r.clearance):'')+(r.location?' · '+esc(r.location):'')+(r.skills&&r.skills.length?'<span style="color:var(--text-muted)"> — '+esc(r.skills.slice(0,5).join(', '))+'</span>':'')+'</div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted)">No required roles.</div>';
+  var rolesHTML='<div id="pd_rfp_roles">'+(rfp.requiredRoles||[]).map(function(r,i){return _pdRoleRowHTML(r,i);}).join('')+'</div>'
+    +'<button type="button" class="btn btn-outline btn-sm" onclick="_pdRoleAddRow()">+ Add Role</button>'
+    +'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">Roles drive the Staffing tab, bench fit-scoring, and pricing seeds. Rows with an empty title are dropped on save.</div>';
   return '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Edit the extracted RFP fields. These feed every AI-powered workflow downstream (past-performance matching, gap analysis, section drafting). Click Save below.</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
     +'<div class="fld"><label class="fld-l">Customer</label><input class="fld-i" id="pd_rfp_customer" value="'+esc(rfp.customer||'')+'"></div>'
@@ -6331,8 +6372,26 @@ function _pdRFPHTML(p){
     +listEdit('requiredClearances','Required Clearances','e.g. Top Secret')
     +listEdit('deliverables','Deliverables','One deliverable per line')
     +listEdit('evaluationCriteria','Evaluation Criteria','e.g. technical 40%, past performance 30%, price 30%')
-    +'<div class="fld"><label class="fld-l">Required Roles</label><div>'+rolesHTML+'</div></div>'
+    +'<div class="fld"><label class="fld-l">Required Roles ('+((rfp.requiredRoles||[]).length)+')</label>'+rolesHTML+'</div>'
     +'<div class="btn-row" style="margin-top:6px"><button class="btn btn-navy" onclick="pdSaveRFP(\''+p.id+'\')">Save RFP Details</button></div>';
+}
+// One editable Required Role row. data-orig carries the role's original index so
+// pdSaveRFP can keep the index-aligned staffing.roleMatches in sync through
+// edits, deletes, and reordering-by-deletion. New rows have data-orig="".
+function _pdRoleRowHTML(r,origIdx){
+  r=r||{};
+  return '<div class="pd-role-row" data-orig="'+(origIdx===undefined||origIdx===null?'':origIdx)+'" style="display:grid;grid-template-columns:2fr 64px 2fr 1fr 1fr 30px;gap:6px;margin-bottom:6px;align-items:center">'
+    +'<input class="fld-i pdr-title" placeholder="Role title" value="'+esc(r.title||'')+'">'
+    +'<input class="fld-i pdr-count" type="number" min="1" value="'+(Number(r.count)||1)+'">'
+    +'<input class="fld-i pdr-skills" placeholder="Skills (comma-separated)" value="'+esc((r.skills||[]).join(', '))+'">'
+    +'<input class="fld-i pdr-clearance" placeholder="Clearance" value="'+esc(r.clearance||'')+'">'
+    +'<input class="fld-i pdr-location" placeholder="Location" value="'+esc(r.location||'')+'">'
+    +'<button type="button" class="btn btn-danger-sm" style="padding:4px 8px" title="Remove role" onclick="this.parentNode.parentNode.removeChild(this.parentNode)">&times;</button>'
+    +'</div>';
+}
+function _pdRoleAddRow(){
+  var c=document.getElementById('pd_rfp_roles');
+  if(c)c.insertAdjacentHTML('beforeend',_pdRoleRowHTML(null,null));
 }
 function pdSaveRFP(id){
   var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
@@ -6342,6 +6401,21 @@ function pdSaveRFP(id){
   ['requirements','requiredCerts','requiredClearances','deliverables','evaluationCriteria'].forEach(function(f){
     p.rfp[f]=gv('pd_rfp_'+f).split('\n').map(function(s){return s.trim();}).filter(Boolean);
   });
+  if(document.getElementById('pd_rfp_roles')){
+    var oldMatches=(p.staffing&&p.staffing.roleMatches)||[];
+    var newRoles=[],newMatches=[];
+    Array.prototype.forEach.call(document.querySelectorAll('#pd_rfp_roles .pd-role-row'),function(row){
+      function v(cls){var el=row.querySelector(cls);return el?String(el.value||'').trim():'';}
+      var title=v('.pdr-title');if(!title)return;
+      newRoles.push({title:title,count:Math.max(1,Number(v('.pdr-count'))||1),
+        skills:v('.pdr-skills').split(',').map(function(s){return s.trim();}).filter(Boolean),
+        clearance:v('.pdr-clearance'),location:v('.pdr-location')});
+      var orig=row.getAttribute('data-orig');
+      newMatches.push(orig!==''&&orig!==null&&oldMatches[Number(orig)]?oldMatches[Number(orig)]:{intent:'',candidates:[],requisitionId:'',assignedMemberIds:[]});
+    });
+    p.rfp.requiredRoles=newRoles;
+    if(p.staffing)p.staffing.roleMatches=newMatches;
+  }
   p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'rfp.edited',payload:{}});
   save();renderProposalDetail(id);renderView();
   alert('RFP details saved.');
@@ -6364,7 +6438,7 @@ function _pdPastPerfHTML(p){
       +(cs.outcomes&&cs.outcomes.length?'<div style="font-size:11px;color:var(--text-secondary);margin-top:4px"><b>Outcomes:</b> '+esc(cs.outcomes.slice(0,3).join(' · '))+'</div>':'')
       +'<div style="margin-top:6px;font-size:11px"><label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" '+(checked?'checked':'')+' onchange="pdTogglePPInclude(\''+p.id+'\',\''+cs.id+'\',this.checked)"> Include in proposal</label></div>'
       +'</div>';
-  }).join(''):(gen?'<div style="font-size:12px;color:var(--text-muted)">No matches found. Try adding more case studies to the Company Profile.</div>':'<div style="font-size:12px;color:var(--text-muted);padding:14px 0">No past performance run yet. Click the button above.</div>');
+  }).join(''):(gen?'<div style="font-size:12px;color:var(--text-muted)">No matches found. Try adding more case studies to the Company Profile.</div>':(caseStudies.length?'<div style="font-size:12px;color:var(--text-muted);padding:14px 0">No past performance run yet. Click the button above.</div>':'<div style="font-size:12px;color:var(--text-muted);padding:14px 0">No past performance run yet — the match button appears once case studies exist.</div>'));
   return '<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Claude semantically matches the RFP scope against your Company Profile case studies and ranks them. Pick the ones you want cited in the proposal.</div>'
     +'<div style="margin-bottom:10px">'+btn+(gen?' <span style="font-size:11px;color:var(--text-muted);margin-left:8px">last run '+new Date(gen).toLocaleString()+'</span>':'')+'</div>'
     +matchesHTML;
@@ -6451,8 +6525,85 @@ function pdToggleCert(id,certId,on){
 
 function _pdFilesHTML(p){
   var rfp=p.rfp||{};
-  var rfpRow=rfp.sourceAttachmentId?'<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--page-bg);border-radius:6px;font-size:12px"><a href="/api/attachments/'+esc(rfp.sourceAttachmentId)+'" target="_blank" style="color:var(--navy);font-weight:600;text-decoration:none">📄 '+esc(rfp.sourceFile||'RFP source')+'</a><span style="font-size:11px;color:var(--text-muted)">RFP source file</span></div>':'<div style="font-size:11px;color:var(--text-muted);padding:8px 0">No RFP file attached.</div>';
-  return '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">All files attached to this proposal. The RFP source PDF is always preserved.</div>'+rfpRow;
+  var rfpRow=rfp.sourceAttachmentId?'<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--page-bg);border-radius:6px;font-size:12px"><a href="/api/attachments/'+esc(rfp.sourceAttachmentId)+'" target="_blank" style="color:var(--navy);font-weight:600;text-decoration:none">📄 '+esc(rfp.sourceFile||'RFP source')+'</a><span style="font-size:11px;color:var(--text-muted)">RFP source file</span></div>':'<div style="font-size:11px;color:var(--text-muted);padding:8px 0">No RFP file attached yet.</div>';
+  return '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">All files attached to this proposal. The RFP source file is always preserved.</div>'+rfpRow
+    +'<div style="margin-top:12px;border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--page-bg)">'
+    +'<div style="font-size:11px;font-weight:700;margin-bottom:4px">'+(rfp.sourceAttachmentId?'Replace the RFP source':'Attach an RFP')+'</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Upload the RFP (PDF/DOCX). Atlas extracts customer, requirements, roles, and key dates with AI and fills <b>only empty</b> RFP fields — existing content is never overwritten.</div>'
+    +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    +'<input type="file" id="pd_rfp_file" accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="font-size:11px">'
+    +'<button type="button" id="pd_rfp_upbtn" class="btn btn-navy btn-sm" onclick="pdUploadRFP(\''+p.id+'\')">Upload &amp; Extract</button>'
+    +'<span id="pd_rfp_upstatus" style="font-size:11px;color:#7C3AED"></span>'
+    +'</div></div>';
+}
+function pdUploadRFP(id){
+  var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
+  var inp=document.getElementById('pd_rfp_file');
+  if(!inp||!inp.files||!inp.files[0]){alert('Pick an RFP file first.');return;}
+  var f=inp.files[0];
+  var btn=document.getElementById('pd_rfp_upbtn');if(btn)btn.disabled=true;
+  function status(m){var el=document.getElementById('pd_rfp_upstatus');if(el)el.textContent=m;}
+  status('Uploading…');
+  var fd=new FormData();fd.append('file',f);
+  fetch('/api/attachments',{method:'POST',body:fd})
+    .then(function(r){if(!r.ok)throw new Error('upload failed: '+r.status);return r.json();})
+    .then(function(att){
+      p.rfp=p.rfp||{};p.rfp.sourceAttachmentId=att.id;p.rfp.sourceFile=f.name;
+      p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'rfp.attached',payload:{name:f.name}});
+      save();
+      status('Extracting RFP fields with AI…');
+      var pr=_rfpExtractPrompt();
+      var llm=_propLLMOpts(p);
+      return llmDocComplete({attachmentId:att.id,provider:llm.provider||undefined,model:llm.model||undefined,system:pr.sys,instruction:pr.instruction,max_tokens:4000});
+    })
+    .then(function(j){
+      var ex=llmExtractJSON(j);
+      if(!ex)throw new Error('Could not parse the extraction response.');
+      // Re-resolve — a save-conflict reload during the LLM call detaches `p`.
+      p=(D.proposals||[]).find(function(x){return x.id===id;});
+      if(!p)throw new Error('Proposal no longer exists.');
+      var n=_pdMergeExtractedRFP(p,ex);
+      p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'rfp.extracted',payload:{fieldsFilled:n}});
+      save();renderProposalDetail(id);renderView();
+      toast('RFP attached — '+n+' field'+(n===1?'':'s')+' filled (existing content kept).','success');
+    })
+    .catch(function(e){
+      if(btn)btn.disabled=false;
+      status('');
+      alert('RFP upload/extraction failed: '+(e&&e.message||e));
+      renderProposalDetail(id);
+    });
+}
+// Merge an AI RFP extraction into p.rfp, filling only empty scalars and
+// appending only new list items / roles / key dates. Returns the change count.
+function _pdMergeExtractedRFP(p,ex){
+  p.rfp=p.rfp||{};var n=0;
+  ['customer','summary','scope','pop','dueDate','contractVehicle','setAsideType'].forEach(function(k){
+    if(ex[k]&&!String(p.rfp[k]||'').trim()){p.rfp[k]=String(ex[k]);n++;}
+  });
+  if(ex.potentialValue&&!Number(p.rfp.potentialValue)){p.rfp.potentialValue=Number(ex.potentialValue)||0;if(p.rfp.potentialValue)n++;}
+  ['requirements','requiredCerts','requiredClearances','deliverables','evaluationCriteria'].forEach(function(k){
+    if(Array.isArray(ex[k])&&ex[k].length){var cur=p.rfp[k]||[];ex[k].forEach(function(x){x=String(x);if(x&&cur.indexOf(x)<0){cur.push(x);n++;}});p.rfp[k]=cur;}
+  });
+  if(Array.isArray(ex.requiredRoles)&&ex.requiredRoles.length){
+    var roles=p.rfp.requiredRoles||[];
+    var have={};roles.forEach(function(r){have[String(r.title||'').toLowerCase()]=true;});
+    ex.requiredRoles.forEach(function(r){
+      var t=String((r&&r.title)||'').trim();
+      if(t&&!have[t.toLowerCase()]){roles.push({title:t,count:Number(r.count)||1,skills:Array.isArray(r.skills)?r.skills.map(String):[],clearance:r.clearance?String(r.clearance):'',location:r.location?String(r.location):''});have[t.toLowerCase()]=true;n++;}
+    });
+    p.rfp.requiredRoles=roles;
+  }
+  if(Array.isArray(ex.keyDates)&&ex.keyDates.length){
+    var kd=p.rfp.keyDates||[];
+    var hl={};kd.forEach(function(d){hl[String(d.label||'').toLowerCase()]=true;});
+    ex.keyDates.forEach(function(d){
+      var l=String((d&&d.label)||'').trim();
+      if(l&&!hl[l.toLowerCase()]){kd.push({label:l,date:String(d.date||'')});hl[l.toLowerCase()]=true;n++;}
+    });
+    p.rfp.keyDates=kd;
+  }
+  return n;
 }
 
 function _pdSettingsHTML(p){
@@ -6463,7 +6614,15 @@ function _pdSettingsHTML(p){
   var defModel=(myAcc&&myAcc.defaultLlmModel)||'(provider default)';
   var provOpts='<option value="">— use my account default ('+esc(defProv)+') —</option>'+llmProvOpts(llmProv||'').replace(/ selected/g,'').replace('value="'+llmProv+'"','value="'+llmProv+'" selected');
   var modelOpts='<option value="">— use my account default ('+esc(defModel||'provider default')+') —</option>'+(llmProv?llmModelOpts(llmProv,llmModel):'<option value="">(pick provider first)</option>');
-  return '<span class="fld-section-hdr" style="margin-top:0">Per-Proposal LLM Override</span>'
+  var tplOpts='<option value="">— none —</option>'+(D.proposalTemplates||[]).map(function(t){return '<option value="'+t.id+'"'+(p.templateId===t.id?' selected':'')+'>'+esc(t.name)+'</option>';}).join('');
+  var tplNote=(p.sections&&p.sections.length)
+    ?'This proposal\'s sections are already initialized — changing the template here does not touch them; it only affects future re-initialization.'
+    :'Pick the template that defines this proposal\'s section list. Atlas offers to initialize the sections right away.';
+  return '<span class="fld-section-hdr" style="margin-top:0">Template</span>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">'+tplNote+'</div>'
+    +'<div style="display:flex;gap:10px;align-items:flex-end"><div class="fld" style="flex:1"><label class="fld-l">Proposal Template</label><select class="fld-sel" id="pd_tpl_sel">'+tplOpts+'</select></div>'
+    +'<div class="fld"><button class="btn btn-navy" onclick="pdSaveTemplate(\''+p.id+'\')">Save Template</button></div></div>'
+    +'<span class="fld-section-hdr">Per-Proposal LLM Override</span>'
     +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Choose a different provider/model just for this proposal. Leave both as "use my account default" to fall back to your Settings → Integrations preference.</div>'
     +'<div style="display:flex;gap:10px"><div class="fld" style="flex:1"><label class="fld-l">Provider</label><select class="fld-sel" id="pd_llm_prov" onchange="_pdLlmProvChange(\''+p.id+'\')">'+provOpts+'</select></div>'
     +'<div class="fld" style="flex:1"><label class="fld-l">Model</label><select class="fld-sel" id="pd_llm_model">'+modelOpts+'</select></div></div>'
@@ -6481,6 +6640,18 @@ function pdSaveSettings(id){
   p.llmProvider=gv('pd_llm_prov')||'';
   p.llmModel=gv('pd_llm_model')||'';
   save();alert('Settings saved.');
+}
+function pdSaveTemplate(id){
+  var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
+  var v=gv('pd_tpl_sel')||'';
+  if((p.templateId||'')===v){alert('Template unchanged.');return;}
+  p.templateId=v;
+  p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'template.changed',payload:{templateId:v}});
+  if(v&&!(p.sections&&p.sections.length)&&confirm('Initialize this proposal\'s sections from the template now?')){
+    _propInitSections(p);
+    p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'sections.initialized',payload:{count:(p.sections||[]).length}});
+  }
+  save();renderProposalDetail(id);renderView();
 }
 
 /* ── SECTIONS TAB (Workflows 6 / 7 / 8: drafting, gap analysis, voice rewrite) ── */
@@ -6557,6 +6728,7 @@ function _pdSectionsHTML(p,tpl){
 function pdInitSectionsFromTemplate(id){
   var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
   _propInitSections(p);
+  if(!(p.sections&&p.sections.length)){alert('The linked template no longer exists (or has no sections). Pick a template in the Settings tab, then initialize again.');return;}
   p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'sections.initialized',payload:{count:(p.sections||[]).length}});
   save();renderProposalDetail(id);
 }
@@ -6649,9 +6821,12 @@ function _pdPartnerPickerHTML(p){
   p.genSources=p.genSources||{partnerIds:[],attributePartners:true};
   var sel=p.genSources.partnerIds||[];
   if(!bank.length)return '<div class="fld" style="margin-top:8px"><label class="fld-l">&#129309; Teaming partner sources</label><div style="font-size:11px;color:var(--text-muted)">No partner proposals uploaded yet. Add them in <b>Admin → Teaming Partner Bank</b> to weave a partner\'s experience into this proposal.</div></div>';
-  var byName={};bank.forEach(function(d){var k=d.partnerName||'Partner';(byName[k]=byName[k]||[]).push(d);});
+  // Group by a normalized key so "ForwardEdge AI" and "ForwardEdge AI " (stray
+  // whitespace/case variants) land in one group; display the first-seen name.
+  var byName={},dispName={};
+  bank.forEach(function(d){var raw=(d.partnerName||'Partner');var k=raw.trim().replace(/\s+/g,' ').toLowerCase()||'partner';if(!dispName[k])dispName[k]=raw.trim()||'Partner';(byName[k]=byName[k]||[]).push(d);});
   var rows=Object.keys(byName).sort().map(function(nm){
-    return '<div style="margin-top:4px"><div style="font-size:11px;font-weight:700;color:#0d9488">&#129309; '+esc(nm)+'</div>'
+    return '<div style="margin-top:4px"><div style="font-size:11px;font-weight:700;color:#0d9488">&#129309; '+esc(dispName[nm])+'</div>'
       +byName[nm].map(function(d){var on=sel.indexOf(d.id)>-1;return '<label style="display:flex;gap:6px;align-items:flex-start;font-size:11px;margin:2px 0 2px 12px;cursor:pointer"><input type="checkbox" '+(on?'checked':'')+' onchange="pdTogglePartnerSrc(\''+p.id+'\',\''+d.id+'\',this.checked)"><span><b>'+esc(d.name)+'</b>'+(d.summary?' — <span style="color:var(--text-muted)">'+esc(d.summary.slice(0,120))+(d.summary.length>120?'…':'')+'</span>':'')+'</span></label>';}).join('')+'</div>';
   }).join('');
   var attr=p.genSources.attributePartners!==false;
@@ -6704,34 +6879,56 @@ function pdGenerateFullProposal(id){
   setStatus('Selecting relevant Knowledge Bank sources…');
   var rfp=p.rfp||{};
   var kbCtxStr=[rfp.customer,rfp.summary,rfp.scope,(rfp.requirements||[]).join('; '),_propBuildBriefCtx(p)].filter(Boolean).join('\n').slice(0,6000);
+  // A save conflict mid-run replaces the whole D object ("server wins"), which
+  // detaches any captured proposal/section references. Re-resolve by id at every
+  // step so generated content always lands on the live objects.
+  var secIds=aiSecs.map(function(s){return s.id;});
+  var total=aiSecs.length;
+  function reResolve(){
+    var live=(D.proposals||[]).find(function(x){return x.id===id;});
+    if(!live){
+      if(btn){btn.disabled=false;btn.textContent='✨ Generate Full Proposal';}
+      setStatus('This proposal no longer exists (deleted or reloaded) — generation stopped.');
+      return null;
+    }
+    p=live;return live;
+  }
   _partnerBuildContext(p,function(partnerBlock){
   kbBuildContext(kbCtxStr,4,3500,function(kbBlock,kbIds){
     kbIds=kbIds||[];
     var i=0,errs=0;
     function done(){
+      if(!reResolve())return;
       var doPricing=_genFlag('pd_gen_pricing',true);
       var doDoss=_genFlag('pd_gen_dossiers',false);
       var pricingMsg=doPricing&&_genSeedPricing(p)?' · pricing seeded':'';
       function finalize(dossCount){
         if(btn){btn.disabled=false;btn.textContent='✨ Generate Full Proposal';}
-        p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'proposal.generated',payload:{sections:aiSecs.length,errors:errs,kbSources:kbIds.length,pricingSeeded:!!pricingMsg,dossiers:dossCount}});
+        if(!reResolve())return;
+        p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'proposal.generated',payload:{sections:total,errors:errs,kbSources:kbIds.length,pricingSeeded:!!pricingMsg,dossiers:dossCount}});
         save();
-        setStatus('Done — drafted '+(aiSecs.length-errs)+'/'+aiSecs.length+' section'+(aiSecs.length===1?'':'s')+(errs?' ('+errs+' failed — retry individually)':'')+pricingMsg+(dossCount?' · '+dossCount+' dossier'+(dossCount===1?'':'s'):'')+'. Opening Sections…');
+        setStatus('Done — drafted '+(total-errs)+'/'+total+' section'+(total===1?'':'s')+(errs?' ('+errs+' failed — retry individually)':'')+pricingMsg+(dossCount?' · '+dossCount+' dossier'+(dossCount===1?'':'s'):'')+'. Opening Sections…');
         setTimeout(function(){_pdTab='sections';renderProposalDetail(id);},1100);
       }
       if(doDoss){setStatus('Generating key-personnel dossiers for assigned bench…');_genDossiers(p,finalize);}
       else finalize(0);
     }
     function next(){
-      if(i>=aiSecs.length){done();return;}
-      var s=aiSecs[i];
-      setStatus('Drafting '+(i+1)+'/'+aiSecs.length+': <b>'+esc(s.title)+'</b>…'+(kbIds.length?' <span style="color:var(--text-muted)">(using '+kbIds.length+' KB source'+(kbIds.length===1?'':'s')+(partnerBlock?' + partner material':'')+')</span>':''));
+      if(i>=total){done();return;}
+      if(!reResolve())return;
+      var s=(p.sections||[]).find(function(x){return x.id===secIds[i];});
+      if(!s){i++;next();return;}
+      setStatus('Drafting '+(i+1)+'/'+total+': <b>'+esc(s.title)+'</b>…'+(kbIds.length?' <span style="color:var(--text-muted)">(using '+kbIds.length+' KB source'+(kbIds.length===1?'':'s')+(partnerBlock?' + partner material':'')+')</span>':''));
       var pr=_propSectionPrompt(p,s,kbBlock,partnerBlock);
       llmComplete({provider:llm.provider,model:llm.model,system:pr.sys,messages:[{role:'user',content:pr.instruction}],max_tokens:4000})
         .then(function(j){
           var html=llmExtractText(j).trim().replace(/^```html\s*/i,'').replace(/```$/,'').trim();
-          if(html){s.html=html;s.draftedAt=Date.now();s.draftedBy=ME?ME.id:'';s.draftedWith={provider:llm.provider,model:llm.model||j.model||''};}
-          else errs++;
+          if(!html){errs++;return;}
+          // Re-resolve before writing — the response may have raced a reload.
+          var live=(D.proposals||[]).find(function(x){return x.id===id;});
+          var ls=live?(live.sections||[]).find(function(x){return x.id===secIds[i];}):null;
+          if(!ls){errs++;return;}
+          ls.html=html;ls.draftedAt=Date.now();ls.draftedBy=ME?ME.id:'';ls.draftedWith={provider:llm.provider,model:llm.model||j.model||''};
         })
         .catch(function(){errs++;})
         .finally(function(){i++;save();next();});
@@ -6845,6 +7042,8 @@ function _genFlag(id,dflt){var el=document.getElementById(id);return el?el.check
 function _genSeedPricing(p){
   var roles=(p.rfp&&p.rfp.requiredRoles)||[];if(!roles.length)return false;
   p.pricing=p.pricing||{mode:'cf-monthly',linkedProjectId:'',items:[]};
+  // Never flip a deliberately chosen Manual/CLIN mode — only seed the CF sheet.
+  if(p.pricing.mode&&p.pricing.mode!=='cf-monthly')return false;
   var cf=_cfEnsure(p);
   if((p.pricing.items&&p.pricing.items.length)||(cf.resources&&cf.resources.length))return false;
   p.pricing.mode='cf-monthly';
@@ -6863,11 +7062,19 @@ function _genDossiers(p,cb){
   var entries=ids.map(_memberDossEntry).filter(Boolean).filter(function(e){return !have[e.key];});
   if(!entries.length){cb(0);return;}
   p.dossiers=p.dossiers||[];
-  var i=0,made=0;
+  var pid=p.id,i=0,made=0;
   (function nx(){
+    // Re-resolve each pass — a save-conflict reload mid-run detaches `p`.
+    var live=(D.proposals||[]).find(function(x){return x.id===pid;});
+    if(!live){cb(made);return;}
+    p=live;p.dossiers=p.dossiers||[];
     if(i>=entries.length){cb(made);return;}
     var e=entries[i];
-    _dossGenerateOne(p,e,function(html){if(html){p.dossiers.push({id:uid(),name:e.name,role:e.role||'',sourceKey:e.key,sourceKind:e.kind,html:html,generatedAt:Date.now()});made++;}i++;save();nx();});
+    _dossGenerateOne(p,e,function(html){
+      var lv=(D.proposals||[]).find(function(x){return x.id===pid;});
+      if(html&&lv){lv.dossiers=lv.dossiers||[];lv.dossiers.push({id:uid(),name:e.name,role:e.role||'',sourceKey:e.key,sourceKind:e.kind,html:html,generatedAt:Date.now()});made++;}
+      i++;save();nx();
+    });
   })();
 }
 function _propBuildRFPCtx(p){

@@ -487,28 +487,35 @@ app.post('/api/llm/with-attachment', async (req, res) => {
     const mime = att.mime || 'application/octet-stream';
     const isPdf = /pdf$/i.test(mime) || /\.pdf$/i.test(att.name || '');
     const fileBase64 = Buffer.from(att.data).toString('base64');
+    // Non-PDF documents (DOCX/XLSX/TXT/CSV/MD): no provider accepts the binary
+    // through this proxy, so extract the text server-side and inline it.
+    let docBlock = '';
+    if (!isPdf) {
+      const docText = await extractDocText(att.data, mime, att.name);
+      docBlock = docText
+        ? `Extracted text of the attached document "${att.name}":\n"""\n${docText.slice(0, 150000)}\n"""`
+        : `[Attachment "${att.name}" is type ${mime}; no text could be extracted from it. Proceed using only the instruction below.]`;
+    }
     let json;
     if (prov === 'anthropic') {
       const userContent = [];
       if (isPdf) userContent.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: fileBase64 } });
-      else userContent.push({ type: 'text', text: `[Attachment "${att.name}" is type ${mime}; Claude cannot read it directly. Proceed using only the instruction below.]` });
+      else userContent.push({ type: 'text', text: docBlock });
       userContent.push({ type: 'text', text: instruction });
       json = await callAnthropic({ apiKey, model, system: systemPrompt, max_tokens, messages: [{ role: 'user', content: userContent }] });
     } else if (prov === 'google') {
       json = await callGoogle({
         apiKey, model, system: systemPrompt, max_tokens,
-        messages: [{ role: 'user', content: instruction }],
+        messages: [{ role: 'user', content: isPdf ? instruction : docBlock + '\n\n' + instruction }],
         fileBase64: isPdf ? fileBase64 : null,
         fileMime: 'application/pdf',
       });
-      if (!isPdf) json.content[0].text = `[Attachment "${att.name}" is type ${mime}; not sent inline.]\n\n` + json.content[0].text;
     } else {
-      // OpenAI: chat/completions endpoint cannot accept binary; instruct that
-      // attachment was not included. The Files+Assistants API would require a
-      // larger refactor; defer until there's user demand.
+      // OpenAI: chat/completions endpoint cannot accept binary, so PDFs fall
+      // back to a notice; extracted-text docs work like any other provider.
       json = await callOpenAI({
         apiKey, model, system: systemPrompt, max_tokens,
-        messages: [{ role: 'user', content: `[Attachment "${att.name}" (${mime}) cannot be sent to OpenAI via this proxy yet — switch to Anthropic or Google for PDF analysis.]\n\n${instruction}` }],
+        messages: [{ role: 'user', content: (isPdf ? `[Attachment "${att.name}" (${mime}) cannot be sent to OpenAI via this proxy yet — switch to Anthropic or Google for PDF analysis.]` : docBlock) + `\n\n${instruction}` }],
       });
     }
     res.json(json);
