@@ -1976,7 +1976,7 @@ function planCardHTML(a){
   var editable=can('task',a.programId);
   var isProj=(a.kind||'coe')==='project';
   var proj=a.projectId?D.projects.find(function(p){return p.id===a.projectId;}):null;
-  var topLbl=isProj?(proj?esc(proj.name):'Unassigned')+(a.parentId?' · subtask':''):esc(progNameOf(a))+(a.parentId?' · subtask':'');
+  var topLbl=isProj?(proj?esc(proj.name):(a.projectId?'(deleted: '+esc(a.projectDeletedName||'item')+')':'Unassigned'))+(a.parentId?' · subtask':''):esc(progNameOf(a))+(a.parentId?' · subtask':'');
   return '<div class="plan-card" style="border-left-color:'+(isProj?'#C5A55A':progColorOf(a))+'"'+(editable?' draggable="true" ondragstart="planDragStart(event,\''+a.id+'\')" ondragend="planDragEnd()"':'')+' onclick="openPlanModal(\''+a.id+'\')">'
     +'<div class="plan-card-prog">'+topLbl+'</div>'
     +'<div class="plan-card-sub">'+(a.isMilestone?'◆ ':'')+esc(a.subtask)+'</div>'
@@ -1997,7 +1997,7 @@ function planCardsHTML(acts){
     if(isProj){
       key=a.projectId||'_unassigned';
       if(key==='_unassigned'){name='Unassigned';color='#94A3B8';}
-      else{var p=D.projects.find(function(x){return x.id===a.projectId;});name=p?p.name:'(unknown project)';color='#0EA5E9';}
+      else{var p=D.projects.find(function(x){return x.id===a.projectId;});name=p?p.name:(a.projectDeletedName?'(deleted: '+a.projectDeletedName+')':'(deleted item — open a task to relink)');color='#0EA5E9';}
     } else {
       key=a.programId||'_uncategorized';
       var pr=progById(a.programId);name=pr?pr.name:(a.program||'Uncategorized');color=pr?(pr.color||'#546478'):'#546478';
@@ -9530,15 +9530,21 @@ renderView();}
 
 function deleteProject(pid){
 var toDelete=projDescendantIds(pid);
+var names={};D.projects.forEach(function(p){if(toDelete.indexOf(p.id)>-1)names[p.id]=p.name||'';});
 D.projects=D.projects.filter(function(p){return toDelete.indexOf(p.id)===-1;});
 D.departments.forEach(function(d){d.members.forEach(function(m){m.projects=(m.projects||[]).filter(function(x){return toDelete.indexOf(typeof x==='string'?x:x.id)===-1;});});});
+// Linked tasks survive the deletion — stamp them with the deleted item's name
+// so Project Tasks shows "(deleted: Name)" instead of an anonymous row.
+(D.activities||[]).forEach(function(a){if(a.projectId&&names[a.projectId]!==undefined)a.projectDeletedName=names[a.projectId];});
 save();renderView();}
 /* Confirm + delete from the edit modal (used for opportunities and any item). */
 function confirmDeleteProject(pid){
 var p=D.projects.find(function(x){return x.id===pid;});if(!p)return;
 var lbl={project:'project',initiative:'initiative',overhead:'overhead item',opportunity:'opportunity'}[projCat(p)]||'item';
-var extra=projDescendantIds(pid).length-1;
-if(!confirm('Delete this '+lbl+(extra>0?' and its '+extra+' sub-item'+(extra===1?'':'s'):'')+'?\n\n“'+(p.name||'')+'”\n\nThis cannot be undone.'))return;
+var ids=projDescendantIds(pid);
+var extra=ids.length-1;
+var taskN=(D.activities||[]).filter(function(a){return ids.indexOf(a.projectId)>-1;}).length;
+if(!confirm('Delete this '+lbl+(extra>0?' and its '+extra+' sub-item'+(extra===1?'':'s'):'')+'?\n\n“'+(p.name||'')+'”\n\nThis cannot be undone.'+(taskN?'\n\n'+taskN+' linked task'+(taskN===1?'':'s')+' in Project Tasks will keep a “(deleted: '+(p.name||'')+')” label — relink them to another item afterward.':'')))return;
 deleteProject(pid);closeModal('ovDeptEdit');
 toast('Deleted '+lbl+': '+(p.name||''),'info');}
 
