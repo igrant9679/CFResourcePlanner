@@ -19,8 +19,13 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .btn:hover{transform:translateY(-1px);}
 .btn-gold{background:var(--gold);color:var(--navy);}
 .btn-gold:hover{box-shadow:0 4px 14px rgba(197,165,90,0.4);}
-.btn-outline{background:rgba(255,255,255,0.08);color:#fff;border:1px solid rgba(255,255,255,0.15);}
-.btn-outline:hover{background:rgba(255,255,255,0.14);}
+/* btn-outline: legible secondary button on light surfaces (cards/modals).
+   The original ghost-on-navy variant survives only inside the dark header —
+   it was unreadable (white on white) everywhere else. */
+.btn-outline{background:#fff;color:var(--navy);border:1px solid var(--border);}
+.btn-outline:hover{background:var(--page-bg);border-color:var(--navy);}
+.hdr-actions .btn-outline{background:rgba(255,255,255,0.08);color:#fff;border:1px solid rgba(255,255,255,0.15);}
+.hdr-actions .btn-outline:hover{background:rgba(255,255,255,0.14);}
 .btn-navy{background:var(--navy);color:#fff;}
 .btn-navy:hover{background:var(--navy-hover);}
 .btn-sec{background:#F1F5F9;color:var(--text-secondary);}
