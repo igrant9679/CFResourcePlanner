@@ -20,7 +20,7 @@ npm test                                      # pure-logic tests, no DB / no net
 | `DATABASE_URL` | Postgres (Railway-provided) |
 | `ANTHROPIC_API_KEY` | LLM drafting/extraction (org-wide default) |
 | `OPENAI_API_KEY`, `GOOGLE_API_KEY` | optional LLM providers |
-| `SAM_GOV_API_KEY` | **Gov Discovery**: free key from your SAM.gov account profile (Account Details → API Key). Without it the SAM source is skipped and the ingestion log says so; forecast CSV import and USAspending enrichment still work (no key needed). |
+| `SAM_GOV_API_KEY` | **Gov Discovery**: free key from your SAM.gov account profile (Account Details → Public API Key). Optional — the key can also be entered in-app under **Admin → Integrations → Data Sources** (org-wide; the env var takes precedence if both are set). Without either, the SAM source is skipped and the ingestion log says so; forecast CSV import and USAspending enrichment still work (no key needed). |
 | `ATLAS_SYNC_TOKEN` | LevelUp mirror auth (see handoff doc) |
 
 ## Gov Discovery (Opportunities → 🛰 Gov Discovery)

@@ -443,6 +443,7 @@ async function govProfile() {
     agencies: agencies.slice(0, 40),
     weights: (gp.settings && gp.settings.weights) || null,
     searches: gp.searches || [],
+    samApiKey: (gp.settings && gp.settings.samApiKey) || '',
   };
 }
 async function govUpsert(unified, profile, stats) {
@@ -484,8 +485,9 @@ async function govUpsert(unified, profile, stats) {
 }
 const SAM_PTYPE = { p: 'presolicitation', r: 'sources-sought', s: 'special', o: 'solicitation', k: 'combined' };
 async function samIngest(profile, stats, errors) {
-  const key = process.env.SAM_GOV_API_KEY;
-  if (!key) { errors.push({ source: 'sam.gov', error: 'SAM_GOV_API_KEY not set — source skipped. Get a free key from your SAM.gov account profile and add it to the Railway env vars.' }); return; }
+  // Env var wins; otherwise the org-wide key saved in Admin → Integrations.
+  const key = process.env.SAM_GOV_API_KEY || profile.samApiKey;
+  if (!key) { errors.push({ source: 'sam.gov', error: 'No SAM.gov API key — source skipped. Add one in Admin → Integrations → Data Sources (free key: sam.gov → Workspace → Account Details → Public API Key).' }); return; }
   const fmt = (dt) => String(dt.getMonth() + 1).padStart(2, '0') + '/' + String(dt.getDate()).padStart(2, '0') + '/' + dt.getFullYear();
   const to = new Date(); const from = new Date(Date.now() - 60 * 86400000);
   const naicsList = (profile.naics || []).slice(0, 6);

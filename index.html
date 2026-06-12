@@ -3025,7 +3025,7 @@ function _govDiscoveryHTML(){
     +(gp.searches||[]).map(function(s){return '<span class="plan-chip" style="cursor:pointer" onclick="govApplySearch(\''+s.id+'\')" title="Apply saved search — daily ingestion reports new matches per saved search">'+esc(s.name)+' <span onclick="event.stopPropagation();govDelSearch(\''+s.id+'\')" style="color:var(--red);font-weight:800">&times;</span></span>';}).join('')
     +'</div>';
   if(_govState.busy)html+='<div class="empty-msg">Loading…</div>';
-  else if(!list.length)html+='<div class="empty-msg">No opportunities yet. Click <b>Run ingestion now</b> (needs <code>SAM_GOV_API_KEY</code> on the server) or <b>Import forecast CSV</b> from the GSA Acquisition Gateway / DHS APFS / EPA forecast exports.</div>';
+  else if(!list.length)html+='<div class="empty-msg">No opportunities yet. Add your SAM.gov API key in <b>Admin → Integrations → Data Sources</b>, then click <b>Run ingestion now</b> — or <b>Import forecast CSV</b> from the GSA Acquisition Gateway / DHS APFS / EPA forecast exports (no key needed).</div>';
   else html+=list.map(_govCardHTML).join('');
   return html+'</div>';
 }
@@ -9611,6 +9611,12 @@ function openIntegrationsManager(){
     +'<div class="fld" style="flex:1"><label class="fld-l">Default Model</label>'
     +'<select class="fld-sel" id="intg_def_model">'+llmModelOpts(curProv,curModel)+'</select></div></div>'
     +'<div style="font-size:11px;color:var(--text-muted);margin:-4px 0 14px">Used for AI calls initiated by your account when no per-proposal override is set.</div>'
+    +'<span class="fld-section-hdr">Data Sources</span>'
+    +'<div class="fld" style="margin-bottom:10px">'
+      +'<label class="fld-l">SAM.gov API Key <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted)">— powers Opportunities → 🛰 Gov Discovery (org-wide)</span></label>'
+      +'<input class="fld-i" id="intg_key_samgov" type="password" value="'+esc(((D.govPipeline||{}).settings||{}).samApiKey||'')+'" placeholder="Free key: sam.gov → sign in → Workspace → Account Details → Public API Key" autocomplete="off">'
+      +'<div style="font-size:10px;color:var(--text-muted);margin-top:3px">Env var: <code>SAM_GOV_API_KEY</code> (takes precedence if set on the server). Keys expire every ~90 days — regenerate on the same SAM.gov page if ingestion starts failing.'+((((D.govPipeline||{}).settings||{}).samApiKey)?' &middot; <span style="color:var(--green)">key set</span>':'')+'</div>'
+    +'</div>'
     +'<div class="btn-row">'
       +'<button class="btn btn-navy" style="flex:1" onclick="saveIntegrations()">Save</button>'
       +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovIntg\')">Close</button>'
@@ -9639,6 +9645,8 @@ function saveIntegrations(){
   });
   myAcc.defaultLlmProvider=gv('intg_def_prov')||'anthropic';
   myAcc.defaultLlmModel=gv('intg_def_model')||'';
+  var sam=gv('intg_key_samgov');
+  if(sam!==undefined){var gp=_govPipe();gp.settings=gp.settings||{};gp.settings.samApiKey=sam.trim();}
   save();closeModal('ovIntg');
 }
 function llmComplete(opts){
