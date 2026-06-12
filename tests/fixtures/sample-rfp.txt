@@ -1,0 +1,22 @@
+SOLICITATION NO. FA8771-26-R-0042 — ENTERPRISE APPLICATION MODERNIZATION SUPPORT
+
+TABLE OF CONTENTS
+SECTION C  Performance Work Statement ............ 3
+SECTION L  Instructions to Offerors .............. 9
+SECTION M  Evaluation Criteria ................... 14
+
+SECTION C — PERFORMANCE WORK STATEMENT
+C.1 SCOPE. The contractor shall provide enterprise application modernization, operations, and maintenance support.
+C.2 TASKS. The contractor shall migrate twelve legacy applications to the approved cloud environment. The contractor must maintain Authority to Operate (ATO) throughout the period of performance. Personnel are required to hold active Secret clearances at a minimum. The contractor will provide monthly status reports no later than the 5th business day of each month.
+
+SECTION L — INSTRUCTIONS TO OFFERORS
+L.1 GENERAL. Proposals shall be submitted electronically via SAM.gov no later than 2:00 PM Eastern Time on the due date.
+L.2 VOLUMES. The offeror shall submit two volumes: Volume I (Technical) and Volume II (Price).
+L.3 PAGE LIMITS. Volume I shall not exceed 20 pages. Pages shall be 8.5 x 11 inches with 1-inch margins and Times New Roman 12-point font.
+L.4 TECHNICAL VOLUME CONTENT. L.4.1 The offeror shall describe its technical approach to migration. L.4.2 The offeror shall describe its staffing plan including key personnel. L.4.3 The offeror must complete and submit the Certification of Compliance form.
+
+SECTION M — EVALUATION CRITERIA
+M.1 BASIS OF AWARD. Award will be made on a best-value tradeoff basis.
+M.2 TECHNICAL APPROACH. Weight: 40. The Government will evaluate the offeror's migration methodology.
+M.3 STAFFING PLAN. Weight: 30. The Government will evaluate key personnel qualifications.
+M.4 PRICE. Weight: 30. Price will be evaluated for reasonableness.

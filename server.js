@@ -54,6 +54,35 @@ async function initDb() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `);
+  // Gov opportunity pipeline (GovWin-style, free sources): unified records
+  // from SAM.gov / forecast CSVs / USAspending enrichment. Lives OUTSIDE the
+  // app_state blob — there can be thousands of records.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS gov_opportunities (
+      id TEXT PRIMARY KEY,
+      solnum TEXT, title TEXT, agency TEXT, sub_agency TEXT, description TEXT,
+      naics TEXT, psc TEXT, set_aside TEXT,
+      value_low NUMERIC, value_high NUMERIC,
+      est_solicitation_date TEXT, est_award_date TEXT,
+      place TEXT, poc_name TEXT, poc_email TEXT,
+      source TEXT, source_url TEXT, notice_type TEXT, lifecycle TEXT,
+      stage TEXT DEFAULT 'identified',
+      score NUMERIC DEFAULT 0, score_parts JSONB, recompete JSONB,
+      timeline JSONB DEFAULT '[]', raw JSONB,
+      archived BOOLEAN DEFAULT false,
+      first_seen TIMESTAMPTZ NOT NULL DEFAULT now(),
+      last_updated TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ingestion_runs (
+      id BIGSERIAL PRIMARY KEY,
+      source TEXT, trigger_kind TEXT,
+      started_at TIMESTAMPTZ NOT NULL DEFAULT now(), finished_at TIMESTAMPTZ,
+      fetched INT DEFAULT 0, added INT DEFAULT 0, updated INT DEFAULT 0,
+      errors JSONB DEFAULT '[]', digest JSONB
+    )
+  `);
   // RFP Shred: per-proposal requirements database, L-M-C mappings, format
   // rules, and annotated outline. One row per proposal, OUTSIDE the app_state
   // blob so hundreds of requirements never bloat the synced state.
@@ -298,6 +327,338 @@ app.get('/api/history/:id', async (req, res) => {
     const r = await pool.query('SELECT data FROM app_state_history WHERE id = $1', [req.params.id]);
     if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(r.rows[0].data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+/* ════════════════════════════════════════════════════════════════════
+   GOV OPPORTUNITY PIPELINE (Module 1) — free official sources only.
+   ════════════════════════════════════════════════════════════════════ */
+/* ── GOVOPS PURE LOGIC (self-contained; mirrored by tests/govops.test.js) ── */
+function govNorm(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim(); }
+function govTitleSim(a, b) {
+  const ta = new Set(govNorm(a).split(' ').filter((w) => w.length > 2));
+  const tb = new Set(govNorm(b).split(' ').filter((w) => w.length > 2));
+  if (!ta.size || !tb.size) return 0;
+  let inter = 0; ta.forEach((w) => { if (tb.has(w)) inter++; });
+  return inter / (ta.size + tb.size - inter);
+}
+// Dedup/lifecycle matching: same solicitation number wins; otherwise fuzzy
+// title similarity + same agency root + NAICS overlap.
+function govMatch(incoming, candidates) {
+  const inSol = govNorm(incoming.solnum).replace(/ /g, '');
+  if (inSol) {
+    const bySol = candidates.find((c) => govNorm(c.solnum).replace(/ /g, '') === inSol);
+    if (bySol) return bySol;
+  }
+  const agRoot = govNorm(incoming.agency).split(' ').slice(0, 3).join(' ');
+  return candidates.find((c) => {
+    if (agRoot && govNorm(c.agency).indexOf(agRoot.split(' ')[0]) < 0) return false;
+    const nA = String(incoming.naics || '').slice(0, 4), nB = String(c.naics || '').slice(0, 4);
+    if (nA && nB && nA !== nB) return false;
+    return govTitleSim(incoming.title, c.title) > 0.55;
+  }) || null;
+}
+const NOTICE_RANK = { forecast: 0, 'sources-sought': 1, special: 1, presolicitation: 2, solicitation: 3, combined: 3 };
+function govLifecycleMax(a, b) { return (NOTICE_RANK[b] || 0) >= (NOTICE_RANK[a] || 0) ? b : a; }
+// Fit score vs the company profile. Weights configurable via app_state
+// govPipeline.settings.weights — defaults below.
+function govScore(opp, profile, weights) {
+  const w = Object.assign({ naics: 35, setAside: 15, keywords: 35, agency: 15 }, weights || {});
+  const parts = {};
+  const myNaics = (profile.naics || []).map(String);
+  const oN = String(opp.naics || '');
+  parts.naics = myNaics.some((n) => n === oN) ? w.naics : (myNaics.some((n) => n.slice(0, 4) === oN.slice(0, 4) && oN) ? w.naics * 0.6 : 0);
+  const sa = govNorm(opp.set_aside);
+  const mySa = (profile.setAsides || []).map(govNorm);
+  parts.setAside = !sa || sa === 'none' ? w.setAside * 0.5 : (mySa.some((s) => s && sa.indexOf(s) > -1) ? w.setAside : 0);
+  const text = govNorm((opp.title || '') + ' ' + (opp.description || ''));
+  const kws = (profile.keywords || []).map(govNorm).filter(Boolean);
+  const hits = kws.filter((k) => text.indexOf(k) > -1).length;
+  parts.keywords = kws.length ? w.keywords * Math.min(1, hits / Math.min(kws.length, 8)) : 0;
+  const ag = govNorm(opp.agency);
+  parts.agency = (profile.agencies || []).map(govNorm).some((a) => a && (ag.indexOf(a) > -1 || a.indexOf(ag.split(' ')[0]) > -1)) ? w.agency : 0;
+  const score = Math.round(Object.keys(parts).reduce((a, k) => a + parts[k], 0));
+  return { score, parts };
+}
+// Forecast CSV adapters: header-alias mapping so format drift doesn't break
+// ingestion. Add an agency = add an entry here (see README).
+const GOV_CSV_ADAPTERS = {
+  'gsa-forecast': { label: 'GSA Acquisition Gateway Forecast', aliases: { title: ['title', 'requirement title', 'project title'], agency: ['organization', 'agency', 'department'], sub_agency: ['bureau', 'sub-agency', 'contracting office'], description: ['description', 'requirement description', 'summary of requirement'], naics: ['naics', 'naics code', 'primary naics'], set_aside: ['set aside', 'set-aside', 'small business set-aside', 'competition type'], value_text: ['estimated value', 'dollar range', 'estimated contract value', 'total estimated value'], est_solicitation_date: ['estimated solicitation date', 'target solicitation date', 'solicitation date'], est_award_date: ['estimated award date', 'target award date', 'award date', 'estimated award fy-quarter'], place: ['place of performance', 'location'], poc_name: ['point of contact', 'poc', 'contact name', 'small business specialist'], poc_email: ['email', 'poc email', 'contact email'], solnum: ['solicitation number', 'listing id', 'forecast id'] } },
+  'dhs-apfs': { label: 'DHS Acquisition Planning Forecast System', aliases: { title: ['title', 'requirement title'], agency: ['component', 'organization'], description: ['description', 'requirement description', 'description of requirement'], naics: ['naics', 'naics code'], set_aside: ['small business program', 'set aside', 'competition strategy'], value_text: ['dollar range', 'estimated value'], est_solicitation_date: ['estimated solicitation release date', 'estimated release date'], est_award_date: ['estimated award date', 'award quarter'], place: ['place of performance'], poc_name: ['small business specialist', 'point of contact'], poc_email: ['contact email', 'email'], solnum: ['apfs number', 'forecast number'] } },
+  'epa': { label: 'EPA Acquisition Forecast', aliases: { title: ['title', 'project title', 'requirement'], agency: ['office', 'program office'], description: ['description', 'project description'], naics: ['naics', 'naics code'], set_aside: ['extent competed', 'set aside type', 'small business set-aside'], value_text: ['estimated range of cost', 'estimated value'], est_solicitation_date: ['estimated solicitation date', 'target solicitation quarter'], est_award_date: ['estimated award date'], place: ['place of performance'], poc_name: ['poc name', 'contact'], poc_email: ['poc email', 'email'], solnum: ['forecast id'] } },
+  'generic': { label: 'Generic forecast CSV', aliases: { title: ['title'], agency: ['agency', 'organization'], description: ['description'], naics: ['naics'], set_aside: ['set aside', 'set-aside'], value_text: ['value', 'estimated value'], est_solicitation_date: ['solicitation date'], est_award_date: ['award date'], place: ['place'], poc_name: ['contact'], poc_email: ['email'], solnum: ['solicitation number', 'id'] } },
+};
+function govParseValueRange(t) {
+  const nums = String(t || '').replace(/[, ]/g, '').match(/\$?([\d.]+)(k|m|b)?/gi) || [];
+  const parse = (s) => { const m = /([\d.]+)(k|m|b)?/i.exec(s); if (!m) return 0; let v = parseFloat(m[1]); if (/k/i.test(m[2] || '')) v *= 1e3; if (/m/i.test(m[2] || '')) v *= 1e6; if (/b/i.test(m[2] || '')) v *= 1e9; return v; };
+  const vals = nums.map(parse).filter((v) => v > 999);
+  if (!vals.length) return { low: null, high: null };
+  return { low: Math.min(...vals), high: Math.max(...vals) };
+}
+function govMapCsvRow(adapterKey, headers, row) {
+  const ad = GOV_CSV_ADAPTERS[adapterKey] || GOV_CSV_ADAPTERS.generic;
+  const hNorm = headers.map((h) => govNorm(h));
+  const pick = (field) => {
+    const aliases = ad.aliases[field] || [];
+    for (const a of aliases) { const i = hNorm.findIndex((h) => h === govNorm(a) || h.indexOf(govNorm(a)) === 0); if (i > -1 && row[i] != null && String(row[i]).trim()) return String(row[i]).trim(); }
+    return '';
+  };
+  const out = { title: pick('title'), agency: pick('agency'), sub_agency: pick('sub_agency'), description: pick('description'), naics: (pick('naics').match(/\d{6}/) || [pick('naics')])[0] || '', set_aside: pick('set_aside'), est_solicitation_date: pick('est_solicitation_date'), est_award_date: pick('est_award_date'), place: pick('place'), poc_name: pick('poc_name'), poc_email: pick('poc_email'), solnum: pick('solnum'), notice_type: 'forecast', lifecycle: 'forecast' };
+  const vr = govParseValueRange(pick('value_text'));
+  out.value_low = vr.low; out.value_high = vr.high;
+  return out.title ? out : null;
+}
+/* ── END GOVOPS PURE LOGIC ── */
+
+// Retry/backoff wrapper for government APIs — polite UA, never hammers.
+async function govFetch(url, opts, tries) {
+  tries = tries == null ? 3 : tries;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(url, Object.assign({ headers: Object.assign({ 'User-Agent': 'Atlas-ResourcePlanner/1.0 (CommunityForce; contact: idris.grant@communityforce.com)' }, (opts && opts.headers) || {}) }, opts || {}));
+      if (res.status === 429 || res.status >= 500) throw new Error('HTTP ' + res.status);
+      return res;
+    } catch (e) {
+      if (attempt >= tries - 1) throw e;
+      await new Promise((r) => setTimeout(r, 1000 * Math.pow(3, attempt)));
+    }
+  }
+}
+async function govProfile() {
+  const r = await pool.query('SELECT data FROM app_state WHERE id = 1');
+  const d = r.rows.length ? r.rows[0].data : {};
+  const cp = (d && d.companyProfile) || {};
+  const ident = cp.identity || {};
+  const keywords = [];
+  (cp.services || []).forEach((s) => { if (s.name) keywords.push(s.name); (s.differentiators || []).slice(0, 2).forEach((x) => keywords.push(x)); });
+  (cp.differentiators || []).forEach((x) => keywords.push(x));
+  const agencies = [];
+  ((d && d.projects) || []).forEach((p) => { if (p.customer && agencies.indexOf(p.customer) < 0) agencies.push(p.customer); });
+  ((d && d.pastClients) || []).forEach((c) => { const n = typeof c === 'string' ? c : (c && c.name); if (n && agencies.indexOf(n) < 0) agencies.push(n); });
+  const gp = (d && d.govPipeline) || {};
+  return {
+    naics: ident.naics || [],
+    setAsides: [ident.ownershipType || 'Small Business'].concat((gp.settings && gp.settings.setAsides) || []),
+    keywords: ((gp.settings && gp.settings.keywords) || []).concat(keywords).slice(0, 40),
+    agencies: agencies.slice(0, 40),
+    weights: (gp.settings && gp.settings.weights) || null,
+    searches: gp.searches || [],
+  };
+}
+async function govUpsert(unified, profile, stats) {
+  if (!unified || !unified.title) return;
+  const cand = await pool.query(
+    `SELECT id, solnum, title, agency, naics, lifecycle, timeline FROM gov_opportunities
+     WHERE archived = false AND (solnum = $1 OR left(coalesce(naics,''),4) = left($2,4) OR $2 = '') LIMIT 400`,
+    [unified.solnum || '', String(unified.naics || '')]
+  );
+  const match = govMatch(unified, cand.rows);
+  const sc = govScore(unified, profile, profile.weights);
+  const tlEntry = { source: unified.source, notice_type: unified.notice_type, url: unified.source_url || '', at: new Date().toISOString(), title: unified.title };
+  if (match) {
+    const lifecycle = govLifecycleMax(match.lifecycle || 'forecast', unified.lifecycle || 'forecast');
+    const timeline = (match.timeline || []).concat([tlEntry]).slice(-25);
+    await pool.query(
+      `UPDATE gov_opportunities SET title=coalesce(nullif($2,''),title), agency=coalesce(nullif($3,''),agency), sub_agency=coalesce(nullif($4,''),sub_agency),
+        description=CASE WHEN length(coalesce($5,''))>length(coalesce(description,'')) THEN $5 ELSE description END,
+        naics=coalesce(nullif($6,''),naics), psc=coalesce(nullif($7,''),psc), set_aside=coalesce(nullif($8,''),set_aside),
+        value_low=coalesce($9,value_low), value_high=coalesce($10,value_high),
+        est_solicitation_date=coalesce(nullif($11,''),est_solicitation_date), est_award_date=coalesce(nullif($12,''),est_award_date),
+        place=coalesce(nullif($13,''),place), poc_name=coalesce(nullif($14,''),poc_name), poc_email=coalesce(nullif($15,''),poc_email),
+        source_url=coalesce(nullif($16,''),source_url), notice_type=$17, lifecycle=$18, solnum=coalesce(nullif($19,''),solnum),
+        score=$20, score_parts=$21, timeline=$22, raw=$23, last_updated=now()
+       WHERE id=$1`,
+      [match.id, unified.title || '', unified.agency || '', unified.sub_agency || '', unified.description || '', String(unified.naics || ''), unified.psc || '', unified.set_aside || '', unified.value_low, unified.value_high, unified.est_solicitation_date || '', unified.est_award_date || '', unified.place || '', unified.poc_name || '', unified.poc_email || '', unified.source_url || '', unified.notice_type || '', lifecycle, unified.solnum || '', sc.score, JSON.stringify(sc.parts), JSON.stringify(timeline), JSON.stringify(unified.raw || {})]
+    );
+    stats.updated++;
+  } else {
+    const id = 'gov_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    await pool.query(
+      `INSERT INTO gov_opportunities (id, solnum, title, agency, sub_agency, description, naics, psc, set_aside, value_low, value_high,
+        est_solicitation_date, est_award_date, place, poc_name, poc_email, source, source_url, notice_type, lifecycle, score, score_parts, timeline, raw)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
+      [id, unified.solnum || '', unified.title, unified.agency || '', unified.sub_agency || '', unified.description || '', String(unified.naics || ''), unified.psc || '', unified.set_aside || '', unified.value_low, unified.value_high, unified.est_solicitation_date || '', unified.est_award_date || '', unified.place || '', unified.poc_name || '', unified.poc_email || '', unified.source || 'unknown', unified.source_url || '', unified.notice_type || '', unified.lifecycle || 'forecast', sc.score, JSON.stringify(sc.parts), JSON.stringify([tlEntry]), JSON.stringify(unified.raw || {})]
+    );
+    stats.added++;
+  }
+}
+const SAM_PTYPE = { p: 'presolicitation', r: 'sources-sought', s: 'special', o: 'solicitation', k: 'combined' };
+async function samIngest(profile, stats, errors) {
+  const key = process.env.SAM_GOV_API_KEY;
+  if (!key) { errors.push({ source: 'sam.gov', error: 'SAM_GOV_API_KEY not set — source skipped. Get a free key from your SAM.gov account profile and add it to the Railway env vars.' }); return; }
+  const fmt = (dt) => String(dt.getMonth() + 1).padStart(2, '0') + '/' + String(dt.getDate()).padStart(2, '0') + '/' + dt.getFullYear();
+  const to = new Date(); const from = new Date(Date.now() - 60 * 86400000);
+  const naicsList = (profile.naics || []).slice(0, 6);
+  if (!naicsList.length) naicsList.push('');
+  for (const naics of naicsList) {
+    let offset = 0;
+    for (let page = 0; page < 5; page++) {
+      const url = 'https://api.sam.gov/opportunities/v2/search?api_key=' + encodeURIComponent(key)
+        + '&postedFrom=' + encodeURIComponent(fmt(from)) + '&postedTo=' + encodeURIComponent(fmt(to))
+        + '&ptype=p,r,s,o,k&limit=200&offset=' + offset + (naics ? '&ncode=' + encodeURIComponent(naics) : '');
+      try {
+        const res = await govFetch(url, {}, 3);
+        if (!res.ok) { errors.push({ source: 'sam.gov', error: 'HTTP ' + res.status }); break; }
+        const j = await res.json();
+        const list = (j && j.opportunitiesData) || [];
+        stats.fetched += list.length;
+        for (const o of list) {
+          const ptype = String(o.type || '').toLowerCase();
+          const lifecycle = SAM_PTYPE[(o.baseType || '').toLowerCase().slice(0, 1)] || (/solicitation/.test(ptype) ? 'solicitation' : /sources/.test(ptype) ? 'sources-sought' : /presol/.test(ptype) ? 'presolicitation' : 'special');
+          await govUpsert({
+            solnum: o.solicitationNumber || '', title: o.title || '', agency: o.department || o.fullParentPathName || '', sub_agency: o.subTier || o.office || '',
+            description: (o.description && String(o.description).slice(0, 4000)) || '', naics: o.naicsCode || '', psc: o.classificationCode || '',
+            set_aside: o.typeOfSetAsideDescription || o.typeOfSetAside || '', value_low: null, value_high: null,
+            est_solicitation_date: o.postedDate || '', est_award_date: '', place: (o.placeOfPerformance && (o.placeOfPerformance.city && o.placeOfPerformance.city.name || '') + ' ' + (o.placeOfPerformance.state && o.placeOfPerformance.state.code || '')) || '',
+            poc_name: (o.pointOfContact && o.pointOfContact[0] && o.pointOfContact[0].fullName) || '', poc_email: (o.pointOfContact && o.pointOfContact[0] && o.pointOfContact[0].email) || '',
+            source: 'sam.gov', source_url: o.uiLink || '', notice_type: lifecycle, lifecycle, raw: o,
+          }, profile, stats);
+        }
+        if (list.length < 200) break;
+        offset += 200;
+        await new Promise((r) => setTimeout(r, 1200)); // polite pacing
+      } catch (e) { errors.push({ source: 'sam.gov', error: e.message }); break; }
+    }
+  }
+}
+// USAspending enrichment: expiring contracts (12–18 months out) matching
+// agency + NAICS + similar description → recompete flags on opportunities.
+async function usaspendingRecompete(profile, stats, errors) {
+  const naicsList = (profile.naics || []).slice(0, 6);
+  if (!naicsList.length) return;
+  const opps = await pool.query("SELECT id, title, agency, naics, description FROM gov_opportunities WHERE archived = false");
+  for (const naics of naicsList) {
+    try {
+      const body = {
+        filters: { naics_codes: [naics], award_type_codes: ['A', 'B', 'C', 'D'], time_period: [{ start_date: new Date(Date.now() - 5 * 365 * 86400000).toISOString().slice(0, 10), end_date: new Date().toISOString().slice(0, 10) }] },
+        fields: ['Award ID', 'Recipient Name', 'Award Amount', 'Awarding Agency', 'Awarding Sub Agency', 'End Date', 'Description'],
+        sort: 'End Date', order: 'desc', limit: 100, page: 1,
+      };
+      const res = await govFetch('https://api.usaspending.gov/api/v2/search/spending_by_award/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, 3);
+      if (!res.ok) { errors.push({ source: 'usaspending', error: 'HTTP ' + res.status }); continue; }
+      const j = await res.json();
+      const now = Date.now(), lo = now, hi = now + 18 * 30 * 86400000;
+      const expiring = ((j && j.results) || []).filter((a) => { const t = Date.parse(a['End Date']); return t && t >= lo && t <= hi; });
+      stats.fetched += expiring.length;
+      for (const a of expiring) {
+        const matches = opps.rows.filter((o) => String(o.naics || '').slice(0, 4) === naics.slice(0, 4)
+          && (govTitleSim(o.title + ' ' + (o.description || '').slice(0, 300), a.Description || '') > 0.18
+            || govNorm(o.agency).indexOf(govNorm(a['Awarding Agency']).split(' ')[0]) > -1));
+        for (const o of matches) {
+          await pool.query('UPDATE gov_opportunities SET recompete = $2, last_updated = now() WHERE id = $1',
+            [o.id, JSON.stringify({ incumbent: a['Recipient Name'] || '', value: a['Award Amount'] || 0, endDate: a['End Date'] || '', awardId: a['Award ID'] || '', flaggedAt: new Date().toISOString() })]);
+          stats.updated++;
+        }
+      }
+      await new Promise((r) => setTimeout(r, 800));
+    } catch (e) { errors.push({ source: 'usaspending', error: e.message }); }
+  }
+}
+async function govRunIngestion(triggerKind) {
+  const run = await pool.query('INSERT INTO ingestion_runs (source, trigger_kind) VALUES ($1,$2) RETURNING id', ['daily', triggerKind]);
+  const runId = run.rows[0].id;
+  const stats = { fetched: 0, added: 0, updated: 0 };
+  const errors = [];
+  try {
+    const profile = await govProfile();
+    const before = await pool.query("SELECT id FROM gov_opportunities");
+    await samIngest(profile, stats, errors);
+    await usaspendingRecompete(profile, stats, errors);
+    // digest per saved search: new + updated since this run started
+    const digest = [];
+    for (const s of (profile.searches || [])) {
+      const f = s.filters || {};
+      const r = await pool.query(
+        `SELECT count(*)::int AS n FROM gov_opportunities WHERE archived=false AND last_updated >= (SELECT started_at FROM ingestion_runs WHERE id=$1)
+          AND ($2='' OR agency ILIKE '%'||$2||'%') AND ($3='' OR naics LIKE $3||'%') AND ($4='' OR set_aside ILIKE '%'||$4||'%')
+          AND ($5='' OR title ILIKE '%'||$5||'%' OR description ILIKE '%'||$5||'%')`,
+        [runId, f.agency || '', f.naics || '', f.setAside || '', f.q || '']
+      );
+      digest.push({ searchId: s.id, name: s.name, hits: r.rows[0].n });
+    }
+    await pool.query('UPDATE ingestion_runs SET finished_at=now(), fetched=$2, added=$3, updated=$4, errors=$5, digest=$6 WHERE id=$1',
+      [runId, stats.fetched, stats.added, stats.updated, JSON.stringify(errors), JSON.stringify(digest)]);
+    return { runId, ...stats, errors, digest };
+  } catch (e) {
+    errors.push({ source: 'run', error: e.message });
+    await pool.query('UPDATE ingestion_runs SET finished_at=now(), fetched=$2, added=$3, updated=$4, errors=$5 WHERE id=$1',
+      [runId, stats.fetched, stats.added, stats.updated, JSON.stringify(errors)]);
+    return { runId, ...stats, errors };
+  }
+}
+// Daily scheduler: checked every 2h; runs if the last auto run is >22h old.
+setInterval(async () => {
+  try {
+    const r = await pool.query("SELECT max(started_at) AS last FROM ingestion_runs WHERE trigger_kind = 'auto'");
+    const last = r.rows[0].last ? new Date(r.rows[0].last).getTime() : 0;
+    if (Date.now() - last > 22 * 3600000) { console.log('[govops] starting scheduled ingestion'); await govRunIngestion('auto'); }
+  } catch (e) { console.error('[govops] scheduler error:', e.message); }
+}, 2 * 3600000);
+
+app.get('/api/govops', async (req, res) => {
+  try {
+    const q = req.query;
+    const r = await pool.query(
+      `SELECT id, solnum, title, agency, sub_agency, naics, psc, set_aside, value_low, value_high, est_solicitation_date, est_award_date,
+              place, poc_name, poc_email, source, source_url, notice_type, lifecycle, stage, score, score_parts, recompete, timeline,
+              left(coalesce(description,''), 600) AS description, first_seen, last_updated
+       FROM gov_opportunities
+       WHERE archived = ($1='1') AND ($2='' OR title ILIKE '%'||$2||'%' OR description ILIKE '%'||$2||'%' OR solnum ILIKE '%'||$2||'%')
+         AND ($3='' OR agency ILIKE '%'||$3||'%') AND ($4='' OR naics LIKE $4||'%') AND ($5='' OR set_aside ILIKE '%'||$5||'%')
+         AND ($6='' OR lifecycle=$6) AND ($7='' OR stage=$7) AND ($8='' OR recompete IS NOT NULL)
+       ORDER BY score DESC, last_updated DESC LIMIT $9 OFFSET $10`,
+      [q.archived || '', q.q || '', q.agency || '', q.naics || '', q.setAside || '', q.lifecycle || '', q.stage || '', q.recompete || '', Math.min(Number(q.limit) || 100, 300), Number(q.offset) || 0]
+    );
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.patch('/api/govops/:id', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const sets = []; const vals = [req.params.id]; let i = 1;
+    if (b.stage !== undefined) { sets.push('stage=$' + (++i)); vals.push(String(b.stage)); }
+    if (b.archived !== undefined) { sets.push('archived=$' + (++i)); vals.push(!!b.archived); }
+    if (!sets.length) return res.status(400).json({ error: 'nothing to update' });
+    await pool.query('UPDATE gov_opportunities SET ' + sets.join(',') + ', last_updated=now() WHERE id=$1', vals);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/govops/ingest', async (req, res) => {
+  try { res.json(await govRunIngestion('manual')); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Forecast CSV/XLSX import (GSA Acquisition Gateway, DHS APFS, EPA, generic).
+app.post('/api/govops/import', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file' });
+    const adapterKey = req.body.source || 'generic';
+    const XLSX = require('xlsx');
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    if (rows.length < 2) return res.status(400).json({ error: 'No data rows found' });
+    const headers = rows[0].map(String);
+    const profile = await govProfile();
+    const stats = { fetched: 0, added: 0, updated: 0 };
+    const errors = [];
+    for (const row of rows.slice(1)) {
+      try {
+        const u = govMapCsvRow(adapterKey, headers, row);
+        if (!u) continue;
+        u.source = adapterKey; u.raw = { headers, row };
+        stats.fetched++;
+        await govUpsert(u, profile, stats);
+      } catch (e) { errors.push({ row: stats.fetched, error: e.message }); }
+    }
+    await pool.query('INSERT INTO ingestion_runs (source, trigger_kind, finished_at, fetched, added, updated, errors) VALUES ($1,$2,now(),$3,$4,$5,$6)',
+      [adapterKey, 'import', stats.fetched, stats.added, stats.updated, JSON.stringify(errors)]);
+    res.json({ ...stats, errors: errors.slice(0, 10) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.get('/api/govops/runs', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT id, source, trigger_kind, started_at, finished_at, fetched, added, updated, errors, digest FROM ingestion_runs ORDER BY id DESC LIMIT 40');
+    res.json(r.rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -2951,9 +2951,13 @@ function oppList(){return D.projects.filter(function(p){return projCat(p)==='opp
 function oppFiltered(q){return oppList().filter(function(p){if(!q)return true;var hay=((p.name||'')+' '+(p.customer||'')+' '+(p.stage||'')+' '+(p.opr||'')+' '+(p.team||'')+' '+(p.comment||'')+' '+(p.changeRequested||'')).toLowerCase();return hay.indexOf(q)>-1;});}
 function oppOwnerHTML(p){if(!p.opr)return '';var ids=planResolveOwners(p.opr);if(ids.length){var m=null;D.departments.forEach(function(d){d.members.forEach(function(x){if(x.id===ids[0])m=x;});});if(m)return '<span class="plan-own" onclick="event.stopPropagation();openPersonProfile(\''+m.id+'\')">'+esc(m.name)+'</span>';}return '<span class="plan-own txt">'+esc(p.opr)+'</span>';}
 function setOppMode(m){oppMode=m;renderView();}
+var oppView='crm';   /* 'crm' = existing pipeline · 'gov' = Gov Discovery (Module 1) */
+function setOppView(v){oppView=v;renderView();if(v==='gov'&&!_govState.loaded)_govLoad();}
 function renderOppView(q){
+  if(oppView==='gov')return _govDiscoveryHTML();
   var opps=oppFiltered(q),canEdit=can('globals');
   var html='<div class="plan-wrap">';
+  html+='<div class="plan-seg" style="margin-bottom:10px;display:inline-flex"><button class="active" onclick="setOppView(\'crm\')">CRM Pipeline</button><button onclick="setOppView(\'gov\')">🛰 Gov Discovery</button></div>';
   var byStage={};OPP_STAGES.forEach(function(s){byStage[s.k]=opps.filter(function(p){return (p.stage||'Lead Gen')===s.k;}).length;});
   var totPot=opps.reduce(function(a,p){return a+(Number(p.potential)||0);},0);
   var statusGroups={};opps.forEach(function(p){var st=p.status||'—';if(!statusGroups[st])statusGroups[st]={n:0,v:0};statusGroups[st].n++;statusGroups[st].v+=Number(p.potential)||0;});
@@ -2970,6 +2974,154 @@ function renderOppView(q){
   else if(oppMode==='calendar')html+=oppCalendarHTML(opps);
   else html+=oppBoardHTML(opps);
   return html+'</div>';
+}
+/* ── GOV DISCOVERY (Module 1 client) — SAM.gov + forecast imports + recompete
+   flags, scored against the Company Profile, feeding the CRM pipeline and the
+   proposal workflow. Records live server-side in gov_opportunities. ── */
+var _govState={list:[],loaded:false,busy:false,runs:[],showRuns:false,filters:{q:'',agency:'',naics:'',setAside:'',lifecycle:'',stage:'',recompete:''}};
+var GOV_STAGES=['identified','qualified','capture','proposal','submitted','won','lost'];
+function _govPipe(){D.govPipeline=D.govPipeline||{searches:[],settings:{}};return D.govPipeline;}
+function _govLoad(){
+  var f=_govState.filters;
+  var qs=Object.keys(f).map(function(k){return k+'='+encodeURIComponent(f[k]||'');}).join('&');
+  _govState.busy=true;
+  fetch('/api/govops?'+qs,{cache:'no-store'}).then(function(r){return r.json();}).then(function(rows){
+    _govState.list=Array.isArray(rows)?rows:[];_govState.loaded=true;_govState.busy=false;
+    if(viewMode==='opp'&&oppView==='gov')renderView();
+  }).catch(function(){_govState.busy=false;_govState.loaded=true;renderView();});
+  fetch('/api/govops/runs',{cache:'no-store'}).then(function(r){return r.json();}).then(function(rows){_govState.runs=Array.isArray(rows)?rows:[];}).catch(function(){});
+}
+function _govDiscoveryHTML(){
+  var f=_govState.filters,list=_govState.list;
+  var html='<div class="plan-wrap">';
+  html+='<div class="plan-seg" style="margin-bottom:10px;display:inline-flex"><button onclick="setOppView(\'crm\')">CRM Pipeline</button><button class="active" onclick="setOppView(\'gov\')">🛰 Gov Discovery</button></div>';
+  html+='<div class="plan-summary"><div class="plan-summary-top"><div><strong style="font-size:14px;color:var(--text-primary)">Government Opportunity Discovery</strong>'
+    +'<span style="font-size:12px;color:var(--text-secondary);margin-left:8px">SAM.gov + agency forecasts + USAspending recompete flags, scored against the Company Profile</span></div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+    +'<button class="btn btn-gold btn-sm" id="gov_ingest_btn" onclick="govIngestNow()">⟳ Run ingestion now</button>'
+    +'<button class="btn btn-outline btn-sm" onclick="govImportModal()">⬆ Import forecast CSV/XLSX</button>'
+    +'<button class="btn btn-outline btn-sm" onclick="_govState.showRuns=!_govState.showRuns;renderView()">'+(_govState.showRuns?'Hide':'Show')+' ingestion log</button>'
+    +'</div></div>'
+    +'<div id="gov_status" style="font-size:11px;color:#7C3AED;margin-top:6px;min-height:14px"></div></div>';
+  if(_govState.showRuns){
+    html+='<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;font-size:11px"><b>Ingestion runs</b> (every run logs source, fetched, new, updated, errors — failures are per-source and never silently dropped)<br>'
+      +(_govState.runs.slice(0,12).map(function(r){
+        var errs=(r.errors||[]);
+        return new Date(r.started_at).toLocaleString()+' · '+esc(r.source)+'/'+esc(r.trigger_kind)+' · fetched '+r.fetched+' · new '+r.added+' · updated '+r.updated
+          +(errs.length?' · <span style="color:var(--red)">'+errs.length+' error(s): '+esc(String(errs[0].error||'').slice(0,90))+'</span>':' · <span style="color:var(--green)">ok</span>');
+      }).join('<br>')||'<span style="color:var(--text-muted)">No runs yet — click "Run ingestion now".</span>')+'</div>';
+  }
+  // saved searches
+  var gp=_govPipe();
+  html+='<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'
+    +'<input class="fld-i" style="width:170px" placeholder="Keyword…" value="'+esc(f.q)+'" onchange="_govState.filters.q=this.value;_govLoad()">'
+    +'<input class="fld-i" style="width:140px" placeholder="Agency…" value="'+esc(f.agency)+'" onchange="_govState.filters.agency=this.value;_govLoad()">'
+    +'<input class="fld-i" style="width:90px" placeholder="NAICS…" value="'+esc(f.naics)+'" onchange="_govState.filters.naics=this.value;_govLoad()">'
+    +'<input class="fld-i" style="width:110px" placeholder="Set-aside…" value="'+esc(f.setAside)+'" onchange="_govState.filters.setAside=this.value;_govLoad()">'
+    +'<select class="fld-sel" style="width:auto" onchange="_govState.filters.lifecycle=this.value;_govLoad()"><option value="">Any lifecycle</option>'+['forecast','sources-sought','presolicitation','solicitation','special'].map(function(l){return '<option'+(f.lifecycle===l?' selected':'')+'>'+l+'</option>';}).join('')+'</select>'
+    +'<select class="fld-sel" style="width:auto" onchange="_govState.filters.stage=this.value;_govLoad()"><option value="">Any stage</option>'+GOV_STAGES.map(function(s){return '<option'+(f.stage===s?' selected':'')+'>'+s+'</option>';}).join('')+'</select>'
+    +'<label style="font-size:11px;display:inline-flex;gap:4px;align-items:center"><input type="checkbox" '+(f.recompete?'checked':'')+' onchange="_govState.filters.recompete=this.checked?\'1\':\'\';_govLoad()"> recompetes</label>'
+    +'<button class="btn btn-outline btn-sm" onclick="govSaveSearch()">★ Save search</button>'
+    +(gp.searches||[]).map(function(s){return '<span class="plan-chip" style="cursor:pointer" onclick="govApplySearch(\''+s.id+'\')" title="Apply saved search — daily ingestion reports new matches per saved search">'+esc(s.name)+' <span onclick="event.stopPropagation();govDelSearch(\''+s.id+'\')" style="color:var(--red);font-weight:800">&times;</span></span>';}).join('')
+    +'</div>';
+  if(_govState.busy)html+='<div class="empty-msg">Loading…</div>';
+  else if(!list.length)html+='<div class="empty-msg">No opportunities yet. Click <b>Run ingestion now</b> (needs <code>SAM_GOV_API_KEY</code> on the server) or <b>Import forecast CSV</b> from the GSA Acquisition Gateway / DHS APFS / EPA forecast exports.</div>';
+  else html+=list.map(_govCardHTML).join('');
+  return html+'</div>';
+}
+function _govCardHTML(o){
+  var sc=Math.round(o.score||0);
+  var scC=sc>=70?'var(--green)':sc>=40?'#D97706':'var(--text-muted)';
+  var lc={'forecast':'#64748b','sources-sought':'#0EA5E9','presolicitation':'#7C3AED','solicitation':'#C5A55A','special':'#64748b'}[o.lifecycle]||'#64748b';
+  var rec=o.recompete?'<span class="plan-chip" style="border-color:var(--red);color:var(--red)" title="Incumbent contract expiring — '+esc(o.recompete.incumbent||'')+' · ends '+esc(o.recompete.endDate||'')+'">↻ recompete: '+esc((o.recompete.incumbent||'').slice(0,24))+'</span>':'';
+  var val=(o.value_low||o.value_high)?'<span class="plan-chip" style="border-color:var(--gold);color:var(--gold)">'+(o.value_low?fmt(Number(o.value_low)):'?')+(o.value_high&&o.value_high!==o.value_low?' – '+fmt(Number(o.value_high)):'')+'</span>':'';
+  var tl=(o.timeline||[]).length>1?'<span class="plan-chip" title="'+esc((o.timeline||[]).map(function(t){return t.notice_type+' ('+String(t.at).slice(0,10)+')';}).join(' → '))+'">'+(o.timeline.length)+' lifecycle events</span>':'';
+  return '<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:#fff">'
+    +'<div style="display:flex;gap:8px;align-items:flex-start"><div style="flex:1">'
+    +'<div style="font-size:13px;font-weight:700">'+(o.source_url?'<a href="'+esc(o.source_url)+'" target="_blank" style="color:var(--navy);text-decoration:none">'+esc(o.title)+' ↗</a>':esc(o.title))+'</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+esc(o.agency||'')+(o.sub_agency?' · '+esc(o.sub_agency):'')+(o.solnum?' · '+esc(o.solnum):'')+(o.naics?' · NAICS '+esc(o.naics):'')+(o.set_aside?' · '+esc(o.set_aside):'')+(o.poc_name?' · POC: '+esc(o.poc_name)+(o.poc_email?' ('+esc(o.poc_email)+')':''):'')+'</div>'
+    +(o.description?'<div style="font-size:11px;color:var(--text-secondary);margin-top:4px">'+esc(String(o.description).slice(0,260))+(String(o.description).length>260?'…':'')+'</div>':'')
+    +'<div class="plan-meta" style="margin-top:6px"><span class="plan-chip" style="border-color:'+lc+';color:'+lc+'">'+esc(o.lifecycle||'?')+'</span>'+val+rec+tl
+    +(o.est_solicitation_date?'<span class="plan-chip">📅 '+esc(String(o.est_solicitation_date).slice(0,10))+'</span>':'')
+    +'<span class="plan-chip" title="'+esc(JSON.stringify(o.score_parts||{}))+'" style="border-color:'+scC+';color:'+scC+';font-weight:700">fit '+sc+'</span>'
+    +'<span class="plan-chip">'+esc(o.source||'')+'</span></div></div>'
+    +'<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">'
+    +'<select class="fld-sel" style="font-size:10px;padding:3px;width:110px" onchange="govSetStage(\''+o.id+'\',this.value)">'+GOV_STAGES.map(function(s){return '<option'+(o.stage===s?' selected':'')+'>'+s+'</option>';}).join('')+'</select>'
+    +'<button class="btn btn-outline btn-sm" style="font-size:10px" onclick="govToCrm(\''+o.id+'\')" title="Create a CRM opportunity from this record">→ CRM Opp</button>'
+    +'<button class="btn btn-gold btn-sm" style="font-size:10px" onclick="govStartProposal(\''+o.id+'\')" title="One click: CRM opportunity + proposal pre-populated with customer, solicitation number, due date, source link">→ Start Proposal</button>'
+    +'<button class="btn btn-sec btn-sm" style="font-size:10px" onclick="govArchive(\''+o.id+'\')">Archive</button>'
+    +'</div></div></div>';
+}
+function govIngestNow(){
+  var btn=document.getElementById('gov_ingest_btn');if(btn){btn.disabled=true;btn.textContent='Ingesting… (can take a few minutes)';}
+  var st=document.getElementById('gov_status');if(st)st.textContent='Pulling SAM.gov + USAspending — paginated politely, so this takes a bit…';
+  fetch('/api/govops/ingest',{method:'POST'}).then(function(r){return r.json();}).then(function(j){
+    var msg='Ingestion done — fetched '+(j.fetched||0)+' · new '+(j.added||0)+' · updated '+(j.updated||0)
+      +((j.errors||[]).length?' · ⚠ '+j.errors.map(function(e){return e.source+': '+e.error;}).join(' | ').slice(0,200):'');
+    toast(msg,(j.errors||[]).length?'warn':'success',8000);
+    ((j.digest)||[]).forEach(function(dg){if(dg.hits>0)toast('★ Saved search "'+dg.name+'": '+dg.hits+' new/updated match'+(dg.hits===1?'':'es')+'.','info',7000);});
+    _govLoad();
+  }).catch(function(e){toast('Ingestion failed: '+(e&&e.message||e),'error',6000);})
+    .finally(function(){if(btn){btn.disabled=false;btn.textContent='⟳ Run ingestion now';}});
+}
+function govImportModal(){
+  openFormModal({over:'Gov Discovery',title:'Import a forecast export',submitLabel:'Import',
+    intro:'Upload the CSV/XLSX export from the GSA Acquisition Gateway Forecast Tool, DHS APFS, or the EPA forecast. Column names are matched per source adapter; rows merge into existing records by solicitation number / fuzzy title.',
+    fields:[
+      {key:'source',label:'Source adapter',type:'select',value:'gsa-forecast',options:[
+        {value:'gsa-forecast',label:'GSA Acquisition Gateway Forecast'},
+        {value:'dhs-apfs',label:'DHS APFS'},
+        {value:'epa',label:'EPA Acquisition Forecast'},
+        {value:'generic',label:'Generic (title/agency/description columns)'}]},
+      {key:'file',label:'CSV / XLSX file',type:'file',accept:'.csv,.xlsx,.xls'}],
+    onSubmit:function(v,files,setStatus){
+      var fobj=files&&files.file;if(!fobj){setStatus('Choose a file.');return false;}
+      setStatus('Importing…');
+      var fd=new FormData();fd.append('file',fobj);fd.append('source',v.source);
+      fetch('/api/govops/import',{method:'POST',body:fd}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||'import failed');return j;});}).then(function(j){
+        closeModal('ovForm');
+        toast('Imported — rows '+(j.fetched||0)+' · new '+(j.added||0)+' · merged '+(j.updated||0)+((j.errors||[]).length?' · '+(j.errors.length)+' row error(s)':''),'success',6000);
+        _govLoad();
+      }).catch(function(e){setStatus('Failed: '+(e&&e.message||e));});
+      return false;
+    }});
+}
+function govSetStage(id,stage){fetch('/api/govops/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({stage:stage})}).then(function(){var o=_govState.list.find(function(x){return x.id===id;});if(o)o.stage=stage;}).catch(function(){toast('Stage update failed.','error');});}
+function govArchive(id){fetch('/api/govops/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({archived:true})}).then(function(){_govState.list=_govState.list.filter(function(x){return x.id!==id;});renderView();}).catch(function(){toast('Archive failed.','error');});}
+function govSaveSearch(){
+  var name=prompt('Name this saved search (the daily ingestion digest reports new matches per saved search):');
+  if(!name)return;
+  var gp=_govPipe();
+  gp.searches.push({id:uid(),name:name.trim(),filters:JSON.parse(JSON.stringify(_govState.filters))});
+  save();renderView();
+}
+function govApplySearch(id){var s=(_govPipe().searches||[]).find(function(x){return x.id===id;});if(!s)return;_govState.filters=JSON.parse(JSON.stringify(s.filters));_govLoad();renderView();}
+function govDelSearch(id){var gp=_govPipe();gp.searches=gp.searches.filter(function(x){return x.id!==id;});save();renderView();}
+function _govMakeCrmOpp(o){
+  var newOpp={id:uid(),name:(o.title||'').slice(0,120),category:'opportunity',revenue:0,targetRevenue:Number(o.value_high||o.value_low)||0,revenueNote:'',description:(o.description||'')+(o.source_url?'\n\nSource: '+o.source_url:''),parentId:null,attachments:[],customer:o.agency||'',stage:'Lead Gen',status:'Qualified',potential:Number(o.value_high||o.value_low)||0,closeDate:(o.est_award_date||'').slice(0,10),govOppId:o.id};
+  D.projects.push(newOpp);save();
+  return newOpp;
+}
+function govToCrm(id){
+  var o=_govState.list.find(function(x){return x.id===id;});if(!o)return;
+  var opp=_govMakeCrmOpp(o);
+  govSetStage(id,'qualified');
+  toastAction('CRM opportunity created: '+opp.name.slice(0,50),'Open',function(){switchTab('opp');oppView='crm';renderView();});
+}
+function govStartProposal(id){
+  var o=_govState.list.find(function(x){return x.id===id;});if(!o)return;
+  var opp=_govMakeCrmOpp(o);
+  var prop={id:uid(),title:(o.agency?o.agency+' — ':'')+(o.title||'').slice(0,110),status:'draft',opportunityId:opp.id,templateId:'',
+    rfp:{customer:o.agency||'',summary:(o.description||'').slice(0,400),scope:o.description||'',pop:'',dueDate:(o.est_solicitation_date||'').slice(0,10),potentialValue:Number(o.value_high||o.value_low)||0,contractVehicle:'',setAsideType:o.set_aside||'',requirements:[],requiredCerts:[],requiredClearances:[],requiredRoles:[],deliverables:[],evaluationCriteria:[],keyDates:[],solicitationNumber:o.solnum||'',sourceUrl:o.source_url||''},
+    sections:[],pastPerformance:{matches:[],generatedAt:0},
+    coverSheet:{certIds:(D.corporateCertifications||[]).filter(function(c){return !c.expiresAt||new Date(c.expiresAt)>Date.now();}).map(function(c){return c.id;}),generatedAt:Date.now()},
+    pricing:{mode:'manual',linkedProjectId:'',items:[]},llmProvider:'',llmModel:'',createdAt:Date.now(),createdBy:ME?ME.id:'',
+    events:[{ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'proposal.created',payload:{source:'gov-pipeline',govOppId:o.id,solnum:o.solnum||''}}]};
+  D.proposals=D.proposals||[];D.proposals.push(prop);save();
+  govSetStage(id,'proposal');
+  switchTab('prop');
+  setTimeout(function(){openProposalDetail(prop.id);},200);
+  toast('Proposal created from the gov opportunity — upload the solicitation in its Shred tab to build the requirements matrix.','success',7000);
 }
 function oppCardInner(p){return '<div class="plan-card-prog">'+esc(p.customer||'')+'</div><div class="plan-card-sub">'+esc(p.name)+'</div><div class="plan-meta">'+(p.potential?'<span class="plan-chip" style="border-color:var(--gold);color:var(--gold)">'+fmt(p.potential)+'</span>':'')+oppStatusChip(p.status)+oppOwnerHTML(p)+(p.closeDate?'<span class="plan-chip">&#128197; '+esc(p.closeDate)+'</span>':'')+'</div>';}
 function oppBoardHTML(opps){
@@ -6801,6 +6953,9 @@ function shredSegmentDoc(pages){
   // key instead, which skips tables of contents)
   var byKey={};marks.forEach(function(m){byKey[m.key]=m;});
   var ucf=Object.keys(byKey).map(function(k){return byKey[k];}).sort(function(a,b){return a.page-b.page||a.at-b.at;});
+  // Drop markers that sit inside another marker's heading (e.g. the PWS
+  // detector firing within "SECTION C — PERFORMANCE WORK STATEMENT").
+  ucf=ucf.filter(function(m,i){var prev=ucf[i-1];return !(prev&&prev.page===m.page&&(m.at-prev.at)<80);});
   function spanText(fromPage,fromAt,toPage,toAt){
     var out=[];
     pages.forEach(function(pg){

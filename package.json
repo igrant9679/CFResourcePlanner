@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "CommunityForce Org Chart & Resource Planner",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node tests/run-tests.js"
   },
   "dependencies": {
     "docx": "^9.7.1",
