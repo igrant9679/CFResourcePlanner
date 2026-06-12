@@ -1170,6 +1170,60 @@ departments:[
 /* ── SERVER SYNC ── */
 function syncSetStatus(msg,color){var el=document.getElementById('ghStatus');if(!el)return;el.textContent=msg;el.style.color=color||'rgba(255,255,255,0.38)';}
 var _serverUpdatedAt=null;   /* optimistic-lock version stamp from the server */
+var _baseState=null;         /* JSON of the last state this tab knows the server has — the 3-way merge base */
+/* ── 3-WAY MERGE (conflict resolution) ──
+   base   = what this tab last loaded/saved (the common ancestor)
+   local  = this tab's current D (base + my edits)
+   server = the fresh server state (base + their edits)
+   Rules: a value I didn't touch takes the server's version; a value only I
+   touched takes mine; when both sides touched the same thing, arrays of
+   {id:...} records merge per record (recursing into records both sides
+   modified), plain objects merge per key, and scalars fall back to mine. */
+function _twmIsObj(x){return x&&typeof x==='object'&&!Array.isArray(x);}
+function _twmAllIds(arr){return arr.every(function(x){return x&&typeof x==='object'&&typeof x.id!=='undefined';});}
+function _twmMergeById(base,local,server){
+  var bMap={},sMap={},seen={};
+  base.forEach(function(x){bMap[x.id]=x;});
+  server.forEach(function(x){sMap[x.id]=x;});
+  var out=[];
+  local.forEach(function(lr){
+    var id=lr.id;seen[id]=true;
+    var br=bMap[id],sr=sMap[id];
+    if(br===undefined){out.push(lr);return;}                      // I added it
+    if(sr===undefined){                                            // they deleted it
+      if(JSON.stringify(lr)===JSON.stringify(br))return;           // I didn't touch it — honor their delete
+      out.push(lr);return;                                         // I modified it — keep mine
+    }
+    out.push(_threeWayMerge(br,lr,sr));                            // both have it — merge the record
+  });
+  server.forEach(function(sr){
+    if(seen[sr.id])return;
+    var br=bMap[sr.id];
+    if(br===undefined){out.push(sr);return;}                       // they added it
+    if(JSON.stringify(sr)!==JSON.stringify(br))out.push(sr);       // I deleted, they modified — keep theirs (safer)
+  });
+  return out;
+}
+function _threeWayMerge(base,local,server){
+  var bj=JSON.stringify(base===undefined?null:base);
+  var lj=JSON.stringify(local===undefined?null:local);
+  if(lj===bj)return server!==undefined?server:local;               // no local change → theirs
+  var sj=JSON.stringify(server===undefined?null:server);
+  if(sj===bj)return local;                                         // no server change → mine
+  if(Array.isArray(local)&&Array.isArray(server)&&Array.isArray(base||[])
+    &&_twmAllIds(local)&&_twmAllIds(server)&&_twmAllIds(base||[]))
+    return _twmMergeById(base||[],local,server);
+  if(_twmIsObj(local)&&_twmIsObj(server)&&_twmIsObj(base||{})){
+    var b=base||{},out={},keys={};
+    [b,local,server].forEach(function(o){Object.keys(o).forEach(function(k){keys[k]=1;});});
+    Object.keys(keys).forEach(function(k){
+      var v=_threeWayMerge(b[k],local[k],server[k]);
+      if(v!==undefined)out[k]=v;
+    });
+    return out;
+  }
+  return local;                                                    // both changed a scalar — mine wins
+}
 async function serverLoad(){
   try{
     var res=await fetch('/api/data',{cache:'no-store'});
@@ -1191,25 +1245,39 @@ async function serverSave(opts){
     var url='/api/data'+(force?'?force=1':'');
     var headers={'Content-Type':'application/json'};
     if(_serverUpdatedAt&&!force)headers['X-Atlas-Base-Updated-At']=_serverUpdatedAt;
-    var res=await fetch(url,{method:'POST',headers:headers,body:JSON.stringify(D)});
-    if(res.ok){try{var ok=await res.json();if(ok&&ok.updatedAt)_serverUpdatedAt=ok.updatedAt;}catch(_){}syncSetStatus('Saved ✓','#86efac');setTimeout(function(){syncSetStatus('Cloud sync on','rgba(255,255,255,0.38)');},2000);}
+    var payload=JSON.stringify(D);
+    var res=await fetch(url,{method:'POST',headers:headers,body:payload});
+    if(res.ok){try{var ok=await res.json();if(ok&&ok.updatedAt)_serverUpdatedAt=ok.updatedAt;}catch(_){}_baseState=payload;syncSetStatus('Saved ✓','#86efac');setTimeout(function(){syncSetStatus('Cloud sync on','rgba(255,255,255,0.38)');},2000);}
     else if(res.status===409){
       try{var body=await res.json();}catch(_){body={};}
       if(body.conflict){
-        // Optimistic-lock conflict — another user/session saved since this browser
-        // loaded. The OLD behavior re-saved this browser's full (possibly stale)
-        // snapshot, which reverted other users' work. Instead, the SERVER wins:
-        // reload its authoritative data so a stale browser can never overwrite
-        // newer changes. Only this browser's last in-flight edit is dropped
-        // (re-apply it); committed data is never lost.
+        // Optimistic-lock conflict — another user/session saved since this tab
+        // last synced. Merge their changes with this tab's edits (record-level
+        // 3-way merge) and re-save, so neither side's work is dropped. Only if
+        // the merge isn't possible do we fall back to "server wins" (reload).
         var fresh=await serverLoad();
         if(fresh&&fresh.reachable&&fresh.data){
-          D=fresh.data;migrate();
-          try{localStorage.setItem(STORE_KEY,JSON.stringify(D));}catch(_){}
-          saveQueued=false;
-          renderView();
-          syncSetStatus('Reloaded — another user had newer changes','#FBBF24');
-          toast('Another user saved changes, so the latest version was reloaded. Re-apply your last edit if it didn’t stick.','warn',8000);
+          var merged=null;
+          if(_baseState){
+            try{merged=_threeWayMerge(JSON.parse(_baseState),D,fresh.data);}
+            catch(e){console.warn('3-way merge failed — falling back to server-wins:',e&&e.message);merged=null;}
+          }
+          if(merged){
+            _baseState=JSON.stringify(fresh.data);
+            D=merged;migrate();
+            try{localStorage.setItem(STORE_KEY,JSON.stringify(D));}catch(_){}
+            renderView();
+            syncSetStatus('Merged with another user’s changes','#86efac');
+            toast('Another user saved at the same time — your edit was merged with theirs automatically.','success',4000);
+            saveQueued=true;   // re-save the merged state with the fresh version stamp
+          } else {
+            D=fresh.data;migrate();
+            try{localStorage.setItem(STORE_KEY,JSON.stringify(D));}catch(_){}
+            saveQueued=false;
+            renderView();
+            syncSetStatus('Reloaded — another user had newer changes','#FBBF24');
+            toast('Another user saved changes, so the latest version was reloaded. Re-apply your last edit if it didn’t stick.','warn',8000);
+          }
         } else {
           saveQueued=false;
           syncSetStatus('Sync conflict — please refresh','#FCA5A5');
@@ -1260,6 +1328,7 @@ async function bootstrapData(){
   if(r.reachable&&r.data){
     var needsSeed=!r.data.overheadSeeded||!r.data.planSeeded||!r.data.accounts||!r.data.programs||!r.data.oppSeeded||!r.data.accountsSeeded||!r.data.oppEnriched||!r.data.clinReqsBackfilled;
     D=r.data;migrate();try{localStorage.setItem(STORE_KEY,JSON.stringify(D));}catch(e){}
+    _baseState=JSON.stringify(D);   // 3-way merge base: what this tab knows the server has
     if(needsSeed)serverSave();
     else{syncSetStatus('Cloud sync on','rgba(255,255,255,0.38)');
       // First load after the LevelUp-mirror feature deploys: populate the
