@@ -3000,6 +3000,7 @@ function _govDiscoveryHTML(){
     +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
     +'<button class="btn btn-gold btn-sm" id="gov_ingest_btn" onclick="govIngestNow()">⟳ Run ingestion now</button>'
     +'<button class="btn btn-outline btn-sm" onclick="govImportModal()">⬆ Import forecast CSV/XLSX</button>'
+    +'<button class="btn btn-outline btn-sm" onclick="govSourcesModal()">⚙ Sources</button>'
     +'<button class="btn btn-outline btn-sm" onclick="_govState.showRuns=!_govState.showRuns;renderView()">'+(_govState.showRuns?'Hide':'Show')+' ingestion log</button>'
     +'</div></div>'
     +'<div id="gov_status" style="font-size:11px;color:#7C3AED;margin-top:6px;min-height:14px"></div></div>';
@@ -3096,6 +3097,73 @@ function govSaveSearch(){
   save();renderView();
 }
 function govApplySearch(id){var s=(_govPipe().searches||[]).find(function(x){return x.id===id;});if(!s)return;_govState.filters=JSON.parse(JSON.stringify(s.filters));_govLoad();renderView();}
+/* ── SOURCES MANAGER: built-in adapter toggles + URL feed/file sources ── */
+function govSourcesModal(){
+  var gp=_govPipe();gp.settings=gp.settings||{};gp.settings.sources=gp.settings.sources||{};gp.urlSources=gp.urlSources||[];
+  var s=gp.settings.sources;
+  var samKey=!!((gp.settings||{}).samApiKey);
+  function tgl(k,label,desc){
+    var on=s[k]!==false;
+    return '<div style="display:flex;gap:8px;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--border)">'
+      +'<input type="checkbox" '+(on?'checked':'')+' onchange="govToggleSource(\''+k+'\',this.checked)" style="margin-top:2px">'
+      +'<div style="flex:1"><b style="font-size:12px">'+label+'</b><div style="font-size:10px;color:var(--text-muted)">'+desc+'</div></div></div>';
+  }
+  var urlRows=gp.urlSources.map(function(u){
+    return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:11px">'
+      +'<input type="checkbox" '+(u.enabled!==false?'checked':'')+' onchange="govToggleUrlSource(\''+u.id+'\',this.checked)">'
+      +'<div style="flex:1"><b>'+esc(u.name)+'</b> <span class="plan-chip">'+esc(u.kind||'csv')+(u.kind!=='rss'&&u.adapter?' · '+esc(u.adapter):'')+'</span><div style="color:var(--text-muted);word-break:break-all">'+esc(u.url)+'</div></div>'
+      +'<button class="btn btn-outline btn-sm" style="padding:2px 7px" onclick="govTestUrlSource(\''+u.id+'\')">Test now</button>'
+      +'<button class="btn btn-danger-sm btn-sm" style="padding:2px 7px" onclick="govDelUrlSource(\''+u.id+'\')">&times;</button>'
+      +'</div>';
+  }).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 0">No URL sources yet.</div>';
+  document.getElementById('mdlAdmin').innerHTML=
+    '<div class="mdl-over">Gov Discovery</div><div class="mdl-title">Data Sources</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">All sources run in the daily ingestion and "Run ingestion now". Each fails independently and logs its errors — a broken source never blocks the others, and retiring one is a checkbox.</div>'
+    +'<span class="fld-section-hdr" style="margin-top:0">Built-in adapters (live APIs)</span>'
+    +tgl('sam','SAM.gov Opportunities API','Presolicitations, sources sought, solicitations, amendments. '+(samKey?'<span style="color:var(--green)">API key set ✓</span>':'<span style="color:#D97706">Needs the API key — Admin → Integrations → Data Sources</span>'))
+    +tgl('apfs','DHS APFS (apfs-cloud.dhs.gov)','Full DHS forecast incl. incumbents, contract numbers, POC emails — the richest free source. No key needed. Filtered to your Company Profile NAICS.')
+    +tgl('fpds','FPDS recompete leads','Queries FPDS ATOM for contracts in your NAICS ending 12–18 months out — surfaces them as [Recompete] leads with incumbent + value. No key needed.')
+    +tgl('usaspending','USAspending enrichment','Flags existing records as recompetes when a matching incumbent contract is expiring. No key needed.')
+    +'<span class="fld-section-hdr">URL sources (file or feed — no scraping)</span>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Paste a direct CSV/XLSX download link (agency OSDBU forecast pages: EPA, HHS, DOE/NNSA, NASA, State, USDA, Commerce, Treasury — or a data.gov dataset file) or an RSS/ATOM feed (NZ GETS saved-search feeds, state portals like Virginia eVA). These run on the daily schedule too. Agencies are migrating to the GSA Gateway — when a source retires, just delete its row.</div>'
+    +urlRows
+    +'<div style="display:grid;grid-template-columns:1fr 2fr;gap:6px;margin-top:8px">'
+      +'<input class="fld-i" id="gov_src_name" placeholder="Name (e.g. EPA Forecast FY26)">'
+      +'<input class="fld-i" id="gov_src_url" placeholder="https://… direct .csv/.xlsx link or RSS feed URL">'
+    +'</div>'
+    +'<div style="display:flex;gap:6px;margin-top:6px;align-items:center">'
+      +'<select class="fld-sel" id="gov_src_kind" style="width:auto"><option value="csv">CSV / XLSX file</option><option value="rss">RSS / ATOM feed</option></select>'
+      +'<select class="fld-sel" id="gov_src_adapter" style="width:auto"><option value="generic">Generic columns</option><option value="gsa-forecast">GSA Forecast columns</option><option value="dhs-apfs">DHS APFS columns</option><option value="epa">EPA columns</option></select>'
+      +'<button class="btn btn-navy btn-sm" onclick="govAddUrlSource()">+ Add source</button>'
+      +'<span id="gov_src_status" style="font-size:11px;color:#7C3AED"></span>'
+    +'</div>'
+    +'<div class="btn-row" style="margin-top:14px"><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovAdmin\')">Close</button></div>';
+  openModal('ovAdmin');
+}
+function govToggleSource(k,on){var gp=_govPipe();gp.settings=gp.settings||{};gp.settings.sources=gp.settings.sources||{};gp.settings.sources[k]=!!on;save();}
+function govToggleUrlSource(id,on){var u=(_govPipe().urlSources||[]).find(function(x){return x.id===id;});if(u){u.enabled=!!on;save();}}
+function govDelUrlSource(id){var gp=_govPipe();gp.urlSources=(gp.urlSources||[]).filter(function(x){return x.id!==id;});save();govSourcesModal();}
+function govAddUrlSource(){
+  var name=gv('gov_src_name').trim(),url=gv('gov_src_url').trim();
+  if(!name||!url){alert('Name and URL are both required.');return;}
+  if(!/^https:\/\//i.test(url)){alert('URL must start with https://');return;}
+  var gp=_govPipe();gp.urlSources=gp.urlSources||[];
+  gp.urlSources.push({id:uid(),name:name,url:url,kind:gv('gov_src_kind')||'csv',adapter:gv('gov_src_adapter')||'generic',enabled:true});
+  save();govSourcesModal();
+}
+function govTestUrlSource(id){
+  var u=(_govPipe().urlSources||[]).find(function(x){return x.id===id;});if(!u)return;
+  var st=document.getElementById('gov_src_status');if(st)st.textContent='Testing '+u.name+'…';
+  fetch('/api/govops/ingest-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(u)})
+    .then(function(r){return r.json();})
+    .then(function(j){
+      var ok=!(j.errors||[]).length;
+      if(st)st.textContent='';
+      toast(u.name+': fetched '+(j.fetched||0)+' · new '+(j.added||0)+' · merged '+(j.updated||0)+(ok?'':' · ⚠ '+String((j.errors[0]||{}).error||'').slice(0,120)),ok?'success':'warn',7000);
+      _govLoad();
+    })
+    .catch(function(e){if(st)st.textContent='';toast('Test failed: '+(e&&e.message||e),'error',6000);});
+}
 function govDelSearch(id){var gp=_govPipe();gp.searches=gp.searches.filter(function(x){return x.id!==id;});save();renderView();}
 function _govMakeCrmOpp(o){
   var newOpp={id:uid(),name:(o.title||'').slice(0,120),category:'opportunity',revenue:0,targetRevenue:Number(o.value_high||o.value_low)||0,revenueNote:'',description:(o.description||'')+(o.source_url?'\n\nSource: '+o.source_url:''),parentId:null,attachments:[],customer:o.agency||'',stage:'Lead Gen',status:'Qualified',potential:Number(o.value_high||o.value_low)||0,closeDate:(o.est_award_date||'').slice(0,10),govOppId:o.id};

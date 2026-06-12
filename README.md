@@ -25,7 +25,14 @@ npm test                                      # pure-logic tests, no DB / no net
 
 ## Gov Discovery (Opportunities → 🛰 Gov Discovery)
 
-- **Sources**: SAM.gov Get Opportunities API (presol/sources-sought/special/solicitation/combined, last 60 days, paginated and rate-limit-polite), forecast CSV/XLSX imports (GSA Acquisition Gateway, DHS APFS, EPA, generic), USAspending enrichment (recompete detection: incumbent contracts expiring in 12–18 months matching agency + NAICS + similar description).
+- **Sources** (toggle each in 🛰 Gov Discovery → ⚙ Sources; every source fails independently and logs to the ingestion log):
+  - **SAM.gov Opportunities API** (key required — env var or Admin → Integrations): presol / sources sought / special / solicitation / combined, last 60 days, paginated politely.
+  - **DHS APFS live API** (`apfs-cloud.dhs.gov/api/forecast/`, no key): the full DHS forecast incl. incumbent contractors, contract numbers, and POC emails; filtered to your Company Profile NAICS prefixes; per-record source links to the public-print page.
+  - **FPDS ATOM recompete leads** (no key): direct query for contracts in your NAICS with ultimate completion dates 12–18 months out → `[Recompete]` lead records carrying incumbent, value, and end date.
+  - **USAspending enrichment** (no key): recompete flags on existing records when a matching incumbent contract is expiring.
+  - **Forecast CSV/XLSX imports** (manual upload): GSA Acquisition Gateway, DHS APFS, EPA, generic column adapters.
+  - **URL sources** (saved, run daily): paste a direct CSV/XLSX download link (EPA / HHS / DOE / NASA / State / USDA / Commerce / Treasury OSDBU forecast files, data.gov-hosted datasets) or an RSS/ATOM feed (NZ GETS saved-search feeds, state portals like Virginia eVA). "Test now" runs one immediately. Note: Data.gov's CKAN API and the GSA Gateway export have no stable machine endpoints today, so both are covered via file URLs / manual export rather than scraping; SBA SubNet has no public API — revisit if one appears.
+  - Bulk sources (APFS, FPDS) require NAICS codes in the Company Profile and skip with a visible notice otherwise — that's what keeps the pipeline relevant instead of firehosed.
 - **Run ingestion manually**: the "⟳ Run ingestion now" button in the UI, or `curl -X POST <app>/api/govops/ingest`. A scheduler also runs it automatically about once a day while the server is up. Every run logs source / fetched / new / updated / errors to `ingestion_runs` (visible via "Show ingestion log" or `GET /api/govops/runs`). A source that fails parsing fails alone and surfaces its error — data is never silently dropped.
 - **Dedup & lifecycle**: records merge by solicitation number, else fuzzy title+agency+NAICS. The same procurement seen as forecast → sources sought → presolicitation → solicitation becomes ONE record with a timeline; lifecycle never moves backwards.
 - **Scoring**: NAICS match, set-aside eligibility, capability-keyword overlap, agency history — sourced from the Company Profile. Weights configurable in app state under `govPipeline.settings.weights` (`{naics,setAside,keywords,agency}`).

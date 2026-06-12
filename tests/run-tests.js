@@ -135,5 +135,58 @@ t('value range parser handles $, commas, K/M', () => {
   assert.deepStrictEqual(govParseValueRange('n/a'), { low: null, high: null });
 });
 
+console.log('govops: live-source mappers (APFS / FPDS / RSS)');
+t('APFS record maps to unified schema with recompete intel', () => {
+  const u = govMapApfsRecord({
+    id: 73831, organization: 'CBP', small_business_program: 'SB',
+    dollar_range: { display_name: '$5M to $10M' }, competitive: 'Recompete',
+    estimated_release_date: '07/01/2026', naics: '541512 - Computer Systems Design',
+    apfs_number: 'F2026073831', requirements_title: 'Enterprise IT Support',
+    requirement: 'The contractor shall support enterprise IT.',
+    contractor: 'ACME FEDERAL LLC', contract_number: '70B01C24D0001',
+    estimated_solicitation_release_date: '07/01/2026', anticipated_award_date: '08/15/2026',
+    place_of_performance_city: 'Ashburn', place_of_performance_state: 'VA',
+    requirements_contact_first_name: 'Jane', requirements_contact_last_name: 'Doe',
+    requirements_contact_email: 'jane.doe@cbp.dhs.gov', contracting_office: 'OIT',
+  });
+  assert.strictEqual(u.naics, '541512');
+  assert.strictEqual(u.value_low, 5000000);
+  assert.strictEqual(u.value_high, 10000000);
+  assert.strictEqual(u.solnum, 'F2026073831');
+  assert.strictEqual(u.recompete.incumbent, 'ACME FEDERAL LLC');
+  assert(u.source_url.includes('/record/73831/public-print/'));
+  assert.strictEqual(u.poc_email, 'jane.doe@cbp.dhs.gov');
+  assert.strictEqual(govMapApfsRecord({ id: 1 }), null, 'no title → null');
+});
+t('FPDS ATOM entry parses PIID, vendor, dates, value, agency', () => {
+  const xml = '<feed><entry><title><![CDATA[DELIVERY ORDER 05GA0A20F0029 (P00007) awarded to ECS FEDERAL, LLC, was modified]]></title>'
+    + '<content><ns1:award><ns1:awardID><ns1:awardContractID><ns1:agencyID name="GAO">0559</ns1:agencyID><ns1:PIID>05GA0A20F0029</ns1:PIID></ns1:awardContractID></ns1:awardID>'
+    + '<ns1:relevantContractDates><ns1:signedDate>2026-06-08 00:00:00</ns1:signedDate><ns1:ultimateCompletionDate>2027-09-14 00:00:00</ns1:ultimateCompletionDate></ns1:relevantContractDates>'
+    + '<ns1:totalDollarValues><ns1:totalObligatedAmount>765850.35</ns1:totalObligatedAmount><ns1:totalBaseAndAllOptionsValue>900000</ns1:totalBaseAndAllOptionsValue></ns1:totalDollarValues>'
+    + '<ns1:purchaserInformation><ns1:contractingOfficeAgencyID name="GAO, EXCEPT COMPTROLLER GENERAL" departmentName="GOVERNMENT ACCOUNTABILITY OFFICE">0559</ns1:contractingOfficeAgencyID></ns1:purchaserInformation>'
+    + '<ns1:contractData><ns1:principalNAICSCode>541512</ns1:principalNAICSCode><ns1:descriptionOfContractRequirement>IT support services</ns1:descriptionOfContractRequirement></ns1:contractData>'
+    + '</ns1:award></content></entry></feed>';
+  const a = govParseFpdsAtom(xml);
+  assert.strictEqual(a.length, 1);
+  assert.strictEqual(a[0].piid, '05GA0A20F0029');
+  assert.strictEqual(a[0].vendor, 'ECS FEDERAL, LLC');
+  assert.strictEqual(a[0].ultimateCompletionDate, '2027-09-14');
+  assert.strictEqual(a[0].totalValue, 900000);
+  assert.strictEqual(a[0].naics, '541512');
+  assert.strictEqual(a[0].department, 'GOVERNMENT ACCOUNTABILITY OFFICE');
+});
+t('RSS and ATOM items both parse (GETS / state portal feeds)', () => {
+  const rss = '<rss><channel><item><title>RFx 12345 — Software Services</title><link>https://www.gets.govt.nz/x/12345</link><description><![CDATA[<p>Desc here</p>]]></description><pubDate>Thu, 12 Jun 2026 01:00:00 GMT</pubDate></item></channel></rss>';
+  const r = govParseRssItems(rss);
+  assert.strictEqual(r.length, 1);
+  assert.strictEqual(r[0].title, 'RFx 12345 — Software Services');
+  assert.strictEqual(r[0].link, 'https://www.gets.govt.nz/x/12345');
+  assert.strictEqual(r[0].description, 'Desc here');
+  const atom = '<feed><entry ><title>Atom Tender</title><link href="https://ex.gov/t/1"/><updated>2026-06-12</updated><summary>S</summary></entry></feed>';
+  const a = govParseRssItems(atom);
+  assert.strictEqual(a.length, 1);
+  assert.strictEqual(a[0].link, 'https://ex.gov/t/1');
+});
+
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
 process.exit(failed ? 1 : 0);
