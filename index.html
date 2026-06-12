@@ -6396,6 +6396,7 @@ function openProposalDetail(id){
   // proposal's tab/section position.
   if(_pdOpenId&&_pdOpenId!==id){_pdTab='overview';_pdActiveSection='';}
   _pdTab=_pdTab||'overview';
+  if(!_shredLoaded[id])_shredLoad(id);   // prefetch so drafting prompts can inject requirements
   renderProposalDetail(id);
   openModal('ovProp');
 }
@@ -6442,8 +6443,8 @@ function renderProposalDetail(id){
   if(due){var dd=new Date(due);if(!isNaN(dd)){var days=Math.round((dd-Date.now())/86400000);if(days<0)dueChip='<span class="rq-sla rq-sla-red">'+Math.abs(days)+'d overdue</span>';else if(days<14)dueChip='<span class="rq-sla rq-sla-warn">due in '+days+'d</span>';else dueChip='<span class="rq-sla">due in '+days+'d</span>';}}
   var stsOpts=PROP_STATUSES.map(function(s){return '<option value="'+s.k+'"'+(p.status===s.k?' selected':'')+'>'+s.l+'</option>';}).join('');
   var tabGroups=[
-    {g:'Content',tabs:[['overview','Overview'],['brief','BusDev Brief'],['sections','Sections']]},
-    {g:'Inputs',tabs:[['rfp','RFP Details'],['pp','Past Performance'],['staffing','Staffing']]},
+    {g:'Content',tabs:[['overview','Overview'],['brief','BusDev Brief'],['outline','Outline'],['sections','Sections']]},
+    {g:'Inputs',tabs:[['rfp','RFP Details'],['shred','Shred'],['pp','Past Performance'],['staffing','Staffing']]},
     {g:'Business',tabs:[['pricing','Pricing'],['cover','Cover Sheet']]},
     {g:'Review & Output',tabs:[['redteam','Red Team'],['export','Export'],['files','Files'],['settings','Settings']]}
   ];
@@ -6461,6 +6462,8 @@ function renderProposalDetail(id){
   var body=hdr+tabBar;
   if(_pdTab==='overview')body+=_pdOverviewHTML(p,opp,tpl);
   else if(_pdTab==='rfp')body+=_pdRFPHTML(p);
+  else if(_pdTab==='shred')body+=_pdShredHTML(p);
+  else if(_pdTab==='outline')body+=_pdOutlineHTML(p);
   else if(_pdTab==='brief')body+=_pdBriefHTML(p);
   else if(_pdTab==='sections')body+=_pdSectionsHTML(p,tpl);
   else if(_pdTab==='staffing')body+=_pdStaffingHTML(p);
@@ -6471,6 +6474,7 @@ function renderProposalDetail(id){
   else if(_pdTab==='export')body+=_pdExportHTML(p);
   else if(_pdTab==='files')body+=_pdFilesHTML(p);
   else if(_pdTab==='settings')body+=_pdSettingsHTML(p);
+  if(_shredLoaded[id]&&_shredCache[id])_shredSyncCompliance(p);
   body+='<div class="btn-row" style="margin-top:14px">'
     +'<button class="btn btn-danger-sm" onclick="pdDelete(\''+id+'\')">Delete Proposal</button>'
     +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovProp\')">Close</button>'
@@ -6776,6 +6780,526 @@ function _pdMergeExtractedRFP(p,ex){
   return n;
 }
 
+/* ════════════════════════════════════════════════════════════════════
+   RFP SHRED + ANNOTATED OUTLINE
+   Shred data (requirements DB, L-M-C map, format rules, outline) lives in
+   its own Postgres table via /api/shred/:proposalId — never in app_state.
+   ════════════════════════════════════════════════════════════════════ */
+/* ── SHRED PURE LOGIC (self-contained; mirrored by tests/shred.test.js) ── */
+// Segment a paged document into UCF sections (A–M, PWS/SOW) with page spans.
+// Falls back to numbered-heading segmentation, then to one whole-doc segment.
+function shredSegmentDoc(pages){
+  var marks=[];
+  pages.forEach(function(pg){
+    var re=/(?:^|[\n\r]|\.\s{2,}|\s{3,})(?:SECTION|PART)\s+([A-M])\b[\s\-–—:.]{0,4}([A-Z][^\n\r]{0,80})?/g,mm;
+    while((mm=re.exec(pg.text))!==null){marks.push({key:mm[1].toUpperCase(),title:(mm[2]||'').trim(),page:pg.n,at:mm.index});}
+    var pw=/(PERFORMANCE\s+WORK\s+STATEMENT|STATEMENT\s+OF\s+WORK)\b/gi,pm;
+    while((pm=pw.exec(pg.text))!==null){marks.push({key:'PWS',title:pm[1],page:pg.n,at:pm.index});}
+  });
+  // de-noise: keep the FIRST occurrence per key (ToC repeats sections; the
+  // body occurrence is usually the later one — keep the LAST occurrence per
+  // key instead, which skips tables of contents)
+  var byKey={};marks.forEach(function(m){byKey[m.key]=m;});
+  var ucf=Object.keys(byKey).map(function(k){return byKey[k];}).sort(function(a,b){return a.page-b.page||a.at-b.at;});
+  function spanText(fromPage,fromAt,toPage,toAt){
+    var out=[];
+    pages.forEach(function(pg){
+      if(pg.n<fromPage||pg.n>toPage)return;
+      var t=pg.text;
+      if(pg.n===fromPage&&pg.n===toPage)t=t.slice(fromAt,toAt);
+      else if(pg.n===fromPage)t=t.slice(fromAt);
+      else if(pg.n===toPage)t=t.slice(0,toAt);
+      out.push({n:pg.n,text:t});
+    });
+    return out;
+  }
+  if(ucf.length>=2){
+    return ucf.map(function(m,i){
+      var nx=ucf[i+1];
+      var seg=spanText(m.page,m.at,nx?nx.page:(pages.length?pages[pages.length-1].n:m.page),nx?nx.at:Infinity);
+      return {key:m.key,title:m.title||('Section '+m.key),pageStart:m.page,pageEnd:nx?nx.page:(pages.length?pages[pages.length-1].n:m.page),pages:seg};
+    });
+  }
+  // heading-based fallback
+  var joined=pages.map(function(p){return p.text;}).join('\n');
+  var hd=/(?:^|\n)\s*(\d+(?:\.\d+)*)\s+([A-Z][^\n]{3,80})(?=\n|$)/g,hits=[],h;
+  while((h=hd.exec(joined))!==null)hits.push(h[1]);
+  if(hits.length>=4){
+    return [{key:'DOC',title:'Document (heading-segmented)',pageStart:pages.length?pages[0].n:1,pageEnd:pages.length?pages[pages.length-1].n:1,pages:pages}];
+  }
+  return [{key:'DOC',title:'Document',pageStart:pages.length?pages[0].n:1,pageEnd:pages.length?pages[pages.length-1].n:1,pages:pages}];
+}
+// Split segment pages into LLM-sized chunks at sentence boundaries with
+// overlap, never crossing a segment boundary, carrying page ranges.
+function shredChunkSegment(seg,maxChars,overlap){
+  maxChars=maxChars||14000;overlap=overlap||600;
+  var parts=[],cur='',curStart=null,curEnd=null;
+  function flush(){if(cur.trim())parts.push({key:seg.key,title:seg.title,text:cur,pageStart:curStart,pageEnd:curEnd});cur='';curStart=null;curEnd=null;}
+  (seg.pages||[]).forEach(function(pg){
+    var marked='\n[PAGE '+pg.n+']\n'+pg.text;
+    while(marked.length){
+      var room=maxChars-cur.length;
+      if(marked.length<=room){cur+=marked;if(curStart===null)curStart=pg.n;curEnd=pg.n;marked='';}
+      else{
+        var cut=marked.slice(0,room),dot=Math.max(cut.lastIndexOf('. '),cut.lastIndexOf('.\n'),cut.lastIndexOf('; '));
+        if(dot<room*0.5)dot=room;else dot+=1;
+        cur+=marked.slice(0,dot);if(curStart===null)curStart=pg.n;curEnd=pg.n;
+        var tail=cur.slice(-overlap);
+        flush();
+        cur=tail;curStart=pg.n;curEnd=pg.n;
+        marked=marked.slice(dot);
+      }
+    }
+  });
+  flush();
+  return parts;
+}
+// Stable requirement IDs: continue from the highest existing R-### number.
+function shredAssignIds(newReqs,existing){
+  var max=0;(existing||[]).forEach(function(r){var m=/^R-(\d+)$/.exec(r.id||'');if(m)max=Math.max(max,Number(m[1]));});
+  return newReqs.map(function(r,i){r.id='R-'+String(max+i+1).padStart(3,'0');return r;});
+}
+// Orphan detection: M factors no L instruction maps to; C requirements no
+// L item covers. These are where proposals get dinged.
+function shredOrphans(mappings,lItems,mFactors,reqs){
+  var mCovered={},cCovered={};
+  (mappings||[]).forEach(function(mp){(mp.M||[]).forEach(function(m){mCovered[m]=1;});(mp.C||[]).forEach(function(c){cCovered[c]=1;});});
+  var mOrphans=(mFactors||[]).map(function(f){return f.ref;}).filter(function(ref){return ref&&!mCovered[ref];});
+  var cOrphans=(reqs||[]).filter(function(r){return r.status!=='deleted'&&(r.section||'').toUpperCase().indexOf('L')!==0&&(r.section||'').toUpperCase().indexOf('M')!==0&&!cCovered[r.id];}).map(function(r){return r.id;});
+  return {M:mOrphans,C:cOrphans};
+}
+// Page allocation proportional to evaluation weight within the volume's limit.
+function shredAllocatePages(volume){
+  var secs=volume.sections||[],limit=Number(volume.pageLimit)||0;
+  var weights=secs.map(function(s){var w=0;(s.mRefs||[]).forEach(function(m){w+=Number(String(m.weight||'').replace(/[^0-9.]/g,''))||0;});return w||1;});
+  var tot=weights.reduce(function(a,b){return a+b;},0)||1;
+  if(limit>0){
+    var alloc=weights.map(function(w){return Math.max(1,Math.round(limit*w/tot));});
+    // trim rounding overflow from the largest allocations
+    var sum=alloc.reduce(function(a,b){return a+b;},0);
+    while(sum>limit){var mx=alloc.indexOf(Math.max.apply(null,alloc));if(alloc[mx]<=1)break;alloc[mx]--;sum--;}
+    secs.forEach(function(s,i){if(!s.pages)s.pages=alloc[i];});
+  }
+  return volume;
+}
+// Per-volume budget reconciliation: warn when allocations exceed the limit.
+function shredPageBudget(outline){
+  return ((outline&&outline.volumes)||[]).map(function(v){
+    var allocated=(v.sections||[]).reduce(function(a,s){return a+(Number(s.pages)||0);},0);
+    var limit=Number(v.pageLimit)||0;
+    return {volume:v.title,limit:limit,allocated:allocated,over:limit>0&&allocated>limit};
+  });
+}
+/* ── END SHRED PURE LOGIC ── */
+
+var _shredCache={};   /* proposalId → shred data (server-backed) */
+var _shredLoaded={};
+function _shredLoad(pid,cb){
+  fetch('/api/shred/'+pid,{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
+    _shredCache[pid]=d||null;_shredLoaded[pid]=true;
+    if(cb)cb(d);
+    if(_pdOpenId===pid&&(_pdTab==='shred'||_pdTab==='outline'))renderProposalDetail(pid);
+  }).catch(function(){_shredLoaded[pid]=true;if(cb)cb(null);});
+}
+function _shredSave(pid){
+  var d=_shredCache[pid];if(!d)return;
+  d.updatedAt=Date.now();d.updatedBy=ME?ME.name:'';
+  clearTimeout(_shredSave._t);
+  _shredSave._t=setTimeout(function(){
+    fetch('/api/shred/'+pid,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)})
+      .catch(function(){toast('Shred save failed — will retry on next change.','warn',4000);});
+  },800);
+}
+function _shredEnsure(pid){
+  if(!_shredCache[pid])_shredCache[pid]={docs:[],requirements:[],lItems:[],mFactors:[],lmc:{mappings:[],orphans:{M:[],C:[]}},formatRules:{},outline:null,generatedAt:0};
+  return _shredCache[pid];
+}
+function _shredStatus(msg){var el=document.getElementById('shred_status');if(el)el.innerHTML=msg;}
+
+function pdShredUpload(pid){
+  var inp=document.getElementById('shred_file');
+  if(!inp||!inp.files||!inp.files[0]){alert('Pick a file first.');return;}
+  var kind=gv('shred_kind')||'solicitation';
+  var f=inp.files[0];
+  _shredStatus('Uploading & extracting text…');
+  var fd=new FormData();fd.append('file',f);fd.append('proposalId',pid);
+  fetch('/api/shred-doc',{method:'POST',body:fd})
+    .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||'upload failed');return j;});})
+    .then(function(j){
+      var d=_shredEnsure(pid);
+      d.docs.push({id:uid(),attachmentId:j.attachmentId,name:j.name,kind:kind,chars:j.chars,ocrNeeded:!!j.ocrNeeded,pages:j.pages||[],uploadedAt:Date.now()});
+      _shredSave(pid);
+      _shredStatus(j.ocrNeeded?'⚠ This looks like a scanned PDF — text extraction found almost nothing. OCR is not supported yet; upload a text-based PDF or the DOCX version.':'');
+      renderProposalDetail(pid);
+      if(kind==='amendment'&&(d.requirements||[]).length)pdShredAmendmentDiff(pid,d.docs[d.docs.length-1].id);
+    })
+    .catch(function(e){_shredStatus('');alert('Upload failed: '+(e&&e.message||e));});
+}
+function pdShredRemoveDoc(pid,docId){
+  var d=_shredCache[pid];if(!d)return;
+  if(!confirm('Remove this document from the shred? Extracted requirements citing it are kept.'))return;
+  d.docs=d.docs.filter(function(x){return x.id!==docId;});
+  _shredSave(pid);renderProposalDetail(pid);
+}
+
+/* The multi-pass shred run: segment → extract per chunk → L/M items →
+   L-M-C mapping → format rules. All passes use the proposal's LLM choice. */
+function pdShredRun(pid){
+  var p=(D.proposals||[]).find(function(x){return x.id===pid;});if(!p)return;
+  var d=_shredEnsure(pid);
+  var srcDocs=d.docs.filter(function(x){return x.kind!=='amendment'&&(x.pages||[]).length;});
+  if(!srcDocs.length){alert('Upload at least one solicitation/attachment document first.');return;}
+  var existing=(d.requirements||[]).filter(function(r){return r.status!=='deleted';});
+  if(existing.length&&!confirm('Re-running the shred adds newly found requirements alongside the existing '+existing.length+' (it never deletes your edits). Continue?'))return;
+  var llm=_propLLMOpts(p);
+  var btn=document.getElementById('shred_run_btn');if(btn){btn.disabled=true;btn.textContent='Shredding…';}
+  function done(err){
+    if(btn){btn.disabled=false;btn.textContent='⚡ Run Shred';}
+    d.generatedAt=Date.now();
+    _shredSave(pid);renderProposalDetail(pid);
+    if(err)_shredStatus('⚠ '+esc(err));
+  }
+  // 1. segment + chunk
+  var chunks=[];
+  srcDocs.forEach(function(doc){
+    shredSegmentDoc(doc.pages).forEach(function(seg){
+      shredChunkSegment(seg).forEach(function(c){c.doc=doc.name;chunks.push(c);});
+    });
+  });
+  if(!chunks.length){done('No text to shred.');return;}
+  var sys='You extract binding requirements from US government solicitation documents for a proposal compliance matrix. Output ONLY JSON inside a ```json``` block. Extract VERBATIM text — never paraphrase, never invent. Capture every "shall", "must", "will", "is required to", "at a minimum", and table-embedded requirement.';
+  var found=[],i=0,errs=0;
+  function nextChunk(){
+    if(i>=chunks.length){afterExtract();return;}
+    var c=chunks[i];
+    _shredStatus('Extracting requirements — chunk '+(i+1)+'/'+chunks.length+' <span style="color:var(--text-muted)">('+esc(c.doc)+' · '+esc(c.title)+')</span>');
+    var instr='DOCUMENT: '+c.doc+'\nSECTION: '+c.key+' — '+c.title+'\nPAGE RANGE: '+c.pageStart+'-'+c.pageEnd+' ([PAGE n] markers are embedded in the text)\n\nTEXT:\n"""\n'+c.text+'\n"""\n\nReturn every binding requirement in this text:\n{"requirements":[{"text":"verbatim requirement","section":"'+c.key+' or finer like L.4.2 if visible","page":nearest [PAGE n] marker as a number,"type":"technical|management|staffing|format-compliance|contractual|certification","volume":"likely proposal volume or empty","confidence":"high|low"}]}\nNo prose outside the JSON.';
+    llmComplete({provider:llm.provider,model:llm.model,system:sys,messages:[{role:'user',content:instr}],max_tokens:4000})
+      .then(function(j){
+        var parsed=llmExtractJSON(j);
+        ((parsed&&parsed.requirements)||[]).forEach(function(r){
+          if(r&&r.text&&String(r.text).trim())found.push({text:String(r.text).trim(),section:r.section||c.key,page:Number(r.page)||c.pageStart,doc:c.doc,type:r.type||'technical',volume:r.volume||'',confidence:r.confidence==='low'?'low':'high',refs:{L:[],M:[],C:[]},status:'active',compliance:'not-started',owner:'',sectionId:'',sectionTitle:''});
+        });
+      })
+      .catch(function(){errs++;})
+      .finally(function(){i++;nextChunk();});
+  }
+  function afterExtract(){
+    // dedupe vs existing + within batch by normalized text
+    var norm=function(t){return String(t).toLowerCase().replace(/\s+/g,' ').trim();};
+    var have={};(d.requirements||[]).forEach(function(r){have[norm(r.text)]=1;});
+    var fresh=[];found.forEach(function(r){var k=norm(r.text);if(!have[k]){have[k]=1;fresh.push(r);}});
+    shredAssignIds(fresh,d.requirements);
+    d.requirements=(d.requirements||[]).concat(fresh);
+    _shredStatus('Found '+fresh.length+' new requirement'+(fresh.length===1?'':'s')+(errs?' ('+errs+' chunk'+(errs===1?'':'s')+' failed)':'')+'. Mapping L ↔ M ↔ C…');
+    pdShredMapLMC(pid,llm,function(){
+      _shredStatus('Extracting format compliance rules…');
+      pdShredFormatRules(pid,llm,function(){done();});
+    });
+  }
+  nextChunk();
+}
+function pdShredMapLMC(pid,llm,cb){
+  var d=_shredCache[pid];if(!d){cb();return;}
+  var lText='',mText='';
+  d.docs.forEach(function(doc){
+    shredSegmentDoc(doc.pages||[]).forEach(function(seg){
+      if(seg.key==='L')lText+=seg.pages.map(function(pg){return pg.text;}).join('\n').slice(0,18000);
+      if(seg.key==='M')mText+=seg.pages.map(function(pg){return pg.text;}).join('\n').slice(0,12000);
+    });
+  });
+  var reqList=(d.requirements||[]).filter(function(r){return r.status!=='deleted';}).map(function(r){return r.id+': '+r.text.slice(0,160);}).join('\n').slice(0,24000);
+  if(!lText&&!mText){d.lmc={mappings:[],orphans:shredOrphans([],[],[],d.requirements)};cb();return;}
+  var sys='You map US government RFP cross-references for a compliance matrix. Output ONLY JSON inside a ```json``` block. Do not invent references.';
+  var instr='SECTION L (instructions to offerors):\n"""\n'+(lText||'(not found)')+'\n"""\n\nSECTION M (evaluation criteria):\n"""\n'+(mText||'(not found)')+'\n"""\n\nEXTRACTED REQUIREMENTS:\n'+reqList
+    +'\n\nReturn:\n{"lItems":[{"ref":"L.x.y","text":"short instruction summary"}],"mFactors":[{"ref":"M.x","factor":"name","weight":"stated weight/importance or empty"}],"mappings":[{"L":"L.x.y","M":["M.x"],"C":["R-001"]}]}\nMap each L instruction to the M factor(s) it is evaluated under and the requirement IDs it covers.';
+  llmComplete({provider:llm.provider,model:llm.model,system:sys,messages:[{role:'user',content:instr}],max_tokens:5000})
+    .then(function(j){
+      var parsed=llmExtractJSON(j)||{};
+      d.lItems=parsed.lItems||[];d.mFactors=parsed.mFactors||[];
+      var maps=parsed.mappings||[];
+      d.lmc={mappings:maps,orphans:shredOrphans(maps,d.lItems,d.mFactors,d.requirements)};
+      // write refs back onto requirements
+      var by={};(d.requirements||[]).forEach(function(r){by[r.id]=r;});
+      maps.forEach(function(mp){(mp.C||[]).forEach(function(rid){var r=by[rid];if(r){if(mp.L&&r.refs.L.indexOf(mp.L)<0)r.refs.L.push(mp.L);(mp.M||[]).forEach(function(m){if(r.refs.M.indexOf(m)<0)r.refs.M.push(m);});}});});
+    })
+    .catch(function(){})
+    .finally(cb);
+}
+function pdShredFormatRules(pid,llm,cb){
+  var d=_shredCache[pid];if(!d){cb();return;}
+  var lText='';
+  d.docs.forEach(function(doc){shredSegmentDoc(doc.pages||[]).forEach(function(seg){if(seg.key==='L'||seg.key==='DOC')lText+=seg.pages.map(function(pg){return pg.text;}).join('\n');});});
+  lText=lText.slice(0,20000);
+  if(!lText){cb();return;}
+  var sys='You extract format-compliance rules from RFP instructions. Output ONLY JSON in a ```json``` block. Use null for anything not stated — never guess.';
+  var instr='TEXT:\n"""\n'+lText+'\n"""\n\nReturn:\n{"pageLimits":[{"volume":"volume name","limit":number}],"font":"","margins":"","lineSpacing":"","submissionMethod":"","dueDateTime":"","timezone":"","forms":["required forms/certs"],"fileNaming":""}';
+  llmComplete({provider:llm.provider,model:llm.model,system:sys,messages:[{role:'user',content:instr}],max_tokens:1500})
+    .then(function(j){var parsed=llmExtractJSON(j);if(parsed)d.formatRules=parsed;})
+    .catch(function(){})
+    .finally(cb);
+}
+var _shredFilter={q:'',section:'',type:'',volume:'',status:''};
+var _shredSel={};   /* requirement-id → checked (for merge) */
+function _pdShredHTML(p){
+  if(!_shredLoaded[p.id]){_shredLoad(p.id);return '<div style="font-size:12px;color:var(--text-muted);padding:20px 0">Loading shred…</div>';}
+  var d=_shredCache[p.id];
+  var docsHTML=((d&&d.docs)||[]).map(function(doc){
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--page-bg);border-radius:6px;font-size:12px;margin-bottom:4px">'
+      +'<span class="plan-chip">'+esc(doc.kind)+'</span>'
+      +'<a href="/api/attachments/'+esc(doc.attachmentId)+'" target="_blank" style="font-weight:600;color:var(--navy);text-decoration:none;flex:1">📄 '+esc(doc.name)+'</a>'
+      +'<span style="color:var(--text-muted);font-size:11px">'+((doc.pages||[]).length)+' pg · '+Math.round((doc.chars||0)/1000)+'k chars</span>'
+      +(doc.ocrNeeded?'<span class="plan-chip" style="border-color:var(--red);color:var(--red)" title="Scanned PDF — almost no extractable text. OCR not supported yet.">⚠ scanned</span>':'')
+      +(doc.kind==='amendment'?'<button class="btn btn-outline btn-sm" onclick="pdShredAmendmentDiff(\''+p.id+'\',\''+doc.id+'\')" title="Diff this amendment against current requirements">↻ Re-diff</button>':'')
+      +'<button class="btn btn-danger-sm btn-sm" onclick="pdShredRemoveDoc(\''+p.id+'\',\''+doc.id+'\')">&times;</button>'
+      +'</div>';
+  }).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 0">No documents yet. Upload the solicitation, then PWS/SOW attachments, then amendments as they arrive.</div>';
+  var upload='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">'
+    +'<select class="fld-sel" id="shred_kind" style="width:auto"><option value="solicitation">Solicitation</option><option value="attachment">Attachment (PWS/SOW/QASP…)</option><option value="amendment">Amendment</option></select>'
+    +'<input type="file" id="shred_file" accept=".pdf,.docx,.doc,.xlsx,.xls" style="font-size:11px">'
+    +'<button class="btn btn-navy btn-sm" onclick="pdShredUpload(\''+p.id+'\')">Upload</button>'
+    +'<span style="flex:1"></span>'
+    +'<button id="shred_run_btn" class="btn btn-gold" onclick="pdShredRun(\''+p.id+'\')" '+(((d&&d.docs)||[]).some(function(x){return x.kind!=='amendment';})?'':'disabled')+'>⚡ Run Shred</button>'
+    +'</div>'
+    +'<div id="shred_status" style="font-size:12px;color:#7C3AED;margin-top:8px;min-height:16px"></div>';
+  if(!d||!(d.requirements||[]).length){
+    return '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Shred the solicitation into a structured requirements database: every binding "shall/must/will" with a page citation, L ↔ M ↔ C cross-references, format compliance rules, and an exportable compliance matrix. The shred feeds the Outline tab and section drafting.</div>'
+      +docsHTML+upload;
+  }
+  // ── requirements table ──
+  var reqs=d.requirements||[];
+  var f=_shredFilter;
+  var sections=[],types=[],volumes=[];
+  reqs.forEach(function(r){if(r.section&&sections.indexOf(r.section)<0)sections.push(r.section);if(r.type&&types.indexOf(r.type)<0)types.push(r.type);if(r.volume&&volumes.indexOf(r.volume)<0)volumes.push(r.volume);});
+  var shown=reqs.filter(function(r){
+    if(f.status?r.status!==f.status:(r.status==='deleted'))return false;
+    if(f.q&&(r.text+' '+r.id).toLowerCase().indexOf(f.q.toLowerCase())<0)return false;
+    if(f.section&&r.section!==f.section)return false;
+    if(f.type&&r.type!==f.type)return false;
+    if(f.volume&&r.volume!==f.volume)return false;
+    return true;
+  });
+  var selCount=Object.keys(_shredSel).filter(function(k){return _shredSel[k];}).length;
+  function selOpts(list,cur,blank){return '<option value="">'+blank+'</option>'+list.map(function(x){return '<option'+(cur===x?' selected':'')+'>'+esc(x)+'</option>';}).join('');}
+  var bar='<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:10px 0 8px">'
+    +'<input class="fld-i" style="width:180px" placeholder="Filter text / R-id…" value="'+esc(f.q)+'" onchange="_shredFilter.q=this.value;renderProposalDetail(\''+p.id+'\')">'
+    +'<select class="fld-sel" style="width:auto" onchange="_shredFilter.section=this.value;renderProposalDetail(\''+p.id+'\')">'+selOpts(sections.sort(),f.section,'All sections')+'</select>'
+    +'<select class="fld-sel" style="width:auto" onchange="_shredFilter.type=this.value;renderProposalDetail(\''+p.id+'\')">'+selOpts(types.sort(),f.type,'All types')+'</select>'
+    +'<select class="fld-sel" style="width:auto" onchange="_shredFilter.volume=this.value;renderProposalDetail(\''+p.id+'\')">'+selOpts(volumes.sort(),f.volume,'All volumes')+'</select>'
+    +'<select class="fld-sel" style="width:auto" onchange="_shredFilter.status=this.value;renderProposalDetail(\''+p.id+'\')">'+selOpts(['active','changed','added','deleted'],f.status,'Active + amended')+'</select>'
+    +'<span style="flex:1"></span>'
+    +(selCount>=2?'<button class="btn btn-outline btn-sm" onclick="pdShredMerge(\''+p.id+'\')">Merge '+selCount+'</button>':'')
+    +'<a class="btn btn-outline btn-sm" href="/api/shred/'+p.id+'/compliance.xlsx" style="text-decoration:none">⬇ Compliance Matrix (XLSX)</a>'
+    +'</div>';
+  var stCls={active:'',changed:'border-color:#D97706;color:#D97706',added:'border-color:var(--green);color:var(--green)',deleted:'border-color:var(--red);color:var(--red)'};
+  var rows=shown.map(function(r){
+    var conf=r.confidence==='low'?' <span class="plan-chip" style="border-color:#D97706;color:#D97706" title="Low extraction confidence — verify against the cited page">low conf</span>':'';
+    var st=r.status!=='active'?' <span class="plan-chip" style="'+(stCls[r.status]||'')+'">'+esc(r.status)+'</span>':'';
+    var compC={'not-started':'var(--text-muted)','drafted':'#D97706','compliant':'var(--green)'}[r.compliance||'not-started'];
+    return '<div style="display:flex;gap:8px;padding:7px 8px;border-bottom:1px solid var(--border);font-size:12px;align-items:flex-start'+(r.status==='deleted'?';opacity:.5':'')+'">'
+      +'<input type="checkbox" '+(_shredSel[r.id]?'checked':'')+' onchange="_shredSel[\''+r.id+'\']=this.checked;renderProposalDetail(\''+p.id+'\')" style="margin-top:2px">'
+      +'<div style="flex:0 0 56px;font-weight:700">'+esc(r.id)+'</div>'
+      +'<div style="flex:1">'+esc(r.text)+conf+st
+        +'<div style="font-size:10px;color:var(--text-muted);margin-top:2px">'+esc(r.doc||'')+' · §'+esc(r.section||'?')+' · p.'+(r.page||'?')
+        +((r.refs&&r.refs.L.length)?' · L: '+esc(r.refs.L.join(','))+'':'')+((r.refs&&r.refs.M.length)?' · M: '+esc(r.refs.M.join(',')):'')
+        +(r.sectionTitle?' · → '+esc(r.sectionTitle):'')+'</div></div>'
+      +'<select class="fld-sel" style="width:96px;font-size:10px;padding:3px" onchange="pdShredSetField(\''+p.id+'\',\''+r.id+'\',\'type\',this.value)">'+['technical','management','staffing','format-compliance','contractual','certification'].map(function(t){return '<option'+(r.type===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select>'
+      +'<select class="fld-sel" style="width:100px;font-size:10px;padding:3px" onchange="pdShredSetField(\''+p.id+'\',\''+r.id+'\',\'owner\',this.value)">'+memberNameOpts(r.owner||'')+'</select>'
+      +'<span class="plan-chip" style="border-color:'+compC+';color:'+compC+'" title="Compliance status — updates as mapped sections are drafted">'+esc(r.compliance||'not-started')+'</span>'
+      +'<button class="btn btn-sec btn-sm" style="padding:2px 7px" onclick="pdShredEditReq(\''+p.id+'\',\''+r.id+'\')">Edit</button>'
+      +(r.status==='deleted'
+        ?'<button class="btn btn-outline btn-sm" style="padding:2px 7px" onclick="pdShredSetField(\''+p.id+'\',\''+r.id+'\',\'status\',\'active\')">Restore</button>'
+        :'<button class="btn btn-danger-sm btn-sm" style="padding:2px 7px" onclick="pdShredSetField(\''+p.id+'\',\''+r.id+'\',\'status\',\'deleted\')">&times;</button>')
+      +'</div>';
+  }).join('')||'<div style="font-size:12px;color:var(--text-muted);padding:12px">Nothing matches the filters.</div>';
+  // ── L-M-C + format rules panels ──
+  var orph=(d.lmc&&d.lmc.orphans)||{M:[],C:[]};
+  var lmc='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">'
+    +'<div style="border:1px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:11px;font-weight:700;margin-bottom:6px">L ↔ M ↔ C cross-reference</div>'
+    +(((d.lmc&&d.lmc.mappings)||[]).slice(0,40).map(function(m){return '<div style="font-size:11px;margin-bottom:3px"><b>'+esc(m.L||'?')+'</b> → '+esc((m.M||[]).join(', ')||'—')+' <span style="color:var(--text-muted)">covers '+esc((m.C||[]).slice(0,8).join(', ')||'—')+((m.C||[]).length>8?'…':'')+'</span></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted)">Run the shred with Section L/M present to build the map.</div>')
+    +((orph.M.length||orph.C.length)?'<div style="margin-top:8px;font-size:11px;color:#D97706"><b>⚠ Orphans:</b>'+(orph.M.length?' M with no L instruction: '+esc(orph.M.join(', '))+'.':'')+(orph.C.length?' Requirements no L item covers: '+esc(orph.C.slice(0,12).join(', '))+(orph.C.length>12?'…':'')+'.':'')+'</div>':'<div style="margin-top:8px;font-size:11px;color:var(--green)">✓ No L-M-C orphans detected.</div>')
+    +'</div>'
+    +'<div style="border:1px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:11px;font-weight:700;margin-bottom:6px">Format compliance rules</div>'
+    +(function(){var fr=d.formatRules||{};var bits=[];
+      ((fr.pageLimits)||[]).forEach(function(pl){bits.push('<b>'+esc(pl.volume||'?')+':</b> '+esc(String(pl.limit))+' pages');});
+      ['font','margins','lineSpacing','submissionMethod','dueDateTime','timezone','fileNaming'].forEach(function(k){if(fr[k])bits.push('<b>'+k+':</b> '+esc(String(fr[k])));});
+      if((fr.forms||[]).length)bits.push('<b>forms:</b> '+esc(fr.forms.join('; ')));
+      return bits.length?'<div style="font-size:11px;line-height:1.7">'+bits.join('<br>')+'</div>':'<div style="font-size:11px;color:var(--text-muted)">None extracted yet.</div>';})()
+    +'</div></div>';
+  var hdr='<div style="font-size:12px;color:var(--text-muted)">'+reqs.filter(function(r){return r.status!=='deleted';}).length+' requirements · every row cites its source page · edit, merge, or split freely — extraction is never locked.</div>';
+  return hdr+docsHTML+upload+bar+'<div style="border:1px solid var(--border);border-radius:8px;max-height:430px;overflow:auto">'+rows+'</div>'+lmc;
+}
+function pdShredSetField(pid,rid,field,val){
+  var d=_shredCache[pid];if(!d)return;
+  var r=(d.requirements||[]).find(function(x){return x.id===rid;});if(!r)return;
+  r[field]=val;_shredSave(pid);renderProposalDetail(pid);
+}
+function pdShredEditReq(pid,rid){
+  var d=_shredCache[pid];if(!d)return;
+  var r=(d.requirements||[]).find(function(x){return x.id===rid;});if(!r)return;
+  openFormModal({over:'RFP Shred',title:'Edit '+r.id,submitLabel:'Save',
+    fields:[
+      {key:'text',label:'Requirement text',type:'textarea',rows:5,required:true,value:r.text},
+      {key:'section',label:'Source section',type:'text',value:r.section||''},
+      {key:'page',label:'Source page',type:'number',value:r.page||''},
+      {key:'volume',label:'Proposal volume',type:'text',value:r.volume||''},
+      {key:'notes',label:'Notes (shows in compliance matrix)',type:'textarea',rows:2,value:r.notes||''},
+      {key:'split',label:'Split: paste the SECOND requirement here to split this row into two',type:'textarea',rows:3,value:''}
+    ],
+    onSubmit:function(v){
+      r.text=v.text.trim();r.section=(v.section||'').trim();r.page=Number(v.page)||r.page;r.volume=(v.volume||'').trim();r.notes=(v.notes||'').trim();
+      if(v.split&&v.split.trim()){
+        var nw={text:v.split.trim(),section:r.section,page:r.page,doc:r.doc,type:r.type,volume:r.volume,confidence:r.confidence,refs:{L:(r.refs.L||[]).slice(),M:(r.refs.M||[]).slice(),C:[]},status:'active',compliance:'not-started',owner:r.owner||'',sectionId:'',sectionTitle:''};
+        shredAssignIds([nw],d.requirements);d.requirements.push(nw);
+      }
+      _shredSave(pid);renderProposalDetail(pid);
+    }});
+}
+function pdShredMerge(pid){
+  var d=_shredCache[pid];if(!d)return;
+  var ids=Object.keys(_shredSel).filter(function(k){return _shredSel[k];});
+  if(ids.length<2)return;
+  var picked=(d.requirements||[]).filter(function(r){return ids.indexOf(r.id)>-1;});
+  if(!confirm('Merge '+picked.length+' requirements into '+picked[0].id+'? The others are marked deleted (recoverable).'))return;
+  var first=picked[0];
+  first.text=picked.map(function(r){return r.text;}).join(' ');
+  picked.slice(1).forEach(function(r){r.status='deleted';(r.refs.L||[]).forEach(function(x){if(first.refs.L.indexOf(x)<0)first.refs.L.push(x);});(r.refs.M||[]).forEach(function(x){if(first.refs.M.indexOf(x)<0)first.refs.M.push(x);});});
+  _shredSel={};
+  _shredSave(pid);renderProposalDetail(pid);
+}
+/* Amendment diff: extract from the amendment, then LLM-diff against current
+   requirements; apply with history so nothing is silently lost. */
+function pdShredAmendmentDiff(pid,docId){
+  var p=(D.proposals||[]).find(function(x){return x.id===pid;});if(!p)return;
+  var d=_shredCache[pid];if(!d)return;
+  var doc=d.docs.find(function(x){return x.id===docId;});if(!doc)return;
+  var llm=_propLLMOpts(p);
+  _shredStatus('Diffing amendment <b>'+esc(doc.name)+'</b> against current requirements…');
+  var amendText=(doc.pages||[]).map(function(pg){return '[PAGE '+pg.n+']\n'+pg.text;}).join('\n').slice(0,30000);
+  var reqList=(d.requirements||[]).filter(function(r){return r.status!=='deleted';}).map(function(r){return r.id+': '+r.text.slice(0,200);}).join('\n').slice(0,24000);
+  var sys='You compare a solicitation AMENDMENT against an existing requirements list. Output ONLY JSON in a ```json``` block. Be conservative — only report changes the amendment explicitly makes.';
+  var instr='AMENDMENT TEXT:\n"""\n'+amendText+'\n"""\n\nCURRENT REQUIREMENTS:\n'+reqList
+    +'\n\nReturn:\n{"changed":[{"id":"R-001","newText":"verbatim new text"}],"added":[{"text":"verbatim","section":"","page":1,"type":"technical"}],"deleted":["R-002"]}';
+  llmComplete({provider:llm.provider,model:llm.model,system:sys,messages:[{role:'user',content:instr}],max_tokens:5000})
+    .then(function(j){
+      var parsed=llmExtractJSON(j)||{};
+      var by={};(d.requirements||[]).forEach(function(r){by[r.id]=r;});
+      var nCh=0,nAd=0,nDe=0;
+      (parsed.changed||[]).forEach(function(c){var r=by[c.id];if(r&&c.newText){r.history=r.history||[];r.history.push({ts:Date.now(),prevText:r.text,via:doc.name});r.text=String(c.newText);r.status='changed';nCh++;}});
+      (parsed.deleted||[]).forEach(function(id){var r=by[id];if(r){r.history=r.history||[];r.history.push({ts:Date.now(),prevText:r.text,via:doc.name,action:'deleted'});r.status='deleted';nDe++;}});
+      var adds=(parsed.added||[]).filter(function(a){return a&&a.text;}).map(function(a){return {text:String(a.text),section:a.section||'AMD',page:Number(a.page)||1,doc:doc.name,type:a.type||'technical',volume:'',confidence:'high',refs:{L:[],M:[],C:[]},status:'added',compliance:'not-started',owner:'',sectionId:'',sectionTitle:''};});
+      shredAssignIds(adds,d.requirements);
+      d.requirements=d.requirements.concat(adds);nAd=adds.length;
+      _shredSave(pid);renderProposalDetail(pid);
+      _shredStatus('Amendment applied: '+nCh+' changed · '+nAd+' added · '+nDe+' deleted (history preserved).');
+    })
+    .catch(function(e){_shredStatus('Amendment diff failed: '+esc(e&&e.message||e));});
+}
+/* ── ANNOTATED OUTLINE (Module 3) — the intermediary step between the shred
+   and Sections. Structure follows Section L exactly; annotations carry the
+   L instruction, M factors/weights, mapped requirement IDs, page allocation,
+   win-theme slots, and writer assignment. Applying it builds p.sections so
+   the whole existing drafting pipeline (Generate All, gap analysis, voice
+   rewrite, export) runs on top of it. ── */
+function _pdOutlineHTML(p){
+  if(!_shredLoaded[p.id]){_shredLoad(p.id);return '<div style="font-size:12px;color:var(--text-muted);padding:20px 0">Loading…</div>';}
+  var d=_shredCache[p.id];
+  var intro='<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Generate a proposal outline that mirrors <b>Section L exactly</b> — never reorganized for "logical flow". Each section is annotated with the L instruction it satisfies, the M factors it\'s scored under, the requirements it must address, and a page allocation reconciled against the volume page limits. Apply it to make these the proposal\'s Sections.</div>';
+  if(!d||!(d.requirements||[]).length){
+    return intro+'<div class="empty-recruit"><div style="font-size:13px;margin-bottom:6px">No shred yet</div><div style="font-size:11px">Run the <b>Shred</b> tab first — the outline is generated from the shredded Section L instructions, M factors, and requirements.</div></div>';
+  }
+  var genBtn='<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">'
+    +'<button id="ol_gen_btn" class="btn btn-gold" onclick="pdOutlineGenerate(\''+p.id+'\')">'+(d.outline?'↻ Re-generate Outline':'✨ Generate Outline from Shred')+'</button>'
+    +(d.outline?'<a class="btn btn-outline btn-sm" href="/api/shred/'+p.id+'/outline.docx" style="text-decoration:none">⬇ Annotated Outline (DOCX)</a>'
+      +'<button class="btn btn-navy btn-sm" onclick="pdOutlineApply(\''+p.id+'\')">→ Apply to Sections</button>':'')
+    +'<span id="ol_status" style="font-size:12px;color:#7C3AED"></span></div>';
+  if(!d.outline)return intro+genBtn;
+  var o=d.outline;
+  var budget=shredPageBudget(o);
+  var budgetHTML='<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px"><div style="font-size:11px;font-weight:700;margin-bottom:6px">Page budget</div>'
+    +budget.map(function(b){return '<div style="font-size:11px;'+(b.over?'color:var(--red);font-weight:700':'')+'">'+esc(b.volume||'?')+': '+b.allocated+' allocated'+(b.limit?' / '+b.limit+' limit'+(b.over?' — ⚠ OVER by '+(b.allocated-b.limit):''):' (no stated limit)')+'</div>';}).join('')+'</div>';
+  var volsHTML=(o.volumes||[]).map(function(v,vi){
+    return '<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">'
+      +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><b style="font-size:13px">'+esc(v.title||'Volume')+'</b>'
+      +'<span style="font-size:11px;color:var(--text-muted)">page limit:</span><input class="fld-i" style="width:64px;padding:3px 6px;font-size:11px" type="number" value="'+(v.pageLimit||'')+'" onchange="pdOutlineSetVol(\''+p.id+'\','+vi+',\'pageLimit\',this.value)"></div>'
+      +(v.sections||[]).map(function(s,si){
+        return '<div style="border-top:1px dashed var(--border);padding:7px 0;font-size:12px">'
+          +'<div style="display:flex;gap:8px;align-items:center"><b>'+esc(s.number||'')+' '+esc(s.title||'')+'</b><span style="flex:1"></span>'
+          +'<span style="font-size:10px;color:var(--text-muted)">pages</span><input class="fld-i" style="width:52px;padding:2px 5px;font-size:11px" type="number" value="'+(s.pages||'')+'" onchange="pdOutlineSetSec(\''+p.id+'\','+vi+','+si+',\'pages\',this.value)">'
+          +'<span style="font-size:10px;color:var(--text-muted)">writer</span><select class="fld-sel" style="width:110px;font-size:10px;padding:3px" onchange="pdOutlineSetSec(\''+p.id+'\','+vi+','+si+',\'writer\',this.value)">'+memberNameOpts(s.writer||'')+'</select></div>'
+          +'<div style="font-size:10px;color:var(--text-muted);margin-top:3px">'
+          +(s.lRef?'Satisfies <b>'+esc(s.lRef)+'</b>':'')
+          +((s.mRefs||[]).length?' · scored under '+s.mRefs.map(function(m){return esc((m.factor||m)+(m.weight?' ('+m.weight+')':''));}).join('; '):'')
+          +((s.reqIds||[]).length?' · must address <b>'+esc(s.reqIds.slice(0,10).join(', '))+(s.reqIds.length>10?'… ('+s.reqIds.length+')':'')+'</b>':'')
+          +' · win themes: <i>[slot]</i></div>'
+          +'</div>';
+      }).join('')
+      +'</div>';
+  }).join('');
+  return intro+genBtn+budgetHTML+volsHTML;
+}
+function pdOutlineSetVol(pid,vi,field,val){var d=_shredCache[pid];if(!d||!d.outline)return;d.outline.volumes[vi][field]=field==='pageLimit'?(Number(val)||0):val;_shredSave(pid);renderProposalDetail(pid);}
+function pdOutlineSetSec(pid,vi,si,field,val){var d=_shredCache[pid];if(!d||!d.outline)return;var s=d.outline.volumes[vi].sections[si];s[field]=field==='pages'?(Number(val)||0):val;_shredSave(pid);renderProposalDetail(pid);}
+function pdOutlineGenerate(pid){
+  var p=(D.proposals||[]).find(function(x){return x.id===pid;});if(!p)return;
+  var d=_shredCache[pid];if(!d)return;
+  var llm=_propLLMOpts(p);
+  var btn=document.getElementById('ol_gen_btn');if(btn){btn.disabled=true;btn.textContent='Generating…';}
+  function st(m){var el=document.getElementById('ol_status');if(el)el.innerHTML=m;}
+  st('Building the Section-L-mirrored outline…');
+  var lList=(d.lItems||[]).map(function(l){return l.ref+': '+l.text;}).join('\n').slice(0,12000);
+  var mList=(d.mFactors||[]).map(function(m){return m.ref+': '+m.factor+(m.weight?' — weight: '+m.weight:'');}).join('\n');
+  var reqList=(d.requirements||[]).filter(function(r){return r.status!=='deleted';}).map(function(r){return r.id+' ['+(r.type||'')+'] '+r.text.slice(0,120);}).join('\n').slice(0,20000);
+  var fr=d.formatRules||{};
+  var sys='You build federal proposal outlines. The structure MUST follow Section L exactly — same volumes, same order, same numbering and headings as the instructions to offerors. NEVER reorganize for logical flow. Output ONLY JSON in a ```json``` block.';
+  var instr='SECTION L INSTRUCTION ITEMS:\n'+(lList||'(none extracted — derive volumes/sections from the requirements below, conservatively)')
+    +'\n\nSECTION M FACTORS:\n'+(mList||'(none)')
+    +'\n\nREQUIREMENTS (map each to the outline section that must address it):\n'+reqList
+    +'\n\nSTATED PAGE LIMITS: '+JSON.stringify(fr.pageLimits||[])
+    +'\n\nReturn:\n{"volumes":[{"title":"Volume I — Technical","pageLimit":number_or_null,"sections":[{"number":"1.0","title":"heading mirroring L","lRef":"L.x.y","mRefs":[{"factor":"M.x name","weight":"as stated or empty"}],"reqIds":["R-001"]}]}]}\nEvery requirement ID should appear in exactly one section where it is best addressed.';
+  llmComplete({provider:llm.provider,model:llm.model,system:sys,messages:[{role:'user',content:instr}],max_tokens:6000})
+    .then(function(j){
+      var parsed=llmExtractJSON(j);
+      if(!parsed||!Array.isArray(parsed.volumes)||!parsed.volumes.length)throw new Error('Could not parse the outline response.');
+      parsed.volumes.forEach(function(v){v.id=v.id||uid();(v.sections||[]).forEach(function(s){s.id=s.id||uid();s.pages=0;s.writer='';});shredAllocatePages(v);});
+      d.outline=parsed;d.outline.generatedAt=Date.now();
+      _shredSave(pid);renderProposalDetail(pid);
+    })
+    .catch(function(e){st('Failed: '+esc(e&&e.message||e));})
+    .finally(function(){if(btn){btn.disabled=false;btn.textContent='✨ Generate Outline from Shred';}});
+}
+function pdOutlineApply(pid){
+  var p=(D.proposals||[]).find(function(x){return x.id===pid;});if(!p)return;
+  var d=_shredCache[pid];if(!d||!d.outline)return;
+  var hasContent=(p.sections||[]).some(function(s){return (s.html||'').trim();});
+  if(!confirm('Apply the outline as this proposal\'s Sections?'+(hasContent?'\n\n⚠ Existing drafted section content will be REPLACED by the outline skeleton.':'\n\nThe current section list (if any) is replaced by the outline skeleton.')))return;
+  var by={};(d.requirements||[]).forEach(function(r){by[r.id]=r;});
+  var secs=[];
+  (d.outline.volumes||[]).forEach(function(v){
+    (v.sections||[]).forEach(function(s){
+      var ann='Satisfies '+(s.lRef||'Section L')+'. Evaluated under: '+((s.mRefs||[]).map(function(m){return (m.factor||m)+(m.weight?' ('+m.weight+')':'');}).join('; ')||'(unmapped)')+'. This section MUST fully address the mapped shredded requirements (provided separately). Honor the page allocation of '+(s.pages||'?')+' page(s).';
+      secs.push({id:s.id,title:(v.title?v.title+' · ':'')+(s.number?s.number+' ':'')+(s.title||''),source:'ai',pageBudget:Number(s.pages)||0,html:'',draftedAt:0,draftedBy:'',draftedWith:{provider:'',model:''},templatePrompt:ann,evidence:[],shredReqIds:(s.reqIds||[]).slice()});
+      (s.reqIds||[]).forEach(function(rid){var r=by[rid];if(r){r.sectionId=s.id;r.sectionTitle=(s.number?s.number+' ':'')+(s.title||'');}});
+    });
+  });
+  if(!secs.length){alert('The outline has no sections.');return;}
+  p.sections=secs;
+  p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'outline.applied',payload:{sections:secs.length}});
+  _shredSave(pid);save();
+  _pdTab='sections';renderProposalDetail(pid);
+  toast('Outline applied — '+secs.length+' sections ready to draft. Requirements are injected into each section\'s drafting prompt automatically.','success',6000);
+}
+/* Compliance auto-update: requirements mapped to a drafted section move to
+   'drafted' (never downgrading a reviewed 'compliant'). */
+function _shredSyncCompliance(p){
+  var d=_shredCache[p.id];if(!d)return;
+  var drafted={};(p.sections||[]).forEach(function(s){if((s.html||'').trim())drafted[s.id]=1;});
+  var changed=false;
+  (d.requirements||[]).forEach(function(r){
+    if(r.sectionId&&drafted[r.sectionId]&&(r.compliance||'not-started')==='not-started'){r.compliance='drafted';changed=true;}
+  });
+  if(changed)_shredSave(p.id);
+}
 function _pdSettingsHTML(p){
   var llmProv=p.llmProvider||'';
   var llmModel=p.llmModel||'';
@@ -6964,6 +7488,13 @@ function _propSectionPrompt(p,s,kbBlock,partnerBlock){
         :'You MAY use these capabilities and facts as part of the overall team solution WITHOUT naming the partner — write in first-person plural as the proposing team. Do NOT claim the partner\'s specific past contracts as CommunityForce\'s own.')
         +'):\n'+partnerBlock):'')
     +(winBlock?'\n\nWINNING EXAMPLES (the same section from proposals that WON — emulate their structure, specificity, and tone; never copy another customer\'s facts into this proposal):\n'+winBlock:'')
+    +(function(){
+      // Shredded requirements mapped to this section (outline-applied sections)
+      var sh=_shredCache[p.id];if(!sh||!s.shredReqIds||!s.shredReqIds.length)return '';
+      var by={};(sh.requirements||[]).forEach(function(r){by[r.id]=r;});
+      var lines=s.shredReqIds.map(function(id){var r=by[id];return r&&r.status!=='deleted'?id+' ('+(r.section||'?')+' p.'+(r.page||'?')+'): '+r.text:'';}).filter(Boolean).slice(0,40);
+      return lines.length?'\n\nSHREDDED REQUIREMENTS THIS SECTION MUST FULLY ADDRESS (cover every one explicitly; a compliance reviewer will check each ID against this section):\n'+lines.join('\n'):'';
+    })()
     +'\n\nBRAND VOICE:\n'+_propBuildVoiceCtx()
     +(_propBuildDifferentiatorsCtx(p)?'\n\nDIFFERENTIATORS & WIN THEMES (weave the relevant ones in naturally; do not list them mechanically):\n'+_propBuildDifferentiatorsCtx(p):'')
     +((t.indexOf('past')>-1||t.indexOf('experience')>-1)?'\n\nPAST PERFORMANCE LIBRARY (use ONLY these — do not invent):\n'+(_propBuildPPCtx(p)||'(none selected; flag this in your output)'):'')

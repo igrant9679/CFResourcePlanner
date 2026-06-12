@@ -54,6 +54,16 @@ async function initDb() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `);
+  // RFP Shred: per-proposal requirements database, L-M-C mappings, format
+  // rules, and annotated outline. One row per proposal, OUTSIDE the app_state
+  // blob so hundreds of requirements never bloat the synced state.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS proposal_shreds (
+      proposal_id TEXT PRIMARY KEY,
+      data JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
   // Knowledge Bank: past proposals + capability/reference docs the Proposal
   // Generator pulls from. The heavy extracted_text (and the original binary)
   // live HERE, not in the app_state JSONB blob — only lightweight metadata
@@ -110,6 +120,36 @@ async function extractDocText(buffer, mime, name) {
     console.error('extractDocText failed for ' + name + ':', e.message);
   }
   return '';
+}
+
+// Per-page text extraction for RFP shredding. PDFs get true page numbers so
+// every extracted requirement can cite its source page; DOCX/XLSX/TXT fall
+// back to a single pseudo-page (cited by section instead).
+async function extractDocTextPaged(buffer, mime, name) {
+  const lower = String(name || '').toLowerCase();
+  const m = String(mime || '').toLowerCase();
+  const isPdf = /pdf$/.test(m) || lower.endsWith('.pdf');
+  if (isPdf) {
+    try {
+      const pdfParse = require('pdf-parse');
+      const pages = [];
+      await pdfParse(buffer, {
+        pagerender: (pageData) => pageData.getTextContent().then((tc) => {
+          const text = tc.items.map((i) => i.str).join(' ');
+          pages.push(text);
+          return text;
+        }),
+      });
+      const total = pages.reduce((a, p) => a + p.length, 0);
+      return {
+        pages: pages.map((t, i) => ({ n: i + 1, text: t })),
+        chars: total,
+        ocrNeeded: pages.length > 0 && total / pages.length < 40,  // likely scanned
+      };
+    } catch (e) { console.error('paged pdf extract failed for ' + name + ':', e.message); return { pages: [], chars: 0, ocrNeeded: false, error: e.message }; }
+  }
+  const text = await extractDocText(buffer, mime, name);
+  return { pages: text ? [{ n: 1, text }] : [], chars: text.length, ocrNeeded: false };
 }
 
 app.get('/api/data', async (req, res) => {
@@ -297,6 +337,121 @@ app.delete('/api/attachments/:id', async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ── RFP SHRED ──
+// Upload a solicitation/amendment/attachment: store the binary (downloadable
+// like any attachment) and return per-page text for the client-side shred.
+app.post('/api/shred-doc', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file provided' });
+    const id = 'att_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    await pool.query(
+      'INSERT INTO attachments (id, project_id, name, mime, size, data) VALUES ($1,$2,$3,$4,$5,$6)',
+      [id, req.body.proposalId || null, req.file.originalname, req.file.mimetype, req.file.size, req.file.buffer]
+    );
+    const ex = await extractDocTextPaged(req.file.buffer, req.file.mimetype, req.file.originalname);
+    res.json({ attachmentId: id, name: req.file.originalname, mime: req.file.mimetype, size: req.file.size, chars: ex.chars, ocrNeeded: !!ex.ocrNeeded, pages: ex.pages });
+  } catch (e) {
+    console.error('shred-doc upload failed:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/shred/:proposalId', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT data, updated_at FROM proposal_shreds WHERE proposal_id = $1', [req.params.proposalId]);
+    if (!r.rows.length) return res.json(null);
+    res.json(r.rows[0].data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/shred/:proposalId', async (req, res) => {
+  try {
+    const data = req.body || {};
+    await pool.query(
+      `INSERT INTO proposal_shreds (proposal_id, data, updated_at) VALUES ($1, $2, now())
+       ON CONFLICT (proposal_id) DO UPDATE SET data = $2, updated_at = now()`,
+      [req.params.proposalId, JSON.stringify(data)]
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Compliance matrix XLSX: one row per active requirement with citation,
+// assignment, owner, and drafting status.
+app.get('/api/shred/:proposalId/compliance.xlsx', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT data FROM proposal_shreds WHERE proposal_id = $1', [req.params.proposalId]);
+    if (!r.rows.length) return res.status(404).send('No shred for this proposal');
+    const d = r.rows[0].data || {};
+    const XLSX = require('xlsx');
+    const rows = (d.requirements || []).filter((q) => q.status !== 'deleted').map((q) => ({
+      'Req ID': q.id,
+      'Requirement': q.text,
+      'Type': q.type || '',
+      'Volume': q.volume || '',
+      'Source Doc': q.doc || '',
+      'Section': q.section || '',
+      'Page': q.page || '',
+      'L Refs': (q.refs && q.refs.L || []).join(', '),
+      'M Refs': (q.refs && q.refs.M || []).join(', '),
+      'Proposal Section': q.sectionTitle || '',
+      'Owner': q.owner || '',
+      'Status': q.compliance || 'not-started',
+      'Confidence': q.confidence || '',
+      'Notes': q.notes || '',
+    }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Compliance Matrix');
+    const fr = (d.formatRules || {});
+    const frRows = Object.keys(fr).map((k) => ({ Rule: k, Value: typeof fr[k] === 'object' ? JSON.stringify(fr[k]) : String(fr[k] || '') }));
+    if (frRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(frRows), 'Format Rules');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="compliance-matrix.xlsx"');
+    res.send(buf);
+  } catch (e) {
+    console.error('compliance export failed:', e.message);
+    res.status(500).send('export failed');
+  }
+});
+
+// Annotated outline DOCX: Section-L-mirrored headings, each followed by an
+// italicized annotation block (L ref, M factors/weights, requirement IDs,
+// page allocation, win-theme slots, writer).
+app.get('/api/shred/:proposalId/outline.docx', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT data FROM proposal_shreds WHERE proposal_id = $1', [req.params.proposalId]);
+    const d = r.rows.length ? (r.rows[0].data || {}) : {};
+    const o = d.outline;
+    if (!o || !Array.isArray(o.volumes) || !o.volumes.length) return res.status(404).send('No outline generated yet');
+    const docx = require('docx');
+    const children = [new docx.Paragraph({ text: 'Annotated Proposal Outline', heading: docx.HeadingLevel.TITLE })];
+    o.volumes.forEach((v) => {
+      children.push(new docx.Paragraph({ text: (v.title || 'Volume') + (v.pageLimit ? '  —  page limit: ' + v.pageLimit : ''), heading: docx.HeadingLevel.HEADING_1 }));
+      (v.sections || []).forEach((s) => {
+        children.push(new docx.Paragraph({ text: (s.number ? s.number + '  ' : '') + (s.title || ''), heading: docx.HeadingLevel.HEADING_2 }));
+        const ann = [
+          s.lRef ? 'Satisfies: ' + s.lRef : '',
+          (s.mRefs || []).length ? 'Evaluated under: ' + s.mRefs.map((m) => (m.factor || m) + (m.weight ? ' (' + m.weight + ')' : '')).join('; ') : '',
+          (s.reqIds || []).length ? 'Must address: ' + s.reqIds.join(', ') : '',
+          s.pages ? 'Page allocation: ' + s.pages + ' pp' : '',
+          'Win themes / discriminators / proof points: [                ]',
+          'Writer: ' + (s.writer || '[unassigned]'),
+        ].filter(Boolean).join('   •   ');
+        children.push(new docx.Paragraph({ children: [new docx.TextRun({ text: ann, italics: true, size: 18, color: '666666' })] }));
+      });
+    });
+    const doc = new docx.Document({ sections: [{ children }] });
+    const buf = await docx.Packer.toBuffer(doc);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', 'attachment; filename="annotated-outline.docx"');
+    res.send(buf);
+  } catch (e) {
+    console.error('outline export failed:', e.message);
+    res.status(500).send('export failed');
   }
 });
 
