@@ -646,7 +646,9 @@ async function fpdsRecompete(profile, stats, errors) {
   const lo = new Date(Date.now() + 12 * 30 * 86400000), hi = new Date(Date.now() + 18 * 30 * 86400000);
   for (const naics of naicsList) {
     try {
-      const q = encodeURIComponent('PRINCIPAL_NAICS_CODE:"' + naics + '" ULTIMATE_COMPLETION_DATE:[' + fmt(lo) + ',' + fmt(hi) + ']');
+      // ESTIMATED_COMPLETION_DATE is the indexed search field (ULTIMATE_… is
+      // only an output field) — probed live 2026-06-12.
+      const q = encodeURIComponent('PRINCIPAL_NAICS_CODE:"' + naics + '" ESTIMATED_COMPLETION_DATE:[' + fmt(lo) + ',' + fmt(hi) + ']');
       for (let start = 0; start < 30; start += 10) {
         const res = await govFetch('https://www.fpds.gov/ezsearch/FEEDS/ATOM?FEEDNAME=PUBLIC&q=' + q + '&start=' + start, {}, 2);
         if (!res.ok) { errors.push({ source: 'fpds', error: 'HTTP ' + res.status }); break; }
