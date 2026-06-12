@@ -203,7 +203,12 @@ app.post('/api/data', async (req, res) => {
       }
       if (prevRow) {
         await pool.query('INSERT INTO app_state_history (data, data_updated_at) VALUES ($1, $2)', [JSON.stringify(prevRow.data), prevRow.updated_at]);
-        await pool.query('DELETE FROM app_state_history WHERE id NOT IN (SELECT id FROM app_state_history ORDER BY id DESC LIMIT 300)');
+        // Retention: drop >14 days; beyond the newest 150 saves keep only the
+        // last save of each hour — fine-grained recent history plus two weeks
+        // of hourly recovery points, without unbounded growth.
+        await pool.query("DELETE FROM app_state_history WHERE archived_at < now() - interval '14 days'");
+        await pool.query(`DELETE FROM app_state_history WHERE id NOT IN (SELECT id FROM app_state_history ORDER BY id DESC LIMIT 150)
+          AND id NOT IN (SELECT max(id) FROM app_state_history GROUP BY date_trunc('hour', archived_at))`);
       }
     } catch (e) { console.error('history archive failed (save continues):', e.message); }
     const w = await pool.query(

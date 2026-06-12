@@ -9787,12 +9787,57 @@ function openAdmin(){
     +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');openDataIssueLog()" title="Data-quality issues found by review or flagged manually">&#9888; Data Issue Log'+(dataIssueSummary()?' ('+dataIssueSummary()+')':'')+'</button>'
     +'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');exportData()" title="Download backup JSON">&#8595; Export</button>'
     +(canI?'<button class="btn btn-outline btn-sm admin-mi" onclick="closeModal(\'ovAdmin\');importData()" title="Restore from JSON file">&#8593; Import</button>':'')
+    +'<button class="btn btn-outline btn-sm admin-mi" onclick="openDataRecovery()" title="Browse the automatic save snapshots and restore any point in time">&#128336; Data Recovery</button>'
     +'</div></div>';
   html+='<div class="btn-row" style="margin-top:14px"><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovAdmin\')">Close</button></div>';
   document.getElementById('mdlAdmin').innerHTML=html;
   openModal('ovAdmin');
 }
 
+/* ── DATA RECOVERY (browse the automatic save snapshots; restore any of them) ── */
+function openDataRecovery(){
+  if(!(ME&&ME.role==='admin'))return;
+  var el=document.getElementById('mdlAdmin');
+  el.innerHTML='<div class="mdl-over">Administration</div><div class="mdl-title">Data Recovery</div><div style="font-size:12px;color:var(--text-muted)">Loading snapshots…</div>';
+  openModal('ovAdmin');
+  fetch('/api/history',{cache:'no-store'}).then(function(r){return r.json();}).then(function(rows){
+    var html='<div class="mdl-over">Administration</div><div class="mdl-title">Data Recovery</div>'
+      +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Every save automatically archives the previous state (recent saves individually, then hourly snapshots for 14 days). Restoring replaces the current data with the selected snapshot — the current state is archived first, so a restore can itself be undone from this screen.</div>';
+    if(!rows||!rows.length){
+      html+='<div style="font-size:12px;color:var(--text-muted);padding:10px 0">No snapshots yet — they accumulate as people save.</div>';
+    }else{
+      html+='<div style="max-height:420px;overflow:auto">'+rows.map(function(s){
+        var c=s.counts||{};
+        return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:7px;margin-bottom:6px;font-size:12px">'
+          +'<div><b>'+new Date(s.archivedAt).toLocaleString()+'</b>'
+          +'<div style="font-size:11px;color:var(--text-muted)">'+(c.departments||0)+' depts · '+(c.projects||0)+' items · '+(c.activities||0)+' tasks · '+(c.proposals||0)+' proposals · '+(c.services||0)+' services · '+(c.recruitings||0)+' reqs</div></div>'
+          +'<button class="btn btn-danger-sm" onclick="restoreSnapshot(\''+s.id+'\')">Restore</button>'
+          +'</div>';
+      }).join('')+'</div>';
+    }
+    html+='<div class="btn-row" style="margin-top:12px"><button class="btn btn-sec" style="flex:1" onclick="openAdmin()">Back</button></div>';
+    el.innerHTML=html;
+  }).catch(function(e){
+    el.innerHTML='<div class="mdl-over">Administration</div><div class="mdl-title">Data Recovery</div><div style="color:var(--red);font-size:12px">Failed to load history: '+esc(e&&e.message||e)+'</div><div class="btn-row" style="margin-top:12px"><button class="btn btn-sec" style="flex:1" onclick="openAdmin()">Back</button></div>';
+  });
+}
+function restoreSnapshot(id){
+  if(!(ME&&ME.role==='admin'))return;
+  if(!confirm('Replace ALL current data with this snapshot?\n\nEveryone\'s view will roll back to that point in time. The current state is archived first, so this can be undone from the same Data Recovery screen.'))return;
+  fetch('/api/history/'+id,{cache:'no-store'})
+    .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
+    .then(function(data){
+      D=data;migrate();
+      try{localStorage.setItem(STORE_KEY,JSON.stringify(D));}catch(_){}
+      return serverSave({force:true});
+    })
+    .then(function(){
+      ME=currentAccount()||ME;
+      closeModal('ovAdmin');renderView();
+      toast('Snapshot restored. Other tabs pick it up within a minute (or on refresh).','success',7000);
+    })
+    .catch(function(e){alert('Restore failed: '+(e&&e.message||e));});
+}
 function renderAdminModal(){
 var tab=ADMIN_TABS.find(function(t){return t.id===adminTab;})||ADMIN_TABS[0];
 var list=D[tab.key]||[];
