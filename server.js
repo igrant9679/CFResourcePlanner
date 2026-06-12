@@ -32,6 +32,17 @@ async function initDb() {
       CONSTRAINT single_row CHECK (id = 1)
     )
   `);
+  // Every accepted save archives the PREVIOUS state here, so any accidental
+  // overwrite (stale tab, bad merge, user error) is recoverable. Pruned to the
+  // most recent 300 snapshots.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_state_history (
+      id BIGSERIAL PRIMARY KEY,
+      data JSONB NOT NULL,
+      data_updated_at TIMESTAMPTZ,
+      archived_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS attachments (
       id TEXT PRIMARY KEY,
@@ -139,8 +150,10 @@ app.post('/api/data', async (req, res) => {
     // Optional bypass for explicit reset/import flows the user knowingly chose
     const force = req.query.force === '1' || req.get('X-Atlas-Force') === '1';
     const base = req.get('X-Atlas-Base-Updated-At') || '';
+    let prevRow = null;
     if (!force) {
       const existing = await pool.query('SELECT data, updated_at FROM app_state WHERE id = 1');
+      prevRow = existing.rows.length ? existing.rows[0] : null;
       const oldData = existing.rows.length ? existing.rows[0].data : null;
       const curTs = existing.rows.length && existing.rows[0].updated_at ? existing.rows[0].updated_at.toISOString() : '';
       // Optimistic lock: another client saved since this one loaded → don't silently overwrite.
@@ -149,6 +162,20 @@ app.post('/api/data', async (req, res) => {
         return res.status(409).json({
           conflict: true,
           error: 'Another user saved changes since you loaded this page. Reload to get their latest version, or choose to overwrite.',
+          serverUpdatedAt: curTs,
+        });
+      }
+      // A save with NO version stamp comes from an outdated tab (code from
+      // before the optimistic lock) or a tab that booted offline. Accepting it
+      // would overwrite the whole state with that tab's stale snapshot — the
+      // root cause of "data entered hours ago disappeared". Reject as a
+      // conflict; current clients reload-and-merge, old clients fail safe.
+      if (!base && curTs) {
+        console.warn('[lock] REJECTED save: missing base stamp (stale/outdated client)');
+        return res.status(409).json({
+          conflict: true,
+          staleClient: true,
+          error: 'This browser tab is out of date (or loaded offline). Refresh the page to get the latest version — your save was blocked to protect newer data.',
           serverUpdatedAt: curTs,
         });
       }
@@ -168,6 +195,17 @@ app.post('/api/data', async (req, res) => {
         }
       }
     }
+    // Archive the state we're about to replace, then prune to the newest 300.
+    try {
+      if (force && !prevRow) {
+        const ex = await pool.query('SELECT data, updated_at FROM app_state WHERE id = 1');
+        prevRow = ex.rows.length ? ex.rows[0] : null;
+      }
+      if (prevRow) {
+        await pool.query('INSERT INTO app_state_history (data, data_updated_at) VALUES ($1, $2)', [JSON.stringify(prevRow.data), prevRow.updated_at]);
+        await pool.query('DELETE FROM app_state_history WHERE id NOT IN (SELECT id FROM app_state_history ORDER BY id DESC LIMIT 300)');
+      }
+    } catch (e) { console.error('history archive failed (save continues):', e.message); }
     const w = await pool.query(
       `INSERT INTO app_state (id, data, updated_at) VALUES (1, $1, now())
        ON CONFLICT (id) DO UPDATE SET data = $1, updated_at = now()
@@ -179,6 +217,43 @@ app.post('/api/data', async (req, res) => {
     console.error('POST /api/data failed:', e.message);
     res.status(500).json({ error: e.message, code: e.code });
   }
+});
+
+// ── VERSION / HISTORY ──
+// bootedAt changes on every deploy — clients poll it to retire stale tabs.
+const SERVER_BOOTED_AT = new Date().toISOString();
+app.get('/api/version', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT updated_at FROM app_state WHERE id = 1');
+    res.json({
+      bootedAt: SERVER_BOOTED_AT,
+      updatedAt: r.rows.length && r.rows[0].updated_at ? r.rows[0].updated_at.toISOString() : null,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Snapshot index — id, when it was archived, and rough collection counts so a
+// recovery point can be picked without downloading every blob.
+app.get('/api/history', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT id, data_updated_at, archived_at, data FROM app_state_history ORDER BY id DESC LIMIT 100');
+    res.json(r.rows.map((row) => {
+      const d = row.data || {};
+      const counts = {};
+      ['departments', 'projects', 'activities', 'proposals', 'recruitings', 'candidates'].forEach((k) => { counts[k] = Array.isArray(d[k]) ? d[k].length : 0; });
+      if (d.companyProfile) counts.services = Array.isArray(d.companyProfile.services) ? d.companyProfile.services.length : 0;
+      return { id: row.id, dataUpdatedAt: row.data_updated_at, archivedAt: row.archived_at, counts };
+    }));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Full snapshot payload — restore by POSTing it back to /api/data?force=1.
+app.get('/api/history/:id', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT data FROM app_state_history WHERE id = $1', [req.params.id]);
+    if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(r.rows[0].data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── FILE ATTACHMENTS ──

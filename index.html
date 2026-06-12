@@ -1266,6 +1266,7 @@ async function serverSave(opts){
             _baseState=JSON.stringify(fresh.data);
             D=merged;migrate();
             try{localStorage.setItem(STORE_KEY,JSON.stringify(D));}catch(_){}
+            ME=currentAccount()||ME;
             renderView();
             syncSetStatus('Merged with another user’s changes','#86efac');
             toast('Another user saved at the same time — your edit was merged with theirs automatically.','success',4000);
@@ -1274,6 +1275,7 @@ async function serverSave(opts){
             D=fresh.data;migrate();
             try{localStorage.setItem(STORE_KEY,JSON.stringify(D));}catch(_){}
             saveQueued=false;
+            ME=currentAccount()||ME;
             renderView();
             syncSetStatus('Reloaded — another user had newer changes','#FBBF24');
             toast('Another user saved changes, so the latest version was reloaded. Re-apply your last edit if it didn’t stick.','warn',8000);
@@ -1298,6 +1300,47 @@ async function serverSave(opts){
   syncing=false;
   if(saveQueued){saveQueued=false;serverSave();}
 }
+/* ── BACKGROUND SYNC POLL ──
+   Tabs in this app stay open for days, which is how every data problem here
+   starts: an old tab shows stale data ("my entries disappeared"), runs old code
+   (UI behaves differently per tab), and can overwrite newer work. Every 45s:
+   - if the SERVER was redeployed since this tab loaded → reload the tab (when
+     idle) so old code retires itself;
+   - if another user saved → pull and adopt the fresh state, but only when this
+     tab is fully idle (no pending save, no open modal, not typing). */
+var _clientBootedAt=null;
+function _syncIdle(){
+  if(save._t||syncing||saveQueued)return false;
+  if(_modalStack.length)return false;
+  var el=document.activeElement;
+  if(el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.isContentEditable))return false;
+  return true;
+}
+async function syncPoll(){
+  try{
+    var r=await fetch('/api/version',{cache:'no-store'});
+    if(!r.ok)return;
+    var v=await r.json();if(!v)return;
+    if(_clientBootedAt===null){_clientBootedAt=v.bootedAt||'';}
+    if(v.bootedAt&&_clientBootedAt&&v.bootedAt!==_clientBootedAt){
+      if(_syncIdle()){location.reload();return;}
+      if(!syncPoll._warnedUpdate){syncPoll._warnedUpdate=true;toast('Atlas was updated — refresh this tab when convenient to pick up the new version.','warn',8000);}
+      return;
+    }
+    if(v.updatedAt&&_serverUpdatedAt&&v.updatedAt!==_serverUpdatedAt&&_syncIdle()){
+      var fresh=await serverLoad();
+      if(fresh&&fresh.reachable&&fresh.data&&_syncIdle()){
+        D=fresh.data;migrate();
+        _baseState=JSON.stringify(fresh.data);
+        try{localStorage.setItem(STORE_KEY,JSON.stringify(D));}catch(_){}
+        ME=currentAccount()||ME;
+        renderView();
+        syncSetStatus('Synced — picked up another user’s changes','rgba(255,255,255,0.55)');
+        setTimeout(function(){syncSetStatus('Cloud sync on','rgba(255,255,255,0.38)');},2500);
+      }
+    }
+  }catch(_){}
+}
 /* ── EXPORT / IMPORT ── */
 function exportData(){
   var blob=new Blob([JSON.stringify(D,null,2)],{type:'application/json'});
@@ -1321,7 +1364,7 @@ function importData(){
   inp.click();
 }
 /* ── LOAD ── */
-function loadLocal(){try{var s=localStorage.getItem(STORE_KEY);if(s){D=JSON.parse(s);migrate();return;}}catch(e){}D=defaultData();migrate();}
+function loadLocal(){try{var s=localStorage.getItem(STORE_KEY);if(s){D=JSON.parse(s);migrate();_baseState=s;return;}}catch(e){}D=defaultData();migrate();}
 async function bootstrapData(){
   syncSetStatus('Loading…','rgba(255,255,255,0.55)');
   var r=await serverLoad();
@@ -5213,8 +5256,8 @@ function openCompanyProfileManager(){
   var dontList=(v.dont||[]).map(function(s,i){return '<div class="cp-row"><span style="color:var(--red);font-weight:700">&times;</span><span style="flex:1">'+esc(s)+'</span><button class="btn btn-danger-sm btn-sm" onclick="cpDelDont('+i+')">&times;</button></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 4px">No don\'t-rules yet.</div>';
   var diffList=(p.differentiators||[]).map(function(s,i){return '<div class="cp-row"><span style="color:var(--gold);font-weight:700">&#9733;</span><span style="flex:1">'+esc(s)+'</span><button class="btn btn-danger-sm btn-sm" onclick="cpDelDiff('+i+')">&times;</button></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 4px">No company differentiators yet — add as many as apply. These feed every proposal draft.</div>';
   var boilerHTML=(p.boilerplate||[]).map(function(b,i){return '<div class="cp-row"><div style="flex:1"><strong style="font-size:12px">'+esc(b.name)+'</strong><div style="font-size:11px;color:var(--text-secondary);margin-top:2px">'+esc((b.text||'').slice(0,140)+(b.text&&b.text.length>140?'…':''))+'</div></div><div style="display:flex;gap:4px"><button class="btn btn-sec btn-sm" onclick="cpEditBoiler('+i+')">Edit</button><button class="btn btn-danger-sm btn-sm" onclick="cpDelBoiler('+i+')">&times;</button></div></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 4px">No boilerplate snippets yet.</div>';
-  var serviceHTML=(p.services||[]).map(function(s,i){return '<div class="cp-row"><div style="flex:1"><strong style="font-size:12px">'+esc(s.name)+'</strong> <span style="font-size:10px;color:var(--text-muted)">'+esc(s.pricingModel||'')+'</span><div style="font-size:11px;color:var(--text-secondary);margin-top:2px">'+esc((s.shortDesc||'').slice(0,140))+'</div></div><div style="display:flex;gap:4px"><button class="btn btn-sec btn-sm" onclick="cpEditService('+i+')">Edit</button><button class="btn btn-danger-sm btn-sm" onclick="cpDelService('+i+')">&times;</button></div></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 4px">No services yet.</div>';
-  var caseStudyHTML=(p.caseStudies||[]).map(function(c,i){return '<div class="cs-card"><div class="cs-card-ttl">'+esc(c.title||c.customer||'(untitled)')+'</div><div class="cs-card-sub">'+esc(c.customer||'')+(c.value?' &middot; '+fmt(c.value):'')+(c.period?' &middot; '+esc(c.period):'')+'</div><div class="cs-card-met">'+esc((c.outcomes||[]).slice(0,2).join(' &middot; '))+'</div><div style="margin-top:6px;display:flex;gap:4px"><button class="btn btn-sec btn-sm" onclick="cpEditCaseStudy('+i+')">Edit</button><button class="btn btn-danger-sm btn-sm" onclick="cpDelCaseStudy('+i+')">&times;</button></div></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 4px">No case studies yet — Claude will use these for past-performance matching during proposal drafting.</div>';
+  var serviceHTML=(p.services||[]).map(function(s,i){var ref=s.id?'\''+s.id+'\'':i;return '<div class="cp-row"><div style="flex:1"><strong style="font-size:12px">'+esc(s.name)+'</strong> <span style="font-size:10px;color:var(--text-muted)">'+esc(s.pricingModel||'')+'</span><div style="font-size:11px;color:var(--text-secondary);margin-top:2px">'+esc((s.shortDesc||'').slice(0,140))+'</div></div><div style="display:flex;gap:4px"><button class="btn btn-sec btn-sm" onclick="cpEditService('+ref+')">Edit</button><button class="btn btn-danger-sm btn-sm" onclick="cpDelService('+ref+')">&times;</button></div></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 4px">No services yet.</div>';
+  var caseStudyHTML=(p.caseStudies||[]).map(function(c,i){var ref=c.id?'\''+c.id+'\'':i;return '<div class="cs-card"><div class="cs-card-ttl">'+esc(c.title||c.customer||'(untitled)')+'</div><div class="cs-card-sub">'+esc(c.customer||'')+(c.value?' &middot; '+fmt(c.value):'')+(c.period?' &middot; '+esc(c.period):'')+'</div><div class="cs-card-met">'+esc((c.outcomes||[]).slice(0,2).join(' &middot; '))+'</div><div style="margin-top:6px;display:flex;gap:4px"><button class="btn btn-sec btn-sm" onclick="cpEditCaseStudy('+ref+')">Edit</button><button class="btn btn-danger-sm btn-sm" onclick="cpDelCaseStudy('+ref+')">&times;</button></div></div>';}).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 4px">No case studies yet — Claude will use these for past-performance matching during proposal drafting.</div>';
   document.getElementById('mdlCP').innerHTML=
     '<div class="mdl-over">Administration</div><div class="mdl-title">Company Profile</div>'
     +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Everything below feeds Claude during proposal generation. Brand voice, services, and case studies are the most impactful — keep them current.</div>'
@@ -5327,8 +5370,17 @@ function cpEditBoiler(i){
   });
 }
 var _svcEdit=null;
-function cpEditService(idx){
+/* Resolve a service/case-study reference (record id string, or a legacy numeric
+   index for records without ids) against the CURRENT array. Index positions go
+   stale whenever a sync merge lands, so ids are authoritative. */
+function _cpResolveIdx(arr,ref){
+  if(typeof ref==='string'){for(var i=0;i<arr.length;i++)if(arr[i]&&arr[i].id===ref)return i;return -2;}
+  return ref;
+}
+function cpEditService(ref){
   var p=D.companyProfile;p.services=p.services||[];
+  var idx=_cpResolveIdx(p.services,ref);
+  if(idx===-2){alert('This service changed in a sync — the list was refreshed. Try again.');openCompanyProfileManager();return;}
   var s=idx<0?{id:uid(),name:'',shortDesc:'',longDesc:'',targetBuyer:'',differentiators:[],pricingModel:'',dealSizeBand:'',naicsCodes:[]}:p.services[idx];
   if(idx>=0&&!s)return;
   if(!Array.isArray(s.differentiators))s.differentiators=[];
@@ -5377,13 +5429,24 @@ function cpSvcDelDiff(i){if(!_svcEdit)return;_svcCapture();_svcEdit.s.differenti
 function cpSvcSave(){
   if(!_svcEdit)return;_svcCapture();
   var s=_svcEdit.s;if(!s.name||!s.name.trim()){alert('Service name is required.');return;}
+  // Write back by id, not by the index captured when the editor opened — a
+  // sync merge may have reordered the array since then.
   var p=D.companyProfile;p.services=p.services||[];
-  if(_svcEdit.idx<0)p.services.push(s);else p.services[_svcEdit.idx]=s;
+  var at=s.id?p.services.findIndex(function(x){return x&&x.id===s.id;}):-1;
+  if(at>=0)p.services[at]=s;else p.services.push(s);
   _svcEdit=null;save();closeModal('ovSvc');openCompanyProfileManager();
 }
-function cpDelService(i){if(!confirm('Delete this service?'))return;D.companyProfile.services.splice(i,1);save();openCompanyProfileManager();}
-function cpEditCaseStudy(idx){
+function cpDelService(ref){
+  if(!confirm('Delete this service?'))return;
+  var arr=D.companyProfile.services||[];
+  var i=_cpResolveIdx(arr,ref);
+  if(i===-2||i<0||!arr[i]){openCompanyProfileManager();return;}
+  arr.splice(i,1);save();openCompanyProfileManager();
+}
+function cpEditCaseStudy(ref){
   var p=D.companyProfile;p.caseStudies=p.caseStudies||[];
+  var idx=_cpResolveIdx(p.caseStudies,ref);
+  if(idx===-2){alert('This case study changed in a sync — the list was refreshed. Try again.');openCompanyProfileManager();return;}
   var c=idx<0?{id:uid(),title:'',customer:'',customerReferenceable:false,contractVehicle:'',period:'',value:0,role:'',scope:'',tech:[],outcomes:[],challenges:'',testimonial:'',pocName:'',pocPermission:false,attachments:[]}:p.caseStudies[idx];
   if(idx>=0&&!c)return;
   openFormModal({over:'Company Profile',title:(idx<0?'Add':'Edit')+' Case Study',submitLabel:'Save Case Study',
@@ -5398,14 +5461,25 @@ function cpEditCaseStudy(idx){
       {key:'outcomes',label:'Outcomes (one per line, with metrics)',type:'textarea',rows:4,value:(c.outcomes||[]).join('\n')}
     ],
     onSubmit:function(v){
-      c.title=v.title.trim();c.customer=(v.customer||'').trim();c.contractVehicle=(v.contractVehicle||'').trim();c.period=v.period||'';c.value=Number(v.value)||0;c.role=(v.role||'').trim();c.scope=v.scope||'';
-      c.outcomes=(v.outcomes||'').split('\n').map(function(x){return x.trim();}).filter(Boolean);
-      if(idx<0)p.caseStudies.push(c);
+      // Re-resolve against the LIVE arrays — D may have been swapped by a sync
+      // merge while this form was open; writing into captured references would
+      // send the entry into a detached object (silently lost).
+      var pp=D.companyProfile;pp.caseStudies=pp.caseStudies||[];
+      var live=(c.id?pp.caseStudies.find(function(x){return x&&x.id===c.id;}):null)||c;
+      live.title=v.title.trim();live.customer=(v.customer||'').trim();live.contractVehicle=(v.contractVehicle||'').trim();live.period=v.period||'';live.value=Number(v.value)||0;live.role=(v.role||'').trim();live.scope=v.scope||'';
+      live.outcomes=(v.outcomes||'').split('\n').map(function(x){return x.trim();}).filter(Boolean);
+      if(!pp.caseStudies.some(function(x){return x===live||(live.id&&x&&x.id===live.id);}))pp.caseStudies.push(live);
       save();openCompanyProfileManager();
     }
   });
 }
-function cpDelCaseStudy(i){if(!confirm('Delete this case study?'))return;D.companyProfile.caseStudies.splice(i,1);save();openCompanyProfileManager();}
+function cpDelCaseStudy(ref){
+  if(!confirm('Delete this case study?'))return;
+  var arr=D.companyProfile.caseStudies||[];
+  var i=_cpResolveIdx(arr,ref);
+  if(i===-2||i<0||!arr[i]){openCompanyProfileManager();return;}
+  arr.splice(i,1);save();openCompanyProfileManager();
+}
 
 /* ── CORPORATE CERTIFICATIONS MANAGER ── */
 function openCorporateCertsManager(){
@@ -10470,6 +10544,7 @@ async function initApp(){
   ME=currentAccount();
   if(ME){document.getElementById('loginOv').style.display='none';renderView();checkCriticalDateNotifs();}
   else{var ov=document.getElementById('loginOv');ov.style.display='flex';document.getElementById('loginUser').focus();}
+  syncPoll();setInterval(syncPoll,45000);
 }
 initApp();
 </script>
