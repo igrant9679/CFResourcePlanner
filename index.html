@@ -4324,7 +4324,7 @@ function _stratGoalStatus(g,ev){
 function _stratMemberOpts(sel){
   return '<option value="">— unassigned —</option>'+allM().map(function(m){return '<option value="'+m.id+'"'+(sel===m.id?' selected':'')+'>'+esc(m.name)+(m.role?' · '+esc(m.role):'')+'</option>';}).join('');
 }
-function _stratOwnerName(id){if(!id)return '';var m=allM().find(function(x){return x.id===id;});return m?m.name:id;}
+function _stratOwnerName(id){if(!id)return '';var m=allM().find(function(x){return x.id===id;});if(m)return m.name;var a=(D.accounts||[]).find(function(x){return x.id===id;});return a?a.name:'';}
 function renderStrategyView(q){
   if(!canProforma())return '<div class="empty-msg">No access. The Strategy section is restricted to Admin.</div>';
   var S=_stratEnsure();
@@ -4513,7 +4513,10 @@ function _stratMatchOwner(name){
    present), so it can be re-run safely. Financial goals owned by the current
    admin; per-initiative revenue goals owned by the initiative's owner. */
 function stratSeedGoals(){
-  var S=_stratEnsure(),meId=ME?ME.id:'';
+  var S=_stratEnsure();
+  // Own financial goals by the current admin's MEMBER record if one matches by
+  // name (goal.owner is a member id); else leave unassigned.
+  var meId=_stratMatchOwner(ME?ME.name:'');
   var fy27=(D.proforma&&D.proforma.company&&D.proforma.company.fy27RevenueTarget)||9250000;
   var gate=model_gate_default();
   function has(metric,linkId){return S.goals.some(function(g){return g.metric===metric&&(!linkId||(g.linkedInitiativeIds||[]).indexOf(linkId)>-1);});}
