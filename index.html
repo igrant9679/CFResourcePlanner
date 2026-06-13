@@ -4389,8 +4389,8 @@ function model_gate_default(){return (D.proforma&&D.proforma.financials&&D.profo
 // ── 2. GOALS & KPIs ──
 function _stratGoalsHTML(model){
   var goals=D.strategy.goals||[];
-  var head='<div style="display:flex;justify-content:space-between;align-items:center;margin:18px 0 8px"><div style="font-size:14px;font-weight:800">Goals &amp; KPIs</div><button class="btn btn-gold btn-sm" onclick="stratEditGoal(\'\')">+ New Goal</button></div>';
-  if(!goals.length)return head+'<div class="empty-msg">No goals yet. Add the cash gate, FY27 revenue ($9.25M target), ARR, skilled-hire counts, or per-initiative revenue goals — auto-tracked where the engine knows the number.</div>';
+  var head='<div style="display:flex;justify-content:space-between;align-items:center;margin:18px 0 8px"><div style="font-size:14px;font-weight:800">Goals &amp; KPIs</div><div style="display:flex;gap:6px">'+(goals.length?'':'<button class="btn btn-outline btn-sm" onclick="stratSeedGoals()">✨ Seed starter goals</button>')+'<button class="btn btn-gold btn-sm" onclick="stratEditGoal(\'\')">+ New Goal</button></div></div>';
+  if(!goals.length)return head+'<div class="empty-msg">No goals yet. Click <b>✨ Seed starter goals</b> for the cash gate, FY27 revenue, weighted pipeline, and one revenue goal per initiative — then edit targets/owners. Or add your own (ARR, skilled-hire counts…) with <b>+ New Goal</b>.</div>';
   var rows=goals.map(function(g){
     var ev=_stratGoalEval(g,model),stt=_stratGoalStatus(g,ev),cfg=_stratMetricCfg(g.metric);
     var target=Number(g.target)||0;
@@ -4464,7 +4464,9 @@ function _stratInitiativesHTML(model){
       +(goalsLinked.length?'<span class="plan-chip" style="border-color:var(--gold);color:var(--gold)">'+goalsLinked.length+' goal'+(goalsLinked.length===1?'':'s')+'</span>':'')
       +'</div>'
       +(!staffedNow&&tgt>0?'<div style="font-size:10px;color:#D97706">Assign resources (Initiatives → '+esc(p.name)+') to make this revenue count toward the gate.</div>':'')
-      +(mileAll.length?'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">'+mileAll.slice(0,4).map(function(a){return (a.status==='done'?'✓ ':a.status==='blocked'?'⛔ ':'○ ')+esc(a.subtask||a.task||'milestone');}).join('<br>')+'</div>':'<div style="font-size:10px;color:var(--text-muted);margin-top:4px"><a href="#" onclick="event.preventDefault();stratAddMilestone(\''+p.id+'\')">+ add a milestone</a></div>')
+      +(p.narrative?'<div style="font-size:11px;color:var(--text-secondary);line-height:1.45;background:var(--page-bg);border-radius:6px;padding:7px 9px;margin-top:6px;max-height:140px;overflow:auto">'+sanitizeHTML(p.narrative)+'</div>':'')
+      +'<div style="margin-top:6px"><button class="btn btn-sec btn-sm" style="padding:2px 8px;font-size:10px" onclick="stratEditNarrative(\''+p.id+'\')">'+(p.narrative?'✎ Edit executive summary':'+ Executive summary')+'</button></div>'
+      +(mileAll.length?'<div style="font-size:10px;color:var(--text-muted);margin-top:6px">'+mileAll.slice(0,4).map(function(a){return (a.status==='done'?'✓ ':a.status==='blocked'?'⛔ ':'○ ')+esc(a.subtask||a.task||'milestone');}).join('<br>')+'</div>':'<div style="font-size:10px;color:var(--text-muted);margin-top:6px"><a href="#" onclick="event.preventDefault();stratAddMilestone(\''+p.id+'\')">+ add a milestone</a></div>')
       +'</div>';
   }).join('');
   return head+'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px">'+cards+'</div>';
@@ -4483,6 +4485,49 @@ function stratAddMilestone(initId){
       D.activities.push({id:uid(),kind:'project',projectId:initId,subtask:v.subtask.trim(),objective:(v.objective||'').trim(),owners:v.owner?[v.owner]:[],status:'todo',isMilestone:true,dueDate:v.dueDate||'',phase:'',alloc:'',updates:[],attachments:[],createdAt:Date.now()});
       save();renderView();
     }});
+}
+/* Executive-summary narrative per initiative — the reasons/idea/justification.
+   Stored as rich HTML on the initiative (p.narrative), sanitized on save. */
+function stratEditNarrative(initId){
+  var p=(D.projects||[]).find(function(x){return x.id===initId;});if(!p)return;
+  var mdl=document.getElementById('mdlForm');if(!mdl)return;
+  mdl.innerHTML='<div class="mdl-over">Strategy</div><div class="mdl-title">Executive summary — '+esc(p.name)+'</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Explain the reasoning, the idea, and the justification for this initiative — why it exists, what it unlocks, and how it supports the cash-gate goal. Shows on the initiative scorecard.</div>'
+    +richEditor('strat_narr',p.narrative||'',{tall:true,placeholder:'e.g. The Salesforce/AgentForce practice diversifies revenue beyond federal services, targets a $X commercial market, and puts two newly-certified consultants to billable work by Q3 — contributing $Y/mo toward the gate while building a reusable accelerator…'})
+    +'<div class="btn-row" style="margin-top:12px"><button class="btn btn-navy" style="flex:1" onclick="stratSaveNarrative(\''+initId+'\')">Save</button><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovForm\')">Cancel</button></div>';
+  openModal('ovForm');
+}
+function stratSaveNarrative(initId){
+  var p=(D.projects||[]).find(function(x){return x.id===initId;});if(!p)return;
+  p.narrative=sanitizeHTML(rtGet('strat_narr'));
+  p.narrativeUpdatedAt=Date.now();p.narrativeUpdatedBy=ME?ME.id:'';
+  save();closeModal('ovForm');renderView();
+}
+/* Resolve an initiative's free-text owner name to a member id where possible. */
+function _stratMatchOwner(name){
+  if(!name)return '';var n=String(name).toLowerCase().trim();
+  var m=allM().find(function(x){var xn=(x.name||'').toLowerCase();return xn&&(n.indexOf(xn)>-1||xn.indexOf(n.split(/[ ,/]/)[0])===0);});
+  return m?m.id:'';
+}
+/* Seed a sensible starter set of goals — idempotent (skips metrics already
+   present), so it can be re-run safely. Financial goals owned by the current
+   admin; per-initiative revenue goals owned by the initiative's owner. */
+function stratSeedGoals(){
+  var S=_stratEnsure(),meId=ME?ME.id:'';
+  var fy27=(D.proforma&&D.proforma.company&&D.proforma.company.fy27RevenueTarget)||9250000;
+  var gate=model_gate_default();
+  function has(metric,linkId){return S.goals.some(function(g){return g.metric===metric&&(!linkId||(g.linkedInitiativeIds||[]).indexOf(linkId)>-1);});}
+  var added=0;
+  if(!has('cash-gate')){S.goals.push({id:uid(),label:'Reach the $1.5M cash gate',metric:'cash-gate',target:gate,baseline:Math.round(capOpeningCash()),targetDate:S.gateTargetDate||'2027-06',owner:meId,cadence:'monthly',linkedInitiativeIds:[],notes:'Survival-mode exit. The whole page measures against this.',createdAt:Date.now(),updatedAt:Date.now()});added++;}
+  if(!has('annual-revenue')){S.goals.push({id:uid(),label:'FY27 revenue target',metric:'annual-revenue',target:fy27,baseline:0,targetDate:'2027-12',owner:meId,cadence:'quarterly',linkedInitiativeIds:[],notes:'From the Proforma FY27 target.',createdAt:Date.now(),updatedAt:Date.now()});added++;}
+  if(!has('weighted-pipeline')){S.goals.push({id:uid(),label:'Build weighted pipeline to defend cash',metric:'weighted-pipeline',target:3000000,baseline:0,targetDate:'2027-06',owner:meId,cadence:'monthly',linkedInitiativeIds:[],notes:'Closing pipeline is what holds the cash trough above the gate.',createdAt:Date.now(),updatedAt:Date.now()});added++;}
+  (D.projects||[]).filter(function(p){return projCat(p)==='initiative';}).forEach(function(p){
+    if(has('initiative-revenue',p.id))return;
+    var annual=Math.round(Math.abs(Number(p.targetRevenue)||0)*12);
+    S.goals.push({id:uid(),label:p.name+' — annual revenue',metric:'initiative-revenue',target:annual,baseline:0,targetDate:'2027-12',owner:_stratMatchOwner(p.owner||p.opr),cadence:'monthly',linkedInitiativeIds:[p.id],notes:annual?'':'Set an annual revenue target for this initiative.',createdAt:Date.now(),updatedAt:Date.now()});added++;
+  });
+  save();renderView();
+  toast(added?('Seeded '+added+' starter goal'+(added===1?'':'s')+'. Edit targets/owners to fit.'):'Starter goals already present — nothing added.',added?'success':'info',6000);
 }
 // ── 4. DEFEND CASHFLOW: which pipeline closes the gap ──
 function _stratDefendHTML(model){
