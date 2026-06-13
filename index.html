@@ -1018,6 +1018,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
       <button class="tab" id="tabPTask" onclick="switchTab('ptask')">Project Tasks</button>
       <button class="tab" id="tabPPlan" onclick="switchTab('pplan')">Resource Planning</button>
       <button class="tab" id="tabReports" onclick="switchTab('reports')">&#128202; Reports</button>
+      <button class="tab tab-confidential" id="tabStrat" onclick="switchTab('strat')">&#127919; Strategy</button>
       <button class="tab tab-confidential" id="tabProforma" onclick="switchTab('proforma')">&#128274; Proforma</button>
     </div>
   </div>
@@ -2644,7 +2645,7 @@ function openUnallocatedModal(){
   openModal('ovForm');
 }
 
-function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',recruit:'tabRecruit',init:'tabInit',opp:'tabOpp',prop:'tabProp',over:'tabOver',orgchart:'tabChart',res:'tabRes',cap:'tabCap',class:'tabClass',plan:'tabPlan',ptask:'tabPTask',pplan:'tabPPlan',reports:'tabReports'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
+function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',recruit:'tabRecruit',init:'tabInit',opp:'tabOpp',prop:'tabProp',over:'tabOver',orgchart:'tabChart',res:'tabRes',cap:'tabCap',class:'tabClass',plan:'tabPlan',ptask:'tabPTask',pplan:'tabPPlan',reports:'tabReports',strat:'tabStrat',proforma:'tabProforma'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
 
 function cardHTML(m,did){
 var dept=D.departments.find(function(d){return d.id===did;});
@@ -3351,6 +3352,7 @@ function renderView(){
   else if(viewMode==='pplan')html=renderProjectPlanningView(q);
   else if(viewMode==='reports')html=renderReportsView(q);
   else if(viewMode==='proforma')html=renderProformaView(q);
+  else if(viewMode==='strat')html=renderStrategyView(q);
   else html=renderResourcesView(q);
   document.getElementById('mainContent').innerHTML=html;
 }
@@ -4214,6 +4216,320 @@ function _pfSnapshotsHTML(P){
   var list='<div class="pf-card"><div class="pf-card-h">Snapshots ('+snaps.length+')</div>'+_pfTable(['Label','Captured','By'],snaps.map(function(s){return [esc(s.label),_pfDate(s.ts),esc(s.by||'')];}))
     +'<div style="margin-top:8px">'+snaps.map(function(s){return '<button class="pf-edit-btn pf-del" style="margin-right:8px" onclick="proformaDelSnapshot(\''+s.id+'\')" title="Delete snapshot">&times; '+esc(s.label)+'</button>';}).join('')+'</div></div>';
   return trend+compare+list;
+}
+/* ════════════════════════════════════════════════════════════════════
+   STRATEGY — goals, metrics & performance against the cash gate.
+   Reads the LIVE projection engine (capProjData + the cash overlay) so the
+   numbers can never diverge from the Capacity Planning / Proforma views.
+   Hybrid metrics: auto-computed where the engine knows the answer, manual
+   where it can't (ARR, skilled hires, utilization). Admin-only.
+   ════════════════════════════════════════════════════════════════════ */
+function _stratEnsure(){
+  D.strategy=D.strategy||{};
+  if(!Array.isArray(D.strategy.goals))D.strategy.goals=[];
+  if(!D.strategy.gateTargetDate)D.strategy.gateTargetDate='2027-06';   // machine-readable June-2027 gate
+  return D.strategy;
+}
+var STRAT_METRICS=[
+  {k:'cash-gate',l:'Cash gate ($ position)',auto:true,hint:'Current cash vs target; ETA from the projection.'},
+  {k:'annual-revenue',l:'Annual revenue (FY of target date)',auto:true,hint:'Sum of projected revenue in the target year.'},
+  {k:'monthly-runrate',l:'Monthly revenue run-rate',auto:true,hint:'Latest projected monthly revenue.'},
+  {k:'weighted-pipeline',l:'Weighted pipeline value',auto:true,hint:'Σ opportunity potential × probability of close.'},
+  {k:'initiative-revenue',l:'Initiative revenue contribution',auto:true,hint:'Projected FY revenue from the linked initiative(s).'},
+  {k:'manual',l:'Manual KPI (ARR, hires, utilization…)',auto:false,hint:'You set current & target by hand.'}
+];
+function _stratMetricCfg(k){return STRAT_METRICS.find(function(m){return m.k===k;})||STRAT_METRICS[STRAT_METRICS.length-1];}
+// The live cash model — one call drives the whole page.
+function _stratCash(){
+  var roster=capBuildRoster();
+  var d=capProjData(roster,0,(typeof _capPipeOpts==='function'?_capPipeOpts():{}));
+  var rows=d.rows||[];
+  var burden=capFixedBurden(),opening=capOpeningCash();
+  var gate=(D.proforma&&D.proforma.financials&&D.proforma.financials.cashGateTarget)||1500000;
+  var cash=opening,gateMet=null,trough=null,firstRegress=null;
+  rows.forEach(function(r,i){
+    r.netCash=r.profit-burden;cash+=r.netCash;r.cashBal=cash;
+    if(gateMet===null&&cash>=gate)gateMet=r;
+    if(!trough||r.cashBal<trough.cashBal)trough=r;
+    if(firstRegress===null&&i>0&&r.netCash<0)firstRegress=r;
+  });
+  return {rows:rows,opening:opening,gate:gate,burden:burden,gateMet:gateMet,trough:trough,firstRegress:firstRegress,modeled:d.modeled||0,noDate:d.noDate||0};
+}
+var MON_ABBR=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function _stratMonLbl(r){return MON_ABBR[r.m]+' '+String(r.y).slice(2);}
+function _stratYM(str){var p=String(str||'').split('-');return {y:+p[0],m:(+p[1]||1)-1};}
+// Inline cash-trajectory sparkline with the target line, trough, and gate-met marker.
+function _stratSparkline(model){
+  var rows=model.rows;if(!rows.length)return '';
+  var W=620,H=120,pad=4;
+  var vals=rows.map(function(r){return r.cashBal;}).concat([model.opening,model.gate]);
+  var min=Math.min.apply(null,vals),max=Math.max.apply(null,vals);
+  if(max===min)max=min+1;
+  var x=function(i){return pad+i*(W-2*pad)/Math.max(1,rows.length-1);};
+  var y=function(v){return H-pad-(v-min)/(max-min)*(H-2*pad);};
+  var path=rows.map(function(r,i){return (i?'L':'M')+x(i).toFixed(1)+' '+y(r.cashBal).toFixed(1);}).join(' ');
+  var gateY=y(model.gate).toFixed(1);
+  var pts=rows.map(function(r,i){var below=r.cashBal<model.gate;return '<circle cx="'+x(i).toFixed(1)+'" cy="'+y(r.cashBal).toFixed(1)+'" r="2" fill="'+(below?'#DC2626':'#16A34A')+'"></circle>';}).join('');
+  var troughIdx=rows.indexOf(model.trough);
+  var troughMk=model.trough?'<circle cx="'+x(troughIdx).toFixed(1)+'" cy="'+y(model.trough.cashBal).toFixed(1)+'" r="4" fill="none" stroke="#DC2626" stroke-width="1.5"></circle>':'';
+  var area=path+' L'+x(rows.length-1).toFixed(1)+' '+(H-pad)+' L'+x(0).toFixed(1)+' '+(H-pad)+' Z';
+  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:120px;display:block">'
+    +'<path d="'+area+'" fill="rgba(37,99,235,0.07)"></path>'
+    +'<line x1="'+pad+'" y1="'+gateY+'" x2="'+(W-pad)+'" y2="'+gateY+'" stroke="#C5A55A" stroke-width="1" stroke-dasharray="5 4"></line>'
+    +'<text x="'+(W-pad)+'" y="'+(gateY-4)+'" text-anchor="end" font-size="9" fill="#C5A55A">$1.5M gate</text>'
+    +'<path d="'+path+'" fill="none" stroke="#1B2A4A" stroke-width="1.6"></path>'+pts+troughMk
+    +'</svg>';
+}
+function _stratStatusChip(key,label){
+  var c={ontrack:'#16A34A',atrisk:'#D97706',off:'#DC2626',done:'#16A34A'}[key]||'#64748b';
+  return '<span class="plan-chip" style="border-color:'+c+';color:'+c+';font-weight:700">'+esc(label||key)+'</span>';
+}
+// Auto-derive a goal's current value + ETA/detail from the live model.
+function _stratGoalEval(g,model){
+  var cfg=_stratMetricCfg(g.metric),out={current:0,detail:'',eta:''};
+  var yr=_stratYM(g.targetDate||D.strategy.gateTargetDate).y;
+  if(g.metric==='cash-gate'){out.current=model.opening;if(model.gateMet)out.eta=_stratMonLbl(model.gateMet);else out.eta='beyond horizon';out.detail='ETA to target: '+out.eta;}
+  else if(g.metric==='annual-revenue'){out.current=model.rows.filter(function(r){return r.y===yr;}).reduce(function(a,r){return a+r.rev;},0);out.detail='FY'+String(yr).slice(2)+' projected revenue';}
+  else if(g.metric==='monthly-runrate'){var last=model.rows[model.rows.length-1];out.current=last?last.rev:0;out.detail='Latest projected month ('+(last?_stratMonLbl(last):'—')+')';}
+  else if(g.metric==='weighted-pipeline'){
+    var sum=0;(D.projects||[]).filter(function(p){return projCat(p)==='opportunity';}).forEach(function(o){
+      var st=capOppStage?capOppStage(o):(o.stage||'');if(st==='Lost')return;
+      var pr=(o.probabilityClose!=null&&o.probabilityClose!=='')?Number(o.probabilityClose)/100:((typeof CAP_STAGE_PROB!=='undefined'&&CAP_STAGE_PROB[st])||0.1);
+      sum+=(Number(o.potential)||0)*pr;});
+    out.current=Math.round(sum);out.detail='Σ potential × P(close) across open pipeline';}
+  else if(g.metric==='initiative-revenue'){
+    var ids=g.linkedInitiativeIds||[];
+    var sum=0;model.rows.filter(function(r){return r.y===yr;}).forEach(function(r){
+      ids.forEach(function(iid){var p=(D.projects||[]).find(function(x){return x.id===iid;});if(p&&capInWindow(p,r.y,r.m))sum+=(capProjRevAt?capProjRevAt(p,r.y,r.m):0);});});
+    out.current=Math.round(sum);out.detail='FY'+String(yr).slice(2)+' contribution from linked initiative(s)';}
+  else { out.current=Number(g.manualCurrent)||0; out.detail=g.cadence?('Manual · review '+g.cadence):'Manual entry'; }
+  return out;
+}
+function _stratGoalStatus(g,ev){
+  var target=Number(g.target)||0,base=Number(g.baseline)||0,cur=ev.current;
+  if(!target)return {key:'atrisk',label:'no target'};
+  var pct=target>base?(cur-base)/(target-base):cur/target;
+  if(pct>=1)return {key:'done',label:'met'};
+  // time pacing if we have a window
+  var now=new Date(),tgt=_stratYM(g.targetDate||'');
+  if(g.targetDate&&g.createdAt){
+    var startMs=g.createdAt,endMs=new Date(tgt.y,tgt.m+1,0).getTime(),nowMs=now.getTime();
+    var tf=endMs>startMs?Math.max(0,Math.min(1,(nowMs-startMs)/(endMs-startMs))):1;
+    if(pct>=tf*0.95)return {key:'ontrack',label:Math.round(pct*100)+'% · on track'};
+    if(pct>=tf*0.75)return {key:'atrisk',label:Math.round(pct*100)+'% · at risk'};
+    return {key:'off',label:Math.round(pct*100)+'% · behind'};
+  }
+  return {key:pct>=0.9?'ontrack':pct>=0.6?'atrisk':'off',label:Math.round(pct*100)+'%'};
+}
+function _stratMemberOpts(sel){
+  return '<option value="">— unassigned —</option>'+allM().map(function(m){return '<option value="'+m.id+'"'+(sel===m.id?' selected':'')+'>'+esc(m.name)+(m.role?' · '+esc(m.role):'')+'</option>';}).join('');
+}
+function _stratOwnerName(id){if(!id)return '';var m=allM().find(function(x){return x.id===id;});return m?m.name:id;}
+function renderStrategyView(q){
+  if(!canProforma())return '<div class="empty-msg">No access. The Strategy section is restricted to Admin.</div>';
+  var S=_stratEnsure();
+  var model=_stratCash();
+  var html='<div style="max-width:1240px;margin:0 auto">';
+  // ── header ──
+  html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:6px">'
+    +'<div><div style="font-size:18px;font-weight:800">Strategy &amp; Performance</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Goals, metrics, and team execution measured live against the $1.5M cash gate. Numbers come from the same engine as Capacity Planning &amp; Proforma.</div></div></div>';
+  html+=_stratNorthStarHTML(model);
+  html+=_stratGoalsHTML(model);
+  html+=_stratInitiativesHTML(model);
+  html+=_stratDefendHTML(model);
+  html+=_stratTeamHTML(model);
+  return html+'</div>';
+}
+// ── 1. NORTH STAR: the cash gate ──
+function _stratNorthStarHTML(model){
+  var S=D.strategy,tgt=_stratYM(S.gateTargetDate);
+  var tgtMs=new Date(tgt.y,tgt.m+1,0).getTime();
+  var monthsToTarget=Math.max(1,Math.round((tgtMs-Date.now())/2629800000));
+  var needed=model.gate-model.opening;
+  var reqRunRate=Math.round(needed/monthsToTarget);
+  var avgNet=model.rows.length?Math.round(model.rows.slice(0,monthsToTarget).reduce(function(a,r){return a+r.netCash;},0)/Math.min(monthsToTarget,model.rows.length)):0;
+  var etaLbl=model.gateMet?_stratMonLbl(model.gateMet):'beyond the horizon';
+  var variance='';
+  if(model.gateMet){var gm=model.gateMet.y*12+model.gateMet.m,tm=tgt.y*12+tgt.m,dv=gm-tm;
+    variance=dv<=0?'<span style="color:#16A34A;font-weight:700">'+(dv===0?'on target':Math.abs(dv)+' mo early')+'</span>':'<span style="color:#DC2626;font-weight:700">'+dv+' mo late</span>';}
+  else variance='<span style="color:#DC2626;font-weight:700">not reached in window</span>';
+  var pct=Math.max(0,Math.min(100,Math.round(model.opening/model.gate*100)));
+  function stat(lbl,val,sub,color){return '<div style="flex:1;min-width:150px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">'+lbl+'</div><div style="font-size:20px;font-weight:800;'+(color?'color:'+color:'')+'">'+val+'</div>'+(sub?'<div style="font-size:10px;color:var(--text-muted)">'+sub+'</div>':'')+'</div>';}
+  var regressNote=model.firstRegress?'<div style="font-size:11px;color:#D97706;margin-top:6px">⚠ Cash burns net-negative starting <b>'+_stratMonLbl(model.firstRegress)+'</b> (FAMS revenue sunset + cost step-ups). Trough <b>'+fmt(Math.round(model.trough.cashBal))+'</b> in '+_stratMonLbl(model.trough)+'. Closing pipeline before then is what holds the line — see "Defend cashflow" below.</div>':'';
+  return '<div style="border:1px solid var(--gold);border-radius:10px;padding:14px 16px;margin:10px 0;background:linear-gradient(180deg,rgba(197,165,90,0.06),transparent)">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div style="font-size:13px;font-weight:800">🎯 North Star — $1.5M cash position by '+MON_ABBR[tgt.m]+' '+tgt.y+'</div>'
+    +'<button class="btn btn-outline btn-sm" onclick="stratEditGate()">Edit target</button></div>'
+    +'<div style="height:8px;background:var(--page-bg);border-radius:5px;overflow:hidden;margin:10px 0"><div style="height:100%;width:'+pct+'%;background:'+(pct>=100?'#16A34A':'#C5A55A')+'"></div></div>'
+    +'<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px">'
+    +stat('Current cash',fmt(Math.round(model.opening)),pct+'% of gate','')
+    +stat('Projected ETA',etaLbl,'',model.gateMet?'#16A34A':'#DC2626')
+    +'<div style="flex:1;min-width:150px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Vs target</div><div style="font-size:16px;font-weight:800;margin-top:3px">'+variance+'</div></div>'
+    +stat('Required run-rate',fmt(reqRunRate)+'/mo','to hit gate on time','')
+    +stat('Projected avg net',fmt(avgNet)+'/mo','next '+Math.min(monthsToTarget,model.rows.length)+' mo',avgNet>=reqRunRate?'#16A34A':'#DC2626')
+    +'</div>'
+    +'<div style="margin-top:12px">'+_stratSparkline(model)+'</div>'
+    +regressNote
+    +'</div>';
+}
+function stratEditGate(){
+  var S=_stratEnsure();
+  openFormModal({over:'Strategy',title:'Cash-gate target',submitLabel:'Save',
+    fields:[
+      {key:'target',label:'Cash gate target ($)',type:'number',value:model_gate_default()},
+      {key:'date',label:'Target date',type:'month',value:S.gateTargetDate}],
+    onSubmit:function(v){
+      D.proforma=D.proforma||{};D.proforma.financials=D.proforma.financials||{};
+      if(v.target)D.proforma.financials.cashGateTarget=Number(v.target)||1500000;
+      if(v.date)S.gateTargetDate=v.date;
+      save();renderView();
+    }});
+}
+function model_gate_default(){return (D.proforma&&D.proforma.financials&&D.proforma.financials.cashGateTarget)||1500000;}
+// ── 2. GOALS & KPIs ──
+function _stratGoalsHTML(model){
+  var goals=D.strategy.goals||[];
+  var head='<div style="display:flex;justify-content:space-between;align-items:center;margin:18px 0 8px"><div style="font-size:14px;font-weight:800">Goals &amp; KPIs</div><button class="btn btn-gold btn-sm" onclick="stratEditGoal(\'\')">+ New Goal</button></div>';
+  if(!goals.length)return head+'<div class="empty-msg">No goals yet. Add the cash gate, FY27 revenue ($9.25M target), ARR, skilled-hire counts, or per-initiative revenue goals — auto-tracked where the engine knows the number.</div>';
+  var rows=goals.map(function(g){
+    var ev=_stratGoalEval(g,model),stt=_stratGoalStatus(g,ev),cfg=_stratMetricCfg(g.metric);
+    var target=Number(g.target)||0;
+    var disp=(g.metric==='manual'&&g.unit)?function(n){return n.toLocaleString()+' '+g.unit;}:fmt;
+    var pct=target?Math.max(0,Math.min(100,Math.round(ev.current/target*100))):0;
+    var links=(g.linkedInitiativeIds||[]).map(function(id){var p=(D.projects||[]).find(function(x){return x.id===id;});return p?esc(p.name):'';}).filter(Boolean).join(', ');
+    return '<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
+      +'<div style="flex:1"><div style="font-size:13px;font-weight:700">'+esc(g.label)+' '+_stratStatusChip(stt.key,stt.label)+(g.metric!=='manual'?' <span class="plan-chip">auto</span>':' <span class="plan-chip">manual</span>')+'</div>'
+      +'<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+esc(cfg.l)+(g.targetDate?' · by '+g.targetDate:'')+(g.owner?' · '+esc(_stratOwnerName(g.owner)):'')+(links?' · ↳ '+links:'')+'</div></div>'
+      +'<div style="text-align:right;flex-shrink:0"><div style="font-size:16px;font-weight:800">'+disp(Math.round(ev.current))+'</div><div style="font-size:10px;color:var(--text-muted)">of '+disp(target)+'</div></div>'
+      +'<div style="display:flex;flex-direction:column;gap:3px"><button class="btn btn-sec btn-sm" style="padding:2px 8px" onclick="stratEditGoal(\''+g.id+'\')">Edit</button><button class="btn btn-danger-sm btn-sm" style="padding:2px 8px" onclick="stratDelGoal(\''+g.id+'\')">&times;</button></div>'
+      +'</div>'
+      +'<div style="height:6px;background:var(--page-bg);border-radius:4px;overflow:hidden;margin-top:8px"><div style="height:100%;width:'+pct+'%;background:'+({ontrack:'#16A34A',atrisk:'#D97706',off:'#DC2626',done:'#16A34A'}[stt.key]||'#64748b')+'"></div></div>'
+      +'<div style="font-size:10px;color:var(--text-muted);margin-top:3px">'+esc(ev.detail)+(g.notes?' · '+esc(g.notes):'')+'</div>'
+      +'</div>';
+  }).join('');
+  return head+rows;
+}
+function stratEditGoal(id){
+  var S=_stratEnsure();
+  var g=id?S.goals.find(function(x){return x.id===id;}):null;
+  var inits=(D.projects||[]).filter(function(p){return projCat(p)==='initiative';});
+  openFormModal({over:'Strategy',title:id?'Edit Goal':'New Goal',submitLabel:'Save Goal',
+    intro:'Auto metrics pull live from the projection engine; pick "Manual KPI" for anything the model can\'t compute (ARR, skilled hires, utilization).',
+    fields:[
+      {key:'label',label:'Goal',type:'text',required:true,value:g?g.label:'',placeholder:'e.g. Reach $1.1M ARR'},
+      {key:'metric',label:'Metric type',type:'select',value:g?g.metric:'manual',options:STRAT_METRICS.map(function(m){return {value:m.k,label:m.l};})},
+      {key:'target',label:'Target value ($, or number for manual)',type:'number',value:g?g.target:''},
+      {key:'baseline',label:'Baseline / starting value (optional)',type:'number',value:g?g.baseline:''},
+      {key:'manualCurrent',label:'Current value (manual metrics only)',type:'number',value:g?g.manualCurrent:''},
+      {key:'unit',label:'Unit label (manual, e.g. "people", "%")',type:'text',value:g?g.unit:''},
+      {key:'targetDate',label:'Target date',type:'month',value:g?g.targetDate:(S.gateTargetDate||'2027-06')},
+      {key:'owner',label:'Owner',type:'select',value:g?g.owner:'',options:[{value:'',label:'— unassigned —'}].concat(allM().map(function(m){return {value:m.id,label:m.name+(m.role?' · '+m.role:'')};}))},
+      {key:'cadence',label:'Review cadence',type:'select',value:g?g.cadence:'monthly',options:[{value:'weekly',label:'Weekly'},{value:'monthly',label:'Monthly'},{value:'quarterly',label:'Quarterly'}]},
+      {key:'linked',label:'Linked initiatives',type:'checkboxes',value:g?(g.linkedInitiativeIds||[]):[],options:inits.map(function(p){return {value:p.id,label:p.name};})},
+      {key:'notes',label:'Notes',type:'textarea',rows:2,value:g?g.notes:''}
+    ],
+    onSubmit:function(v){
+      if(!v.label||!v.label.trim()){alert('Goal name required.');return false;}
+      if(g){g.label=v.label.trim();g.metric=v.metric;g.target=Number(v.target)||0;g.baseline=Number(v.baseline)||0;g.manualCurrent=Number(v.manualCurrent)||0;g.unit=(v.unit||'').trim();g.targetDate=v.targetDate;g.owner=v.owner||'';g.cadence=v.cadence;g.linkedInitiativeIds=v.linked||[];g.notes=(v.notes||'').trim();g.updatedAt=Date.now();}
+      else S.goals.push({id:uid(),label:v.label.trim(),metric:v.metric,target:Number(v.target)||0,baseline:Number(v.baseline)||0,manualCurrent:Number(v.manualCurrent)||0,unit:(v.unit||'').trim(),targetDate:v.targetDate,owner:v.owner||'',cadence:v.cadence,linkedInitiativeIds:v.linked||[],notes:(v.notes||'').trim(),createdAt:Date.now(),updatedAt:Date.now()});
+      save();renderView();
+    }});
+}
+function stratDelGoal(id){if(!confirm('Delete this goal?'))return;var S=_stratEnsure();S.goals=S.goals.filter(function(x){return x.id!==id;});save();renderView();}
+// ── 3. INITIATIVE SCORECARDS ──
+function _stratInitiativesHTML(model){
+  var inits=(D.projects||[]).filter(function(p){return projCat(p)==='initiative';});
+  var head='<div style="font-size:14px;font-weight:800;margin:18px 0 8px">Initiative scorecards</div>';
+  if(!inits.length)return head+'<div class="empty-msg">No initiatives defined. Add them under the Initiatives tab — each one should staff up and carry a revenue target.</div>';
+  var now=new Date(),ny=now.getFullYear(),nm=now.getMonth();
+  var roster=capBuildRoster();
+  var active=roster.filter(function(pn){return capPersonActive(pn,ny,nm);});
+  var cards=inits.map(function(p){
+    var staffedNow=(typeof capItemFTERAt==='function')?capItemFTERAt(active,p.id,ny,nm)>0:false;
+    var tgt=Number(p.targetRevenue)||0;
+    // projected FY contribution (this calendar year of months in the model)
+    var contrib=model.rows.filter(function(r){return r.y===ny;}).reduce(function(a,r){
+      return a+((capInWindow(p,r.y,r.m)&&capItemFTERAt(active,p.id,r.y,r.m)>0&&capProjRevAt)?capProjRevAt(p,r.y,r.m):0);},0);
+    var mileAll=(D.activities||[]).filter(function(a){return a.projectId===p.id&&a.isMilestone;});
+    var mileDone=mileAll.filter(function(a){return a.status==='done';}).length;
+    var goalsLinked=(D.strategy.goals||[]).filter(function(g){return (g.linkedInitiativeIds||[]).indexOf(p.id)>-1;});
+    return '<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px">'
+      +'<div style="font-size:13px;font-weight:700">'+esc(p.name)+'</div>'
+      +'<div style="font-size:11px;color:var(--text-muted);margin:3px 0">'+(p.owner||p.opr?'Owner: '+esc(p.owner||p.opr)+' · ':'')+'Target '+fmt(tgt)+'/mo</div>'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin:6px 0">'
+      +(staffedNow?_stratStatusChip('ontrack','staffed — counting'):_stratStatusChip('off','not staffed — $0 in forecast'))
+      +'<span class="plan-chip">FY contrib '+fmt(Math.round(contrib))+'</span>'
+      +(mileAll.length?'<span class="plan-chip">'+mileDone+'/'+mileAll.length+' milestones</span>':'')
+      +(goalsLinked.length?'<span class="plan-chip" style="border-color:var(--gold);color:var(--gold)">'+goalsLinked.length+' goal'+(goalsLinked.length===1?'':'s')+'</span>':'')
+      +'</div>'
+      +(!staffedNow&&tgt>0?'<div style="font-size:10px;color:#D97706">Assign resources (Initiatives → '+esc(p.name)+') to make this revenue count toward the gate.</div>':'')
+      +(mileAll.length?'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">'+mileAll.slice(0,4).map(function(a){return (a.status==='done'?'✓ ':a.status==='blocked'?'⛔ ':'○ ')+esc(a.subtask||a.task||'milestone');}).join('<br>')+'</div>':'<div style="font-size:10px;color:var(--text-muted);margin-top:4px"><a href="#" onclick="event.preventDefault();stratAddMilestone(\''+p.id+'\')">+ add a milestone</a></div>')
+      +'</div>';
+  }).join('');
+  return head+'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px">'+cards+'</div>';
+}
+function stratAddMilestone(initId){
+  openFormModal({over:'Strategy',title:'New initiative milestone',submitLabel:'Add',
+    intro:'Creates a milestone task linked to this initiative (shows in Project Tasks too).',
+    fields:[
+      {key:'subtask',label:'Milestone',type:'text',required:true,value:''},
+      {key:'objective',label:'Objective / definition of done',type:'textarea',rows:2,value:''},
+      {key:'owner',label:'Owner',type:'select',value:'',options:[{value:'',label:'— unassigned —'}].concat(allM().map(function(m){return {value:m.id,label:m.name};}))},
+      {key:'dueDate',label:'Due date',type:'date',value:''}],
+    onSubmit:function(v){
+      if(!v.subtask||!v.subtask.trim()){alert('Milestone name required.');return false;}
+      D.activities=D.activities||[];
+      D.activities.push({id:uid(),kind:'project',projectId:initId,subtask:v.subtask.trim(),objective:(v.objective||'').trim(),owners:v.owner?[v.owner]:[],status:'todo',isMilestone:true,dueDate:v.dueDate||'',phase:'',alloc:'',updates:[],attachments:[],createdAt:Date.now()});
+      save();renderView();
+    }});
+}
+// ── 4. DEFEND CASHFLOW: which pipeline closes the gap ──
+function _stratDefendHTML(model){
+  var head='<div style="font-size:14px;font-weight:800;margin:18px 0 8px">Defend cashflow</div>';
+  var trough=model.trough;
+  if(!trough)return '';
+  var gap=model.gate-trough.cashBal;
+  var opps=(D.projects||[]).filter(function(p){return projCat(p)==='opportunity';})
+    .filter(function(o){var st=capOppStage?capOppStage(o):(o.stage||'');return st!=='Lost'&&st!=='Won';})
+    .map(function(o){var pr=(o.probabilityClose!=null&&o.probabilityClose!=='')?Number(o.probabilityClose)/100:((typeof CAP_STAGE_PROB!=='undefined'&&CAP_STAGE_PROB[o.stage])||0.1);return {o:o,ev:(Number(o.potential)||0)*pr,pr:pr};})
+    .sort(function(a,b){return b.ev-a.ev;});
+  var cumv=0,picks=[];
+  for(var i=0;i<opps.length&&cumv<gap;i++){cumv+=opps[i].ev;picks.push(opps[i]);}
+  var troughOK=trough.cashBal>=model.gate;
+  var body='<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px">'
+    +'<div style="font-size:12px;margin-bottom:6px">'+(troughOK
+      ?'<span style="color:#16A34A;font-weight:700">✓ The projected cash trough ('+fmt(Math.round(trough.cashBal))+' in '+_stratMonLbl(trough)+') stays above the $1.5M gate.</span> Keep the pipeline converting to hold it.'
+      :'<span style="color:#DC2626;font-weight:700">Projected trough '+fmt(Math.round(trough.cashBal))+' in '+_stratMonLbl(trough)+'</span> — a gap of <b>'+fmt(Math.round(gap))+'</b> below the gate. Closing this weighted pipeline (by expected value) covers it:')+'</div>';
+  if(!troughOK){
+    if(!picks.length)body+='<div style="font-size:11px;color:#DC2626">No open pipeline to close the gap — this is where new opportunities (Gov Discovery) matter most.</div>';
+    else body+='<table style="width:100%;font-size:11px;border-collapse:collapse">'+picks.map(function(x){return '<tr><td style="padding:3px 0">'+esc(x.o.name||'(opp)')+'</td><td style="text-align:right;color:var(--text-muted)">'+Math.round(x.pr*100)+'% P</td><td style="text-align:right">'+fmt(Number(x.o.potential)||0)+'</td><td style="text-align:right;font-weight:700">EV '+fmt(Math.round(x.ev))+'</td></tr>';}).join('')+'</table>'
+      +'<div style="font-size:11px;color:var(--text-muted);margin-top:6px">Closing the '+picks.length+' above ≈ '+fmt(Math.round(cumv))+' expected value — covers the '+fmt(Math.round(gap))+' gap. <a href="#" onclick="event.preventDefault();switchTab(\'opp\')">Open pipeline →</a></div>';
+  }
+  return head+body+'</div>';
+}
+// ── 5. TEAM PERFORMANCE ──
+function _stratTeamHTML(model){
+  var head='<div style="font-size:14px;font-weight:800;margin:18px 0 8px">Team performance</div>';
+  var byOwner={};
+  function bucket(id){if(!id)id='_un';return byOwner[id]=byOwner[id]||{goals:0,goalsOff:0,miles:0,milesDone:0,milesLate:0};}
+  (D.strategy.goals||[]).forEach(function(g){var b=bucket(g.owner);b.goals++;var ev=_stratGoalEval(g,model),st=_stratGoalStatus(g,ev);if(st.key==='off')b.goalsOff++;});
+  var today=new Date();today.setHours(0,0,0,0);
+  (D.activities||[]).filter(function(a){return a.isMilestone;}).forEach(function(a){
+    (a.owners&&a.owners.length?a.owners:['_un']).forEach(function(oid){var b=bucket(oid);b.miles++;if(a.status==='done')b.milesDone++;else if(a.dueDate&&new Date(a.dueDate)<today)b.milesLate++;});
+  });
+  var ids=Object.keys(byOwner);
+  if(!ids.length)return head+'<div class="empty-msg">Assign owners to goals and initiative milestones to track performance here.</div>';
+  var rows=ids.map(function(id){var b=byOwner[id];var nm=id==='_un'?'Unassigned':_stratOwnerName(id);
+    var health=b.goalsOff||b.milesLate?'off':(b.goals||b.miles?'ontrack':'atrisk');
+    return '<div style="display:flex;gap:10px;align-items:center;padding:7px 10px;border-bottom:1px solid var(--border);font-size:12px">'
+      +'<div style="flex:1;font-weight:600">'+esc(nm)+'</div>'
+      +(b.goals?'<span class="plan-chip">'+b.goals+' goal'+(b.goals===1?'':'s')+(b.goalsOff?' · '+b.goalsOff+' behind':'')+'</span>':'')
+      +(b.miles?'<span class="plan-chip">'+b.milesDone+'/'+b.miles+' milestones'+(b.milesLate?' · '+b.milesLate+' late':'')+'</span>':'')
+      +_stratStatusChip(health,health==='off'?'attention':health==='ontrack'?'on track':'idle')
+      +'</div>';
+  }).join('');
+  return head+'<div style="border:1px solid var(--border);border-radius:8px">'+rows+'</div>';
 }
 function renderProformaView(q){
   if(!canProforma())return '<div class="empty-msg">No access. The Proforma section is restricted to Admin.</div>';
@@ -11288,7 +11604,7 @@ function rptCsvBuiltin(key){var f=RPT_CSV[key],b=rptBuiltin(key);if(!f||(b&&b.fi
 /* ── AUTH & PERMISSIONS (client-side roles only — not API security) ── */
 var AUTH_USER='khaja@communityforce.com',AUTH_PASS='Namtra_CF27',DEFAULT_PW='CommunityForce2026';
 var ME=null;
-var SECTIONS=[{k:'res',tab:'tabRes',l:'Resources'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'plan',tab:'tabPlan',l:'COE Plan'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'pplan',tab:'tabPPlan',l:'Resource Planning'},{k:'reports',tab:'tabReports',l:'Reports'},{k:'proforma',tab:'tabProforma',l:'Proforma'}];
+var SECTIONS=[{k:'res',tab:'tabRes',l:'Resources'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'plan',tab:'tabPlan',l:'COE Plan'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'pplan',tab:'tabPPlan',l:'Resource Planning'},{k:'reports',tab:'tabReports',l:'Reports'},{k:'strat',tab:'tabStrat',l:'Strategy'},{k:'proforma',tab:'tabProforma',l:'Proforma'}];
 function emailFromName(name){var clean=(name||'').replace(/\(.*?\)/g,'').replace(/[^A-Za-z .\-]/g,'').trim();var parts=clean.split(/\s+/).filter(Boolean);var local=parts.length>=2?(parts[0]+'.'+parts[parts.length-1]):(parts[0]||'user');return local.toLowerCase().replace(/[^a-z0-9.]/g,'')+'@communityforce.com';}
 function authMigrate(){
   if(!D.accounts)D.accounts=[];
@@ -11307,7 +11623,7 @@ function authMigrate(){
   D.accounts.forEach(function(a){if(!('active' in a))a.active=true;if(!a.programIds)a.programIds=[];if(!a.role)a.role='viewer';});
   if(!D.sectionVis)D.sectionVis={};['owner','editor','viewer'].forEach(function(r){if(!D.sectionVis[r])D.sectionVis[r]={};});
 }
-function canSee(k){if(!ME)return false;if(k==='proforma')return canProforma();if(ME.role==='admin')return true;if(k==='recruit')return canRecruit();if(k==='prop')return canProposal();var rv=D.sectionVis&&D.sectionVis[ME.role];return rv?rv[k]!==false:true;}
+function canSee(k){if(!ME)return false;if(k==='proforma'||k==='strat')return canProforma();if(ME.role==='admin')return true;if(k==='recruit')return canRecruit();if(k==='prop')return canProposal();var rv=D.sectionVis&&D.sectionVis[ME.role];return rv?rv[k]!==false:true;}
 function canRecruit(){
   if(!ME)return false;
   if(ME.role==='admin'||ME.role==='editor')return true;
