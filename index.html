@@ -1421,7 +1421,7 @@ function migrate(){
     if(!('resumeLink' in m))m.resumeLink='';
     if(!m.attachments)m.attachments=[];
   });});
-  var REV={'p_bclm':{revenue:212756,revenueNote:'→ $265,945/mo Aug 15 · BCLM +25% extension'},'p_fams':{revenue:76944,revenueNote:'Ends Sep 24, 2026 · 85.2% margin'},'p_c1fams':{revenue:25984,revenueNote:'→ $100,000/mo target Oct 2026 · 61% margin at maturity'},'p_software':{revenue:50000,revenueNote:'$550K ARR floor · 7.65% margin — needs intervention'},'p_marines':{revenue:0,revenueNote:'Active pursuit · SBIR Phase III via ForwardEdge-AI · $1.2M'},'p_salesforce':{revenue:0,revenueNote:'Build phase · 3 engagements seeding'},'p_afosi':{revenue:0,revenueNote:'Proposal due Jun 8 · $1.0M opportunity'},'p_phoenix':{revenue:0,revenueNote:'Software play · repricing initiative'},'p_tableau':{revenue:0,revenueNote:'Internal capability build'}};
+  var REV={'p_bclm':{revenue:212756,revenueNote:'→ $265,945/mo Aug 15 · BCLM +25% extension'},'p_fams':{revenue:76944,revenueNote:'Ends Sep 24, 2026 · 85.2% margin'},'p_c1fams':{revenue:25984,revenueNote:'Ends Sep 24, 2026 · was ramping to $100K (re-add as a new project if extended)'},'p_software':{revenue:50000,revenueNote:'$550K ARR floor · 7.65% margin — needs intervention'},'p_marines':{revenue:0,revenueNote:'Active pursuit · SBIR Phase III via ForwardEdge-AI · $1.2M'},'p_salesforce':{revenue:0,revenueNote:'Build phase · 3 engagements seeding'},'p_afosi':{revenue:0,revenueNote:'Proposal due Jun 8 · $1.0M opportunity'},'p_phoenix':{revenue:0,revenueNote:'Software play · repricing initiative'},'p_tableau':{revenue:0,revenueNote:'Internal capability build'}};
   D.projects.forEach(function(p){if(!('revenue' in p)){var d=REV[p.id];p.revenue=d?d.revenue:0;p.revenueNote=d?d.revenueNote:'';}if(!('revenueNote' in p))p.revenueNote='';if(!p.clins)p.clins=[];});
   planMigrate();authMigrate();oppMigrate();tplMigrate();recruitMigrate();proposalsMigrate();proformaMigrate();}
 /* ── PROFORMA (CEO second brain) — confidential, Admin-only ──
@@ -1611,7 +1611,7 @@ function proformaMigrate(){
   var TL={
     p_bclm:[{from:'2026-06',to:'2026-08',revenue:212756,cost:146267,note:'Current rate (through Aug 14)'},{from:'2026-09',to:null,revenue:265945,cost:172867,note:'Extended +25% (from Aug 15, 2026)'}],
     p_fams:[{from:'2026-06',to:'2026-09',revenue:76944,cost:11394,note:'85.2% margin — ends Sep 24, 2026'},{from:'2026-10',to:null,revenue:0,cost:0,note:'Contract ended'}],
-    p_c1fams:[{from:'2026-06',to:'2026-09',revenue:25984,cost:25000,note:'Ramp — near breakeven (2 resources)'},{from:'2026-10',to:null,revenue:100000,cost:38700,note:'At $100K target (6 resources) — 61.3% margin'}],
+    p_c1fams:[{from:'2026-06',to:'2026-09',revenue:25984,cost:25000,note:'Ends Sep 24, 2026 — near breakeven (2 resources)'}],
     p_software:[{from:'2026-06',to:null,revenue:50000,cost:46175,note:'$600K ARR · 7.65% margin — needs intervention'}]
   };
   if(!D.kbTimelineSeeded){ (D.projects||[]).forEach(function(p){ if(TL[p.id])p.timeline=TL[p.id]; }); D.kbTimelineSeeded=true; }
@@ -3523,6 +3523,7 @@ function capBuildRoster(){
       oneTimeCosts:m.oneTimeCosts?JSON.parse(JSON.stringify(m.oneTimeCosts)):null,
       allocSchedule:m.allocSchedule?JSON.parse(JSON.stringify(m.allocSchedule)):null,
       contractor:!!m.contractor,
+      furloughDate:m.furloughDate||'',
       projects:(m.projects||[]).map(function(x){return (typeof x==='object')?{id:x.id,pct:Number(x.pct)||0,clinId:x.clinId}:{id:x,pct:100};})};
   });
 }
@@ -3731,6 +3732,11 @@ function capOppStage(o){ var stg=(o.stage||'').trim(); if(stg&&CAP_STAGE_PROB.ha
 function capOppEffProb(o,multPct){ var base=CAP_STAGE_PROB[capOppStage(o)]; if(base==null)base=0; if(base>=1)return 1; return Math.max(0,Math.min(1,base*(Number(multPct)||0)/100)); }
 /* Is a roster person on payroll in month (y,m)? Real members always; ghosts/prospects
    from their startMonth ('YYYY-MM') onward, or immediately if no start set. */
+/* Has this roster person been furloughed by month (y,m)? furloughDate ('YYYY-MM-DD')
+   is the "decided to let them go" signal — from that month on they leave the
+   forecast. Before it (or if unset), they remain a cost even when unallocated
+   (bench), because we are still paying them until the furlough decision lands. */
+function _capFurloughed(pn,y,m){if(!pn||!pn.furloughDate)return false;var k=_capYM(String(pn.furloughDate).slice(0,7));return !isNaN(k)&&(y*12+m)>=k;}
 function capPersonActive(pn,y,m){
   if(pn._origin==='member'||!pn.startMonth)return true;
   var parts=String(pn.startMonth).split('-'),sy=+parts[0],sm=(+parts[1]||1)-1;
@@ -3841,9 +3847,10 @@ function capProjData(roster,multPct,opts){
     // = Other Payroll.
     var projLabor=0,otherLabor=0;
     var _mk=mo.y*12+mo.m;
-    active.forEach(function(pn){var cst=capPersonCostAt(pn,mo.y,mo.m);
-      if(ppProjAllocAt(pn,mo)<=0)return;  // resources not assigned to a project / initiative / overhead this month are NOT counted as a cost in the forecast
-      var pp=PROJIDS.reduce(function(a,pid){return a+memberProjPctAt(pn,pid,mo.y,mo.m);},0);  // % on PROJECT-type items this month (per-item: schedule overrides base)
+    active.forEach(function(pn){
+      if(_capFurloughed(pn,mo.y,mo.m))return;  // furloughed → off the books from the furlough month; otherwise still a cost even when bench/unallocated
+      var cst=capPersonCostAt(pn,mo.y,mo.m);
+      var pp=PROJIDS.reduce(function(a,pid){return a+memberProjPctAt(pn,pid,mo.y,mo.m);},0);  // % on PROJECT-type items this month (per-item: schedule overrides base); bench (pp=0) → full cost to Other payroll
       var pProj=Math.round(cst*Math.min(100,pp)/100);  // round per person (mirrors the Projects page) so the buckets are whole dollars and tie out
       projLabor+=pProj; otherLabor+=(cst-pProj);});     // remainder (initiative/overhead/bench labor) → Other Payroll
     var projectPayroll=projLabor;
@@ -3932,7 +3939,7 @@ function _capProjHTML(roster){
     +'<button class="btn btn-sec btn-sm" onclick="capProjExportCSV()">&#8595; CSV</button>'
     +'<button class="btn btn-sec btn-sm" onclick="capProjPrint()">&#128424; Print</button>'
     +'<div class="cap-stage-leg" style="flex-basis:100%">Forecast shows revenue from existing <b>Projects</b> only. Tick <b>Include Closed Won</b> and/or <b>Include In Negotiation</b> to add those opportunities on top at their <b>full Potential value</b> (no probability discount; the monthly figure is Potential&nbsp;$&divide;12, counted from each opp’s close date). Nothing else from the pipeline is counted.</div>'
-    +'<div class="cap-stage-leg" style="flex-basis:100%">&#8505; Resources not assigned to a project, initiative, or overhead are not counted as a cost in the forecast (the Furlough report tracks them for furlough).</div>'
+    +'<div class="cap-stage-leg" style="flex-basis:100%">&#8505; Unallocated (bench) resources are still counted as cost in <b>Other payroll</b> until you set a furlough date — then they leave the forecast from that month. Set furlough dates in Resource Planning &rarr; Edit Resource.</div>'
     +'</div>';
   var v4='';   // V4 scenario chips removed from the Pipeline Forecast (still used by the Proforma scenario selector)
   // cash controls
@@ -4016,8 +4023,8 @@ function capDrill(y,m,metric){
     (D.projects||[]).filter(function(p){return projCat(p)==='opportunity';}).forEach(function(o){if(!oppInc(o))return;add(o.name,oppMonthly(o),'pipeline · '+capOppStage(o)+(o.closeDate?' · close '+o.closeDate:''));});
   } else if(metric==='proj'||metric==='other'){
     title=metric==='proj'?'Project payroll':'Other payroll';
-    active.forEach(function(pn){if(ppProjAllocAt(pn,{y:y,m:m})<=0)return;var cst=capPersonCostAt(pn,y,m);var pp=PROJIDS.reduce(function(a,pid){return a+memberProjPctAt(pn,pid,y,m);},0);var pProj=Math.round(cst*Math.min(100,pp)/100);
-      if(metric==='proj')add(pn.name,pProj,Math.round(Math.min(100,pp))+'% on projects');else add(pn.name,cst-pProj,'non-project labor');});
+    active.forEach(function(pn){if(_capFurloughed(pn,y,m))return;var cst=capPersonCostAt(pn,y,m);var pp=PROJIDS.reduce(function(a,pid){return a+memberProjPctAt(pn,pid,y,m);},0);var pProj=Math.round(cst*Math.min(100,pp)/100);
+      if(metric==='proj')add(pn.name,pProj,Math.round(Math.min(100,pp))+'% on projects');else add(pn.name,cst-pProj,pp>0?'non-project labor':'bench — unallocated');});
     if(metric==='other'){add('Federal Sales/BD & Management (fixed)',(typeof proformaBDMgmtFixedMonthlyAt==='function'?proformaBDMgmtFixedMonthlyAt(y,m):0),'payroll-typed cost-structure lines');}
   } else if(metric==='oh'){
     title='Overhead / G&A';var cs=(D.proforma||{}).costStructure||{};
@@ -4958,11 +4965,16 @@ function _stratLadderTiers(row,roster){
   // Tier 2. (No standalone comp-cut tier: trimming billable salaries is off-policy.)
   var contractorItems=[],benchItems=[],deferLabor={};        // deferLabor[pid] = $ of non-billable W2 labor on that deferrable initiative
   roster.filter(function(pn){return capPersonActive(pn,y,m);}).forEach(function(pn){
-    if(ppProjAllocAt(pn,mo)<=0)return;                       // not costed in the forecast this month
+    if(_capFurloughed(pn,y,m))return;                        // furloughed → already off the forecast, nothing to cut
     var cst=capPersonCostAt(pn,y,m);
     var pids=(typeof _memberAllPids==='function'?_memberAllPids(pn):(pn.projects||[]).map(function(x){return typeof x==='object'?x.id:x;}));
     var parts=pids.map(function(pid){return {pid:pid,pct:memberProjPctAt(pn,pid,y,m)};}).filter(function(x){return x.pct>0;});
-    var tot=parts.reduce(function(a,x){return a+x.pct;},0);if(tot<=0)return;
+    var tot=parts.reduce(function(a,x){return a+x.pct;},0);
+    if(tot<=0){                                              // bench / unallocated — fully non-billable; cutting = furlough
+      if(pn.contractor)contractorItems.push({name:pn.name,amount:Math.round(cst),note:'bench — unallocated'});
+      else benchItems.push({name:pn.name,amount:Math.round(cst),note:'bench — unallocated'});
+      return;
+    }
     var cAmt=0,bAmt=0,cOn=[],bOn=[];
     parts.forEach(function(x){
       var share=cst*(x.pct/tot);
