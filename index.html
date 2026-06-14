@@ -4325,23 +4325,76 @@ function _stratMemberOpts(sel){
   return '<option value="">— unassigned —</option>'+allM().map(function(m){return '<option value="'+m.id+'"'+(sel===m.id?' selected':'')+'>'+esc(m.name)+(m.role?' · '+esc(m.role):'')+'</option>';}).join('');
 }
 function _stratOwnerName(id){if(!id)return '';var m=allM().find(function(x){return x.id===id;});if(m)return m.name;var a=(D.accounts||[]).find(function(x){return x.id===id;});return a?a.name:'';}
+var stratTab='overview';
+function stratSetTab(t){stratTab=t;renderView();}
 function renderStrategyView(q){
   if(!canProforma())return '<div class="empty-msg">No access. The Strategy section is restricted to Admin.</div>';
   var S=_stratEnsure();
   var model=_stratCash();
   var html='<div style="max-width:1240px;margin:0 auto">';
-  // ── header ──
-  html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:6px">'
+  html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:8px">'
     +'<div><div style="font-size:18px;font-weight:800">Strategy &amp; Performance</div>'
-    +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Goals, metrics, and team execution measured live against the $1.5M cash gate. Numbers come from the same engine as Capacity Planning &amp; Proforma.</div></div></div>';
-  html+=_stratNorthStarHTML(model);
-  html+=_stratGoalsHTML(model);
-  html+=_stratBridgeHTML(model);
-  html+=_stratInitiativesHTML(model);
-  html+=_stratDefendHTML(model);
-  html+=_stratTeamHTML(model);
+    +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Goals, metrics, and team execution measured live against the cash gate and the debt-free-by-FY29 plan. Numbers come from the same engine as Capacity Planning &amp; Proforma.</div></div></div>';
+  var tabs=[['overview','Overview'],['projections','Debt-Free Plan'],['goals','Goals &amp; KPIs'],['initiatives','Initiatives'],['team','Team']];
+  html+='<div class="pf-subtabs">'+tabs.map(function(t){return '<button class="pf-subtab'+(stratTab===t[0]?' active':'')+'" onclick="stratSetTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
+  if(stratTab==='overview'){html+=_stratNorthStarHTML(model);html+=_stratDefendHTML(model);}
+  else if(stratTab==='projections'){html+=_stratProjectionsHTML(model);}
+  else if(stratTab==='goals'){html+=_stratGoalsHTML(model);html+=_stratBridgeHTML(model);}
+  else if(stratTab==='initiatives'){html+=_stratInitiativesHTML(model);}
+  else if(stratTab==='team'){html+=_stratTeamHTML(model);}
   return html+'</div>';
 }
+/* ── DEBT-FREE PLAN: multi-year revenue model (FY26→FY29) at a configurable
+   annual growth rate + net margin, tracking cumulative net income against the
+   debt to find the debt-free year. All assumptions are editable. ── */
+function _stratProjModel(){
+  var S=_stratEnsure();
+  var base=Number(S.fy26Base)||Math.round(((D.proforma&&D.proforma.company&&D.proforma.company.monthlyRevenue)||0)*12)||4388208;
+  var g=(S.growthPct!=null?Number(S.growthPct):25)/100;
+  var nm=(S.netMarginPct!=null?Number(S.netMarginPct):12)/100;
+  var debt=Number(S.debtTotal)||((D.proforma&&D.proforma.debt&&D.proforma.debt.total))||4091319;
+  var years=[2026,2027,2028,2029];
+  var cum=0,rev=base,rows=[],debtFreeYear=null;
+  years.forEach(function(y,i){
+    if(i>0)rev=rev*(1+g);
+    var ni=rev*nm;cum+=ni;
+    if(debtFreeYear===null&&cum>=debt)debtFreeYear=y;
+    rows.push({y:y,rev:rev,ni:ni,cum:cum,remain:Math.max(0,debt-cum)});
+  });
+  var sumFactors=years.reduce(function(a,_,i){return a+Math.pow(1+g,i);},0);
+  return {rows:rows,base:base,g:g,nm:nm,debt:debt,cum:cum,debtFreeYear:debtFreeYear,
+    targetYear:Number(S.debtFreeTargetYear)||2029,
+    requiredBase:debt/(nm*sumFactors),
+    requiredMargin:debt/(base*sumFactors)};
+}
+function _stratProjectionsHTML(model){
+  var S=_stratEnsure();var P=_stratProjModel();
+  var fy=function(y){return 'FY'+String(y).slice(2);};
+  var met=P.debtFreeYear&&P.debtFreeYear<=P.targetYear;
+  var asm='<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;border:1px solid var(--border);border-radius:8px;padding:10px 12px">'
+    +'<div class="fld" style="margin:0"><label class="fld-l">FY26 base revenue</label><input class="fld-i" style="width:130px" type="number" value="'+Math.round(P.base)+'" onchange="stratSetAssumption(\'fy26Base\',this.value)"></div>'
+    +'<div class="fld" style="margin:0"><label class="fld-l">Annual growth %</label><input class="fld-i" style="width:90px" type="number" value="'+(S.growthPct!=null?S.growthPct:25)+'" onchange="stratSetAssumption(\'growthPct\',this.value)"></div>'
+    +'<div class="fld" style="margin:0"><label class="fld-l">Net margin %</label><input class="fld-i" style="width:90px" type="number" value="'+(S.netMarginPct!=null?S.netMarginPct:12)+'" onchange="stratSetAssumption(\'netMarginPct\',this.value)"></div>'
+    +'<div class="fld" style="margin:0"><label class="fld-l">Debt to retire</label><input class="fld-i" style="width:120px" type="number" value="'+Math.round(P.debt)+'" onchange="stratSetAssumption(\'debtTotal\',this.value)"></div>'
+    +'<div style="flex:1"></div><button class="btn btn-outline btn-sm" onclick="stratSolveBase()">Solve FY26 base for debt-free by '+fy(P.targetYear)+'</button>'
+    +'</div>';
+  var hdr='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)"><td style="padding:4px 0">Year</td><td style="text-align:right">Revenue</td><td style="text-align:right">Net income ('+Math.round(P.nm*100)+'%)</td><td style="text-align:right">Cumulative net</td><td style="text-align:right">Debt remaining</td></tr>';
+  var body=P.rows.map(function(r){var free=r.remain<=0;return '<tr><td style="padding:5px 0;font-weight:700">'+fy(r.y)+(r.y===2026?' <span style="font-weight:400;color:var(--text-muted)">(base)</span>':'')+'</td>'
+    +'<td style="text-align:right">'+fmt(Math.round(r.rev))+'</td>'
+    +'<td style="text-align:right">'+fmt(Math.round(r.ni))+'</td>'
+    +'<td style="text-align:right">'+fmt(Math.round(r.cum))+'</td>'
+    +'<td style="text-align:right;font-weight:700;color:'+(free?'#16A34A':'#DC2626')+'">'+(free?'debt-free ✓':fmt(Math.round(r.remain)))+'</td></tr>';}).join('');
+  var status= met
+    ? '<div style="border:1px solid #16A34A;border-radius:8px;padding:10px 12px;margin-bottom:10px;background:rgba(22,163,74,0.06);font-size:12px"><b style="color:#16A34A">✓ On plan:</b> at '+Math.round(P.g*100)+'% annual growth and '+Math.round(P.nm*100)+'% net margin, cumulative net income retires the '+fmt(Math.round(P.debt))+' debt during <b>'+fy(P.debtFreeYear)+'</b> — debt-free by December '+fy(P.targetYear)+'.</div>'
+    : '<div style="border:1px solid #DC2626;border-radius:8px;padding:10px 12px;margin-bottom:10px;background:rgba(220,38,38,0.05);font-size:12px"><b style="color:#DC2626">✗ Not debt-free by '+fy(P.targetYear)+':</b> at '+Math.round(P.g*100)+'% growth from a '+fmt(Math.round(P.base))+' base, cumulative net income reaches '+fmt(Math.round(P.cum))+' by end of '+fy(2029)+', leaving '+fmt(Math.round(P.debt-P.cum))+'. To close it, pick a lever: <b>FY26 base ≈ '+fmt(Math.round(P.requiredBase))+'</b> (at '+Math.round(P.g*100)+'% growth), or <b>net margin ≈ '+(P.requiredMargin*100).toFixed(1)+'%</b> (at this base), or raise the growth rate.</div>';
+  return '<div style="font-size:14px;font-weight:800;margin:10px 0 8px">Debt-free plan — '+fy(2026)+' → '+fy(2029)+'</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Revenue grows at the set rate from the FY26 base; net income (margin × revenue) accumulates against the '+fmt(Math.round(P.debt))+' debt. History for context: 2024 $11.4M → 2025 $8.0M → FY26 run-rate ~'+fmt(Math.round(P.base))+'. Edit any assumption to re-plan.</div>'
+    +asm+status
+    +'<table style="width:100%;font-size:12px;border-collapse:collapse"><thead>'+hdr+'</thead><tbody>'+body+'</tbody></table>'
+    +'<div style="font-size:10px;color:var(--text-muted);margin-top:8px">Net income is treated as free cash applied to debt principal (a planning proxy). The near-term monthly cash trough and the no-negative-cash rule live on the Overview tab.</div>';
+}
+function stratSetAssumption(k,v){var S=_stratEnsure();S[k]=Number(v)||0;save();renderView();}
+function stratSolveBase(){var S=_stratEnsure();var P=_stratProjModel();S.fy26Base=Math.round(P.requiredBase);save();toast('FY26 base set to '+fmt(Math.round(P.requiredBase))+' — the level that retires the debt by FY'+String(P.targetYear).slice(2)+' at '+Math.round(P.g*100)+'% growth. Adjust if your real FY26 differs.','success',6000);renderView();}
 // ── 1. NORTH STAR: the cash gate ──
 function _stratNorthStarHTML(model){
   var S=D.strategy,tgt=_stratYM(S.gateTargetDate);
