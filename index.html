@@ -4681,27 +4681,42 @@ function _stratDefendHTML(model){
 }
 // ── 5. TEAM PERFORMANCE ──
 function _stratTeamHTML(model){
-  var head='<div style="font-size:14px;font-weight:800;margin:18px 0 8px">Team performance</div>';
+  var S=_stratEnsure();var fyYr=_stratYM((((S.goals||[]).find(function(g){return g.metric==='annual-revenue';})||{}).targetDate)||'2026-12').y;
+  var head='<div style="font-size:14px;font-weight:800;margin:18px 0 8px">Team performance — FY'+String(fyYr).slice(2)+'</div>';
   var byOwner={};
-  function bucket(id){if(!id)id='_un';return byOwner[id]=byOwner[id]||{goals:0,goalsOff:0,miles:0,milesDone:0,milesLate:0};}
-  (D.strategy.goals||[]).forEach(function(g){var b=bucket(g.owner);b.goals++;var ev=_stratGoalEval(g,model),st=_stratGoalStatus(g,ev);if(st.key==='off')b.goalsOff++;});
+  function bucket(id){if(!id)id='_un';return byOwner[id]=byOwner[id]||{goals:0,goalsOff:0,miles:0,milesDone:0,milesLate:0,tgt:0,cur:0,items:[]};}
+  (S.goals||[]).forEach(function(g){var b=bucket(g.owner);b.goals++;var ev=_stratGoalEval(g,model),st=_stratGoalStatus(g,ev);if(st.key==='off')b.goalsOff++;
+    // Roll up the owner's annual revenue accountability (annual + initiative revenue targets).
+    if((g.metric==='annual-revenue'||g.metric==='initiative-revenue')&&(Number(g.target)||0)>0){b.tgt+=Number(g.target)||0;b.cur+=ev.current||0;b.items.push({l:g.label,t:Number(g.target)||0,c:ev.current||0,st:st.key});}
+  });
   var today=new Date();today.setHours(0,0,0,0);
   (D.activities||[]).filter(function(a){return a.isMilestone;}).forEach(function(a){
     (a.owners&&a.owners.length?a.owners:['_un']).forEach(function(oid){var b=bucket(oid);b.miles++;if(a.status==='done')b.milesDone++;else if(a.dueDate&&new Date(a.dueDate)<today)b.milesLate++;});
   });
-  var ids=Object.keys(byOwner);
+  var ids=Object.keys(byOwner).sort(function(a,b){return byOwner[b].tgt-byOwner[a].tgt;});
   if(!ids.length)return head+'<div class="empty-msg">Assign owners to goals and initiative milestones to track performance here.</div>';
   var rows=ids.map(function(id){var b=byOwner[id];var nm=id==='_un'?'Unassigned':_stratOwnerName(id);
     var health=b.goalsOff||b.milesLate?'off':(b.goals||b.miles?'ontrack':'atrisk');
-    return '<div style="display:flex;gap:10px;align-items:center;padding:7px 10px;border-bottom:1px solid var(--border);font-size:12px">'
+    var pct=b.tgt?Math.round(b.cur/b.tgt*100):0;
+    var tgtCell=b.tgt?'<div style="text-align:right;min-width:150px"><div style="font-weight:800">'+fmt(Math.round(b.tgt))+'</div><div style="font-size:10px;color:var(--text-muted)">tracking '+fmt(Math.round(b.cur))+' · '+pct+'%</div></div>':'<div style="text-align:right;min-width:150px;color:var(--text-muted);font-size:11px">no revenue target</div>';
+    var itemsList=b.items.length?'<div style="font-size:10px;color:var(--text-muted);margin-top:4px;padding-left:2px">'+b.items.sort(function(x,y){return y.t-x.t;}).map(function(it){return _stratStatusDot(it.st)+' '+esc(it.l.replace(/ — annual revenue$/,''))+' — '+fmt(Math.round(it.c))+' / '+fmt(Math.round(it.t));}).join('<br>')+'</div>':'';
+    return '<div style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px">'
+      +'<div style="display:flex;gap:10px;align-items:center">'
       +'<div style="flex:1;font-weight:600">'+esc(nm)+'</div>'
       +(b.goals?'<span class="plan-chip">'+b.goals+' goal'+(b.goals===1?'':'s')+(b.goalsOff?' · '+b.goalsOff+' behind':'')+'</span>':'')
       +(b.miles?'<span class="plan-chip">'+b.milesDone+'/'+b.miles+' milestones'+(b.milesLate?' · '+b.milesLate+' late':'')+'</span>':'')
       +_stratStatusChip(health,health==='off'?'attention':health==='ontrack'?'on track':'idle')
+      +tgtCell
+      +'</div>'+itemsList
       +'</div>';
   }).join('');
-  return head+'<div style="border:1px solid var(--border);border-radius:8px">'+rows+'</div>';
+  var totT=ids.reduce(function(a,id){return a+byOwner[id].tgt;},0),totC=ids.reduce(function(a,id){return a+byOwner[id].cur;},0);
+  var foot='<div style="display:flex;gap:10px;align-items:center;padding:8px 10px;font-size:12px;font-weight:800;background:var(--page-bg)"><div style="flex:1">Total assigned revenue target (FY'+String(fyYr).slice(2)+')</div><div style="text-align:right;min-width:150px">'+fmt(Math.round(totT))+'<div style="font-size:10px;font-weight:400;color:var(--text-muted)">tracking '+fmt(Math.round(totC))+'</div></div></div>';
+  return head
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Each member’s FY'+String(fyYr).slice(2)+' revenue accountability (the annual + initiative revenue goals they own), plus goals and milestone execution. Note: the company-wide revenue goal and the initiative goals overlap, so the total below is gross accountability, not a clean sum of company revenue.</div>'
+    +'<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">'+rows+foot+'</div>';
 }
+function _stratStatusDot(k){var c={ontrack:'#16A34A',atrisk:'#D97706',off:'#DC2626',done:'#16A34A'}[k]||'#94A3B8';return '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+c+';vertical-align:middle"></span>';}
 function renderProformaView(q){
   if(!canProforma())return '<div class="empty-msg">No access. The Proforma section is restricted to Admin.</div>';
   if(!D.proforma)proformaMigrate();
