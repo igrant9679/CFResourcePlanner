@@ -1374,7 +1374,7 @@ async function bootstrapData(){
   syncSetStatus('Loading…','rgba(255,255,255,0.55)');
   var r=await serverLoad();
   if(r.reachable&&r.data){
-    var needsSeed=!r.data.overheadSeeded||!r.data.planSeeded||!r.data.accounts||!r.data.programs||!r.data.oppSeeded||!r.data.accountsSeeded||!r.data.oppEnriched||!r.data.clinReqsBackfilled;
+    var needsSeed=!r.data.overheadSeeded||!r.data.planSeeded||!r.data.accounts||!r.data.programs||!r.data.oppSeeded||!r.data.accountsSeeded||!r.data.oppEnriched||!r.data.clinReqsBackfilled||!r.data.pfRowIdsBackfilled;
     D=r.data;migrate();try{localStorage.setItem(STORE_KEY,JSON.stringify(D));}catch(e){}
     _baseState=JSON.stringify(D);   // 3-way merge base: what this tab knows the server has
     if(needsSeed)serverSave();
@@ -1591,6 +1591,20 @@ function proformaSeedV4(){
 }
 function proformaMigrate(){
   if(!D.proforma)D.proforma=proformaSeedV4();
+  // Backfill stable row IDs on every Proforma table array so the 3-way conflict
+  // merge can honor per-row edits/deletes. Without ids, _threeWayMerge falls back
+  // to whole-array "mine wins" (line ~1230), so a stale 2nd tab's save RESURRECTS
+  // rows deleted in another tab (the "Federal pipeline items keep coming back"
+  // bug). One-time + idempotent; non-creating walk so it never fabricates structure.
+  if(!D.pfRowIdsBackfilled){
+    Object.keys(PF_FIELDS).forEach(function(path){
+      var parts=path.split('.'),o=D.proforma;
+      for(var i=0;i<parts.length-1&&o;i++)o=o[parts[i]];
+      var arr=o&&o[parts[parts.length-1]];
+      if(Array.isArray(arr))arr.forEach(function(r){if(r&&typeof r==='object'&&r.id===undefined)r.id=uid();});
+    });
+    D.pfRowIdsBackfilled=true;
+  }
   // ── Phase 1 Tier A enrichment: time-phased contract economics on operational projects ──
   // `to` is the INCLUSIVE last month a segment applies; ranges are non-overlapping
   // so each month resolves to exactly one segment (Capacity Projections consume this).
@@ -4270,7 +4284,7 @@ function _pfApply(cols,rec,v){cols.forEach(function(c){var val=v[c.k];
   rec[c.k]=val;});}
 function pfEditRow(path,idx){var sch=PF_FIELDS[path];if(!sch)return;var arr=_pfArr(path);var cur=(idx>=0)?arr[idx]:null;
   openFormModal({over:'Proforma',title:(idx<0?'Add ':'Edit ')+sch.label,submitLabel:'Save',fields:_pfFormFields(sch.cols,cur),
-    onSubmit:function(v){var rec=(idx<0)?{}:arr[idx];_pfApply(sch.cols,rec,v);if(idx<0)arr.push(rec);pfTouch();toast((idx<0?'Added':'Updated')+' — '+sch.label.toLowerCase()+'.','success');}});}
+    onSubmit:function(v){var rec=(idx<0)?{id:uid()}:arr[idx];_pfApply(sch.cols,rec,v);if(idx<0)arr.push(rec);pfTouch();toast((idx<0?'Added':'Updated')+' — '+sch.label.toLowerCase()+'.','success');}});}
 function pfDelRow(path,idx){var arr=_pfArr(path);if(!arr[idx])return;if(!confirm('Delete this entry?'))return;arr.splice(idx,1);pfTouch();}
 function pfEditObj(path){var sch=PF_OBJ[path];if(!sch)return;var ref=_pfRef(path);var obj=ref.parent[ref.key];if(obj==null){obj={};ref.parent[ref.key]=obj;}
   openFormModal({over:'Proforma',title:'Edit '+sch.label,submitLabel:'Save',fields:_pfFormFields(sch.fields,obj),
