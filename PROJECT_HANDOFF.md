@@ -16,11 +16,14 @@ or a new AI session.
 ## 0. Latest session state (2026-06-14) — READ FIRST
 
 ### ⚠️ Open / in-progress
-- **C1FAMS (Leidos) was accidentally deleted from production** and the user is
-  **re-adding it manually** as a **project** (NOT initiative): **revenue
-  $25,984/mo, start `2026-06`, end `2026-09`** (active Jun→Sep 24, $0 from Oct).
-  Verify it's back. If needed, the full prior record (id `p_c1fams`) is in the
-  backup `_backups/atlas-prod-20260614-092458.json`.
+- **C1FAMS (Leidos) was accidentally deleted from prod — RESTORED 2026-06-14**
+  via API from `_backups/atlas-prod-20260614-092458.json`, with the corrected
+  end-Sep model: id `p_c1fams`, **project**, revenue **$25,984/mo, start `2026-06`,
+  end `2026-09`** (active Jun→Sep 24, $0 from Oct), single timeline segment, 4
+  CLINs preserved. Allocations re-linked automatically (Ande Bhasker 40% sched,
+  Asif Ahmed Rather 100%, Yasir Arfath Farooqie 100%) because they live on the
+  people's `allocSchedule` (projectId `p_c1fams`), not the project. Contract cost
+  line is $25,000/mo (near-breakeven, 2 resources). Done — no action needed.
 - **Debt-service override not yet set on prod.** The Cash-gate "Debt service /mo"
   field (Capacity → Projections → 💵 Cash gate) now persists to
   `D.proforma.financials.debtServiceOverride` (read by `capFixedBurden`). The
