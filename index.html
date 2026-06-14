@@ -2852,6 +2852,119 @@ function renderProjView(q,category){
   if(!tops.length)html+='<div class="empty-msg">'+meta.empty+'</div>';
   html+='</div>';return html;}
 
+/* ── INITIATIVES: List ↔ Detail sub-tabs. Detail is a single-initiative deep-dive
+   (financials, scorecard, sources, strategic + market relevance, proposals,
+   people, milestones) selected from a dropdown — a management briefing view. ── */
+var initSubTab='list',_initDetailId='';
+function initSetTab(t){initSubTab=t;renderView();}
+function initSetDetail(id){_initDetailId=id;renderView();}
+function renderInitiativesView(q){
+  var tabs=[['list','All initiatives'],['detail','Initiative detail']];
+  var bar='<div class="pf-subtabs">'+tabs.map(function(t){return '<button class="pf-subtab'+(initSubTab===t[0]?' active':'')+'" onclick="initSetTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
+  return '<div>'+bar+(initSubTab==='detail'?_initDetailHTML():renderProjView(q,'initiative'))+'</div>';
+}
+function _initDetailHTML(){
+  var inits=(D.projects||[]).filter(function(p){return projCat(p)==='initiative';});
+  if(!inits.length)return '<div class="empty-msg">No initiatives yet — add one on the “All initiatives” tab.</div>';
+  var p=inits.find(function(x){return x.id===_initDetailId;})||inits[0];
+  var opts=inits.map(function(x){return '<option value="'+x.id+'"'+(x.id===p.id?' selected':'')+'>'+esc(x.name)+'</option>';}).join('');
+  var sel='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">'
+    +'<label style="font-size:12px;font-weight:700;color:var(--text-secondary)">Initiative</label>'
+    +'<select class="fld-sel" style="max-width:360px;flex:1;min-width:220px" onchange="initSetDetail(this.value)">'+opts+'</select>'
+    +'<button class="btn btn-sec btn-sm" onclick="openEditProject(\''+p.id+'\')">&#9998; Edit core</button>'
+    +'<button class="btn btn-sec btn-sm" onclick="_initEditDetails(\''+p.id+'\')">&#9998; Edit briefing fields</button>'
+    +'</div>';
+  return '<div class="proj-scroll">'+sel+_initDetailBody(p)+'</div>';
+}
+function _initEditDetails(id){
+  var p=(D.projects||[]).find(function(x){return x.id===id;});if(!p)return;
+  openFormModal({over:'Initiative',title:'Briefing details — '+p.name,submitLabel:'Save',
+    intro:'Management context for this initiative. Financials, staffing and milestones are computed live from the model; these fields capture the qualitative story.',
+    fields:[
+      {key:'leadSource',label:'Source (lead)',type:'select',value:p.leadSource||'',options:[{value:'',label:'— not set —'},{value:'self',label:'Self-led (CommunityForce)'},{value:'partner',label:'Partner-led / teamed'}]},
+      {key:'leadPartners',label:'Partner(s) — if partner-led',type:'text',value:p.leadPartners||''},
+      {key:'strategicRationale',label:'Strategic relevance to CommunityForce',type:'textarea',rows:4,value:p.strategicRationale||''},
+      {key:'marketRelevance',label:'Market / industry relevance & opportunity',type:'textarea',rows:4,value:p.marketRelevance||''}],
+    onSubmit:function(v){p.leadSource=v.leadSource||'';p.leadPartners=(v.leadPartners||'').trim();p.strategicRationale=(v.strategicRationale||'').trim();p.marketRelevance=(v.marketRelevance||'').trim();save();renderView();toast('Briefing details saved.','success');}});
+}
+function _initCard(title,inner,actions){
+  return '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:12px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px"><div style="font-size:13px;font-weight:800">'+title+'</div>'+(actions||'')+'</div>'+inner+'</div>';
+}
+function _initProseBlock(txt,empty,editFn,id){
+  var body=txt?'<div style="font-size:12px;color:var(--text-secondary);line-height:1.5;white-space:pre-wrap">'+esc(txt)+'</div>':'<div style="font-size:12px;color:var(--text-muted);font-style:italic">'+empty+'</div>';
+  var btn='<button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 8px" onclick="'+editFn+'(\''+id+'\')">'+(txt?'&#9998; Edit':'+ Add')+'</button>';
+  return {body:body,btn:btn};
+}
+function _initDetailBody(p){
+  var all=allM();
+  var roll=projRollupData(p.id,all);
+  var revNow=itemRev(p),tgt=Number(p.targetRevenue)||0,costMo=roll.cost,net=revNow-costMo;
+  var now=new Date(),ny=now.getFullYear(),nm=now.getMonth();
+  var roster=capBuildRoster(),active=roster.filter(function(pn){return capPersonActive(pn,ny,nm);});
+  var staffedNow=(typeof capItemFTERAt==='function')?capItemFTERAt(active,p.id,ny,nm)>0:false;
+  var rows=[];try{rows=(capProjData(roster,0,(typeof _capPipeOpts==='function'?_capPipeOpts():{}))||{}).rows||[];}catch(e){}
+  var contrib=rows.filter(function(r){return r.y===ny;}).reduce(function(a,r){return a+((capInWindow(p,r.y,r.m)&&capItemFTERAt(active,p.id,r.y,r.m)>0&&capProjRevAt)?capProjRevAt(p,r.y,r.m):0);},0);
+  var mileAll=(D.activities||[]).filter(function(a){return a.projectId===p.id&&a.isMilestone;});
+  var mileDone=mileAll.filter(function(a){return a.status==='done';}).length;
+  var goalsLinked=((D.strategy&&D.strategy.goals)||[]).filter(function(g){return (g.linkedInitiativeIds||[]).indexOf(p.id)>-1;});
+  var props=(D.proposals||[]).filter(function(pr){return pr.opportunityId===p.id||(pr.pricing&&pr.pricing.linkedProjectId===p.id);});
+  var assigned=all.filter(function(m){return projIds(m).indexOf(p.id)>-1;});
+  function stat(lbl,val,sub,color){return '<div style="flex:1;min-width:130px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">'+lbl+'</div><div style="font-size:19px;font-weight:800;'+(color?'color:'+color:'')+'">'+val+'</div>'+(sub?'<div style="font-size:10px;color:var(--text-muted)">'+sub+'</div>':'')+'</div>';}
+  // Header + window
+  var html='<div style="background:linear-gradient(135deg,var(--navy),var(--navy-light));color:#fff;border-radius:var(--radius);padding:14px 16px;margin-bottom:12px">'
+    +'<div style="font-size:18px;font-weight:800">'+esc(p.name)+'</div>'
+    +'<div style="font-size:11px;color:rgba(255,255,255,0.6);margin-top:3px">'+(p.owner||p.opr?'Owner: '+esc(p.owner||p.opr)+' &nbsp;·&nbsp; ':'')+'Active '+esc(p.startDate||'start')+' → '+esc(p.endDate||'ongoing')+'</div>'
+    +(p.description?'<div style="font-size:12px;color:rgba(255,255,255,0.8);margin-top:7px;line-height:1.45">'+sanitizeHTML(p.description)+'</div>':'')
+    +'</div>';
+  // Financials + scorecard KPIs
+  html+=_initCard('Financials &amp; scorecard',
+    '<div style="display:flex;gap:16px;flex-wrap:wrap">'
+    +stat('Expected revenue',fmt(tgt)+'/mo','target','')
+    +stat('Modeled revenue (now)',fmt(revNow)+'/mo',staffedNow?'counting in forecast':'$0 until staffed',staffedNow?'var(--green)':'var(--amber)')
+    +stat('Monthly cost (labor)',fmt(costMo)+'/mo',assigned.length+' assigned','')
+    +stat('Net / mo',fmt(net)+'/mo','revenue − labor',net>=0?'var(--green)':'var(--red)')
+    +stat('FY'+String(ny).slice(2)+' contribution',fmt(Math.round(contrib)),'projected this calendar year','')
+    +'</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">'
+    +(staffedNow?_stratStatusChip('ontrack','staffed — counting'):_stratStatusChip('off','not staffed — $0 in forecast'))
+    +(mileAll.length?'<span class="plan-chip">'+mileDone+'/'+mileAll.length+' milestones</span>':'')
+    +(goalsLinked.length?'<span class="plan-chip" style="border-color:var(--gold);color:var(--gold)">'+goalsLinked.length+' linked strategy goal'+(goalsLinked.length===1?'':'s')+'</span>':'')
+    +'</div>'
+    +(!staffedNow&&tgt>0?'<div style="font-size:11px;color:#D97706;margin-top:8px">⚠ Not staffed this month — assign resources (on the “All initiatives” tab) to make this revenue count toward the gate.</div>':''));
+  // Two-column qualitative grid
+  var srcChip = p.leadSource==='self'?'<span class="plan-chip" style="border-color:var(--green);color:var(--green);font-weight:700">Self-led (CommunityForce)</span>'
+    : p.leadSource==='partner'?'<span class="plan-chip" style="border-color:var(--gold);color:var(--gold);font-weight:700">Partner-led / teamed</span>'
+    : '<span style="font-size:12px;color:var(--text-muted);font-style:italic">Not set</span>';
+  var srcInner='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'+srcChip+(p.leadSource==='partner'&&p.leadPartners?'<span style="font-size:12px;color:var(--text-secondary)">Partners: <b>'+esc(p.leadPartners)+'</b></span>':'')+'</div>';
+  var strat=_initProseBlock(p.strategicRationale,'No strategic rationale captured yet — why this matters to CommunityForce.','_initEditDetails',p.id);
+  var mkt=_initProseBlock(p.marketRelevance,'No market/industry relevance captured yet — the opportunity and demand.','_initEditDetails',p.id);
+  html+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px">'
+    +_initCard('Source (lead)',srcInner,'<button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 8px" onclick="_initEditDetails(\''+p.id+'\')">&#9998; Edit</button>')
+    +_initCard('Strategic relevance to CommunityForce',strat.body,strat.btn)
+    +_initCard('Market / industry relevance &amp; opportunity',mkt.body,mkt.btn)
+    +_initCard('Executive summary',(p.narrative?'<div style="font-size:12px;color:var(--text-secondary);line-height:1.5;max-height:240px;overflow:auto">'+sanitizeHTML(p.narrative)+'</div>':'<div style="font-size:12px;color:var(--text-muted);font-style:italic">No executive summary yet — the reasoning, idea and justification.</div>'),'<button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 8px" onclick="stratEditNarrative(\''+p.id+'\')">'+(p.narrative?'&#9998; Edit':'+ Add')+'</button>')
+    +'</div>';
+  // People assigned
+  var peopleInner = assigned.length
+    ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:4px 14px">'+assigned.map(function(m){var pct=projDisplayPct(m,p.id);return '<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:3px 0;font-size:12px"><span class="proj-mem-link" onclick="openPersonProfile(\''+m.id+'\')" style="cursor:pointer">'+esc(m.name)+' <span style="color:var(--text-muted);font-size:10px">'+esc(m._dn||'')+'</span></span><span style="font-weight:600">'+pct+'% · '+fmt(Math.round(m.cost*pct/100))+'</span></div>';}).join('')+'</div>'
+    : '<div style="font-size:12px;color:var(--text-muted);font-style:italic">No resources assigned. The initiative shows $0 revenue in the forecast until it is staffed.</div>';
+  html+=_initCard('People assigned ('+assigned.length+')',peopleInner);
+  // Proposals associated
+  var propInner = props.length
+    ? '<div>'+props.map(function(pr){return '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding:5px 0;font-size:12px"><span>'+esc(pr.title||'(untitled proposal)')+(pr.customer?' <span style="color:var(--text-muted);font-size:10px">· '+esc(pr.customer)+'</span>':'')+'</span><span style="display:flex;gap:8px;align-items:center"><span class="plan-chip">'+esc(pr.status||'draft')+'</span><a href="#" onclick="event.preventDefault();viewMode=\'prop\';renderView()" style="font-size:11px;font-weight:700">Open →</a></span></div>';}).join('')+'</div>'
+    : '<div style="font-size:12px;color:var(--text-muted);font-style:italic">No proposals linked to this initiative yet. Proposals link via their Opportunity / contract-project setting in the Proposals tab.</div>';
+  html+=_initCard('Proposals associated ('+props.length+')',propInner);
+  // Milestones
+  var mileInner = mileAll.length
+    ? '<div style="font-size:12px">'+mileAll.map(function(a){var ic=a.status==='done'?'✓':a.status==='blocked'?'⛔':'○';var col=a.status==='done'?'var(--green)':a.status==='blocked'?'var(--red)':'var(--text-muted)';return '<div style="padding:3px 0;border-bottom:1px solid var(--border)"><span style="color:'+col+';font-weight:700">'+ic+'</span> '+esc(a.subtask||a.task||'milestone')+(a.dueDate?' <span style="color:var(--text-muted);font-size:10px">· due '+esc(a.dueDate)+'</span>':'')+'</div>';}).join('')+'</div>'
+    : '<div style="font-size:12px;color:var(--text-muted);font-style:italic">No milestones yet.</div>';
+  html+=_initCard('Milestones ('+mileDone+'/'+mileAll.length+')',mileInner,'<button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 8px" onclick="stratAddMilestone(\''+p.id+'\')">+ Milestone</button>');
+  // Attachments
+  if((p.attachments||[]).length)html+=_initCard('Attachments',projAttachHTML(p).replace('margin-top:7px',''));
+  return html;
+}
+
 var orgMode='hier';
 var ORG_VIEWS=[{k:'hier',l:'Hierarchical'},{k:'horiz',l:'Flat / Horizontal'},{k:'matrix',l:'Matrix'},{k:'func',l:'Functional'},{k:'div',l:'Division'}];
 var ORG_DESC={hier:'Reporting lines (reports-to), top-down.',horiz:'Same reporting lines, flowing left-to-right.',matrix:'Function (team) × project-assignment grid — the classic matrix org.',func:'Grouped by functional team / department.',div:'Grouped by business line / contract.'};
@@ -3337,7 +3450,7 @@ function renderView(){
   var q=(document.getElementById('searchInput').value||'').toLowerCase().trim();var html;
   if(viewMode==='org')html=renderOrgView(q);
   else if(viewMode==='proj')html=renderProjView(q,'project');
-  else if(viewMode==='init')html=renderProjView(q,'initiative');
+  else if(viewMode==='init')html=renderInitiativesView(q);
   else if(viewMode==='opp')html=renderOppView(q);
   else if(viewMode==='over')html=renderProjView(q,'overhead');
   else if(viewMode==='orgchart')html=renderOrgChartView(q);
