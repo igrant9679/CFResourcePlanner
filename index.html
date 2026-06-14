@@ -4231,7 +4231,6 @@ function _stratEnsure(){
   if(!Array.isArray(D.strategy.goals))D.strategy.goals=[];
   if(!D.strategy.gateTargetDate)D.strategy.gateTargetDate='2027-06';   // machine-readable June-2027 gate
   if(!Array.isArray(D.strategy.triggers))D.strategy.triggers=[];        // pursuit decision-date trigger register
-  if(D.strategy.compCutPct==null)D.strategy.compCutPct=10;              // Tier-5 temporary comp-reduction cap (% of remaining billable W2)
   return D.strategy;
 }
 /* ── STRAT BREAK-EVEN PURE LOGIC ── (extracted by tests/run-tests.js — keep the markers intact; no D / DOM access in this block) */
@@ -4740,32 +4739,34 @@ function _stratLadderTiers(row,roster){
   // Which initiatives are deferrable this month (targetRevenue<=0 — practice builds, Phoenix 2, etc.)
   var defer={};
   (D.projects||[]).forEach(function(p){if(projCat(p)==='initiative'){var rev=capInWindow(p,y,m)?(capProjRevAt?capProjRevAt(p,y,m):0):0;if(rev<=0)defer[p.id]=true;}});
-  var t2=0,t3=0,t4=0,billW2=0;
+  // POLICY: billable-project labor is NEVER a cut — neither W2 nor contractor, since
+  // it generates revenue. Only the NON-billable PORTION of anyone's allocation is a
+  // lever. Each person-month's non-billable cost is split: contractor → Tier 3
+  // (variable), W2 on a deferrable initiative → Tier 4, all other non-billable W2 →
+  // Tier 2. (No standalone comp-cut tier: trimming billable salaries is off-policy.)
+  var t2=0,t3=0,t4=0;
   roster.filter(function(pn){return capPersonActive(pn,y,m);}).forEach(function(pn){
     if(ppProjAllocAt(pn,mo)<=0)return;                       // not costed in the forecast this month
     var cst=capPersonCostAt(pn,y,m);
-    if(pn.contractor){t3+=cst;return;}                       // contractors → variable labor (entire costed amount)
     var pids=(typeof _memberAllPids==='function'?_memberAllPids(pn):(pn.projects||[]).map(function(x){return typeof x==='object'?x.id:x;}));
     var parts=pids.map(function(pid){return {pid:pid,pct:memberProjPctAt(pn,pid,y,m)};}).filter(function(x){return x.pct>0;});
     var tot=parts.reduce(function(a,x){return a+x.pct;},0);if(tot<=0)return;
     parts.forEach(function(x){
       var share=cst*(x.pct/tot);
       var p=(D.projects||[]).find(function(z){return z.id===x.pid;});var c=p?projCat(p):'';
-      if(c==='project')billW2+=share;                        // billable — only Tier 5 can touch it
-      else if(c==='initiative'&&defer[x.pid])t4+=share;      // deferrable-initiative labor
-      else t2+=share;                                         // revenue-positive initiative + overhead-item labor
+      if(c==='project')return;                               // BILLABLE — protected, never cut (W2 or contractor)
+      if(pn.contractor)t3+=share;                            // non-billable contractor labor → variable
+      else if(c==='initiative'&&defer[x.pid])t4+=share;      // non-billable W2 on a deferrable initiative
+      else t2+=share;                                         // other non-billable W2 (rev-positive initiative + overhead)
     });
   });
   // Tier 4 also reclaims the net-negative revenue of deferrable initiatives (e.g. Phoenix 2 ≈ -$10K/mo).
   (D.projects||[]).forEach(function(p){if(projCat(p)==='initiative'&&defer[p.id]&&capInWindow(p,y,m)){var rev=capProjRevAt?capProjRevAt(p,y,m):0;if(rev<0)t4+=(-rev);}});
-  var cutPct=(D.strategy&&D.strategy.compCutPct!=null)?Number(D.strategy.compCutPct):10;
-  var t5=billW2*Math.max(0,Math.min(100,cutPct))/100;
   return [
     {key:'subs',label:'Discretionary & subscriptions',available:Math.round(t1)},
-    {key:'bench',label:'Non-billable labor',available:Math.round(t2)},
-    {key:'contractor',label:'Variable / contractor labor',available:Math.round(t3)},
-    {key:'defer',label:'Deferrable investments',available:Math.round(t4)},
-    {key:'comp',label:'Structural — temporary comp cut ('+cutPct+'% of billable)',available:Math.round(t5)}
+    {key:'contractor',label:'Variable / contractor labor (non-billable)',available:Math.round(t3)},
+    {key:'bench',label:'Non-billable W2 labor',available:Math.round(t2)},
+    {key:'defer',label:'Deferrable investments',available:Math.round(t4)}
   ];
 }
 // Render the stacked cost-to-restore recommendation for one negative month.
@@ -4789,17 +4790,23 @@ function _stratCostLadderHTML(red,roster){
     +rows+foot+'</div>';
 }
 // Per-month sign strip: green bar = positive operating profit, red = negative.
+// Each bar is labeled with its month (red + bold for breaches) so the negative
+// months are identifiable directly in the graphic; the year is ticked at each Jan.
 function _stratBreakEvenStrip(rows){
   if(!rows.length)return '';
-  var W=620,H=46,n=rows.length,bw=W/n,mid=H/2;
+  var W=640,Hbar=48,Hlbl=22,H=Hbar+Hlbl,n=rows.length,bw=W/n,mid=Hbar/2;
   var maxAbs=Math.max(1,Math.max.apply(null,rows.map(function(r){return Math.abs(r.profit);})));
-  var bars=rows.map(function(r,i){
-    var neg=r.profit<0,h=Math.max(1,Math.abs(r.profit)/maxAbs*(mid-2));
-    var x=(i*bw+0.6).toFixed(1),w=Math.max(1,bw-1.2).toFixed(1),yy=(neg?mid:mid-h).toFixed(1);
-    return '<rect x="'+x+'" y="'+yy+'" width="'+w+'" height="'+h.toFixed(1)+'" fill="'+(neg?'#DC2626':'#16A34A')+'"><title>'+_stratMonLbl(r)+': '+(neg?'−':'')+fmt(Math.round(Math.abs(r.profit)))+' operating profit</title></rect>';
-  }).join('');
-  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:46px;display:block">'
-    +'<line x1="0" y1="'+mid+'" x2="'+W+'" y2="'+mid+'" stroke="var(--border)" stroke-width="1"></line>'+bars+'</svg>';
+  var bars='',labels='';
+  rows.forEach(function(r,i){
+    var neg=r.profit<0,h=Math.max(1,Math.abs(r.profit)/maxAbs*(mid-3));
+    var cx=i*bw+bw/2;
+    var x=(i*bw+1.2).toFixed(1),w=Math.max(1,bw-2.4).toFixed(1),yy=(neg?mid:mid-h).toFixed(1);
+    bars+='<rect x="'+x+'" y="'+yy+'" width="'+w+'" height="'+h.toFixed(1)+'" rx="1" fill="'+(neg?'#DC2626':'#16A34A')+'"><title>'+_stratMonLbl(r)+': '+(neg?'−':'')+fmt(Math.round(Math.abs(r.profit)))+' operating profit</title></rect>';
+    labels+='<text x="'+cx.toFixed(1)+'" y="'+(Hbar+11)+'" text-anchor="middle" font-size="9" fill="'+(neg?'#DC2626':'var(--text-muted)')+'"'+(neg?' font-weight="700"':'')+'>'+MON_ABBR[r.m]+'</text>';
+    if(r.m===0||i===0)labels+='<text x="'+cx.toFixed(1)+'" y="'+(Hbar+20)+'" text-anchor="middle" font-size="8" fill="var(--text-muted)" font-weight="700">’'+String(r.y).slice(2)+'</text>';
+  });
+  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:'+H+'px;display:block">'
+    +'<line x1="0" y1="'+mid+'" x2="'+W+'" y2="'+mid+'" stroke="var(--border)" stroke-width="1"></line>'+bars+labels+'</svg>';
 }
 function _stratBreakEvenHTML(model){
   var scan=stratScanNegative(model.rows);
@@ -4822,6 +4829,7 @@ function _stratBreakEvenHTML(model){
   var anyContractor=roster.some(function(p){return p.contractor;});
   if(!anyContractor)box+='<div style="font-size:11px;color:#D97706;margin-top:6px">⚠ No resources are flagged as <b>Contractor</b> yet, so the variable-labor tier shows $0. Tag contractors in Edit Resource → Classification to unlock that lever.</div>';
   box+='<div style="font-size:12px;font-weight:700;margin:12px 0 2px">Cost-to-restore — least-painful-first ladder per breached month</div>';
+  box+='<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Billable-project labor (W2 <i>and</i> contractor) is protected and never appears as a cut — it generates revenue. Only non-billable cost is a lever.</div>';
   box+=scan.red.map(function(r){return _stratCostLadderHTML(r,roster);}).join('');
   box+='</div>';
   return head+box;
