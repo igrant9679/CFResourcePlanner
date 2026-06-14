@@ -13,6 +13,82 @@ or a new AI session.
 
 ---
 
+## 0. Latest session state (2026-06-14) — READ FIRST
+
+### ⚠️ Open / in-progress
+- **C1FAMS (Leidos) was accidentally deleted from production** and the user is
+  **re-adding it manually** as a **project** (NOT initiative): **revenue
+  $25,984/mo, start `2026-06`, end `2026-09`** (active Jun→Sep 24, $0 from Oct).
+  Verify it's back. If needed, the full prior record (id `p_c1fams`) is in the
+  backup `_backups/atlas-prod-20260614-092458.json`.
+- **Debt-service override not yet set on prod.** The Cash-gate "Debt service /mo"
+  field (Capacity → Projections → 💵 Cash gate) now persists to
+  `D.proforma.financials.debtServiceOverride` (read by `capFixedBurden`). The
+  computed $15,360 = SBA $9,860 (ALSO in Overhead → double-counted) + Fairfax
+  $5,500 (not in Overhead). Recommended value **$5,500** (drops the SBA
+  double-count, keeps Fairfax) or **$0** if Fairfax/Sterling get added to Overhead.
+- **Lost data, NOT recoverable:** the user's "Fibretek" + "Xcelerate" opportunities
+  (added ~June 13) are absent from prod AND from all 14 days of server history —
+  a stale-tab overwrite or a save that never persisted. Re-create if still needed.
+
+### 🛑 Data-loss hazard (recurring — warn the user)
+Multiple/stale browser tabs overwrite each other. **Keep ONE tab; reload before
+editing.** Server keeps ~14 days of snapshots: `GET /api/history` (index) +
+`GET /api/history/:id` (payload); restore by POSTing a payload to
+`/api/data?force=1`. Local point-in-time backups this session are in `_backups/`.
+
+### 🔧 Assistant protocol for editing PROD data directly
+`GET /api/data` (capture the `X-Atlas-Updated-At` response header) → modify the
+JSON → `POST /api/data` with header `X-Atlas-Base-Updated-At: <that stamp>`.
+Always save a backup to `_backups/` first. A 200 means no concurrent write landed.
+
+### ✅ Shipped this session (all live on `main`/Railway; latest commit `4598c9d`)
+- **Strategy break-even suite:** no-negative-operating-profit guardrail + per-month
+  red/green strip; **cost-to-restore ladder** (Tier 1 discretionary/subs → Tier 2
+  non-billable W2 → Tier 3 non-billable contractor → Tier 4 deferrable initiatives;
+  billable-project labor NEVER cut; debt excluded — it's below the operating line);
+  **slip simulator**; **trigger register**; **Break-even sub-tab** with a full
+  recommendation breakdown + **cut simulator** (`_stratCutLevers`/`_stratCutSel`).
+- **Forecast model — option B:** bench/unallocated labor now counts as cost (Other
+  payroll) **until furloughed** (`furloughDate`); `_capNotYetStarted` excludes
+  future hires before their first allocation. `capBuildRoster` carries
+  `contractor` + `furloughDate`. Big behavior change vs the old "unallocated = $0".
+- **Capacity → Projections:** every $ is a drill-down link (`capDrill(y,m,metric)`).
+- **Initiatives:** List ↔ **Detail** sub-tab (`renderInitiativesView`, dropdown
+  deep-dive) with financials/scorecard, source (self/partner-led), strategic +
+  market relevance, exec summary, people, proposals, milestones, and
+  **linked opportunities** (`o.initiativeIds[]`, editable both sides; pipeline-impact rollup).
+- **Branding:** rebuilt Atlas logo (inline SVG) on login + header, favicon,
+  "Operating System" wording.
+- **Nav order:** Proforma · Strategy · Capacity Planning · Resource Planning ·
+  Projects · Initiatives · Opportunities · Proposals · Overhead · Resources ·
+  Reports · Recruiting · COE Tasks · Project Tasks · Org Chart. (COE Plan→COE Tasks.)
+- **Contracts:** FAMS + C1FAMS both **end Sep 24, 2026** (C1FAMS no longer ramps to
+  $100K). Contract-end milestones added.
+- **Proforma cleanup:** removed the stale **Scenarios tab** + V4 forecast-scenario
+  selector (cash trajectory now always base); **Pipeline tab → "Marines"** (static
+  Federal-pipeline table removed, Marines DD577 detail kept). Contracts tab KEPT
+  (it's the live time-phased contract-revenue editor). **Proforma table rows now
+  carry `id`** (`pfRowIdsBackfilled`) so the 3-way merge stops resurrecting deleted
+  rows. "Unallocated Resources" re-categorized initiative→**overhead** (parked
+  people are now Tier-2 non-billable, not a deferrable investment).
+
+### Note on the Jun–Sep negative operating margin
+It's **structural / pre-existing**, not caused by this session's engine changes
+(option B added only ~$2.5K/mo of bench). Driver: ~$82K/mo of **non-billable
+labor** — Management + Phoenix 2 / Salesforce / Tableau practice investments +
+the Unallocated Resources parking bucket. The new break-even guardrail simply
+**surfaces** these long-negative months for the first time.
+
+### Working norms / verify loop
+No build step — edit `index.html`/`server.js`, syntax-check the inline `<script>`
+with `node --check`-style parse, `npm test` (24 tests, marker-delimited pure
+logic), preview-verify (set `sessionStorage cf_auth='1'`), commit (`git commit -F`
+temp file + Co-Authored-By trailer), push to `main` (deploys ~1-3 min), confirm
+live. Push cadence: fine to commit+push+verify per change during active iteration.
+
+---
+
 ## 1. Quick Facts
 
 | Thing | Value |
