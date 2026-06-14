@@ -3737,6 +3737,20 @@ function capOppEffProb(o,multPct){ var base=CAP_STAGE_PROB[capOppStage(o)]; if(b
    forecast. Before it (or if unset), they remain a cost even when unallocated
    (bench), because we are still paying them until the furlough decision lands. */
 function _capFurloughed(pn,y,m){if(!pn||!pn.furloughDate)return false;var k=_capYM(String(pn.furloughDate).slice(0,7));return !isNaN(k)&&(y*12+m)>=k;}
+// Earliest month this person has ANY allocation — a base project's window start
+// (-Infinity if the project is open-ended) or a scheduled-allocation start.
+// Infinity when they have no allocations at all (a true current bench resource).
+function _capFirstAlloc(pn){
+  if(!pn)return Infinity;var first=Infinity;
+  (pn.projects||[]).forEach(function(e){var pid=(typeof e==='object')?e.id:e;if((typeof e==='object')&&(Number(e.pct)||100)<=0)return;var p=(D.projects||[]).find(function(x){return x.id===pid;});if(!p)return;first=Math.min(first,p.startDate?_capYM(p.startDate):-Infinity);});
+  (pn.allocSchedule||[]).forEach(function(r){if((Number(r.pct)||0)<=0)return;first=Math.min(first,r.start?_capYM(r.start):-Infinity);});
+  return first;
+}
+// A planned/future hire who hasn't started yet: they HAVE an allocation but its
+// earliest month is still in the future, so they're not on payroll yet and aren't
+// a cost before they start. (Contrast a current employee who rolls off to the
+// bench — they have a past/current allocation, so they keep costing under option B.)
+function _capNotYetStarted(pn,y,m){var f=_capFirstAlloc(pn);return isFinite(f)&&f>(y*12+m);}
 function capPersonActive(pn,y,m){
   if(pn._origin==='member'||!pn.startMonth)return true;
   var parts=String(pn.startMonth).split('-'),sy=+parts[0],sm=(+parts[1]||1)-1;
@@ -3848,7 +3862,7 @@ function capProjData(roster,multPct,opts){
     var projLabor=0,otherLabor=0;
     var _mk=mo.y*12+mo.m;
     active.forEach(function(pn){
-      if(_capFurloughed(pn,mo.y,mo.m))return;  // furloughed → off the books from the furlough month; otherwise still a cost even when bench/unallocated
+      if(_capFurloughed(pn,mo.y,mo.m)||_capNotYetStarted(pn,mo.y,mo.m))return;  // furloughed → off the books; not-yet-started future hire → not on payroll yet; otherwise still a cost even when bench/unallocated
       var cst=capPersonCostAt(pn,mo.y,mo.m);
       var pp=PROJIDS.reduce(function(a,pid){return a+memberProjPctAt(pn,pid,mo.y,mo.m);},0);  // % on PROJECT-type items this month (per-item: schedule overrides base); bench (pp=0) → full cost to Other payroll
       var pProj=Math.round(cst*Math.min(100,pp)/100);  // round per person (mirrors the Projects page) so the buckets are whole dollars and tie out
@@ -4032,7 +4046,7 @@ function capDrill(y,m,metric){
     (D.projects||[]).filter(function(p){return projCat(p)==='opportunity';}).forEach(function(o){if(!oppInc(o))return;add(o.name,oppMonthly(o),'pipeline · '+capOppStage(o)+(o.closeDate?' · close '+o.closeDate:''));});
   } else if(metric==='proj'||metric==='other'){
     title=metric==='proj'?'Project payroll':'Other payroll';
-    active.forEach(function(pn){if(_capFurloughed(pn,y,m))return;var cst=capPersonCostAt(pn,y,m);var pp=PROJIDS.reduce(function(a,pid){return a+memberProjPctAt(pn,pid,y,m);},0);var pProj=Math.round(cst*Math.min(100,pp)/100);
+    active.forEach(function(pn){if(_capFurloughed(pn,y,m)||_capNotYetStarted(pn,y,m))return;var cst=capPersonCostAt(pn,y,m);var pp=PROJIDS.reduce(function(a,pid){return a+memberProjPctAt(pn,pid,y,m);},0);var pProj=Math.round(cst*Math.min(100,pp)/100);
       if(metric==='proj')add(pn.name,pProj,Math.round(Math.min(100,pp))+'% on projects');else add(pn.name,cst-pProj,pp>0?'non-project labor':'bench — unallocated');});
     if(metric==='other'){add('Federal Sales/BD & Management (fixed)',(typeof proformaBDMgmtFixedMonthlyAt==='function'?proformaBDMgmtFixedMonthlyAt(y,m):0),'payroll-typed cost-structure lines');}
   } else if(metric==='oh'){
@@ -4974,7 +4988,7 @@ function _stratLadderTiers(row,roster){
   // Tier 2. (No standalone comp-cut tier: trimming billable salaries is off-policy.)
   var contractorItems=[],benchItems=[],deferLabor={};        // deferLabor[pid] = $ of non-billable W2 labor on that deferrable initiative
   roster.filter(function(pn){return capPersonActive(pn,y,m);}).forEach(function(pn){
-    if(_capFurloughed(pn,y,m))return;                        // furloughed → already off the forecast, nothing to cut
+    if(_capFurloughed(pn,y,m)||_capNotYetStarted(pn,y,m))return;  // furloughed → off the forecast; not-yet-started future hire → not on payroll yet
     var cst=capPersonCostAt(pn,y,m);
     var pids=(typeof _memberAllPids==='function'?_memberAllPids(pn):(pn.projects||[]).map(function(x){return typeof x==='object'?x.id:x;}));
     var parts=pids.map(function(pid){return {pid:pid,pct:memberProjPctAt(pn,pid,y,m)};}).filter(function(x){return x.pct>0;});
