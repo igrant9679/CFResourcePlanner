@@ -4336,6 +4336,7 @@ function renderStrategyView(q){
     +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Goals, metrics, and team execution measured live against the $1.5M cash gate. Numbers come from the same engine as Capacity Planning &amp; Proforma.</div></div></div>';
   html+=_stratNorthStarHTML(model);
   html+=_stratGoalsHTML(model);
+  html+=_stratBridgeHTML(model);
   html+=_stratInitiativesHTML(model);
   html+=_stratDefendHTML(model);
   html+=_stratTeamHTML(model);
@@ -4452,6 +4453,31 @@ function stratEditGoal(id){
 }
 function stratDelGoal(id){if(!confirm('Delete this goal?'))return;var S=_stratEnsure();S.goals=S.goals.filter(function(x){return x.id!==id;});save();renderView();}
 // ── 3. INITIATIVE SCORECARDS ──
+/* FY revenue bridge — shows exactly how existing revenue + each initiative's
+   target build to the debt-payoff revenue target, so the logic is visible
+   rather than implied. Live: recomputes as goals/targets are edited. */
+function _stratBridgeHTML(model){
+  var S=D.strategy||{};
+  var rg=(S.goals||[]).find(function(g){return g.metric==='annual-revenue';});
+  if(!rg)return '';
+  var yr=_stratYM(rg.targetDate||'2027-12').y,fy='FY'+String(yr).slice(2);
+  var base=model.rows.filter(function(r){return r.y===yr;}).reduce(function(a,r){return a+r.rev;},0);
+  var initGoals=(S.goals||[]).filter(function(g){return g.metric==='initiative-revenue'&&(Number(g.target)||0)>0;}).sort(function(a,b){return (Number(b.target)||0)-(Number(a.target)||0);});
+  var initSum=initGoals.reduce(function(a,g){return a+(Number(g.target)||0);},0);
+  var planned=base+initSum,target=Number(rg.target)||0,gap=planned-target;
+  function initName(g){var p=(D.projects||[]).find(function(x){return x.id===(g.linkedInitiativeIds||[])[0];});return p?p.name:g.label;}
+  function row(label,val,o){o=o||{};return '<tr style="'+(o.top?'border-top:2px solid var(--border);':'')+'"><td style="padding:5px 0;'+(o.indent?'padding-left:16px;':'')+(o.muted?'color:var(--text-muted);':'')+(o.bold?'font-weight:800;':'')+'">'+label+'</td><td style="padding:5px 0;text-align:right;'+(o.color?'color:'+o.color+';':'')+(o.bold?'font-weight:800;':'')+'">'+val+'</td></tr>';}
+  var tbl=row('Existing &amp; contracted revenue <span style="color:var(--text-muted);font-weight:400">('+fy+' projection, no new pipeline)</span>',fmt(Math.round(base)));
+  initGoals.forEach(function(g){tbl+=row('+ '+esc(initName(g))+' <span class="plan-chip" style="border-color:#7C3AED;color:#7C3AED">suggested</span>',fmt(Number(g.target)||0),{indent:true});});
+  tbl+=row('= Planned '+fy+' revenue',fmt(Math.round(planned)),{top:true,bold:true});
+  tbl+=row('Debt-payoff target &mdash; $'+(S.debtTotal||4091319).toLocaleString()+' &divide; '+(S.debtPayoffYears||3)+'yr &times; '+(S.netMarginPct||12)+'% net margin',fmt(target),{muted:true});
+  var gapC=gap>=-1000?'#16A34A':'#DC2626';
+  tbl+=row(gap>=0?'Surplus over target':'Gap to target',(gap>=0?'+':'')+fmt(Math.round(gap)),{bold:true,color:gapC});
+  return '<div style="font-size:14px;font-weight:800;margin:18px 0 8px">'+fy+' revenue bridge</div>'
+    +'<div style="border:1px solid var(--border);border-radius:8px;padding:12px 14px">'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">How the pieces build to the debt-payoff target. The initiative targets total <b>'+fmt(Math.round(initSum))+'</b> on their own &mdash; they reach the target only stacked on existing contracted revenue. Edit any initiative goal and this updates live.</div>'
+    +'<table style="width:100%;font-size:12px;border-collapse:collapse">'+tbl+'</table></div>';
+}
 function _stratInitiativesHTML(model){
   var inits=(D.projects||[]).filter(function(p){return projCat(p)==='initiative';});
   var head='<div style="font-size:14px;font-weight:800;margin:18px 0 8px">Initiative scorecards</div>';
