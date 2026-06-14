@@ -4540,23 +4540,26 @@ function _stratBridgeHTML(model){
   var S=D.strategy||{};
   var rg=(S.goals||[]).find(function(g){return g.metric==='annual-revenue';});
   if(!rg)return '';
-  var yr=_stratYM(rg.targetDate||'2027-12').y,fy='FY'+String(yr).slice(2);
-  var base=model.rows.filter(function(r){return r.y===yr;}).reduce(function(a,r){return a+r.rev;},0);
-  var initGoals=(S.goals||[]).filter(function(g){return g.metric==='initiative-revenue'&&(Number(g.target)||0)>0;}).sort(function(a,b){return (Number(b.target)||0)-(Number(a.target)||0);});
-  var initSum=initGoals.reduce(function(a,g){return a+(Number(g.target)||0);},0);
-  var planned=base+initSum,target=Number(rg.target)||0,gap=planned-target;
-  function initName(g){var p=(D.projects||[]).find(function(x){return x.id===(g.linkedInitiativeIds||[])[0];});return p?p.name:g.label;}
-  function row(label,val,o){o=o||{};return '<tr style="'+(o.top?'border-top:2px solid var(--border);':'')+'"><td style="padding:5px 0;'+(o.indent?'padding-left:16px;':'')+(o.muted?'color:var(--text-muted);':'')+(o.bold?'font-weight:800;':'')+'">'+label+'</td><td style="padding:5px 0;text-align:right;'+(o.color?'color:'+o.color+';':'')+(o.bold?'font-weight:800;':'')+'">'+val+'</td></tr>';}
-  var tbl=row('Existing &amp; contracted revenue <span style="color:var(--text-muted);font-weight:400">('+fy+' projection, no new pipeline)</span>',fmt(Math.round(base)));
-  initGoals.forEach(function(g){tbl+=row('+ '+esc(initName(g))+' <span class="plan-chip" style="border-color:#7C3AED;color:#7C3AED">suggested</span>',fmt(Number(g.target)||0),{indent:true});});
-  tbl+=row('= Planned '+fy+' revenue',fmt(Math.round(planned)),{top:true,bold:true});
-  tbl+=row('Debt-payoff target &mdash; $'+(S.debtTotal||4091319).toLocaleString()+' &divide; '+(S.debtPayoffYears||3)+'yr &times; '+(S.netMarginPct||12)+'% net margin',fmt(target),{muted:true});
-  var gapC=gap>=-1000?'#16A34A':'#DC2626';
-  tbl+=row(gap>=0?'Surplus over target':'Gap to target',(gap>=0?'+':'')+fmt(Math.round(gap)),{bold:true,color:gapC});
-  return '<div style="font-size:14px;font-weight:800;margin:18px 0 8px">'+fy+' revenue bridge</div>'
+  var P=_stratProjModel();                       // FY26→FY29 revenue trajectory
+  var anchorYr=_stratYM(rg.targetDate||'2027-12').y;   // year the initiative targets are set for (FY27)
+  var g=P.g;
+  var years=P.rows.map(function(r){return r.y;});
+  function mult(y){return Math.pow(1+g,y-anchorYr);}   // grow/shrink the anchor-year targets across years
+  var initGoals=(S.goals||[]).filter(function(x){return x.metric==='initiative-revenue'&&(Number(x.target)||0)>0;}).sort(function(a,b){return (Number(b.target)||0)-(Number(a.target)||0);});
+  function initName(x){var p=(D.projects||[]).find(function(z){return z.id===(x.linkedInitiativeIds||[])[0];});return p?p.name:x.label;}
+  function fyh(y){return 'FY'+String(y).slice(2);}
+  function cells(fn,o){o=o||{};return years.map(function(y,i){return '<td style="text-align:right;padding:'+(o.bold?'5px':'4px')+' 0 4px 12px;'+(o.bold?'font-weight:800;':'')+'">'+fn(y,i)+'</td>';}).join('');}
+  var head='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)"><td style="padding:4px 0">Source</td>'+years.map(function(y){return '<td style="text-align:right;padding-left:12px">'+fyh(y)+'</td>';}).join('')+'</tr>';
+  // Base & other = each year's total minus the itemized initiative contributions
+  var baseRow='<tr><td style="padding:4px 0">Base &amp; other revenue <span style="color:var(--text-muted);font-weight:400">(existing contracts + residual to target)</span></td>'
+    +cells(function(y,i){var initSum=initGoals.reduce(function(a,x){return a+(Number(x.target)||0)*mult(y);},0);return fmt(Math.round(P.rows[i].rev-initSum));})+'</tr>';
+  var initRows=initGoals.map(function(x){var t=Number(x.target)||0;
+    return '<tr><td style="padding:4px 0;padding-left:12px">+ '+esc(initName(x))+' <span class="plan-chip" style="border-color:#7C3AED;color:#7C3AED">suggested</span></td>'+cells(function(y){return fmt(Math.round(t*mult(y)));})+'</tr>';}).join('');
+  var totRow='<tr style="border-top:2px solid var(--border)"><td style="padding:5px 0;font-weight:800">= Revenue target ('+Math.round(g*100)+'% growth)</td>'+cells(function(y,i){return fmt(Math.round(P.rows[i].rev));},{bold:true})+'</tr>';
+  return '<div style="font-size:14px;font-weight:800;margin:18px 0 8px">Revenue</div>'
     +'<div style="border:1px solid var(--border);border-radius:8px;padding:12px 14px">'
-    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">How the pieces build to the debt-payoff target. The initiative targets total <b>'+fmt(Math.round(initSum))+'</b> on their own &mdash; they reach the target only stacked on existing contracted revenue. Edit any initiative goal and this updates live.</div>'
-    +'<table style="width:100%;font-size:12px;border-collapse:collapse">'+tbl+'</table></div>';
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Revenue target across the debt-free plan ('+Math.round(g*100)+'% annual growth). Initiative targets are set for <b>'+fyh(anchorYr)+'</b> and projected at the plan growth rate in the other years; &ldquo;Base &amp; other&rdquo; is existing contracts plus the residual needed to hit each year&rsquo;s target. Edit growth on the Debt-Free Plan tab or any initiative goal to update this live.</div>'
+    +'<table style="width:100%;font-size:12px;border-collapse:collapse"><thead>'+head+'</thead><tbody>'+baseRow+initRows+totRow+'</tbody></table></div>';
 }
 function _stratInitiativesHTML(model){
   var inits=(D.projects||[]).filter(function(p){return projCat(p)==='initiative';});
