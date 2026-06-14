@@ -799,6 +799,8 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .cap-proj-tbl td.mo,.cap-proj-tbl th.mo{text-align:left;font-weight:700;position:sticky;left:0;background:#fff;}
 .cap-proj-tbl thead th.mo{background:#f1f5f9;z-index:2;}
 .cap-proj-tbl tr.yr-end td{border-bottom:2px solid #cbd5e1;}
+.cap-drill{cursor:pointer;border-bottom:1px dotted currentColor;}
+.cap-drill:hover{color:var(--gold);}
 .cap-proj-note{font-size:11px;color:var(--text-muted);margin:8px 2px 0;}
 .tpl-card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px;border-left:3px solid #7C3AED;}
 .tpl-card-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;}
@@ -3956,13 +3958,13 @@ function _capProjHTML(roster){
   var body=anchorRow+rows.map(function(r,i){
     var yrEnd=(i<rows.length-1&&rows[i+1].y!==r.y);
     return '<tr'+(yrEnd?' class="yr-end"':'')+'><td class="mo">'+CAP_MONTHS[r.m]+" '"+(r.y%100)+'</td>'
-      +'<td>'+fmt(r.rev)+'</td>'
-      +'<td>'+(r.oppRev?'<span class="cap-pos">'+fmt(r.oppRev)+'</span>':'—')+'</td>'
-      +'<td>'+fmt(r.projectPayroll||0)+'</td>'
-      +'<td>'+fmt(r.otherPayroll||0)+'</td>'
-      +'<td>'+fmt(r.overhead||0)+'</td>'
-      +'<td class="'+(r.profit>=0?'cap-pos':'cap-neg')+'">'+fmt(r.profit)+'</td>'
-      +(_capCashMode?'<td class="'+(r.cashBal>=gate?'cap-pos':'cap-neg')+'">'+fmt(r.cashBal)+(gateMet&&gateMet.y===r.y&&gateMet.m===r.m?' &#9989;':'')+'</td>':'<td class="'+((r.cum+cumBase)>=0?'cap-pos':'cap-neg')+'">'+fmt(r.cum+cumBase)+'</td>')
+      +'<td>'+_capDL(r.y,r.m,'rev',fmt(r.rev))+'</td>'
+      +'<td>'+(r.oppRev?_capDL(r.y,r.m,'opp','<span class="cap-pos">'+fmt(r.oppRev)+'</span>'):'—')+'</td>'
+      +'<td>'+_capDL(r.y,r.m,'proj',fmt(r.projectPayroll||0))+'</td>'
+      +'<td>'+_capDL(r.y,r.m,'other',fmt(r.otherPayroll||0))+'</td>'
+      +'<td>'+_capDL(r.y,r.m,'oh',fmt(r.overhead||0))+'</td>'
+      +'<td class="'+(r.profit>=0?'cap-pos':'cap-neg')+'">'+_capDL(r.y,r.m,'profit',fmt(r.profit))+'</td>'
+      +(_capCashMode?'<td class="'+(r.cashBal>=gate?'cap-pos':'cap-neg')+'">'+_capDL(r.y,r.m,'cash',fmt(r.cashBal))+(gateMet&&gateMet.y===r.y&&gateMet.m===r.m?' &#9989;':'')+'</td>':'<td class="'+((r.cum+cumBase)>=0?'cap-pos':'cap-neg')+'">'+_capDL(r.y,r.m,'cash',fmt(r.cum+cumBase))+'</td>')
       +'</tr>';
   }).join('');
   var tbl='<div class="cap-proj-tbl-wrap"><table class="cap-proj-tbl"><thead>'
@@ -3977,6 +3979,58 @@ function _capProjHTML(roster){
   var charts='<div class="cap-chart" style="margin-bottom:14px"><div class="cap-chart-h">Cumulative revenue &amp; profit through Dec '+rows[rows.length-1].y+'</div>'+_capProjChart(rows)+'</div>'
     +(_capCashMode?'<div class="cap-chart" style="margin-bottom:14px"><div class="cap-chart-h">Cash balance vs $'+(Math.round(gate/1000))+'K survival gate</div>'+_capCashChart(rows,gate,opening)+'</div>':'');
   return ctl+v4+cashPanel+charts+'<div class="cap-yr-cards">'+yrCards+'</div>'+tbl+note;
+}
+// Wrap a projection dollar amount in a click-to-drill link.
+function _capDL(y,m,metric,inner){return '<span class="cap-drill" title="See the items contributing to this figure" onclick="capDrill('+y+','+m+',\''+metric+'\')">'+inner+'</span>';}
+/* Drill-down: list the individual items (projects, opportunities, people, cost
+   lines) contributing to a Projections cell for a given month. Recomputes from
+   the same roster + pipeline options the projection used, so it ties out. */
+function capDrill(y,m,metric){
+  var roster=(typeof CAP!=='undefined'&&CAP&&CAP.roster)?CAP.roster:capBuildRoster();
+  var opts=(typeof _capPipeOpts==='function'?_capPipeOpts():{});
+  var active=roster.filter(function(pn){return capPersonActive(pn,y,m);});
+  var PROJIDS=(D.projects||[]).filter(function(p){return projCat(p)==='project';}).map(function(p){return p.id;});
+  var rows=[],total=0,title='',sub='',moLbl=CAP_MONTHS[m]+" '"+(y%100);
+  function add(name,amt,note){if(Math.round(amt)===0)return;rows.push({name:name,amt:Math.round(amt),note:note||''});}
+  function oppInc(o){var s=capOppStage(o);if(s==='Lost')return false;if(opts.noPipeline)return false;var st=(o.status||'').toLowerCase();if((s==='Won'||st==='closed won')&&opts.inclWon)return true;if(st==='negotiation'&&opts.inclNeg)return true;return false;}
+  function oppMonthly(o){if(!o.closeDate)return 0;var cd=new Date(o.closeDate);if(isNaN(cd))return 0;var ck=cd.getFullYear()*12+cd.getMonth();if(opts.slips&&opts.slips[o.id]!=null)ck=opts.slips[o.id];if((y*12+m)<ck)return 0;return (Number(o.potential)||0)/12;}
+  if(metric==='rev'||metric==='opp'){
+    if(metric==='rev'){title='Revenue';
+      (D.projects||[]).filter(function(p){return projCat(p)==='project';}).forEach(function(p){add(p.name,capInWindow(p,y,m)?capProjRevAt(p,y,m):0,'project');});
+      (D.projects||[]).filter(function(p){return projCat(p)==='initiative';}).forEach(function(p){if(capItemFTERAt(active,p.id,y,m)>0&&capInWindow(p,y,m))add(p.name,capProjRevAt(p,y,m),'initiative · staffed');});
+    } else title='Pipeline revenue (opportunities)';
+    (D.projects||[]).filter(function(p){return projCat(p)==='opportunity';}).forEach(function(o){if(!oppInc(o))return;add(o.name,oppMonthly(o),'pipeline · '+capOppStage(o)+(o.closeDate?' · close '+o.closeDate:''));});
+  } else if(metric==='proj'||metric==='other'){
+    title=metric==='proj'?'Project payroll':'Other payroll';
+    active.forEach(function(pn){if(ppProjAllocAt(pn,{y:y,m:m})<=0)return;var cst=capPersonCostAt(pn,y,m);var pp=PROJIDS.reduce(function(a,pid){return a+memberProjPctAt(pn,pid,y,m);},0);var pProj=Math.round(cst*Math.min(100,pp)/100);
+      if(metric==='proj')add(pn.name,pProj,Math.round(Math.min(100,pp))+'% on projects');else add(pn.name,cst-pProj,'non-project labor');});
+    if(metric==='other'){add('Federal Sales/BD & Management (fixed)',(typeof proformaBDMgmtFixedMonthlyAt==='function'?proformaBDMgmtFixedMonthlyAt(y,m):0),'payroll-typed cost-structure lines');}
+  } else if(metric==='oh'){
+    title='Overhead / G&A';var cs=(D.proforma||{}).costStructure||{};
+    (cs.overhead||[]).forEach(function(x){if(_pfLineType(x.category,x.type)==='overhead')add(x.category,_pfLineMonthlyAt(x,y,m),'overhead line');});
+    (cs.softwareSubs||[]).forEach(function(x){if(_pfLineType(x.vendor,x.type)==='overhead')add(x.vendor,_pfLineMonthlyAt(x,y,m),'software subscription');});
+  } else if(metric==='profit'||metric==='cash'){
+    var r=(capProjData(roster,0,opts).rows||[]).find(function(x){return x.y===y&&x.m===m;})||{};
+    if(metric==='profit'){title='Operating profit';
+      rows.push({name:'Revenue',amt:Math.round(r.rev||0),note:'open the Revenue cell to drill'});
+      rows.push({name:'− Project payroll',amt:-Math.round(r.projectPayroll||0),note:''});
+      rows.push({name:'− Other payroll',amt:-Math.round(r.otherPayroll||0),note:''});
+      rows.push({name:'− Overhead/G&A',amt:-Math.round(r.overhead||0),note:''});
+      total=Math.round(r.profit||0);
+    } else {title='Cash flow';var burden=capFixedBurden();
+      rows.push({name:'Operating profit (this month)',amt:Math.round(r.profit||0),note:''});
+      rows.push({name:'− Debt service (financing)',amt:-Math.round(burden),note:'below the operating line — cash only'});
+      total=Math.round((r.profit||0)-burden);sub='= net cash this month; it adds to the running balance shown in the table.';}
+  }
+  if(metric!=='profit'&&metric!=='cash'){rows.sort(function(a,b){return Math.abs(b.amt)-Math.abs(a.amt);});total=rows.reduce(function(a,x){return a+x.amt;},0);}
+  var html='<div class="mdl-over">Capacity → Projections</div><div class="mdl-title">'+esc(title)+' — '+esc(moLbl)+'</div>';
+  if(sub)html+='<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">'+esc(sub)+'</div>';
+  if(!rows.length)html+='<div class="empty-msg">No contributing items this month.</div>';
+  else html+='<div style="max-height:50vh;overflow:auto"><table style="width:100%;font-size:12px;border-collapse:collapse">'
+    +rows.map(function(it){return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px 0">'+esc(it.name)+(it.note?' <span style="color:var(--text-muted);font-size:10px">· '+esc(it.note)+'</span>':'')+'</td><td style="text-align:right;font-weight:600;white-space:nowrap;color:'+(it.amt<0?'var(--red)':'inherit')+'">'+fmt(it.amt)+'</td></tr>';}).join('')
+    +'<tr style="border-top:2px solid var(--border);font-weight:800"><td style="padding:5px 0">Total</td><td style="text-align:right">'+fmt(total)+'</td></tr></table></div>';
+  html+='<div class="btn-row" style="margin-top:14px"><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovRB\')">Close</button></div>';
+  document.getElementById('mdlRB').innerHTML=html;openModal('ovRB');
 }
 function _capCashChart(rows,gate,opening){
   var w=760,h=200,padL=64,padR=14,padT=12,padB=30,n=rows.length;
