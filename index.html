@@ -1474,12 +1474,6 @@ function proformaSeedV4(){
         liquid:[{asset:'Interactive Brokers (liquid cash)',value:300000},{asset:'401(k)',value:59000}],liquidSubtotal:359000,
         realEstate:[{property:'Primary Residence (secures SBA loan)',value:6000000,debt:1300000,equity:4700000,notes:'Northpoint Bank mortgage (personal). SBA coverage: 2.4x'},
           {property:'Dallas Investment Property',value:150000,debt:0,equity:150000,notes:''}],realEstateEquity:4850000}},
-    pipeline:[{opportunity:'AFOSI Recompete',customer:'Air Force OSI',vehicle:'GSA 8a STARS via RDTS',value:1000000,pwin:0.5,ev:500000,owner:'Idris',next:'Proposal due Jun 8 · CF past perf 13/15 task areas'},
-      {opportunity:'IDOS ICBM',customer:'Air Force',vehicle:'Polaris via RDTS (ADERA Prime)',value:1000000,pwin:0.5,ev:500000,owner:'Idris',next:'Execute teaming agreement · ForwardEdge finding alt Polaris prime'},
-      {opportunity:'C1FAMS FY27',customer:'SAF/FMFS',vehicle:'POM-funded / SBIR 2',value:1200000,pwin:0.5,ev:600000,owner:'Khaja',next:'Awaiting Bobby Chung · follow-up week of May 26'},
-      {opportunity:'Marines DD577',customer:'USMC',vehicle:'SBIR Phase III via ForwardEdge-AI',value:1200000,pwin:0.5,ev:600000,owner:'Khaja',next:'Demo well-received · Response expected ~5 days · HIGH PRIORITY'},
-      {opportunity:'SpaceForce S&T',customer:'U.S. Space Force',vehicle:'SBIR 2',value:450000,pwin:0.5,ev:225000,owner:'Khaja / Norman lead',next:'Proposal submitted · Awaiting outcome'}],
-    pipelineTotals:{value:4850000,ev:2425000,range:'EV range: $1.25M (1-2 wins) to $3.75M (4 wins)'},
     marines:{poc:'Sirron Evans (CIV) — Lead Audit Compliance Coordinator, Marine Forces Reserve / Marine Forces South',
       contact:'Office: 504-697-8783 · Cell: 504-512-6219 · sirron.evans@usmc.mil',
       status:'Strong technical fit ✅ · AF ATO under G6 review ✅ · SBIR Phase III pathway framed ✅',
@@ -4268,7 +4262,6 @@ var PF_FIELDS={
  'debt.corporate':{label:'Debt obligation',cols:[{k:'lender',l:'Lender'},{k:'balance',l:'Balance',type:'number'},{k:'monthlyPayment',l:'Monthly payment'},{k:'rateTerm',l:'Rate / term'},{k:'status',l:'Status'},{k:'notes',l:'Notes',type:'textarea'}]},
  'debt.personal.liquid':{label:'Liquid asset',cols:[{k:'asset',l:'Asset'},{k:'value',l:'Value',type:'number'}]},
  'debt.personal.realEstate':{label:'Real estate',cols:[{k:'property',l:'Property'},{k:'value',l:'Value',type:'number'},{k:'debt',l:'Debt',type:'number'},{k:'equity',l:'Equity',type:'number'},{k:'notes',l:'Notes'}]},
- 'pipeline':{label:'Pursuit',cols:[{k:'opportunity',l:'Opportunity'},{k:'customer',l:'Customer'},{k:'vehicle',l:'Vehicle'},{k:'value',l:'Value',type:'number'},{k:'pwin',l:'Pwin (0–1)',type:'number'},{k:'ev',l:'Expected value',type:'number'},{k:'owner',l:'Owner'},{k:'next',l:'Next step',type:'textarea'}]},
  'marines.timeline':{label:'Marines event',cols:[{k:'date',l:'Date'},{k:'event',l:'Event'}]},
  'technology.architecture':{label:'Architecture item',cols:[{k:'category',l:'Category'},{k:'desc',l:'Description',type:'textarea'}]},
  'technology.capabilityLayers':{label:'Capability',cols:[{k:'capability',l:'Capability'},{k:'layer',l:'Layer / status'},{k:'notes',l:'Notes'}]},
@@ -4287,7 +4280,6 @@ var PF_OBJ={
  'financials':{label:'Cash assumptions',fields:[{k:'openingCash',l:'Opening cash',type:'number'},{k:'cashGateTarget',l:'Cash gate target',type:'number'}]},
  'debt':{label:'Corporate debt summary',fields:[{k:'total',l:'Total debt',type:'number'},{k:'monthlyRange',l:'Monthly range'}]},
  'debt.personal':{label:'Personal position summary',fields:[{k:'netWorth',l:'Net worth',type:'number'},{k:'liquidSubtotal',l:'Liquid subtotal',type:'number'},{k:'realEstateEquity',l:'Real-estate equity',type:'number'}]},
- 'pipelineTotals':{label:'Pipeline totals',fields:[{k:'value',l:'Total value',type:'number'},{k:'ev',l:'Expected value',type:'number'},{k:'range',l:'EV range note'}]},
  'marines':{label:'Marines detail',fields:[{k:'poc',l:'POC'},{k:'contact',l:'Contact'},{k:'status',l:'Status',type:'textarea'},{k:'strategy',l:'Strategy',type:'textarea'},{k:'advantage',l:'Key advantage',type:'textarea'},{k:'aiPositioning',l:'AI positioning',type:'textarea'},{k:'next',l:'Next step',type:'textarea'}]},
  'strategy.operatingModel':{label:'Operating model',fields:[{k:'coe',l:'CoE',type:'textarea'},{k:'triad',l:'Triad',type:'list'},{k:'cadence',l:'Cadence',type:'list'},{k:'os',l:'Operating system'}]},
  'technology.sbir':{label:'SBIR note',fields:[{k:'andrewKirksey',l:'Andrew Kirksey role',type:'textarea'}]},
@@ -5322,7 +5314,7 @@ function renderProformaView(q){
   if(!D.proforma)proformaMigrate();
   var P=D.proforma,c=P.company||{},f=P.financials||{},meta=P.meta||{};
   var gateTarget=f.cashGateTarget||1500000,cash=f.openingCash||c.cashPosition||0,pct=Math.max(0,Math.min(100,Math.round(cash/gateTarget*100)));
-  var tabs=[['overview','Overview'],['financials','Financials & Cash'],['contracts','Contracts'],['debt','Debt'],['pipeline','Pipeline'],['strategy','Strategy'],['technology','Technology'],['costs','Cost Structure'],['risks','Risks & Dates'],['snapshots','Snapshots']];
+  var tabs=[['overview','Overview'],['financials','Financials & Cash'],['contracts','Contracts'],['debt','Debt'],['pipeline','Marines'],['strategy','Strategy'],['technology','Technology'],['costs','Cost Structure'],['risks','Risks & Dates'],['snapshots','Snapshots']];
   var nav='<div class="pf-subtabs">'+tabs.map(function(t){return '<button class="pf-subtab'+(proformaTab===t[0]?' active':'')+'" onclick="pfSetTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
   var kpis=[['Cash position',_pfMoney(cash)],['Cash gate',_pfMoney(gateTarget)+' · '+pct+'%'],['Monthly profit',_pfMoney(c.monthlyProfit)+' → '+_pfMoney(c.monthlyProfitOct)],['Corporate debt',_pfMoney(c.corporateDebt)],['Gate ETA',esc(c.gateDate||'—')]];
   var kpiBar='<div class="pf-kpis">'+kpis.map(function(k){return '<div class="pf-kpi"><div class="pf-kpi-l">'+k[0]+'</div><div class="pf-kpi-v">'+k[1]+'</div></div>';}).join('')+'</div>';
@@ -5366,10 +5358,8 @@ function renderProformaView(q){
     body='<div class="pf-card">'+_pfH('Corporate debt — total '+_pfMoney(dd.total),"pfEditObj('debt')")+_pfTable(['Lender','Balance','Monthly payment','Rate / term','Status','Notes'],(dd.corporate||[]).map(function(x){return [esc(x.lender),_pfMoney(x.balance),esc(x.monthlyPayment),esc(x.rateTerm),esc(x.status),esc(x.notes)];}),'debt.corporate')+'</div>'
       +'<div class="pf-note">Corporate-level financial information only.</div>';
   } else if(proformaTab==='pipeline'){
-    var m=P.marines||{},pt=P.pipelineTotals||{};
-    body='<div class="pf-card">'+_pfH('Federal pipeline — '+(P.pipeline||[]).length+' active pursuits',"pfEditObj('pipelineTotals')")+_pfTable(['Opportunity','Customer','Vehicle','Value','Pwin','EV','Owner','Next step'],(P.pipeline||[]).map(function(x){return [esc(x.opportunity),esc(x.customer),esc(x.vehicle),_pfMoney(x.value),Math.round((x.pwin||0)*100)+'%',_pfMoney(x.ev),esc(x.owner),esc(x.next)];}),'pipeline')
-      +'<div class="pf-kv" style="margin-top:8px"><span>Totals</span><b>'+_pfMoney(pt.value)+' value · '+_pfMoney(pt.ev)+' EV</b></div><div class="pf-note">'+esc(pt.range||'')+'</div></div>'
-      +'<div class="pf-card">'+_pfH('Marines DD577 — high priority',"pfEditObj('marines')")+_pfTable(['Field','Detail'],[
+    var m=P.marines||{};
+    body='<div class="pf-card">'+_pfH('Marines DD577 — high priority',"pfEditObj('marines')")+_pfTable(['Field','Detail'],[
         ['POC',esc(m.poc)],['Contact',esc(m.contact)],['Status',esc(m.status)],['Strategy',esc(m.strategy)],['Key advantage',esc(m.advantage)],['AI positioning',esc(m.aiPositioning)],['Next step',esc(m.next)]])
       +_pfH('Timeline')+_pfTable(['Date','Event'],(m.timeline||[]).map(function(t){return [esc(t.date),esc(t.event)];}),'marines.timeline')+'</div>';
   } else if(proformaTab==='strategy'){
