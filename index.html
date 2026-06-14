@@ -4357,6 +4357,19 @@ function _stratNorthStarHTML(model){
   var pct=Math.max(0,Math.min(100,Math.round(model.opening/model.gate*100)));
   function stat(lbl,val,sub,color){return '<div style="flex:1;min-width:150px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">'+lbl+'</div><div style="font-size:20px;font-weight:800;'+(color?'color:'+color:'')+'">'+val+'</div>'+(sub?'<div style="font-size:10px;color:var(--text-muted)">'+sub+'</div>':'')+'</div>';}
   var regressNote=model.firstRegress?'<div style="font-size:11px;color:#D97706;margin-top:6px">⚠ Cash burns net-negative starting <b>'+_stratMonLbl(model.firstRegress)+'</b> (FAMS revenue sunset + cost step-ups). Trough <b>'+fmt(Math.round(model.trough.cashBal))+'</b> in '+_stratMonLbl(model.trough)+'. Closing pipeline before then is what holds the line — see "Defend cashflow" below.</div>':'';
+  // No-negative-cash rule: the plan may never let the projected cash balance
+  // fall below the floor; the lever is cutting overhead / furloughing
+  // non-billable resources.
+  var floor=(D.strategy&&D.strategy.cashFloor!=null)?D.strategy.cashFloor:0;
+  var burnMonths=model.rows.filter(function(r){return r.netCash<0;}).length;
+  var guardBox;
+  if(!model.trough||model.trough.cashBal>=floor){
+    guardBox='<div style="font-size:11px;color:#16A34A;margin-top:6px;border-top:1px dashed var(--border);padding-top:6px"><b>No-negative-cash rule:</b> holds — lowest projected month is '+fmt(Math.round(model.trough?model.trough.cashBal:0))+' ('+(model.trough?_stratMonLbl(model.trough):'—')+'), above the '+fmt(floor)+' floor.'+(burnMonths?' But '+burnMonths+' month'+(burnMonths===1?'':'s')+' burn net-negative — the cushion is thin, so protect it by closing pipeline or trimming non-billable cost.':'')+'</div>';
+  } else {
+    var shortfall=floor-model.trough.cashBal;
+    var lever=Math.round((model.trough.otherPayroll||0)+(model.trough.overhead||0));
+    guardBox='<div style="font-size:11px;color:#DC2626;margin-top:6px;border-top:1px dashed var(--border);padding-top:6px"><b>⛔ No-negative-cash rule BREACHED:</b> '+_stratMonLbl(model.trough)+' projects '+fmt(Math.round(model.trough.cashBal))+', '+fmt(Math.round(shortfall))+' below the floor. Hold the line by furloughing / cutting non-billable overhead (~'+fmt(lever)+'/mo available that month) or pulling pipeline forward into earlier months.</div>';
+  }
   return '<div style="border:1px solid var(--gold);border-radius:10px;padding:14px 16px;margin:10px 0;background:linear-gradient(180deg,rgba(197,165,90,0.06),transparent)">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div style="font-size:13px;font-weight:800">🎯 North Star — $1.5M cash position by '+MON_ABBR[tgt.m]+' '+tgt.y+'</div>'
     +'<button class="btn btn-outline btn-sm" onclick="stratEditGate()">Edit target</button></div>'
@@ -4370,6 +4383,7 @@ function _stratNorthStarHTML(model){
     +'</div>'
     +'<div style="margin-top:12px">'+_stratSparkline(model)+'</div>'
     +regressNote
+    +guardBox
     +'</div>';
 }
 function stratEditGate(){
@@ -4399,7 +4413,7 @@ function _stratGoalsHTML(model){
     var links=(g.linkedInitiativeIds||[]).map(function(id){var p=(D.projects||[]).find(function(x){return x.id===id;});return p?esc(p.name):'';}).filter(Boolean).join(', ');
     return '<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px">'
       +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
-      +'<div style="flex:1"><div style="font-size:13px;font-weight:700">'+esc(g.label)+' '+_stratStatusChip(stt.key,stt.label)+(g.metric!=='manual'?' <span class="plan-chip">auto</span>':' <span class="plan-chip">manual</span>')+'</div>'
+      +'<div style="flex:1"><div style="font-size:13px;font-weight:700">'+esc(g.label)+' '+_stratStatusChip(stt.key,stt.label)+(g.metric!=='manual'?' <span class="plan-chip">auto</span>':' <span class="plan-chip">manual</span>')+(g.suggested?' <span class="plan-chip" style="border-color:#7C3AED;color:#7C3AED" title="Atlas-recommended figure — review and adjust to your plan">suggested</span>':'')+'</div>'
       +'<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+esc(cfg.l)+(g.targetDate?' · by '+g.targetDate:'')+(g.owner?' · '+esc(_stratOwnerName(g.owner)):'')+(links?' · ↳ '+links:'')+'</div></div>'
       +'<div style="text-align:right;flex-shrink:0"><div style="font-size:16px;font-weight:800">'+disp(Math.round(ev.current))+'</div><div style="font-size:10px;color:var(--text-muted)">of '+disp(target)+'</div></div>'
       +'<div style="display:flex;flex-direction:column;gap:3px"><button class="btn btn-sec btn-sm" style="padding:2px 8px" onclick="stratEditGoal(\''+g.id+'\')">Edit</button><button class="btn btn-danger-sm btn-sm" style="padding:2px 8px" onclick="stratDelGoal(\''+g.id+'\')">&times;</button></div>'
