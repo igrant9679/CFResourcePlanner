@@ -2887,6 +2887,22 @@ function _initEditDetails(id){
       {key:'marketRelevance',label:'Market / industry relevance & opportunity',type:'textarea',rows:4,value:p.marketRelevance||''}],
     onSubmit:function(v){p.leadSource=v.leadSource||'';p.leadPartners=(v.leadPartners||'').trim();p.strategicRationale=(v.strategicRationale||'').trim();p.marketRelevance=(v.marketRelevance||'').trim();save();renderView();toast('Briefing details saved.','success');}});
 }
+// Link/unlink opportunities to this initiative (writes each opp's initiativeIds[]).
+function _initLinkOpps(id){
+  var p=(D.projects||[]).find(function(x){return x.id===id;});if(!p)return;
+  var opps=(D.projects||[]).filter(function(x){return projCat(x)==='opportunity';});
+  if(!opps.length){toast('No opportunities exist yet to link.','warn');return;}
+  openFormModal({over:'Initiative',title:'Link opportunities — '+p.name,submitLabel:'Save links',
+    intro:'Select the opportunities this initiative is driving. Their pipeline value rolls up as the initiative’s impact — the substantiation for why it exists.',
+    fields:[{key:'opps',label:'Opportunities',type:'checkboxes',
+      value:opps.filter(function(o){return (o.initiativeIds||[]).indexOf(id)>-1;}).map(function(o){return o.id;}),
+      options:opps.map(function(o){return {value:o.id,label:(o.name||'(opp)')+(o.customer?' · '+o.customer:'')+(o.potential?' · '+fmt(Number(o.potential)||0):'')};})}],
+    onSubmit:function(v){var setIds=v.opps||[];
+      opps.forEach(function(o){o.initiativeIds=o.initiativeIds||[];var has=o.initiativeIds.indexOf(id)>-1,want=setIds.indexOf(o.id)>-1;
+        if(want&&!has)o.initiativeIds.push(id);else if(!want&&has)o.initiativeIds=o.initiativeIds.filter(function(x){return x!==id;});});
+      save();renderView();toast('Linked '+setIds.length+' opportunit'+(setIds.length===1?'y':'ies')+' to '+p.name+'.','success');}});
+}
+function _initOppProb(o){return (o.probabilityClose!=null&&o.probabilityClose!=='')?Number(o.probabilityClose)/100:((typeof CAP_STAGE_PROB!=='undefined'&&CAP_STAGE_PROB[(typeof capOppStage==='function'?capOppStage(o):(o.stage||''))])||0.1);}
 function _initCard(title,inner,actions){
   return '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:12px">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px"><div style="font-size:13px;font-weight:800">'+title+'</div>'+(actions||'')+'</div>'+inner+'</div>';
@@ -2910,6 +2926,9 @@ function _initDetailBody(p){
   var goalsLinked=((D.strategy&&D.strategy.goals)||[]).filter(function(g){return (g.linkedInitiativeIds||[]).indexOf(p.id)>-1;});
   var props=(D.proposals||[]).filter(function(pr){return pr.opportunityId===p.id||(pr.pricing&&pr.pricing.linkedProjectId===p.id);});
   var assigned=all.filter(function(m){return projIds(m).indexOf(p.id)>-1;});
+  var linkedOpps=(D.projects||[]).filter(function(o){return projCat(o)==='opportunity'&&(o.initiativeIds||[]).indexOf(p.id)>-1;});
+  var linkPot=linkedOpps.reduce(function(a,o){return a+(Number(o.potential)||0);},0);
+  var linkEV=linkedOpps.reduce(function(a,o){return a+(Number(o.potential)||0)*_initOppProb(o);},0);
   function stat(lbl,val,sub,color){return '<div style="flex:1;min-width:130px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">'+lbl+'</div><div style="font-size:19px;font-weight:800;'+(color?'color:'+color:'')+'">'+val+'</div>'+(sub?'<div style="font-size:10px;color:var(--text-muted)">'+sub+'</div>':'')+'</div>';}
   // Header + window
   var html='<div style="background:linear-gradient(135deg,var(--navy),var(--navy-light));color:#fff;border-radius:var(--radius);padding:14px 16px;margin-bottom:12px">'
@@ -2925,6 +2944,7 @@ function _initDetailBody(p){
     +stat('Monthly cost (labor)',fmt(costMo)+'/mo',assigned.length+' assigned','')
     +stat('Net / mo',fmt(net)+'/mo','revenue − labor',net>=0?'var(--green)':'var(--red)')
     +stat('FY'+String(ny).slice(2)+' contribution',fmt(Math.round(contrib)),'projected this calendar year','')
+    +stat('Pipeline driven',fmt(Math.round(linkEV)),linkedOpps.length+' opp'+(linkedOpps.length===1?'':'s')+' · '+fmt(linkPot)+' potential',linkEV>0?'var(--gold)':'')
     +'</div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">'
     +(staffedNow?_stratStatusChip('ontrack','staffed — counting'):_stratStatusChip('off','not staffed — $0 in forecast'))
@@ -2945,6 +2965,16 @@ function _initDetailBody(p){
     +_initCard('Market / industry relevance &amp; opportunity',mkt.body,mkt.btn)
     +_initCard('Executive summary',(p.narrative?'<div style="font-size:12px;color:var(--text-secondary);line-height:1.5;max-height:240px;overflow:auto">'+sanitizeHTML(p.narrative)+'</div>':'<div style="font-size:12px;color:var(--text-muted);font-style:italic">No executive summary yet — the reasoning, idea and justification.</div>'),'<button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 8px" onclick="stratEditNarrative(\''+p.id+'\')">'+(p.narrative?'&#9998; Edit':'+ Add')+'</button>')
     +'</div>';
+  // Linked opportunities — the pipeline this initiative is driving (impact / substantiation)
+  var loInner = linkedOpps.length
+    ? '<table style="width:100%;font-size:11px;border-collapse:collapse">'
+      +'<tr style="color:var(--text-muted)"><th style="text-align:left;padding:2px 0">Opportunity</th><th>Stage</th><th style="text-align:right">Potential</th><th style="text-align:right">P</th><th style="text-align:right">Weighted EV</th></tr>'
+      +linkedOpps.map(function(o){var pr=_initOppProb(o);return '<tr style="border-top:1px solid var(--border)"><td style="padding:3px 0">'+esc(o.name||'(opp)')+(o.customer?' <span style="color:var(--text-muted);font-size:10px">· '+esc(o.customer)+'</span>':'')+'</td><td style="text-align:center"><span class="plan-chip">'+esc(typeof capOppStage==='function'?capOppStage(o):(o.stage||''))+'</span></td><td style="text-align:right">'+fmt(Number(o.potential)||0)+'</td><td style="text-align:right;color:var(--text-muted)">'+Math.round(pr*100)+'%</td><td style="text-align:right;font-weight:700">'+fmt(Math.round((Number(o.potential)||0)*pr))+'</td></tr>';}).join('')
+      +'<tr style="border-top:2px solid var(--border);font-weight:800"><td style="padding:4px 0">Total</td><td></td><td style="text-align:right">'+fmt(linkPot)+'</td><td></td><td style="text-align:right;color:var(--gold)">'+fmt(Math.round(linkEV))+'</td></tr>'
+      +'</table>'
+      +'<div style="font-size:11px;color:var(--text-secondary);margin-top:7px">Substantiation: this initiative is driving <b>'+linkedOpps.length+'</b> opportunit'+(linkedOpps.length===1?'y':'ies')+' worth <b>'+fmt(linkPot)+'</b> in potential / <b>'+fmt(Math.round(linkEV))+'</b> weighted pipeline.</div>'
+    : '<div style="font-size:12px;color:var(--text-muted);font-style:italic">No opportunities linked yet. Link the pipeline this initiative is driving to show its impact and justify its existence.</div>';
+  html+=_initCard('Linked opportunities ('+linkedOpps.length+') — pipeline impact',loInner,'<button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 8px" onclick="_initLinkOpps(\''+p.id+'\')">&#128279; Link opportunities</button>');
   // People assigned
   var peopleInner = assigned.length
     ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:4px 14px">'+assigned.map(function(m){var pct=projDisplayPct(m,p.id);return '<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:3px 0;font-size:12px"><span class="proj-mem-link" onclick="openPersonProfile(\''+m.id+'\')" style="cursor:pointer">'+esc(m.name)+' <span style="color:var(--text-muted);font-size:10px">'+esc(m._dn||'')+'</span></span><span style="font-weight:600">'+pct+'% · '+fmt(Math.round(m.cost*pct/100))+'</span></div>';}).join('')+'</div>'
@@ -3365,6 +3395,7 @@ function oppEditFields(p){
     +'<div class="fld"><label class="fld-l">Exp Close / Decision date</label><input class="fld-i" type="date" id="ep_close" value="'+esc(p.closeDate||'')+'"></div>'
     +'<div class="fld"><label class="fld-l">Team</label><input class="fld-i" id="ep_team" value="'+esc(p.team||'')+'"></div>'
     +'<div class="fld"><label class="fld-l">Change Requested</label><textarea class="fld-i" id="ep_change" rows="2">'+esc(p.changeRequested||'')+'</textarea></div>'
+    +(function(){var inits=(D.projects||[]).filter(function(x){return projCat(x)==='initiative';});if(!inits.length)return '';return '<div class="fld"><label class="fld-l">Linked initiative(s) <span style="font-weight:400;color:var(--text-muted);font-size:10px">— which practice/initiative this pursuit substantiates</span></label><select class="fld-sel" id="ep_inits" multiple size="'+Math.min(5,Math.max(2,inits.length))+'">'+inits.map(function(it){return '<option value="'+it.id+'"'+(((p.initiativeIds||[]).indexOf(it.id)>-1)?' selected':'')+'>'+esc(it.name)+'</option>';}).join('')+'</select><div style="font-size:10px;color:var(--text-muted);margin-top:2px">Ctrl/Cmd-click to select multiple. Rolls up as initiative impact on the Initiative detail tab.</div></div>';})()
     +oppWorkflowHTML(p);
 }
 /* ── PERSON FILE / RESUME ATTACHMENTS ── */
@@ -11347,7 +11378,7 @@ var rv=document.getElementById('ep_rev');
 if(newCat==='project'){p.revenue=rv?(Number(rv.value)||0):(p.revenue||0);p.targetRevenue=0;}
 else if(isPipelineCat(newCat)){p.targetRevenue=rv?(Number(rv.value)||0):(p.targetRevenue||0);p.revenue=0;}
 else{p.revenue=0;p.targetRevenue=0;}
-if(newCat==='opportunity'){var sEl=document.getElementById('ep_stage');if(sEl)p.stage=sEl.value;p.customer=gv('ep_customer');p.leadGen=gv('ep_lg');p.presales=gv('ep_ps');p.sales=gv('ep_sales');p.delivery=gv('ep_deliv');p.opr=gv('ep_opr');p.pm=gv('ep_pm');p.team=gv('ep_team');p.closeDate=gv('ep_close');p.changeRequested=gv('ep_change');var potEl=document.getElementById('ep_potential');p.potential=potEl?(Number(potEl.value)||0):(p.potential||0);p.status=gv('ep_status');var prEl=document.getElementById('ep_prob');if(prEl)p.probabilityClose=(prEl.value===''?'':Math.max(0,Math.min(100,Number(prEl.value)||0)));}
+if(newCat==='opportunity'){var sEl=document.getElementById('ep_stage');if(sEl)p.stage=sEl.value;p.customer=gv('ep_customer');p.leadGen=gv('ep_lg');p.presales=gv('ep_ps');p.sales=gv('ep_sales');p.delivery=gv('ep_deliv');p.opr=gv('ep_opr');p.pm=gv('ep_pm');p.team=gv('ep_team');p.closeDate=gv('ep_close');p.changeRequested=gv('ep_change');var potEl=document.getElementById('ep_potential');p.potential=potEl?(Number(potEl.value)||0):(p.potential||0);p.status=gv('ep_status');var prEl=document.getElementById('ep_prob');if(prEl)p.probabilityClose=(prEl.value===''?'':Math.max(0,Math.min(100,Number(prEl.value)||0)));var _ie=document.getElementById('ep_inits');if(_ie)p.initiativeIds=Array.from(_ie.selectedOptions).map(function(o){return o.value;});}
 p.revenueNote=gv('ep_note');p.description=rtGet('ep_desc');p.parentId=catChanged?null:(gv('ep_parent')||null);
 var stEl=document.getElementById('ep_start');if(stEl)p.startDate=stEl.value||'';
 var enEl=document.getElementById('ep_end');if(enEl)p.endDate=enEl.value||'';
