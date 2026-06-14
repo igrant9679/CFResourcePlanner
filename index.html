@@ -1006,16 +1006,16 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
     <div class="tab-bar">
       <button class="tab tab-confidential" id="tabProforma" onclick="switchTab('proforma')">&#128274; Proforma</button>
       <button class="tab tab-confidential" id="tabStrat" onclick="switchTab('strat')">&#127919; Strategy</button>
+      <button class="tab" id="tabCap" onclick="switchTab('cap')">Capacity Planning</button>
+      <button class="tab" id="tabPPlan" onclick="switchTab('pplan')">Resource Planning</button>
       <button class="tab" id="tabProj" onclick="switchTab('proj')">Projects</button>
       <button class="tab" id="tabInit" onclick="switchTab('init')">Initiatives</button>
-      <button class="tab" id="tabCap" onclick="switchTab('cap')">Capacity Planning</button>
       <button class="tab" id="tabOpp" onclick="switchTab('opp')">Opportunities</button>
       <button class="tab" id="tabProp" onclick="switchTab('prop')">Proposals</button>
       <button class="tab" id="tabOver" onclick="switchTab('over')">Overhead</button>
       <button class="tab active" id="tabRes" onclick="switchTab('res')">Resources</button>
       <button class="tab" id="tabReports" onclick="switchTab('reports')">&#128202; Reports</button>
       <button class="tab" id="tabRecruit" onclick="switchTab('recruit')">Recruiting</button>
-      <button class="tab" id="tabPPlan" onclick="switchTab('pplan')">Resource Planning</button>
       <button class="tab" id="tabPlan" onclick="switchTab('plan')">COE Tasks</button>
       <button class="tab" id="tabPTask" onclick="switchTab('ptask')">Project Tasks</button>
       <button class="tab" id="tabChart" onclick="switchTab('orgchart')">Org Chart</button>
@@ -12382,7 +12382,7 @@ function rptCsvBuiltin(key){var f=RPT_CSV[key],b=rptBuiltin(key);if(!f||(b&&b.fi
 /* ── AUTH & PERMISSIONS (client-side roles only — not API security) ── */
 var AUTH_USER='khaja@communityforce.com',AUTH_PASS='Namtra_CF27',DEFAULT_PW='CommunityForce2026';
 var ME=null;
-var SECTIONS=[{k:'proforma',tab:'tabProforma',l:'Proforma'},{k:'strat',tab:'tabStrat',l:'Strategy'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources'},{k:'reports',tab:'tabReports',l:'Reports'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'pplan',tab:'tabPPlan',l:'Resource Planning'},{k:'plan',tab:'tabPlan',l:'COE Tasks'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'orgchart',tab:'tabChart',l:'Org Chart'}];
+var SECTIONS=[{k:'proforma',tab:'tabProforma',l:'Proforma'},{k:'strat',tab:'tabStrat',l:'Strategy'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'pplan',tab:'tabPPlan',l:'Resource Planning'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources'},{k:'reports',tab:'tabReports',l:'Reports'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'plan',tab:'tabPlan',l:'COE Tasks'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'orgchart',tab:'tabChart',l:'Org Chart'}];
 function emailFromName(name){var clean=(name||'').replace(/\(.*?\)/g,'').replace(/[^A-Za-z .\-]/g,'').trim();var parts=clean.split(/\s+/).filter(Boolean);var local=parts.length>=2?(parts[0]+'.'+parts[parts.length-1]):(parts[0]||'user');return local.toLowerCase().replace(/[^a-z0-9.]/g,'')+'@communityforce.com';}
 function authMigrate(){
   if(!D.accounts)D.accounts=[];
