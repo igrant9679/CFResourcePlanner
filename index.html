@@ -3365,6 +3365,7 @@ function capBuildRoster(){
       costSchedule:m.costSchedule?JSON.parse(JSON.stringify(m.costSchedule)):null,
       oneTimeCosts:m.oneTimeCosts?JSON.parse(JSON.stringify(m.oneTimeCosts)):null,
       allocSchedule:m.allocSchedule?JSON.parse(JSON.stringify(m.allocSchedule)):null,
+      contractor:!!m.contractor,
       projects:(m.projects||[]).map(function(x){return (typeof x==='object')?{id:x.id,pct:Number(x.pct)||0,clinId:x.clinId}:{id:x,pct:100};})};
   });
 }
@@ -3694,8 +3695,9 @@ function capProjData(roster,multPct,opts){
     opps.forEach(function(o){
       if(!_oppIncluded(o))return;  // see inclusion rules above (prob mode vs legacy)
       if(!o.closeDate)return; var cd=new Date(o.closeDate);if(isNaN(cd))return;
-      var live=mo.y>cd.getFullYear()||(mo.y===cd.getFullYear()&&mo.m>=cd.getMonth());
-      if(!live)return;
+      var ck=cd.getFullYear()*12+cd.getMonth();
+      if(opts.slips&&opts.slips[o.id]!=null)ck=opts.slips[o.id];   // slip simulator: non-destructive effective close-month override
+      if((mo.y*12+mo.m)<ck)return;   // opp not yet live this month
       oppRev+=((Number(o.potential)||0)/12)*_oppWeight(o);
     });
     oppRev=Math.round(oppRev);
@@ -4228,8 +4230,47 @@ function _stratEnsure(){
   D.strategy=D.strategy||{};
   if(!Array.isArray(D.strategy.goals))D.strategy.goals=[];
   if(!D.strategy.gateTargetDate)D.strategy.gateTargetDate='2027-06';   // machine-readable June-2027 gate
+  if(!Array.isArray(D.strategy.triggers))D.strategy.triggers=[];        // pursuit decision-date trigger register
+  if(D.strategy.compCutPct==null)D.strategy.compCutPct=10;              // Tier-5 temporary comp-reduction cap (% of remaining billable W2)
   return D.strategy;
 }
+/* ── STRAT BREAK-EVEN PURE LOGIC ── (extracted by tests/run-tests.js — keep the markers intact; no D / DOM access in this block) */
+// Scan projected monthly rows for negative OPERATING profit (rev − cost), distinct
+// from the cash balance. Returns the breaches, the worst, and the total shortfall.
+function stratScanNegative(rows){
+  var red=[],total=0,worst=null;
+  (rows||[]).forEach(function(r,i){
+    if(r.profit<0){var sh=-r.profit;red.push({i:i,y:r.y,m:r.m,profit:r.profit,shortfall:sh});total+=sh;if(!worst||sh>worst.shortfall)worst=red[red.length-1];}
+  });
+  return {red:red,count:red.length,totalShortfall:total,worst:worst};
+}
+// Greedy least-painful-first allocation of a month's shortfall across the cost
+// ladder. tiers = [{key,label,available}] in priority order. Each tier yields no
+// more than it actually holds; any remaining gap is reported as uncovered.
+function stratLadderAllocate(shortfall,tiers){
+  var need=Math.max(0,shortfall||0),covered=0;
+  var steps=(tiers||[]).map(function(t){
+    var avail=Math.max(0,Math.round(t.available||0));
+    var take=Math.min(avail,Math.max(0,need-covered));
+    covered+=take;
+    return {key:t.key,label:t.label,available:avail,take:take};
+  });
+  return {shortfall:Math.max(0,shortfall||0),steps:steps,covered:covered,uncovered:Math.max(0,need-covered),fullyCovered:covered+0.5>=need};
+}
+// Effective close-month key (y*12+m) after slipping a closeDate by N months. null
+// when there is no date. Used by the slip simulator's capProjData overlay.
+function stratSlipMonthKey(closeDate,slipMonths){
+  if(!closeDate)return null;var p=String(closeDate).split('-');var y=+p[0],mo=(+p[1]||1)-1;
+  if(isNaN(y)||isNaN(mo))return null;
+  return y*12+mo+(Number(slipMonths)||0);
+}
+// Months that flip from non-negative profit (base) to negative (slipped), aligned by index.
+function stratNewlyNegative(baseRows,slipRows){
+  var out=[];
+  (slipRows||[]).forEach(function(r,i){var b=(baseRows||[])[i];if(b&&b.profit>=0&&r.profit<0)out.push({y:r.y,m:r.m,shortfall:-r.profit});});
+  return out;
+}
+/* ── END STRAT BREAK-EVEN PURE LOGIC ── */
 var STRAT_METRICS=[
   {k:'cash-gate',l:'Cash gate ($ position)',auto:true,hint:'Current cash vs target; ETA from the projection.'},
   {k:'annual-revenue',l:'Annual revenue (FY of target date)',auto:true,hint:'Sum of projected revenue in the target year.'},
@@ -4337,7 +4378,7 @@ function renderStrategyView(q){
     +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Goals, metrics, and team execution measured live against the cash gate and the debt-free-by-FY29 plan. Numbers come from the same engine as Capacity Planning &amp; Proforma.</div></div></div>';
   var tabs=[['overview','Overview'],['projections','Debt-Free Plan'],['goals','Goals &amp; KPIs'],['revenue','Revenue'],['initiatives','Initiatives'],['team','Team']];
   html+='<div class="pf-subtabs">'+tabs.map(function(t){return '<button class="pf-subtab'+(stratTab===t[0]?' active':'')+'" onclick="stratSetTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
-  if(stratTab==='overview'){html+=_stratNorthStarHTML(model);html+=_stratDefendHTML(model);}
+  if(stratTab==='overview'){html+=_stratNorthStarHTML(model);html+=_stratBreakEvenHTML(model);html+=_stratSlipHTML(model);html+=_stratTriggersHTML(model);html+=_stratDefendHTML(model);}
   else if(stratTab==='projections'){html+=_stratProjectionsHTML(model);}
   else if(stratTab==='goals'){html+=_stratGoalsHTML(model);}
   else if(stratTab==='revenue'){html+=_stratBridgeHTML(model);}
@@ -4679,6 +4720,199 @@ function _stratDefendHTML(model){
       +'<div style="font-size:11px;color:var(--text-muted);margin-top:6px">Closing the '+picks.length+' above ≈ '+fmt(Math.round(cumv))+' expected value — covers the '+fmt(Math.round(gap))+' gap. <a href="#" onclick="event.preventDefault();switchTab(\'opp\')">Open pipeline →</a></div>';
   }
   return head+body+'</div>';
+}
+// ── BREAK-EVEN GUARDRAIL + COST-TO-RESTORE + SLIP SIMULATOR ──
+/* Build the cost-to-restore ladder capacities for one projected month, from the
+   live roster. Tiers are returned in least-painful-first priority order. The
+   labor partition assigns each person-month's COSTED labor to exactly one tier
+   (no double-counting): contractors → Tier 3; else by allocation category —
+   billable project labor is only reachable via Tier 5 (a capped comp haircut),
+   deferrable-initiative labor → Tier 4, all other non-billable (revenue-positive
+   initiatives + overhead items) → Tier 2. Idle resources (alloc<=0) are already
+   $0 in the forecast, so they contribute nothing — matching the engine. */
+function _stratLadderTiers(row,roster){
+  var y=row.y,m=row.m,mo={y:y,m:m};
+  var cs=(D.proforma||{}).costStructure||{};
+  // Tier 1 — discretionary: software subscriptions + overhead lines flagged discretionary.
+  var subs=(cs.softwareSubs||[]).reduce(function(a,x){return a+(_pfLineMonthlyAt?_pfLineMonthlyAt(x,y,m):(Number(x.monthly)||0));},0);
+  var discOh=(cs.overhead||[]).filter(function(x){return x.discretionary;}).reduce(function(a,x){return a+(_pfLineMonthlyAt?_pfLineMonthlyAt(x,y,m):(Number(x.monthly)||0));},0);
+  var t1=subs+discOh;
+  // Which initiatives are deferrable this month (targetRevenue<=0 — practice builds, Phoenix 2, etc.)
+  var defer={};
+  (D.projects||[]).forEach(function(p){if(projCat(p)==='initiative'){var rev=capInWindow(p,y,m)?(capProjRevAt?capProjRevAt(p,y,m):0):0;if(rev<=0)defer[p.id]=true;}});
+  var t2=0,t3=0,t4=0,billW2=0;
+  roster.filter(function(pn){return capPersonActive(pn,y,m);}).forEach(function(pn){
+    if(ppProjAllocAt(pn,mo)<=0)return;                       // not costed in the forecast this month
+    var cst=capPersonCostAt(pn,y,m);
+    if(pn.contractor){t3+=cst;return;}                       // contractors → variable labor (entire costed amount)
+    var pids=(typeof _memberAllPids==='function'?_memberAllPids(pn):(pn.projects||[]).map(function(x){return typeof x==='object'?x.id:x;}));
+    var parts=pids.map(function(pid){return {pid:pid,pct:memberProjPctAt(pn,pid,y,m)};}).filter(function(x){return x.pct>0;});
+    var tot=parts.reduce(function(a,x){return a+x.pct;},0);if(tot<=0)return;
+    parts.forEach(function(x){
+      var share=cst*(x.pct/tot);
+      var p=(D.projects||[]).find(function(z){return z.id===x.pid;});var c=p?projCat(p):'';
+      if(c==='project')billW2+=share;                        // billable — only Tier 5 can touch it
+      else if(c==='initiative'&&defer[x.pid])t4+=share;      // deferrable-initiative labor
+      else t2+=share;                                         // revenue-positive initiative + overhead-item labor
+    });
+  });
+  // Tier 4 also reclaims the net-negative revenue of deferrable initiatives (e.g. Phoenix 2 ≈ -$10K/mo).
+  (D.projects||[]).forEach(function(p){if(projCat(p)==='initiative'&&defer[p.id]&&capInWindow(p,y,m)){var rev=capProjRevAt?capProjRevAt(p,y,m):0;if(rev<0)t4+=(-rev);}});
+  var cutPct=(D.strategy&&D.strategy.compCutPct!=null)?Number(D.strategy.compCutPct):10;
+  var t5=billW2*Math.max(0,Math.min(100,cutPct))/100;
+  return [
+    {key:'subs',label:'Discretionary & subscriptions',available:Math.round(t1)},
+    {key:'bench',label:'Non-billable labor',available:Math.round(t2)},
+    {key:'contractor',label:'Variable / contractor labor',available:Math.round(t3)},
+    {key:'defer',label:'Deferrable investments',available:Math.round(t4)},
+    {key:'comp',label:'Structural — temporary comp cut ('+cutPct+'% of billable)',available:Math.round(t5)}
+  ];
+}
+// Render the stacked cost-to-restore recommendation for one negative month.
+function _stratCostLadderHTML(red,roster){
+  var tiers=_stratLadderTiers(red,roster);
+  var alloc=stratLadderAllocate(red.shortfall,tiers);
+  var rows=alloc.steps.map(function(s){
+    var on=s.take>0;
+    return '<div style="display:flex;gap:8px;align-items:baseline;font-size:11px;padding:2px 0;'+(on?'':'opacity:.5')+'">'
+      +'<span style="width:14px;color:'+(on?'#DC2626':'var(--text-muted)')+';font-weight:700">'+(on?'✓':'·')+'</span>'
+      +'<span style="flex:1">'+esc(s.label)+'</span>'
+      +'<span style="color:var(--text-muted)">holds '+fmt(s.available)+'</span>'
+      +'<span style="width:90px;text-align:right;font-weight:700;color:'+(on?'#DC2626':'var(--text-muted)')+'">'+(on?'cut '+fmt(s.take):'—')+'</span>'
+      +'</div>';
+  }).join('');
+  var foot=alloc.fullyCovered
+    ? '<div style="font-size:11px;color:#16A34A;font-weight:700;margin-top:4px">= break-even restored ('+fmt(alloc.covered)+' cut to close the '+fmt(red.shortfall)+' gap).</div>'
+    : '<div style="font-size:11px;color:#DC2626;font-weight:700;margin-top:4px">⚠ Ladder cannot fully cover this month — covers '+fmt(alloc.covered)+', still '+fmt(alloc.uncovered)+' short. Closing pipeline or restructuring revenue is required.</div>';
+  return '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-top:6px;background:var(--page-bg)">'
+    +'<div style="font-size:12px;font-weight:700;margin-bottom:4px">'+_stratMonLbl(red)+' — shortfall '+fmt(red.shortfall)+'</div>'
+    +rows+foot+'</div>';
+}
+// Per-month sign strip: green bar = positive operating profit, red = negative.
+function _stratBreakEvenStrip(rows){
+  if(!rows.length)return '';
+  var W=620,H=46,n=rows.length,bw=W/n,mid=H/2;
+  var maxAbs=Math.max(1,Math.max.apply(null,rows.map(function(r){return Math.abs(r.profit);})));
+  var bars=rows.map(function(r,i){
+    var neg=r.profit<0,h=Math.max(1,Math.abs(r.profit)/maxAbs*(mid-2));
+    var x=(i*bw+0.6).toFixed(1),w=Math.max(1,bw-1.2).toFixed(1),yy=(neg?mid:mid-h).toFixed(1);
+    return '<rect x="'+x+'" y="'+yy+'" width="'+w+'" height="'+h.toFixed(1)+'" fill="'+(neg?'#DC2626':'#16A34A')+'"><title>'+_stratMonLbl(r)+': '+(neg?'−':'')+fmt(Math.round(Math.abs(r.profit)))+' operating profit</title></rect>';
+  }).join('');
+  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:46px;display:block">'
+    +'<line x1="0" y1="'+mid+'" x2="'+W+'" y2="'+mid+'" stroke="var(--border)" stroke-width="1"></line>'+bars+'</svg>';
+}
+function _stratBreakEvenHTML(model){
+  var scan=stratScanNegative(model.rows);
+  var roster=capBuildRoster();
+  var head='<div style="font-size:14px;font-weight:800;margin:18px 0 8px">Break-even guardrail <span style="font-weight:400;font-size:11px;color:var(--text-muted)">— no month may run negative operating profit (revenue − cost). Stricter than, and separate from, the no-negative-cash rule above.</span></div>';
+  var border=scan.count?'#DC2626':'var(--gold)';
+  var box='<div style="border:1px solid '+border+';border-radius:10px;padding:14px 16px;background:'+(scan.count?'rgba(220,38,38,0.04)':'rgba(22,163,74,0.04)')+'">';
+  if(!scan.count){
+    box+='<div style="font-size:12px;color:#16A34A;font-weight:700">✓ Holds — every projected month has non-negative operating profit.</div>'
+      +'<div style="margin-top:10px">'+_stratBreakEvenStrip(model.rows)+'</div></div>';
+    return head+box;
+  }
+  function stat(lbl,val,color){return '<div style="flex:1;min-width:140px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">'+lbl+'</div><div style="font-size:20px;font-weight:800;'+(color?'color:'+color:'')+'">'+val+'</div></div>';}
+  box+='<div style="display:flex;gap:16px;flex-wrap:wrap">'
+    +stat('Negative-profit months',scan.count,'#DC2626')
+    +stat('Worst month',_stratMonLbl(scan.worst)+' · '+fmt(scan.worst.shortfall),'#DC2626')
+    +stat('Total shortfall',fmt(scan.totalShortfall),'#DC2626')
+    +'</div>'
+    +'<div style="margin-top:10px">'+_stratBreakEvenStrip(model.rows)+'</div>';
+  var anyContractor=roster.some(function(p){return p.contractor;});
+  if(!anyContractor)box+='<div style="font-size:11px;color:#D97706;margin-top:6px">⚠ No resources are flagged as <b>Contractor</b> yet, so the variable-labor tier shows $0. Tag contractors in Edit Resource → Classification to unlock that lever.</div>';
+  box+='<div style="font-size:12px;font-weight:700;margin:12px 0 2px">Cost-to-restore — least-painful-first ladder per breached month</div>';
+  box+=scan.red.map(function(r){return _stratCostLadderHTML(r,roster);}).join('');
+  box+='</div>';
+  return head+box;
+}
+/* Recompute the projection with a non-destructive slip overlay (oppId → effective
+   close-month key). Mirrors _stratCash but passes opts.slips to capProjData. */
+function _stratCashWith(slips){
+  var roster=capBuildRoster();
+  var base=(typeof _capPipeOpts==='function'?_capPipeOpts():{});
+  var opts={pipelineMode:base.pipelineMode,noPipeline:base.noPipeline,inclWon:base.inclWon,inclNeg:base.inclNeg,slips:slips||null};
+  var d=capProjData(roster,0,opts),rows=d.rows||[];
+  var burden=capFixedBurden(),opening=capOpeningCash();
+  var cash=opening;rows.forEach(function(r){r.netCash=r.profit-burden;cash+=r.netCash;r.cashBal=cash;});
+  return {rows:rows,roster:roster};
+}
+var _stratSlips={};   // oppId → slip months (non-destructive; never written to D.projects)
+function _stratSlipOpps(){return (D.projects||[]).filter(function(p){return projCat(p)==='opportunity'&&p.closeDate;}).filter(function(o){var st=capOppStage?capOppStage(o):(o.stage||'');return st!=='Lost';});}
+function stratAddSlip(){var id=gv('strat_slip_opp'),n=Number(gv('strat_slip_mo'));if(!id){toast('Pick a pursuit to slip.','warn');return;}_stratSlips[id]=isNaN(n)?3:n;renderView();}
+function stratRemoveSlip(id){delete _stratSlips[id];renderView();}
+function stratClearSlips(){_stratSlips={};renderView();}
+function _stratSlipHTML(model){
+  var head='<div style="font-size:14px;font-weight:800;margin:18px 0 8px">Slip simulator <span style="font-weight:400;font-size:11px;color:var(--text-muted)">— push a pursuit’s close date out and see which months turn negative. Overlay only; the real opportunity is never changed.</span></div>';
+  var opps=_stratSlipOpps();
+  if(!opps.length)return head+'<div class="empty-msg">No open pursuits with a close date to slip.</div>';
+  var opsOpts=opps.map(function(o){return '<option value="'+o.id+'">'+esc(o.name||'(opp)')+(o.closeDate?' · closes '+esc(o.closeDate):'')+'</option>';}).join('');
+  var ctl='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">'
+    +'<select class="fld-sel" id="strat_slip_opp" style="flex:1;min-width:200px"><option value="">— pursuit to slip —</option>'+opsOpts+'</select>'
+    +'<input class="fld-i" id="strat_slip_mo" type="number" value="3" style="width:90px" title="Months to slip"> <span style="font-size:11px;color:var(--text-muted)">months</span>'
+    +'<button class="btn btn-sec btn-sm" onclick="stratAddSlip()">+ Add slip</button>';
+  var keys=Object.keys(_stratSlips);
+  if(keys.length)ctl+='<button class="btn btn-outline btn-sm" onclick="stratClearSlips()">Clear all</button>';
+  ctl+='</div>';
+  if(!keys.length)return head+'<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px">'+ctl+'<div style="font-size:11px;color:var(--text-muted)">Add one or more slips to model a delayed close (or a "bad quarter" of several).</div></div>';
+  // active slips → effective close-month keys
+  var slipKeys={},chips=keys.map(function(id){var o=(D.projects||[]).find(function(p){return p.id===id;});var n=_stratSlips[id];var k=stratSlipMonthKey(o&&o.closeDate,n);if(k!=null)slipKeys[id]=k;
+    return '<span class="plan-chip" style="border-color:#D97706;color:#D97706">'+esc((o&&o.name)||'opp')+' +'+n+'mo <a href="#" onclick="event.preventDefault();stratRemoveSlip(\''+id+'\')" style="color:#DC2626;text-decoration:none;font-weight:700">×</a></span>';}).join(' ');
+  var slipped=_stratCashWith(slipKeys);
+  var baseScan=stratScanNegative(model.rows),slipScan=stratScanNegative(slipped.rows);
+  var newly=stratNewlyNegative(model.rows,slipped.rows);
+  var body='<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px">'+ctl
+    +'<div style="margin-bottom:8px">'+chips+'</div>'
+    +'<div style="font-size:12px;margin-bottom:6px">Negative-profit months: <b>'+baseScan.count+'</b> base → <b style="color:'+(slipScan.count>baseScan.count?'#DC2626':'inherit')+'">'+slipScan.count+'</b> with the slip'+(newly.length?' · <b style="color:#DC2626">'+newly.length+' newly negative</b>':' · <span style="color:#16A34A">no new breaches</span>')+'.</div>'
+    +'<div style="margin:6px 0">'+_stratBreakEvenStrip(slipped.rows)+'</div>';
+  if(newly.length){
+    body+='<div style="font-size:12px;font-weight:700;margin:8px 0 2px">Cost-to-restore for the newly-negative months</div>';
+    body+=newly.map(function(nm){var red=slipScan.red.find(function(r){return r.y===nm.y&&r.m===nm.m;})||nm;return _stratCostLadderHTML(red,slipped.roster);}).join('');
+  }
+  body+='</div>';
+  return head+body;
+}
+// ── TRIGGER REGISTER (stretch): per-pursuit "if X hasn't closed by date Y, do Z" ──
+function stratAddTrigger(id){
+  var S=_stratEnsure();var t=id?(S.triggers||[]).find(function(x){return x.id===id;}):null;
+  var opps=_stratSlipOpps();
+  openFormModal({over:'Strategy',title:t?'Edit trigger':'New trigger',submitLabel:'Save',
+    fields:[
+      {key:'oppId',label:'Pursuit',type:'select',value:t?t.oppId:'',options:[{value:'',label:'— select —'}].concat(opps.map(function(o){return {value:o.id,label:(o.name||'(opp)')};}))},
+      {key:'decisionDate',label:'Decision date (default 30–60 days before revenue is needed)',type:'date',value:t?t.decisionDate:''},
+      {key:'action',label:'Pre-agreed action (if it has not closed by then)',type:'textarea',value:t?t.action:''}],
+    onSubmit:function(v){if(!v.oppId||!v.decisionDate){toast('Pursuit and decision date are required.','warn');return;}
+      if(t){t.oppId=v.oppId;t.decisionDate=v.decisionDate;t.action=v.action||'';}
+      else S.triggers.push({id:uid(),oppId:v.oppId,decisionDate:v.decisionDate,action:v.action||''});
+      save();renderView();toast('Trigger saved.','success');}});
+}
+function stratDelTrigger(id){var S=_stratEnsure();S.triggers=(S.triggers||[]).filter(function(x){return x.id!==id;});save();renderView();}
+function _stratTriggersHTML(model){
+  var S=_stratEnsure();var trg=S.triggers||[];
+  var head='<div style="display:flex;justify-content:space-between;align-items:center;margin:18px 0 8px"><div style="font-size:14px;font-weight:800">Trigger register <span style="font-weight:400;font-size:11px;color:var(--text-muted)">— "if X hasn’t closed by date Y, do Z"</span></div><button class="btn btn-outline btn-sm" onclick="stratAddTrigger()">+ Trigger</button></div>';
+  if(!trg.length)return head+'<div class="empty-msg" style="font-size:12px">No triggers yet. Set a decision date + pre-agreed action per pursuit so contingencies fire as a rule, not a scramble.</div>';
+  var now=new Date();now.setHours(0,0,0,0);
+  var rows=trg.map(function(t){
+    var o=(D.projects||[]).find(function(p){return p.id===t.oppId;});
+    var st=o?(capOppStage?capOppStage(o):(o.stage||'')):'';
+    var dd=t.decisionDate?new Date(t.decisionDate):null;if(dd)dd.setHours(0,0,0,0);
+    var days=dd?Math.round((dd-now)/86400000):null;
+    var closed=st==='Won';
+    var flag;
+    if(closed)flag='<span class="plan-chip" style="border-color:#16A34A;color:#16A34A">closed — cleared</span>';
+    else if(days==null)flag='';
+    else if(days<0)flag='<span class="plan-chip" style="border-color:#DC2626;color:#DC2626;font-weight:700">⛔ '+(-days)+'d overdue — act now</span>';
+    else if(days<=60)flag='<span class="plan-chip" style="border-color:#D97706;color:#D97706;font-weight:700">⚠ '+days+'d to decision</span>';
+    else flag='<span class="plan-chip">'+days+'d out</span>';
+    return '<div style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px">'
+      +'<div style="display:flex;gap:10px;align-items:center"><div style="flex:1;font-weight:600">'+esc((o&&o.name)||'(pursuit removed)')+'</div>'
+      +'<span style="color:var(--text-muted)">'+esc(t.decisionDate||'')+'</span>'+flag
+      +'<button class="btn btn-sec btn-sm" style="font-size:10px;padding:1px 6px" onclick="stratAddTrigger(\''+t.id+'\')">Edit</button>'
+      +'<button class="btn btn-sec btn-sm" style="font-size:10px;padding:1px 6px" onclick="stratDelTrigger(\''+t.id+'\')">Delete</button></div>'
+      +(t.action?'<div style="font-size:11px;color:var(--text-muted);margin-top:3px">→ '+esc(t.action)+'</div>':'')
+      +'</div>';
+  }).join('');
+  return head+'<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">'+rows+'</div>';
 }
 // ── 5. TEAM PERFORMANCE ──
 function _stratTeamHTML(model){
@@ -10489,7 +10723,8 @@ document.getElementById('mdlEdit').innerHTML=
   +'<div class="chk-row"><input type="checkbox" id="e_sme" '+(m.sme?'checked':'')+'><label for="e_sme">SME</label></div>'
   +'<div class="chk-row"><input type="checkbox" id="e_assoc" '+(m.associate?'checked':'')+'><label for="e_assoc">Associate</label></div>'
   +'<div class="chk-row"><input type="checkbox" id="e_prop" '+(m.proposal?'checked':'')+'><label for="e_prop">Proposal</label></div>'
-  +'<div class="chk-row"><input type="checkbox" id="e_recr" '+(m.recruiter?'checked':'')+'><label for="e_recr">Recruiter</label></div></div></div>'
+  +'<div class="chk-row"><input type="checkbox" id="e_recr" '+(m.recruiter?'checked':'')+'><label for="e_recr">Recruiter</label></div>'
+  +'<div class="chk-row"><input type="checkbox" id="e_contractor" '+(m.contractor?'checked':'')+'><label for="e_contractor" title="Variable / contractor labor — throttleable to match revenue. Drives the Strategy break-even cost-to-restore ladder (Tier 3).">Contractor</label></div></div></div>'
   +fT('e_note','Notes / Transition Plan',m.note||'')
   +'<div class="fld"><div class="chk-row warn-chk"><input type="checkbox" id="e_reassess" '+(m.reassess?'checked':'')+'><label for="e_reassess">&#9888; Flag for value reassessment</label></div></div>'
 +'</div>'
@@ -10508,7 +10743,7 @@ m.name=gv('e_name');m.role=gv('e_role');m.cost=Number(gv('e_cost'))||0;m.badge=g
 m.reportsTo=gv('e_reports');var __prev=m.projects||[];var __np=msVal('e_proj');__np.forEach(function(np){var old=__prev.find(function(o){return (typeof o==='object'?o.id:o)===np.id;});if(old&&typeof old==='object'&&old.clinId)np.clinId=old.clinId;});m.projects=__np;m.skillsets=msVal('e_skill');
 m.certifications=msVal('e_cert');m.pastProjects=msVal('e_ppj');m.pastClients=msVal('e_pcl');
 m.location=gv('e_loc');m.clearance=gv('e_clr');m.resumeLink=gv('e_resume');
-m.hub=gc('e_hub');m.sme=gc('e_sme');m.associate=gc('e_assoc');m.proposal=gc('e_prop');m.recruiter=gc('e_recr');m.note=gv('e_note');m.reassess=gc('e_reassess');
+m.hub=gc('e_hub');m.sme=gc('e_sme');m.associate=gc('e_assoc');m.proposal=gc('e_prop');m.recruiter=gc('e_recr');m.contractor=gc('e_contractor');m.note=gv('e_note');m.reassess=gc('e_reassess');
 var _fd=document.getElementById('e_furlough');if(_fd)m.furloughDate=(_fd.value||'').trim();
 var newDid=gv('e_dept_mv');
 if(newDid&&newDid!==did){var toDept=D.departments.find(function(d){return d.id===newDid;});if(toDept){fromDept.members=fromDept.members.filter(function(x){return x.id!==mid;});toDept.members.push(m);}}

@@ -19,6 +19,7 @@ function extract(src, startMark, endMark, label) {
 // shred pure logic needs a DOM-free environment — it is plain JS already
 eval(extract(html, 'function shredSegmentDoc', '/* ── END SHRED PURE LOGIC ── */', 'shred'));
 eval(extract(srv, 'function govNorm', '/* ── END GOVOPS PURE LOGIC ── */', 'govops'));
+eval(extract(html, 'function stratScanNegative', '/* ── END STRAT BREAK-EVEN PURE LOGIC ── */', 'strat'));
 
 let passed = 0, failed = 0;
 function t(name, fn) {
@@ -186,6 +187,59 @@ t('RSS and ATOM items both parse (GETS / state portal feeds)', () => {
   const a = govParseRssItems(atom);
   assert.strictEqual(a.length, 1);
   assert.strictEqual(a[0].link, 'https://ex.gov/t/1');
+});
+
+console.log('strat: break-even scan / cost ladder / slip simulator');
+t('scan flags negative-profit months, worst, and total shortfall', () => {
+  const rows = [
+    { y: 2026, m: 7, profit: 40000 },
+    { y: 2026, m: 9, profit: -65550 },   // FAMS sunset month
+    { y: 2026, m: 10, profit: -12000 },
+    { y: 2026, m: 11, profit: 5000 },
+  ];
+  const s = stratScanNegative(rows);
+  assert.strictEqual(s.count, 2);
+  assert.strictEqual(s.totalShortfall, 77550);
+  assert.strictEqual(s.worst.shortfall, 65550);
+  assert.strictEqual(s.worst.m, 9);
+});
+t('ladder allocates least-painful-first, capped at each tier, and covers the gap', () => {
+  const a = stratLadderAllocate(50000, [
+    { key: 'subs', label: 'Discretionary', available: 7000 },
+    { key: 'bench', label: 'Non-billable labor', available: 30000 },
+    { key: 'contractor', label: 'Contractor', available: 40000 },
+    { key: 'defer', label: 'Deferrable', available: 10000 },
+    { key: 'comp', label: 'Comp cut', available: 12000 },
+  ]);
+  assert.strictEqual(a.steps[0].take, 7000);
+  assert.strictEqual(a.steps[1].take, 30000);
+  assert.strictEqual(a.steps[2].take, 13000);   // only the remaining 13k of the 40k tier
+  assert.strictEqual(a.steps[3].take, 0);        // gap already closed
+  assert.strictEqual(a.covered, 50000);
+  assert.strictEqual(a.fullyCovered, true);
+  assert.strictEqual(a.uncovered, 0);
+});
+t('ladder reports an honest uncovered gap when tiers cannot cover the month', () => {
+  const a = stratLadderAllocate(60000, [
+    { key: 'subs', label: 'Discretionary', available: 7000 },
+    { key: 'bench', label: 'Non-billable labor', available: 8000 },
+  ]);
+  assert.strictEqual(a.covered, 15000);
+  assert.strictEqual(a.uncovered, 45000);
+  assert.strictEqual(a.fullyCovered, false);
+});
+t('slip shifts an opp close month by N (and handles missing dates)', () => {
+  assert.strictEqual(stratSlipMonthKey('2026-09-01', 3), 2026 * 12 + 8 + 3); // Sep(8) + 3 = Dec
+  assert.strictEqual(stratSlipMonthKey('2026-09', 0), 2026 * 12 + 8);
+  assert.strictEqual(stratSlipMonthKey('', 3), null);
+});
+t('newly-negative diff flags only months that flip positive→negative', () => {
+  const base = [{ y: 2026, m: 8, profit: 5000 }, { y: 2026, m: 9, profit: 2000 }, { y: 2026, m: 10, profit: -1000 }];
+  const slip = [{ y: 2026, m: 8, profit: 5000 }, { y: 2026, m: 9, profit: -8000 }, { y: 2026, m: 10, profit: -1000 }];
+  const n = stratNewlyNegative(base, slip);
+  assert.strictEqual(n.length, 1);
+  assert.strictEqual(n[0].m, 9);
+  assert.strictEqual(n[0].shortfall, 8000);
 });
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
