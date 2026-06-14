@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Atlas · CommunityForce Resource Planner</title>
+<title>Atlas · The CommunityForce Operating System</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2060'%3E%3Cpath%20d='M32%204L56%2047H38.5L32%2033%2025.5%2047H8Z'%20fill='%23C5A55A'/%3E%3Cpath%20d='M7%2049.5Q32%2060.5%2057%2049.5L52.5%2051.2Q32%2058%2011.5%2051.2Z'%20fill='%239FB0C8'/%3E%3C/svg%3E">
 <style>
 :root{--navy:#1B2A4A;--navy-light:#243656;--navy-hover:#2C4068;--gold:#C5A55A;--gold-dim:rgba(197,165,90,0.12);--green:#2D6A4F;--green-dim:rgba(45,106,79,0.1);--violet:#7C5CBF;--violet-dim:rgba(124,92,191,0.1);--amber:#D97706;--amber-dim:rgba(217,119,6,0.1);--slate:#546478;--slate-dim:rgba(84,100,120,0.07);--red:#DC2626;--red-light:#FEE2E2;--teal:#0D9488;--teal-dim:rgba(13,148,136,0.08);--warn-border:#F59E0B;--warn-text:#92400E;--card-bg:#fff;--page-bg:#ECEEF2;--text-primary:#1B2A4A;--text-secondary:#5A6A7E;--text-muted:#94A3B8;--border:#DDE2EA;--radius:10px;--shadow-sm:0 1px 3px rgba(27,42,74,0.06);--shadow-md:0 6px 24px rgba(27,42,74,0.1);--shadow-lg:0 20px 60px rgba(27,42,74,0.18);}
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -950,19 +951,18 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 <body>
 <div class="login-ov" id="loginOv" style="display:none">
   <div class="login-card">
-    <svg width="58" height="58" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin:0 auto 10px;display:block">
-      <rect width="40" height="40" rx="11" fill="url(#lbg)"/>
-      <line x1="20" y1="12.5" x2="11" y2="27" stroke="#C5A55A" stroke-width="1.7" stroke-linecap="round"/>
-      <line x1="20" y1="12.5" x2="20" y2="27" stroke="#C5A55A" stroke-width="1.7" stroke-linecap="round"/>
-      <line x1="20" y1="12.5" x2="29" y2="27" stroke="#C5A55A" stroke-width="1.7" stroke-linecap="round"/>
-      <circle cx="20" cy="12" r="4.3" fill="#C5A55A"/>
-      <circle cx="11" cy="28" r="3.3" fill="#fff"/>
-      <circle cx="20" cy="28" r="3.3" fill="#fff"/>
-      <circle cx="29" cy="28" r="3.3" fill="#fff"/>
-      <defs><linearGradient id="lbg" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse"><stop stop-color="#33476B"/><stop offset="1" stop-color="#16223C"/></linearGradient></defs>
+    <svg width="58" height="54" viewBox="0 0 64 60" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin:0 auto 8px;display:block;filter:drop-shadow(0 4px 12px rgba(197,165,90,0.35))">
+      <defs>
+        <linearGradient id="atlasTriL" x1="32" y1="4" x2="32" y2="48" gradientUnits="userSpaceOnUse"><stop stop-color="#EBD49A"/><stop offset=".5" stop-color="#C5A55A"/><stop offset="1" stop-color="#9A7C39"/></linearGradient>
+        <linearGradient id="atlasArcL" x1="6" y1="53" x2="58" y2="53" gradientUnits="userSpaceOnUse"><stop stop-color="#C5A55A"/><stop offset=".5" stop-color="#AEBED4"/><stop offset="1" stop-color="#C5A55A"/></linearGradient>
+      </defs>
+      <path d="M32 4 L56 47 L38.5 47 L32 33 L25.5 47 L8 47 Z" fill="url(#atlasTriL)"/>
+      <path d="M7 49.5 Q32 60.5 57 49.5 L52.5 51.2 Q32 58 11.5 51.2 Z" fill="url(#atlasArcL)"/>
     </svg>
-    <div style="font-size:25px;font-weight:800;color:#1B2A4A;letter-spacing:-0.5px">Atlas</div>
-    <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#94A3B8;margin-top:3px">Resource Planner</div>
+    <div style="font-size:30px;font-weight:800;color:#1B2A4A;letter-spacing:-0.5px;line-height:1">Atlas</div>
+    <div style="font-size:9px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--gold);margin-top:6px">by CommunityForce</div>
+    <div style="font-size:11px;font-weight:600;color:#5A6A7E;margin-top:10px">The <b style="color:#1B2A4A">CommunityForce</b> Operating System (OS)</div>
+    <div style="font-size:9px;font-weight:600;letter-spacing:.4px;color:#94A3B8;margin-top:8px">Unify Teams &nbsp;·&nbsp; Execute Strategy &nbsp;·&nbsp; Drive Impact &nbsp;·&nbsp; Scale with Confidence</div>
     <div class="login-title" style="margin-top:16px">Sign in to continue</div>
     <input type="email" id="loginUser" placeholder="Email" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
     <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
@@ -973,23 +973,20 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 <div class="hdr"><div class="hdr-in">
   <div class="hdr-top">
     <div>
-      <div class="cf-tag" style="margin-bottom:7px">by <b>communityforce.com</b></div>
+      <div class="cf-tag" style="margin-bottom:7px">by <b>CommunityForce</b></div>
       <div style="display:flex;align-items:center;gap:13px">
         <span class="app-badge">
-          <svg width="46" height="46" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="40" height="40" rx="11" fill="url(#abg)"/>
-            <line x1="20" y1="12.5" x2="11" y2="27" stroke="#C5A55A" stroke-width="1.7" stroke-linecap="round"/>
-            <line x1="20" y1="12.5" x2="20" y2="27" stroke="#C5A55A" stroke-width="1.7" stroke-linecap="round"/>
-            <line x1="20" y1="12.5" x2="29" y2="27" stroke="#C5A55A" stroke-width="1.7" stroke-linecap="round"/>
-            <circle cx="20" cy="12" r="4.3" fill="#C5A55A"/>
-            <circle cx="11" cy="28" r="3.3" fill="#fff"/>
-            <circle cx="20" cy="28" r="3.3" fill="#fff"/>
-            <circle cx="29" cy="28" r="3.3" fill="#fff"/>
-            <defs><linearGradient id="abg" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse"><stop stop-color="#33476B"/><stop offset="1" stop-color="#16223C"/></linearGradient></defs>
+          <svg width="46" height="43" viewBox="0 0 64 60" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <linearGradient id="atlasTriH" x1="32" y1="4" x2="32" y2="48" gradientUnits="userSpaceOnUse"><stop stop-color="#EBD49A"/><stop offset=".5" stop-color="#C5A55A"/><stop offset="1" stop-color="#9A7C39"/></linearGradient>
+              <linearGradient id="atlasArcH" x1="6" y1="53" x2="58" y2="53" gradientUnits="userSpaceOnUse"><stop stop-color="#C5A55A"/><stop offset=".5" stop-color="#AEBED4"/><stop offset="1" stop-color="#C5A55A"/></linearGradient>
+            </defs>
+            <path d="M32 4 L56 47 L38.5 47 L32 33 L25.5 47 L8 47 Z" fill="url(#atlasTriH)"/>
+            <path d="M7 49.5 Q32 60.5 57 49.5 L52.5 51.2 Q32 58 11.5 51.2 Z" fill="url(#atlasArcH)"/>
           </svg>
         </span>
         <div>
-          <div><span class="app-name">Atlas</span><span class="app-tagchip">Resource Planner</span></div>
+          <div><span class="app-name">Atlas</span><span class="app-tagchip">Operating System</span></div>
           <div class="hdr-sub" style="margin-top:4px">Workforce · projects · capacity &nbsp;·&nbsp; <span id="ghStatus" style="transition:color 0.3s">Loading…</span></div>
         </div>
       </div>
