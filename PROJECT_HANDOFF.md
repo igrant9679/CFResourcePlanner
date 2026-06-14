@@ -50,8 +50,10 @@ Always save a backup to `_backups/` first. A 200 means no concurrent write lande
   red/green strip; **cost-to-restore ladder** (Tier 1 discretionary/subs → Tier 2
   non-billable W2 → Tier 3 non-billable contractor → Tier 4 deferrable initiatives;
   billable-project labor NEVER cut; debt excluded — it's below the operating line);
-  **slip simulator**; **trigger register**; **Break-even sub-tab** with a full
-  recommendation breakdown + **cut simulator** (`_stratCutLevers`/`_stratCutSel`).
+  **slip simulator**; **win simulator** (`_stratWins`/`opts.wonOpps` — mark opps
+  Won at full potential, see revenue/profit/gate impact); **trigger register**;
+  **Break-even sub-tab** with a recommendation breakdown + **cut simulator**
+  (`_stratCutLevers`/`_stratCutSel`).
 - **Forecast model — option B:** bench/unallocated labor now counts as cost (Other
   payroll) **until furloughed** (`furloughDate`); `_capNotYetStarted` excludes
   future hires before their first allocation. `capBuildRoster` carries
