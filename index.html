@@ -4335,11 +4335,12 @@ function renderStrategyView(q){
   html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:8px">'
     +'<div><div style="font-size:18px;font-weight:800">Strategy &amp; Performance</div>'
     +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Goals, metrics, and team execution measured live against the cash gate and the debt-free-by-FY29 plan. Numbers come from the same engine as Capacity Planning &amp; Proforma.</div></div></div>';
-  var tabs=[['overview','Overview'],['projections','Debt-Free Plan'],['goals','Goals &amp; KPIs'],['initiatives','Initiatives'],['team','Team']];
+  var tabs=[['overview','Overview'],['projections','Debt-Free Plan'],['goals','Goals &amp; KPIs'],['revenue','Revenue'],['initiatives','Initiatives'],['team','Team']];
   html+='<div class="pf-subtabs">'+tabs.map(function(t){return '<button class="pf-subtab'+(stratTab===t[0]?' active':'')+'" onclick="stratSetTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
   if(stratTab==='overview'){html+=_stratNorthStarHTML(model);html+=_stratDefendHTML(model);}
   else if(stratTab==='projections'){html+=_stratProjectionsHTML(model);}
-  else if(stratTab==='goals'){html+=_stratGoalsHTML(model);html+=_stratBridgeHTML(model);}
+  else if(stratTab==='goals'){html+=_stratGoalsHTML(model);}
+  else if(stratTab==='revenue'){html+=_stratBridgeHTML(model);}
   else if(stratTab==='initiatives'){html+=_stratInitiativesHTML(model);}
   else if(stratTab==='team'){html+=_stratTeamHTML(model);}
   return html+'</div>';
