@@ -3892,6 +3892,12 @@ function capInWindow(p,y,m){
 var _capBurdenOverride=null, _capCashMode=false;
 function capFixedBurden(){
   var extra=(_capV4&&CAP_V4[_capV4])?(CAP_V4[_capV4].extraBurden||0):0;
+  // Persisted override (D.proforma.financials.debtServiceOverride) wins — set this
+  // to 0 when debt is already covered in Overhead/G&A, to avoid double-counting it
+  // below the operating line. Falls back to the session override, then the
+  // computed corporate debt service.
+  var ov=(D.proforma&&D.proforma.financials)?D.proforma.financials.debtServiceOverride:undefined;
+  if(ov!=null&&ov!=='')return (Number(ov)||0)+extra;
   if(_capBurdenOverride!=null)return _capBurdenOverride+extra;
   return proformaDebtService()+extra;
 }
@@ -3913,7 +3919,10 @@ function _capPipeLbl(){ var adds=[];if(!_capNoPipeline){if(_capInclWon)adds.push
 function _capPipeOpts(){ return {pipelineMode:'prob',noPipeline:_capNoPipeline,inclWon:_capInclWon,inclNeg:_capInclNeg}; }
 function capSetV4(k){ _capV4=(k===_capV4?null:k); if(_capV4&&CAP_V4[_capV4]){_capProjMult=CAP_V4[_capV4].mult;} renderView(); }
 function capToggleCash(){ _capCashMode=!_capCashMode; renderView(); }
-function capSetBurden(v){ var n=Number(v); _capBurdenOverride=(v===''||isNaN(n))?null:Math.max(0,n); renderView(); }
+function capSetBurden(v){ var n=Number(v); D.proforma=D.proforma||{};D.proforma.financials=D.proforma.financials||{};
+  if(v===''||isNaN(n)){delete D.proforma.financials.debtServiceOverride;_capBurdenOverride=null;}
+  else{D.proforma.financials.debtServiceOverride=Math.max(0,n);_capBurdenOverride=Math.max(0,n);}
+  save();renderView(); }
 function _capProjOpts(){ return _capV4&&CAP_V4[_capV4]?{c1target:CAP_V4[_capV4].c1target,marinesWon:CAP_V4[_capV4].marinesWon}:{}; }
 function _capYearTotals(rows,yr){
   var r={revenue:0,projectPayroll:0,otherPayroll:0,overhead:0,profit:0,months:0};
@@ -5027,6 +5036,61 @@ function _stratCostLadderHTML(red,roster){
     +'<div style="font-size:12px;font-weight:700;margin-bottom:4px">'+_stratMonLbl(red)+' — shortfall '+fmt(red.shortfall)+'</div>'
     +rows+foot+'</div>';
 }
+// ── CUT SIMULATOR: select recommended cuts and see the impact (non-destructive) ──
+var _stratCutSel={};   // cut lever key (tier|name) → true
+function stratToggleCut(key){_stratCutSel[key]=!_stratCutSel[key];renderView();}
+function stratClearCuts(){_stratCutSel={};renderView();}
+// Unique cut levers across the whole forecast (deduped by tier|name; amount = the
+// largest monthly figure that lever reaches), so a lever can be toggled once and
+// applied every month it exists.
+function _stratCutLevers(model){
+  var roster=capBuildRoster(),byKey={};
+  (model.rows||[]).forEach(function(r){
+    _stratLadderTiers(r,roster).forEach(function(t){(t.items||[]).forEach(function(it){
+      var key=t.key+'|'+it.name;
+      if(!byKey[key]||it.amount>byKey[key].amount)byKey[key]={key:key,tier:t.key,tierLabel:t.label,name:it.name,amount:it.amount,note:it.note};
+    });});
+  });
+  return Object.keys(byKey).map(function(k){return byKey[k];}).sort(function(a,b){return b.amount-a.amount;});
+}
+// Recompute monthly profit with the selected cuts applied (each cut saves its
+// per-month amount from every month it appears in). Pure overlay — nothing saved.
+function _stratSimRows(model){
+  var roster=capBuildRoster();
+  var anySel=Object.keys(_stratCutSel).some(function(k){return _stratCutSel[k];});
+  return {anySel:anySel,rows:(model.rows||[]).map(function(r){
+    var sav=0;
+    if(anySel)_stratLadderTiers(r,roster).forEach(function(t){(t.items||[]).forEach(function(it){if(_stratCutSel[t.key+'|'+it.name])sav+=it.amount;});});
+    return {y:r.y,m:r.m,profit:r.profit+sav,savings:sav};
+  })};
+}
+function _stratCutSimHTML(model){
+  var levers=_stratCutLevers(model);
+  if(!levers.length)return '';
+  var sim=_stratSimRows(model);
+  var baseScan=stratScanNegative(model.rows),simScan=stratScanNegative(sim.rows);
+  var selKeys=Object.keys(_stratCutSel).filter(function(k){return _stratCutSel[k];});
+  var monthlySaved=levers.filter(function(l){return _stratCutSel[l.key];}).reduce(function(a,l){return a+l.amount;},0);
+  var head='<div style="font-size:14px;font-weight:800;margin:6px 0 4px">Simulate cuts <span style="font-weight:400;font-size:11px;color:var(--text-muted)">— tick levers to model the impact on operating profit. Overlay only; nothing is changed until you act on it (furlough, cancel a sub, defer an initiative).</span></div>';
+  var impact='<div style="display:flex;gap:16px;flex-wrap:wrap;border:1px solid '+(simScan.count<baseScan.count?'#16A34A':'var(--border)')+';border-radius:8px;padding:10px 12px;margin-bottom:8px;background:'+(sim.anySel?'rgba(22,163,74,0.04)':'transparent')+'">'
+    +'<div style="flex:1;min-width:150px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Cuts selected</div><div style="font-size:19px;font-weight:800">'+selKeys.length+(monthlySaved?' · '+fmt(monthlySaved)+'/mo':'')+'</div></div>'
+    +'<div style="flex:1;min-width:150px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Negative-profit months</div><div style="font-size:19px;font-weight:800"><span style="color:#DC2626">'+baseScan.count+'</span> → <span style="color:'+(simScan.count<baseScan.count?'#16A34A':(simScan.count>baseScan.count?'#DC2626':'inherit'))+'">'+simScan.count+'</span></div></div>'
+    +'<div style="flex:1;min-width:150px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Total shortfall</div><div style="font-size:19px;font-weight:800"><span style="color:#DC2626">'+fmt(baseScan.totalShortfall)+'</span> → <span style="color:'+(simScan.totalShortfall<baseScan.totalShortfall?'#16A34A':'inherit')+'">'+fmt(simScan.totalShortfall)+'</span></div></div>'
+    +(selKeys.length?'<div style="align-self:center"><button class="btn btn-outline btn-sm" onclick="stratClearCuts()">Clear</button></div>':'')
+    +'</div>'
+    +'<div style="margin:6px 0 10px">'+_stratBreakEvenStrip(sim.rows)+'</div>';
+  var TLBL={subs:'Discretionary & subscriptions',contractor:'Variable / contractor labor',bench:'Non-billable W2 labor',defer:'Deferrable investments',comp:'Structural'};
+  var groups={};levers.forEach(function(l){(groups[l.tier]=groups[l.tier]||[]).push(l);});
+  var list=['subs','contractor','bench','defer','comp'].filter(function(t){return groups[t];}).map(function(t){
+    return '<div style="margin-bottom:8px"><div style="font-size:11px;font-weight:800;color:var(--text-secondary);margin-bottom:2px">'+(TLBL[t]||t)+'</div>'
+      +groups[t].map(function(l){var on=!!_stratCutSel[l.key];
+        return '<label style="display:flex;align-items:center;gap:8px;font-size:12px;padding:2px 0;cursor:pointer"><input type="checkbox" '+(on?'checked':'')+' onchange="stratToggleCut(\''+l.key.replace(/'/g,"\\'")+'\')" style="margin:0">'
+          +'<span style="flex:1">'+esc(l.name)+(l.note?' <span style="color:var(--text-muted);font-size:10px">· '+esc(l.note)+'</span>':'')+'</span>'
+          +'<span style="font-weight:700;white-space:nowrap">'+fmt(l.amount)+'/mo</span></label>';
+      }).join('')+'</div>';
+  }).join('');
+  return '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px">'+head+impact+'<div style="max-height:40vh;overflow:auto;border-top:1px solid var(--border);padding-top:8px">'+list+'</div></div>';
+}
 // ── COST-TO-RESTORE: full recommendation breakdown (dedicated Strategy sub-tab) ──
 // Drills each breached month's tier recommendation down to the individual lines
 // (subscriptions, people, initiatives), marking exactly which ones to cut.
@@ -5034,9 +5098,11 @@ function _stratBreakdownHTML(model){
   var scan=stratScanNegative(model.rows);
   var head='<div style="font-size:14px;font-weight:800;margin:8px 0 4px">Cost-to-restore — recommendation breakdown</div>'
     +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">For every negative-profit month, the exact lines to cut to reach $0 operating profit — drilled down to the individual subscription, person, or initiative within each ladder tier. Billable-project labor (W2 <i>and</i> contractor) is never listed: it generates revenue and is protected.</div>';
-  if(!scan.count)return head+'<div style="margin:10px 0">'+_stratBreakEvenStrip(model.rows)+'</div><div class="empty-msg">No negative-profit months in the projection — nothing to restore. 🎉</div>';
+  var sim=_stratCutSimHTML(model);
+  if(!scan.count)return head+sim+'<div style="margin:10px 0">'+_stratBreakEvenStrip(model.rows)+'</div><div class="empty-msg">No negative-profit months in the projection — nothing to restore. 🎉</div>';
   var roster=capBuildRoster();
-  return head
+  return head+sim
+    +'<div style="font-size:14px;font-weight:800;margin:6px 0 4px">Per-month breakdown</div>'
     +'<div style="font-size:12px;margin-bottom:10px"><b style="color:#DC2626">'+scan.count+'</b> negative month'+(scan.count===1?'':'s')+' · total shortfall <b style="color:#DC2626">'+fmt(scan.totalShortfall)+'</b> · worst <b>'+_stratMonLbl(scan.worst)+'</b> ('+fmt(scan.worst.shortfall)+')</div>'
     +scan.red.map(function(red){return _stratBreakdownMonthHTML(red,roster);}).join('');
 }
