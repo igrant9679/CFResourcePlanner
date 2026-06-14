@@ -1005,21 +1005,21 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
   <div class="stats" id="statsBar"></div>
   <div class="toolbar">
     <div class="tab-bar">
-      <button class="tab" id="tabChart" onclick="switchTab('orgchart')">Org Chart</button>
+      <button class="tab tab-confidential" id="tabProforma" onclick="switchTab('proforma')">&#128274; Proforma</button>
+      <button class="tab tab-confidential" id="tabStrat" onclick="switchTab('strat')">&#127919; Strategy</button>
       <button class="tab" id="tabProj" onclick="switchTab('proj')">Projects</button>
-      <button class="tab" id="tabRecruit" onclick="switchTab('recruit')">Recruiting</button>
       <button class="tab" id="tabInit" onclick="switchTab('init')">Initiatives</button>
+      <button class="tab" id="tabCap" onclick="switchTab('cap')">Capacity Planning</button>
       <button class="tab" id="tabOpp" onclick="switchTab('opp')">Opportunities</button>
       <button class="tab" id="tabProp" onclick="switchTab('prop')">Proposals</button>
       <button class="tab" id="tabOver" onclick="switchTab('over')">Overhead</button>
       <button class="tab active" id="tabRes" onclick="switchTab('res')">Resources</button>
-      <button class="tab" id="tabCap" onclick="switchTab('cap')">Capacity Planning</button>
-      <button class="tab" id="tabPlan" onclick="switchTab('plan')">COE Plan</button>
-      <button class="tab" id="tabPTask" onclick="switchTab('ptask')">Project Tasks</button>
-      <button class="tab" id="tabPPlan" onclick="switchTab('pplan')">Resource Planning</button>
       <button class="tab" id="tabReports" onclick="switchTab('reports')">&#128202; Reports</button>
-      <button class="tab tab-confidential" id="tabStrat" onclick="switchTab('strat')">&#127919; Strategy</button>
-      <button class="tab tab-confidential" id="tabProforma" onclick="switchTab('proforma')">&#128274; Proforma</button>
+      <button class="tab" id="tabRecruit" onclick="switchTab('recruit')">Recruiting</button>
+      <button class="tab" id="tabPPlan" onclick="switchTab('pplan')">Resource Planning</button>
+      <button class="tab" id="tabPlan" onclick="switchTab('plan')">COE Tasks</button>
+      <button class="tab" id="tabPTask" onclick="switchTab('ptask')">Project Tasks</button>
+      <button class="tab" id="tabChart" onclick="switchTab('orgchart')">Org Chart</button>
     </div>
   </div>
 </div></div>
@@ -1997,7 +1997,7 @@ function renderPlanView(q){
   PLAN_STS.forEach(function(s){counts[s.k]=acts.filter(function(a){return a.status===s.k;}).length;});
   var html='<div class="plan-wrap">';
   html+='<div class="plan-summary"><div class="plan-summary-top">'
-    +'<div><strong style="font-size:14px;color:var(--text-primary)">'+(planKind()==='project'?'Project Tasks':'COE Plan')+'</strong>'
+    +'<div><strong style="font-size:14px;color:var(--text-primary)">'+(planKind()==='project'?'Project Tasks':'COE Tasks')+'</strong>'
     +'<span style="font-size:12px;color:var(--text-secondary);margin-left:8px">'+acts.length+' task'+(acts.length===1?'':'s')+' &middot; '+prog.done+' completed ('+prog.pct+'%)</span></div>'
     +'<div class="plan-counts">'+PLAN_STS.map(function(s){return '<span class="plan-chip" style="border-color:'+s.c+';color:'+s.c+'">'+s.l+': '+counts[s.k]+'</span>';}).join('')+'</div>'
     +'</div><div class="plan-bar" style="max-width:none;margin-top:10px"><div class="plan-bar-fill" style="width:'+prog.pct+'%"></div></div></div>';
@@ -2261,7 +2261,7 @@ function openPlanModal(id,presetParent){
   if(v.projectId){var _rp=D.projects.find(function(x){return x.id===v.projectId;});if(_rp)curRelCat=projCat(_rp);}
   var relCatOpts=REL_CATS.map(function(c){return '<option value="'+c.k+'"'+(curRelCat===c.k?' selected':'')+'>'+c.l+'</option>';}).join('');
   var projOpts='<option value="">— none —</option>'+D.projects.filter(function(p){return !curRelCat||projCat(p)===curRelCat;}).map(function(p){return '<option value="'+p.id+'"'+(v.projectId===p.id?' selected':'')+'>'+esc(p.name)+'</option>';}).join('');
-  var modalKindLabel=isProjKind?'Project Task':'COE Plan';
+  var modalKindLabel=isProjKind?'Project Task':'COE Task';
   var programBlock=isProjKind
     ?'<input type="hidden" id="pl_program" value="">'
     :'<div style="display:flex;gap:10px"><div class="fld" style="flex:1"><label class="fld-l">Program</label><select class="fld-sel" id="pl_program"'+dis+'>'+progOpts+'</select></div>'
@@ -11397,7 +11397,7 @@ function openProgramsManager(){
       +'<span style="font-size:11px;color:var(--text-muted);white-space:nowrap">'+cnt+' task'+(cnt===1?'':'s')+'</span>'
       +'<button class="btn btn-danger-sm btn-sm" onclick="delProgram(\''+p.id+'\')">&#10005;</button></div>';
   }).join('');
-  document.getElementById('mdlAdmin').innerHTML='<div class="mdl-over">'+(planKind()==='project'?'Project Tasks':'COE Plan')+'</div><div class="mdl-title">Manage Programs</div>'
+  document.getElementById('mdlAdmin').innerHTML='<div class="mdl-over">'+(planKind()==='project'?'Project Tasks':'COE Tasks')+'</div><div class="mdl-title">Manage Programs</div>'
     +'<div class="fld"><label class="fld-l">Plan start (Month 1 anchor)</label><input class="fld-i" type="date" id="pm_planstart" value="'+esc(D.planStart||'2026-06-01')+'" onchange="setPlanStart(this.value)"></div>'
     +'<div id="pm_list">'+(rows||'<div style="font-size:12px;color:var(--text-muted)">No programs yet.</div>')+'</div>'
     +'<div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px;display:flex;gap:6px"><input class="fld-i" id="pm_new" placeholder="New program name"><button class="btn btn-navy btn-sm" onclick="addProgram()">+ Add</button></div>';
@@ -12034,7 +12034,7 @@ function rptCsvBuiltin(key){var f=RPT_CSV[key],b=rptBuiltin(key);if(!f||(b&&b.fi
 /* ── AUTH & PERMISSIONS (client-side roles only — not API security) ── */
 var AUTH_USER='khaja@communityforce.com',AUTH_PASS='Namtra_CF27',DEFAULT_PW='CommunityForce2026';
 var ME=null;
-var SECTIONS=[{k:'res',tab:'tabRes',l:'Resources'},{k:'orgchart',tab:'tabChart',l:'Org Chart'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'plan',tab:'tabPlan',l:'COE Plan'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'pplan',tab:'tabPPlan',l:'Resource Planning'},{k:'reports',tab:'tabReports',l:'Reports'},{k:'strat',tab:'tabStrat',l:'Strategy'},{k:'proforma',tab:'tabProforma',l:'Proforma'}];
+var SECTIONS=[{k:'proforma',tab:'tabProforma',l:'Proforma'},{k:'strat',tab:'tabStrat',l:'Strategy'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources'},{k:'reports',tab:'tabReports',l:'Reports'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'pplan',tab:'tabPPlan',l:'Resource Planning'},{k:'plan',tab:'tabPlan',l:'COE Tasks'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'orgchart',tab:'tabChart',l:'Org Chart'}];
 function emailFromName(name){var clean=(name||'').replace(/\(.*?\)/g,'').replace(/[^A-Za-z .\-]/g,'').trim();var parts=clean.split(/\s+/).filter(Boolean);var local=parts.length>=2?(parts[0]+'.'+parts[parts.length-1]):(parts[0]||'user');return local.toLowerCase().replace(/[^a-z0-9.]/g,'')+'@communityforce.com';}
 function authMigrate(){
   if(!D.accounts)D.accounts=[];
