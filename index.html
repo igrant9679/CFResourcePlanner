@@ -1458,11 +1458,7 @@ function proformaSeedV4(){
       gates:[{name:'Sterling debt restructured',status:'✅ COMPLETE',projectedClose:'Filed March 2026',notes:'2-yr extension to 6/30/29, quarterly NAV-indexed payments'},
         {name:'Cash balance > $1.5M',status:'⏳ TRACKING',projectedClose:'~June 2027 (base case)',notes:'Currently $1.10M; Sterling payment quantification could shift timing'},
         {name:'6 consecutive months positive cash flow',status:'⏳ ON TRACK',projectedClose:'Q3 2026',notes:'Monthly profit targets met through May 2026'}]},
-    scenarios:[{name:'Base Case',cashAtHorizon:1569505,gateTiming:'~June 2027',assumptions:'BCLM extended + C1FAMS at $100K + no Marines win'},
-      {name:'Marines Win Case',cashAtHorizon:1820000,gateTiming:'Earlier, larger cushion',assumptions:'Base + Marines at $500K ARR / 50% margin'},
-      {name:'Conservative Case',cashAtHorizon:1380000,gateTiming:'Likely missed',assumptions:'Base + C1FAMS only reaches $80K (not $100K)'},
-      {name:'Sterling Stress Case',cashAtHorizon:1420000,gateTiming:'Barely missed',assumptions:'Base + Sterling payments at $10K/mo equivalent'},
-      {name:'Overperformance Case',cashAtHorizon:2000000,gateTiming:'Well ahead',assumptions:'Marines win + C1FAMS reaches $120K/mo'}],
+    scenarios:[],
     contractEconomics:[{contract:'FAMS (sunsetting Sep 24, 2026)',rev:76944,cost:11394,profit:65550,margin:0.852,role:'Highest margin — protect through Sep 24, 2026 end'},
       {contract:'C1FAMS via Leidos (at $100K target)',rev:100000,cost:38700,profit:61300,margin:0.613,role:'Primary growth lever — execution to $100K critical'},
       {contract:'BCLM Extended (+25% rate)',rev:265945,cost:172867,profit:93078,margin:0.35,role:'Anchor contract — Aug 15, 2026 – Aug 14, 2027'},
@@ -1565,7 +1561,7 @@ function proformaSeedV4(){
       {date:'2026-08-15',event:'BCLM Extension begins (+25%)',impact:'+$53,189/mo revenue lift ($26.6K additional profit)',status:'UPCOMING'},
       {date:'2026-09-24',event:'FAMS contract ends',impact:'-$76,944/mo revenue; -$11,394/mo cost; net -$65,550/mo profit',status:'UPCOMING'},
       {date:'2026-09-24',event:'C1FAMS contract ends',impact:'-$25,984/mo revenue; -$25,000/mo cost; net ~-$984/mo. Re-add as a new project if extended.',status:'UPCOMING'},
-      {date:'2027-06-30',event:'$1.5M cash gate projected',impact:'SURVIVAL MODE EXIT. Base case per V4. Sterling payments could shift timing.',status:'GATE'},
+      {date:'2027-06-30',event:'$1.5M cash gate projected',impact:'SURVIVAL MODE EXIT. Sterling payments could shift timing.',status:'GATE'},
       {date:'2027-08-14',event:'BCLM extension ends',impact:'Renewal decision window. Also M&A timing trigger.',status:'STRATEGIC'},
       {date:'2029-06-30',event:'Sterling restructured balance retired',impact:'Final corporate debt obligation cleared.',status:'FUTURE'}],
     dataGaps:[{gap:'Sterling restructured payment schedule — quarterly amounts & NAV indexing',priority:'HIGHEST',owner:'Anwer Sheikh',impact:'Cash gate could shift to late 2027/early 2028 if payments $10K/mo'},
@@ -4015,7 +4011,7 @@ function _capProjHTML(roster){
     +'<tr><th class="mo">Month</th><th>Revenue</th><th>of which pipeline</th><th>Project payroll</th><th>Other payroll</th><th>Overhead/G&amp;A</th><th>Profit</th><th>'+(_capCashMode?'Cash balance':'Cumulative profit')+'</th></tr></thead>'
     +'<tbody>'+body+'</tbody></table></div>';
   var note='<div class="cap-proj-note">Projection starts this month and runs through Dec '+rows[rows.length-1].y+'. '
-    +'Cost = Project payroll + Other payroll + Overhead/G&amp;A. <b>Project payroll</b> = labor allocated to projects/initiatives. <b>Other payroll</b> = all non-project labor (people on overhead items like G&amp;A/Operations, bench, plus Federal Sales/BD &amp; Management). <b>Overhead/G&amp;A</b> = '+fmt(d.overheadFixed||0)+'/mo fixed costs from the Proforma Cost Structure only (no people). Profit and margin are net of all three. Contract revenue is time-phased from the Knowledge Base (FAMS sunset Sep 24, BCLM +25% step, C1FAMS ramp to $100K Oct). '
+    +'Cost = Project payroll + Other payroll + Overhead/G&amp;A. <b>Project payroll</b> = labor allocated to projects/initiatives. <b>Other payroll</b> = all non-project labor (people on overhead items like G&amp;A/Operations, bench, plus Federal Sales/BD &amp; Management). <b>Overhead/G&amp;A</b> = '+fmt(d.overheadFixed||0)+'/mo fixed costs from the Proforma Cost Structure only (no people). Profit and margin are net of all three. Contract revenue is time-phased (FAMS &amp; C1FAMS both end Sep 24, 2026; BCLM +25% step Aug 15).'
     +((function(){var added=[];if(!_capNoPipeline){if(_capInclWon)added.push('Closed Won');if(_capInclNeg)added.push('In Negotiation');}
        if(!added.length)return 'Existing Projects revenue only — no pipeline included. Tick Include Closed Won or Include In Negotiation to add those opportunities.';
        return d.modeled+' '+added.join(' + ')+' opportunit'+(d.modeled===1?'y is':'ies are')+' added on top of existing Projects revenue at full Potential value (monthly = Potential ÷ 12, from each opp’s close date)'+(d.noDate?'; '+d.noDate+' without a close date excluded':'')+'.';})())
@@ -4268,7 +4264,6 @@ var PF_FIELDS={
  'financials.history':{label:'Historical year',cols:[{k:'year',l:'Year'},{k:'revenue',l:'Revenue',type:'number'},{k:'netIncome',l:'Net income',type:'number'},{k:'opCashFlow',l:'Op. cash flow',type:'number'},{k:'endingCash',l:'Ending cash',type:'number'}]},
  'financials.cashTrajectory':{label:'Cash point',cols:[{k:'date',l:'Date (YYYY-MM-DD)'},{k:'cash',l:'Cash',type:'number'},{k:'delta',l:'Monthly Δ',type:'number'},{k:'status',l:'Status'},{k:'notes',l:'Notes'}]},
  'financials.gates':{label:'Exit gate',cols:[{k:'name',l:'Gate'},{k:'status',l:'Status'},{k:'projectedClose',l:'Projected close'},{k:'notes',l:'Notes'}]},
- 'scenarios':{label:'Scenario',cols:[{k:'name',l:'Name'},{k:'cashAtHorizon',l:'Cash @ horizon',type:'number'},{k:'gateTiming',l:'Gate timing'},{k:'assumptions',l:'Assumptions',type:'textarea'}]},
  'contractEconomics':{label:'Contract',cols:[{k:'contract',l:'Contract'},{k:'rev',l:'Monthly rev',type:'number'},{k:'cost',l:'Monthly cost',type:'number'},{k:'profit',l:'Monthly profit',type:'number'},{k:'margin',l:'Margin (0–1)',type:'number'},{k:'role',l:'Strategic role',type:'textarea'}]},
  'debt.corporate':{label:'Debt obligation',cols:[{k:'lender',l:'Lender'},{k:'balance',l:'Balance',type:'number'},{k:'monthlyPayment',l:'Monthly payment'},{k:'rateTerm',l:'Rate / term'},{k:'status',l:'Status'},{k:'notes',l:'Notes',type:'textarea'}]},
  'debt.personal.liquid':{label:'Liquid asset',cols:[{k:'asset',l:'Asset'},{k:'value',l:'Value',type:'number'}]},
@@ -5327,16 +5322,15 @@ function renderProformaView(q){
   if(!D.proforma)proformaMigrate();
   var P=D.proforma,c=P.company||{},f=P.financials||{},meta=P.meta||{};
   var gateTarget=f.cashGateTarget||1500000,cash=f.openingCash||c.cashPosition||0,pct=Math.max(0,Math.min(100,Math.round(cash/gateTarget*100)));
-  var tabs=[['overview','Overview'],['financials','Financials & Cash'],['scenarios','Scenarios'],['contracts','Contracts'],['debt','Debt'],['pipeline','Pipeline'],['strategy','Strategy'],['technology','Technology'],['costs','Cost Structure'],['risks','Risks & Dates'],['snapshots','Snapshots']];
+  var tabs=[['overview','Overview'],['financials','Financials & Cash'],['contracts','Contracts'],['debt','Debt'],['pipeline','Pipeline'],['strategy','Strategy'],['technology','Technology'],['costs','Cost Structure'],['risks','Risks & Dates'],['snapshots','Snapshots']];
   var nav='<div class="pf-subtabs">'+tabs.map(function(t){return '<button class="pf-subtab'+(proformaTab===t[0]?' active':'')+'" onclick="pfSetTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
   var kpis=[['Cash position',_pfMoney(cash)],['Cash gate',_pfMoney(gateTarget)+' · '+pct+'%'],['Monthly profit',_pfMoney(c.monthlyProfit)+' → '+_pfMoney(c.monthlyProfitOct)],['Corporate debt',_pfMoney(c.corporateDebt)],['Gate ETA',esc(c.gateDate||'—')]];
   var kpiBar='<div class="pf-kpis">'+kpis.map(function(k){return '<div class="pf-kpi"><div class="pf-kpi-l">'+k[0]+'</div><div class="pf-kpi-v">'+k[1]+'</div></div>';}).join('')+'</div>';
   var upd=(meta.updatedBy&&meta.updatedBy!=='seed')?(' · last edited by '+esc(meta.updatedBy)+(_pfDate(meta.updatedAt)?(' on '+_pfDate(meta.updatedAt)):'')):'';
   var banner='<div class="pf-banner">&#128274; CONFIDENTIAL — CEO second brain. Restricted to Admin. Not synced externally. <span style="opacity:.8">Source: Knowledge Base '+esc(meta.version||'')+' · as of '+esc(meta.asOf||'')+upd+'</span></div>';
-  var scenSel='<label class="pf-meta" style="margin-left:8px">Forecast scenario <select class="fld-sel" style="width:auto;display:inline-block" onchange="pfSetScenario(this.value)">'+Object.keys(CAP_V4).map(function(k){return '<option value="'+k+'"'+(_pfScenario===k?' selected':'')+'>'+esc(CAP_V4[k].label)+'</option>';}).join('')+'</select></label>';
   var actions='<div class="pf-actions-row"><button class="btn btn-gold btn-sm" onclick="proformaTakeSnapshot()">&#128247; Take snapshot</button>'
-    +'<button class="btn btn-sec btn-sm" onclick="pfEditObj(\'meta\')">Edit doc meta</button>'+scenSel
-    +'<span class="pf-meta">· forward figures (cash trajectory, scenarios, contracts) are computed by Capacity Planning. Past/actuals are fixed.</span></div>';
+    +'<button class="btn btn-sec btn-sm" onclick="pfEditObj(\'meta\')">Edit doc meta</button>'
+    +'<span class="pf-meta">· forward figures (cash trajectory, contracts) are computed live by Capacity Planning. Past/actuals are fixed.</span></div>';
   var body='';
   if(proformaTab==='overview'){
     body='<div class="pf-grid">'
@@ -5353,18 +5347,8 @@ function renderProformaView(q){
   } else if(proformaTab==='financials'){
     var projRows=_pfScenarioRows();
     body='<div class="pf-card">'+_pfH('Cash position — actuals (fixed, past)',"pfEditObj('financials')")+_pfTable(['Date','Cash','Monthly Δ','Status','Notes'],(f.cashTrajectory||[]).map(function(r){return [esc(r.date),_pfMoney(r.cash),_pfMoney(r.delta),'<span class="pf-pill pf-ok">'+esc(r.status||'Actual')+'</span>',esc(r.notes)];}),'financials.cashTrajectory')+'</div>'
-      +'<div class="pf-card">'+_pfH('Projected cash trajectory — computed by Capacity Planning ('+esc(CAP_V4[_pfScenario].label)+')')+_pfTable(['Month','Cash balance','Monthly Δ','Source'],projRows.map(function(r){return [CAP_MONTHS[r.m]+" '"+(r.y%100),_pfMoney(Math.round(r.cashBal)),_pfMoney(Math.round(r.netCash)),'<span class="pf-pill">Projected</span>'];}))+'<div class="pf-note">Opening cash + cumulative (profit − debt service), under the selected forecast scenario (change it in the toolbar above). Edit the inputs in Capacity Planning &amp; Cost Structure — not here.</div></div>'
+      +'<div class="pf-card">'+_pfH('Projected cash trajectory — computed live by Capacity Planning')+_pfTable(['Month','Cash balance','Monthly Δ','Source'],projRows.map(function(r){return [CAP_MONTHS[r.m]+" '"+(r.y%100),_pfMoney(Math.round(r.cashBal)),_pfMoney(Math.round(r.netCash)),'<span class="pf-pill">Projected</span>'];}))+'<div class="pf-note">Opening cash + cumulative (profit − debt service), from the live base-case projection. Edit the inputs in Capacity Planning &amp; Cost Structure — not here.</div></div>'
       +'<div class="pf-card">'+_pfH('Survival-mode exit gates')+_pfTable(['Gate','Status','Projected close','Notes'],(f.gates||[]).map(function(g){return [esc(g.name),esc(g.status),esc(g.projectedClose),esc(g.notes)];}),'financials.gates')+'</div>';
-  } else if(proformaTab==='scenarios'){
-    var assumpByName={};(P.scenarios||[]).forEach(function(s){assumpByName[s.name]=s.assumptions;});
-    var gateT=(P.financials||{}).cashGateTarget||1500000;
-    body='<div class="pf-grid">'+Object.keys(CAP_V4).map(function(k){var s=CAP_V4[k];var r=_pfScenarioCashAtHorizon(k),gm=r.gateMet;
-      return '<div class="pf-card'+(_pfScenario===k?' pf-locked':'')+'"><div class="pf-card-h">'+esc(s.label)+(_pfScenario===k?' <span class="pf-pill pf-ok">active</span>':'')+'</div>'
-       +'<div class="pf-big">'+_pfMoney(Math.round(r.cash))+'</div><div class="pf-sub">computed cash at horizon · workbook ref '+fmt(s.ref)+'</div>'
-       +'<div class="pf-kv"><span>$'+Math.round(gateT/1000)+'K gate</span><b>'+(gm?('met '+CAP_MONTHS[gm.m]+" '"+(gm.y%100)):'not reached')+'</b></div>'
-       +'<div class="pf-note">'+esc(assumpByName[s.label]||'')+'</div>'
-       +'<button class="btn btn-sec btn-sm" style="margin-top:6px" onclick="pfSetScenario(\''+k+'\')">Use this scenario</button></div>';}).join('')+'</div>'
-      +'<div class="pf-note" style="margin-top:8px">Cash-at-horizon is computed live by Capacity Planning under each scenario (contracted revenue + that scenario\'s levers, net of payroll + overhead + debt service).</div>';
   } else if(proformaTab==='contracts'){
     var contracts=(D.projects||[]).filter(function(p){return p.timeline&&p.timeline.length;});
     var tlBody='';contracts.forEach(function(p){(p.timeline||[]).forEach(function(s,si){
