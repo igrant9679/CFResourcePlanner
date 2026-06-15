@@ -4605,7 +4605,13 @@ function renderStrategyView(q){
     +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Goals, metrics, and team execution measured live against the cash gate and the debt-free-by-FY29 plan. Numbers come from the same engine as Capacity Planning &amp; Proforma.</div></div></div>';
   var tabs=[['overview','Overview'],['breakeven','Break-even'],['projections','Debt-Free Plan'],['goals','Goals &amp; KPIs'],['revenue','Revenue'],['initiatives','Initiatives'],['team','Team']];
   html+='<div class="pf-subtabs">'+tabs.map(function(t){return '<button class="pf-subtab'+(stratTab===t[0]?' active':'')+'" onclick="stratSetTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
-  if(stratTab==='overview'){html+=_stratNorthStarHTML(model);html+=_stratBreakEvenHTML(model);html+=_stratSlipHTML(model);html+=_stratTriggersHTML(model);html+=_stratDefendHTML(model);}
+  if(stratTab==='overview'){
+    // Win simulator overlays the North Star too: ticking pursuits as Won recomputes
+    // the cash trajectory / ETA / guardrail at the top of the page, not just break-even.
+    var _winSel=Object.keys(_stratWins).filter(function(k){return _stratWins[k];});
+    var nsModel=_winSel.length?_stratCashWith(null,_stratWins):model;
+    html+=_stratNorthStarHTML(nsModel);html+=_stratBreakEvenHTML(model);html+=_stratSlipHTML(model);html+=_stratTriggersHTML(model);html+=_stratDefendHTML(model);
+  }
   else if(stratTab==='breakeven'){html+=_stratBreakdownHTML(model);}
   else if(stratTab==='projections'){html+=_stratProjectionsHTML(model);}
   else if(stratTab==='goals'){html+=_stratGoalsHTML(model);}
@@ -4722,7 +4728,7 @@ function _stratNorthStarHTML(model){
     guardBox='<div style="font-size:11px;color:#DC2626;margin-top:6px;border-top:1px dashed var(--border);padding-top:6px"><b>⛔ No-negative-cash rule BREACHED:</b> '+_stratMonLbl(model.trough)+' projects '+fmt(Math.round(model.trough.cashBal))+', '+fmt(Math.round(shortfall))+' below the floor. Hold the line by furloughing / cutting non-billable overhead (~'+fmt(lever)+'/mo available that month) or pulling pipeline forward into earlier months.</div>';
   }
   return '<div style="border:1px solid var(--gold);border-radius:10px;padding:14px 16px;margin:10px 0;background:linear-gradient(180deg,rgba(197,165,90,0.06),transparent)">'
-    +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div style="font-size:13px;font-weight:800">🎯 North Star — $1.5M cash position by '+MON_ABBR[tgt.m]+' '+tgt.y+'</div>'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div style="font-size:13px;font-weight:800">🎯 North Star — $1.5M cash position by '+MON_ABBR[tgt.m]+' '+tgt.y+(Object.keys(_stratWins).some(function(k){return _stratWins[k];})?' <span style="font-size:11px;font-weight:700;color:#16A34A">· win overlay active</span>':'')+'</div>'
     +'<button class="btn btn-outline btn-sm" onclick="stratEditGate()">Edit target</button></div>'
     +'<div style="height:8px;background:var(--page-bg);border-radius:5px;overflow:hidden;margin:10px 0"><div style="height:100%;width:'+pct+'%;background:'+(pct>=100?'#16A34A':'#C5A55A')+'"></div></div>'
     +'<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px">'
@@ -5208,32 +5214,37 @@ function _stratCashWith(slips,wonOpps){
   var d=capProjData(roster,0,opts),rows=d.rows||[];
   var burden=capFixedBurden(),opening=capOpeningCash();
   var gate=(D.proforma&&D.proforma.financials&&D.proforma.financials.cashGateTarget)||1500000;
-  var cash=opening,gateMet=null,trough=null;
-  rows.forEach(function(r){r.netCash=r.profit-burden;cash+=r.netCash;r.cashBal=cash;if(gateMet===null&&cash>=gate)gateMet=r;if(!trough||r.cashBal<trough.cashBal)trough=r;});
-  return {rows:rows,roster:roster,gate:gate,gateMet:gateMet,trough:trough};
+  var cash=opening,gateMet=null,trough=null,firstRegress=null;
+  rows.forEach(function(r,i){r.netCash=r.profit-burden;cash+=r.netCash;r.cashBal=cash;if(gateMet===null&&cash>=gate)gateMet=r;if(!trough||r.cashBal<trough.cashBal)trough=r;if(firstRegress===null&&i>0&&r.netCash<0)firstRegress=r;});
+  return {rows:rows,roster:roster,opening:opening,gate:gate,burden:burden,gateMet:gateMet,trough:trough,firstRegress:firstRegress,modeled:d.modeled||0,noDate:d.noDate||0};
 }
 // ── WIN SIMULATOR: mark pursuits as Won (full potential) and see the impact ──
 var _stratWins={};   // oppId → true (treated as Closed/Won; non-destructive overlay)
 function stratToggleWin(id){_stratWins[id]=!_stratWins[id];renderView();}
 function stratClearWins(){_stratWins={};renderView();}
-function _stratWinOpps(){return (D.projects||[]).filter(function(p){return projCat(p)==='opportunity';}).filter(function(o){var st=capOppStage?capOppStage(o):(o.stage||'');return st!=='Lost'&&st!=='Won';});}
+// Win simulator only offers pursuits in the Negotiation stage (OPP_STATUSES) — the
+// late-stage, most-winnable deals — never Won/Lost.
+function _stratWinOpps(){return (D.projects||[]).filter(function(p){return projCat(p)==='opportunity';}).filter(function(o){return String(o.status||'').trim().toLowerCase()==='negotiation';});}
 // Win-simulator picker — sits above the cost-to-restore recommendations on both
 // the Overview break-even panel and the Break-even tab; the impact is reflected
 // live in the break-even numbers/strip/ladder/breakdown.
 function _stratWinPickerHTML(){
   var opps=_stratWinOpps();
-  if(!opps.length)return '';
+  var shell='<div style="margin-top:14px;border-top:1px dashed var(--border);padding-top:10px">';
+  if(!opps.length)return shell
+    +'<div style="font-size:12px;font-weight:700;margin-bottom:4px">🏆 Win simulator</div>'
+    +'<div class="empty-msg" style="font-size:11px">No opportunities in the Negotiation stage. Move a pursuit to <b>Negotiation</b> (Opportunities → status) to model winning it here.</div></div>';
   var sel=Object.keys(_stratWins).filter(function(k){return _stratWins[k];});
   var totPot=sel.reduce(function(a,id){var o=(D.projects||[]).find(function(p){return p.id===id;});return a+(o?(Number(o.potential)||0):0);},0);
   var noDate=sel.filter(function(id){var o=(D.projects||[]).find(function(p){return p.id===id;});return o&&!o.closeDate;}).length;
   var list=opps.slice().sort(function(a,b){return (Number(b.potential)||0)-(Number(a.potential)||0);}).map(function(o){
     var on=!!_stratWins[o.id],st=capOppStage?capOppStage(o):(o.stage||'');
     return '<label style="display:flex;align-items:center;gap:8px;font-size:12px;padding:2px 0;cursor:pointer"><input type="checkbox" '+(on?'checked':'')+' onchange="stratToggleWin(\''+o.id+'\')" style="margin:0">'
-      +'<span style="flex:1">'+esc(o.name||'(opp)')+(o.customer?' <span style="color:var(--text-muted);font-size:10px">· '+esc(o.customer)+'</span>':'')+' <span class="plan-chip">'+esc(st)+'</span>'+(o.closeDate?'':' <span style="color:#D97706;font-size:10px">no close date</span>')+'</span>'
+      +'<span style="flex:1">'+esc(o.name||'(opp)')+(o.customer?' <span style="color:var(--text-muted);font-size:10px">· '+esc(o.customer)+'</span>':'')+' <span class="plan-chip">'+esc(st)+'</span>'+(o.closeDate?' <span style="color:var(--text-muted);font-size:10px">· closes '+esc(o.closeDate)+'</span>':' <span style="color:#D97706;font-size:10px">no close date</span>')+'</span>'
       +'<span style="font-weight:700;white-space:nowrap">'+fmt(Number(o.potential)||0)+'/yr</span></label>';
   }).join('');
   return '<div style="margin-top:14px;border-top:1px dashed var(--border);padding-top:10px">'
-    +'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:4px"><div style="font-size:12px;font-weight:700">🏆 Win simulator <span style="font-weight:400;color:var(--text-muted);font-size:11px">— tick pursuits to model winning them at full Potential; the break-even figures update live</span></div>'+(sel.length?'<button class="btn btn-outline btn-sm" onclick="stratClearWins()">Clear wins</button>':'')+'</div>'
+    +'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:4px"><div style="font-size:12px;font-weight:700">🏆 Win simulator <span style="font-weight:400;color:var(--text-muted);font-size:11px">— tick Negotiation-stage pursuits to model winning them at full Potential; the North Star &amp; break-even figures update live</span></div>'+(sel.length?'<button class="btn btn-outline btn-sm" onclick="stratClearWins()">Clear wins</button>':'')+'</div>'
     +(sel.length?'<div style="font-size:11px;color:#16A34A;font-weight:700;margin-bottom:4px">'+sel.length+' selected · '+fmt(totPot)+'/yr potential applied'+(noDate?' · ⚠ '+noDate+' with no close date (earns from projection start)':'')+'</div>':'')
     +'<div style="max-height:28vh;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:#fff">'+list+'</div></div>';
 }
