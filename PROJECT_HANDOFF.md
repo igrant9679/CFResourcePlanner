@@ -45,15 +45,16 @@ editing.** Server keeps ~14 days of snapshots: `GET /api/history` (index) +
 JSON → `POST /api/data` with header `X-Atlas-Base-Updated-At: <that stamp>`.
 Always save a backup to `_backups/` first. A 200 means no concurrent write landed.
 
-### ✅ Shipped this session (all live on `main`/Railway; latest commit `4598c9d`)
+### ✅ Shipped this session (all live on `main`/Railway; latest commit `fb59bd6`)
 - **Strategy break-even suite:** no-negative-operating-profit guardrail + per-month
   red/green strip; **cost-to-restore ladder** (Tier 1 discretionary/subs → Tier 2
   non-billable W2 → Tier 3 non-billable contractor → Tier 4 deferrable initiatives;
   billable-project labor NEVER cut; debt excluded — it's below the operating line);
-  **slip simulator**; **win simulator** (`_stratWins`/`opts.wonOpps` — mark opps
-  Won at full potential, see revenue/profit/gate impact); **trigger register**;
-  **Break-even sub-tab** with a recommendation breakdown + **cut simulator**
-  (`_stratCutLevers`/`_stratCutSel`).
+  **win simulator FOLDED INTO the break-even panel** (`_stratWins`/`opts.wonOpps` +
+  `_stratWinPickerHTML`) — ticking pursuits as Won recomputes the panel's negative-
+  month count, total shortfall (base struck-through), gate ETA, strip, and ladder
+  live; **slip simulator**; **trigger register**; **Break-even sub-tab** with a
+  recommendation breakdown + **cut simulator** (`_stratCutLevers`/`_stratCutSel`).
 - **Forecast model — option B:** bench/unallocated labor now counts as cost (Other
   payroll) **until furloughed** (`furloughDate`); `_capNotYetStarted` excludes
   future hires before their first allocation. `capBuildRoster` carries
