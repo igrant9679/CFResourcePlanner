@@ -5098,13 +5098,21 @@ function _stratCutSimHTML(model){
 // Drills each breached month's tier recommendation down to the individual lines
 // (subscriptions, people, initiatives), marking exactly which ones to cut.
 function _stratBreakdownHTML(model){
+  // Win overlay: if pursuits are ticked in the Win simulator, the entire breakdown
+  // (scan, cut simulator, per-month recommendations) recomputes against the
+  // post-win projection — same overlay that drives the Overview break-even panel.
+  var winSel=Object.keys(_stratWins).filter(function(k){return _stratWins[k];}),hasWins=winSel.length>0;
+  var eff=hasWins?_stratCashWith(null,_stratWins):null;
+  if(eff)model=eff;
   var scan=stratScanNegative(model.rows);
-  var head='<div style="font-size:14px;font-weight:800;margin:8px 0 4px">Cost-to-restore — recommendation breakdown</div>'
-    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">For every negative-profit month, the exact lines to cut to reach $0 operating profit — drilled down to the individual subscription, person, or initiative within each ladder tier. Billable-project labor (W2 <i>and</i> contractor) is never listed: it generates revenue and is protected.</div>';
+  var head='<div style="font-size:14px;font-weight:800;margin:8px 0 4px">Cost-to-restore — recommendation breakdown'+(hasWins?' <span style="font-size:11px;font-weight:700;color:#16A34A">· win overlay active</span>':'')+'</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">For every negative-profit month, the exact lines to cut to reach $0 operating profit — drilled down to the individual subscription, person, or initiative within each ladder tier. Billable-project labor (W2 <i>and</i> contractor) is never listed: it generates revenue and is protected.'+(hasWins?' <b style="color:#16A34A">Every figure below reflects the ticked pursuit(s) as Won.</b>':'')+'</div>';
+  // Win simulator sits above the recommendations so ticking pursuits adjusts the breakdown live.
+  var win=_stratWinPickerHTML();
   var sim=_stratCutSimHTML(model);
-  if(!scan.count)return head+sim+'<div style="margin:10px 0">'+_stratBreakEvenStrip(model.rows)+'</div><div class="empty-msg">No negative-profit months in the projection — nothing to restore. 🎉</div>';
+  if(!scan.count)return head+win+sim+'<div style="margin:10px 0">'+_stratBreakEvenStrip(model.rows)+'</div><div class="empty-msg">No negative-profit months in the projection — nothing to restore. 🎉</div>';
   var roster=capBuildRoster();
-  return head+sim
+  return head+win+sim
     +'<div style="font-size:14px;font-weight:800;margin:6px 0 4px">Per-month breakdown</div>'
     +'<div style="font-size:12px;margin-bottom:10px"><b style="color:#DC2626">'+scan.count+'</b> negative month'+(scan.count===1?'':'s')+' · total shortfall <b style="color:#DC2626">'+fmt(scan.totalShortfall)+'</b> · worst <b>'+_stratMonLbl(scan.worst)+'</b> ('+fmt(scan.worst.shortfall)+')</div>'
     +scan.red.map(function(red){return _stratBreakdownMonthHTML(red,roster);}).join('');
@@ -5184,10 +5192,10 @@ function _stratBreakEvenHTML(model){
     +'<div style="margin-top:10px">'+_stratBreakEvenStrip(effRows)+'</div>';
   var anyContractor=roster.some(function(p){return p.contractor;});
   if(!anyContractor)box+='<div style="font-size:11px;color:#D97706;margin-top:6px">⚠ No resources are flagged as <b>Contractor</b> yet, so the variable-labor tier shows $0. Tag contractors in Edit Resource → Classification to unlock that lever.</div>';
+  box+=_stratWinPickerHTML();
   box+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin:12px 0 2px;gap:10px"><div style="font-size:12px;font-weight:700">Cost-to-restore — least-painful-first ladder per breached month'+(hasWins?' (after the win overlay)':'')+'</div><a href="#" onclick="event.preventDefault();stratSetTab(\'breakeven\')" style="font-size:11px;font-weight:700;white-space:nowrap">See full breakdown →</a></div>';
   box+='<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Billable-project labor (W2 <i>and</i> contractor) is protected and never appears as a cut — it generates revenue. Only non-billable cost is a lever.</div>';
   box+=scan.red.map(function(r){return _stratCostLadderHTML(r,roster);}).join('');
-  box+=_stratWinPickerHTML();
   box+='</div>';
   return head+box;
 }
@@ -5209,8 +5217,9 @@ var _stratWins={};   // oppId → true (treated as Closed/Won; non-destructive o
 function stratToggleWin(id){_stratWins[id]=!_stratWins[id];renderView();}
 function stratClearWins(){_stratWins={};renderView();}
 function _stratWinOpps(){return (D.projects||[]).filter(function(p){return projCat(p)==='opportunity';}).filter(function(o){var st=capOppStage?capOppStage(o):(o.stage||'');return st!=='Lost'&&st!=='Won';});}
-// Win-simulator picker — lives at the bottom of the break-even panel; the impact
-// is reflected directly in the break-even numbers/strip/ladder above it.
+// Win-simulator picker — sits above the cost-to-restore recommendations on both
+// the Overview break-even panel and the Break-even tab; the impact is reflected
+// live in the break-even numbers/strip/ladder/breakdown.
 function _stratWinPickerHTML(){
   var opps=_stratWinOpps();
   if(!opps.length)return '';
@@ -5224,7 +5233,7 @@ function _stratWinPickerHTML(){
       +'<span style="font-weight:700;white-space:nowrap">'+fmt(Number(o.potential)||0)+'/yr</span></label>';
   }).join('');
   return '<div style="margin-top:14px;border-top:1px dashed var(--border);padding-top:10px">'
-    +'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:4px"><div style="font-size:12px;font-weight:700">🏆 Win simulator <span style="font-weight:400;color:var(--text-muted);font-size:11px">— tick pursuits to model winning them at full Potential; the break-even figures above update live</span></div>'+(sel.length?'<button class="btn btn-outline btn-sm" onclick="stratClearWins()">Clear wins</button>':'')+'</div>'
+    +'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:4px"><div style="font-size:12px;font-weight:700">🏆 Win simulator <span style="font-weight:400;color:var(--text-muted);font-size:11px">— tick pursuits to model winning them at full Potential; the break-even figures update live</span></div>'+(sel.length?'<button class="btn btn-outline btn-sm" onclick="stratClearWins()">Clear wins</button>':'')+'</div>'
     +(sel.length?'<div style="font-size:11px;color:#16A34A;font-weight:700;margin-bottom:4px">'+sel.length+' selected · '+fmt(totPot)+'/yr potential applied'+(noDate?' · ⚠ '+noDate+' with no close date (earns from projection start)':'')+'</div>':'')
     +'<div style="max-height:28vh;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:#fff">'+list+'</div></div>';
 }
