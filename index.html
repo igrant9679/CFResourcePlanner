@@ -4605,7 +4605,7 @@ function renderStrategyView(q){
     +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Goals, metrics, and team execution measured live against the cash gate and the debt-free-by-FY29 plan. Numbers come from the same engine as Capacity Planning &amp; Proforma.</div></div></div>';
   var tabs=[['overview','Overview'],['breakeven','Break-even'],['projections','Debt-Free Plan'],['goals','Goals &amp; KPIs'],['revenue','Revenue'],['initiatives','Initiatives'],['team','Team']];
   html+='<div class="pf-subtabs">'+tabs.map(function(t){return '<button class="pf-subtab'+(stratTab===t[0]?' active':'')+'" onclick="stratSetTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
-  if(stratTab==='overview'){html+=_stratNorthStarHTML(model);html+=_stratBreakEvenHTML(model);html+=_stratWinHTML(model);html+=_stratSlipHTML(model);html+=_stratTriggersHTML(model);html+=_stratDefendHTML(model);}
+  if(stratTab==='overview'){html+=_stratNorthStarHTML(model);html+=_stratBreakEvenHTML(model);html+=_stratSlipHTML(model);html+=_stratTriggersHTML(model);html+=_stratDefendHTML(model);}
   else if(stratTab==='breakeven'){html+=_stratBreakdownHTML(model);}
   else if(stratTab==='projections'){html+=_stratProjectionsHTML(model);}
   else if(stratTab==='goals'){html+=_stratGoalsHTML(model);}
@@ -5160,28 +5160,34 @@ function _stratBreakEvenStrip(rows){
     +'<line x1="0" y1="'+mid+'" x2="'+W+'" y2="'+mid+'" stroke="var(--border)" stroke-width="1"></line>'+bars+labels+'</svg>';
 }
 function _stratBreakEvenHTML(model){
-  var scan=stratScanNegative(model.rows);
   var roster=capBuildRoster();
-  var head='<div style="font-size:14px;font-weight:800;margin:18px 0 8px">Break-even guardrail <span style="font-weight:400;font-size:11px;color:var(--text-muted)">— no month may run negative operating profit (revenue − cost). Stricter than, and separate from, the no-negative-cash rule above.</span></div>';
+  var winSel=Object.keys(_stratWins).filter(function(k){return _stratWins[k];}),hasWins=winSel.length>0;
+  var eff=hasWins?_stratCashWith(null,_stratWins):null;     // effective (post-win) projection drives the whole panel
+  var effRows=eff?eff.rows:model.rows;
+  var baseScan=stratScanNegative(model.rows),scan=stratScanNegative(effRows);
+  var head='<div style="font-size:14px;font-weight:800;margin:18px 0 8px">Break-even guardrail <span style="font-weight:400;font-size:11px;color:var(--text-muted)">— no month may run negative operating profit (revenue − cost). Stricter than, and separate from, the no-negative-cash rule above.'+(hasWins?' <b style="color:#16A34A">Win overlay active</b> — every figure below reflects the ticked pursuit(s) as Won.':'')+'</span></div>';
   var border=scan.count?'#DC2626':'var(--gold)';
   var box='<div style="border:1px solid '+border+';border-radius:10px;padding:14px 16px;background:'+(scan.count?'rgba(220,38,38,0.04)':'rgba(22,163,74,0.04)')+'">';
   if(!scan.count){
-    box+='<div style="font-size:12px;color:#16A34A;font-weight:700">✓ Holds — every projected month has non-negative operating profit.</div>'
-      +'<div style="margin-top:10px">'+_stratBreakEvenStrip(model.rows)+'</div></div>';
+    box+='<div style="font-size:12px;color:#16A34A;font-weight:700">✓ Holds — every projected month has non-negative operating profit.'+(hasWins&&baseScan.count?' (Winning '+winSel.length+' pursuit'+(winSel.length===1?'':'s')+' clears all '+baseScan.count+' base negative month'+(baseScan.count===1?'':'s')+'.)':'')+'</div>'
+      +'<div style="margin-top:10px">'+_stratBreakEvenStrip(effRows)+'</div>'+_stratWinPickerHTML()+'</div>';
     return head+box;
   }
   function stat(lbl,val,color){return '<div style="flex:1;min-width:140px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">'+lbl+'</div><div style="font-size:20px;font-weight:800;'+(color?'color:'+color:'')+'">'+val+'</div></div>';}
+  var strike=function(v){return '<span style="text-decoration:line-through;color:var(--text-muted);font-size:13px;font-weight:600">'+v+'</span> ';};
   box+='<div style="display:flex;gap:16px;flex-wrap:wrap">'
-    +stat('Negative-profit months',scan.count,'#DC2626')
+    +stat('Negative-profit months',(hasWins?strike(baseScan.count):'')+scan.count,'#DC2626')
     +stat('Worst month',_stratMonLbl(scan.worst)+' · '+fmt(scan.worst.shortfall),'#DC2626')
-    +stat('Total shortfall',fmt(scan.totalShortfall),'#DC2626')
+    +stat('Total shortfall',(hasWins?strike(fmt(baseScan.totalShortfall)):'')+fmt(scan.totalShortfall),'#DC2626')
+    +(hasWins?stat('$1.5M gate ETA',(model.gateMet?_stratMonLbl(model.gateMet):'—')+' → '+(eff.gateMet?_stratMonLbl(eff.gateMet):'—'),(eff.gateMet&&(!model.gateMet||(eff.gateMet.y*12+eff.gateMet.m)<(model.gateMet.y*12+model.gateMet.m)))?'#16A34A':''):'')
     +'</div>'
-    +'<div style="margin-top:10px">'+_stratBreakEvenStrip(model.rows)+'</div>';
+    +'<div style="margin-top:10px">'+_stratBreakEvenStrip(effRows)+'</div>';
   var anyContractor=roster.some(function(p){return p.contractor;});
   if(!anyContractor)box+='<div style="font-size:11px;color:#D97706;margin-top:6px">⚠ No resources are flagged as <b>Contractor</b> yet, so the variable-labor tier shows $0. Tag contractors in Edit Resource → Classification to unlock that lever.</div>';
-  box+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin:12px 0 2px;gap:10px"><div style="font-size:12px;font-weight:700">Cost-to-restore — least-painful-first ladder per breached month</div><a href="#" onclick="event.preventDefault();stratSetTab(\'breakeven\')" style="font-size:11px;font-weight:700;white-space:nowrap">See full breakdown →</a></div>';
+  box+='<div style="display:flex;justify-content:space-between;align-items:baseline;margin:12px 0 2px;gap:10px"><div style="font-size:12px;font-weight:700">Cost-to-restore — least-painful-first ladder per breached month'+(hasWins?' (after the win overlay)':'')+'</div><a href="#" onclick="event.preventDefault();stratSetTab(\'breakeven\')" style="font-size:11px;font-weight:700;white-space:nowrap">See full breakdown →</a></div>';
   box+='<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Billable-project labor (W2 <i>and</i> contractor) is protected and never appears as a cut — it generates revenue. Only non-billable cost is a lever.</div>';
   box+=scan.red.map(function(r){return _stratCostLadderHTML(r,roster);}).join('');
+  box+=_stratWinPickerHTML();
   box+='</div>';
   return head+box;
 }
@@ -5203,39 +5209,24 @@ var _stratWins={};   // oppId → true (treated as Closed/Won; non-destructive o
 function stratToggleWin(id){_stratWins[id]=!_stratWins[id];renderView();}
 function stratClearWins(){_stratWins={};renderView();}
 function _stratWinOpps(){return (D.projects||[]).filter(function(p){return projCat(p)==='opportunity';}).filter(function(o){var st=capOppStage?capOppStage(o):(o.stage||'');return st!=='Lost'&&st!=='Won';});}
-function _stratWinHTML(model){
-  var head='<div style="font-size:14px;font-weight:800;margin:18px 0 8px">Win simulator <span style="font-weight:400;font-size:11px;color:var(--text-muted)">— mark one or more pursuits as Won (full Potential value, from their close date) and see the revenue, profit, and cash-gate impact. Overlay only; opportunities are never changed.</span></div>';
+// Win-simulator picker — lives at the bottom of the break-even panel; the impact
+// is reflected directly in the break-even numbers/strip/ladder above it.
+function _stratWinPickerHTML(){
   var opps=_stratWinOpps();
-  if(!opps.length)return head+'<div class="empty-msg">No open pursuits to win.</div>';
+  if(!opps.length)return '';
+  var sel=Object.keys(_stratWins).filter(function(k){return _stratWins[k];});
+  var totPot=sel.reduce(function(a,id){var o=(D.projects||[]).find(function(p){return p.id===id;});return a+(o?(Number(o.potential)||0):0);},0);
+  var noDate=sel.filter(function(id){var o=(D.projects||[]).find(function(p){return p.id===id;});return o&&!o.closeDate;}).length;
   var list=opps.slice().sort(function(a,b){return (Number(b.potential)||0)-(Number(a.potential)||0);}).map(function(o){
     var on=!!_stratWins[o.id],st=capOppStage?capOppStage(o):(o.stage||'');
     return '<label style="display:flex;align-items:center;gap:8px;font-size:12px;padding:2px 0;cursor:pointer"><input type="checkbox" '+(on?'checked':'')+' onchange="stratToggleWin(\''+o.id+'\')" style="margin:0">'
-      +'<span style="flex:1">'+esc(o.name||'(opp)')+(o.customer?' <span style="color:var(--text-muted);font-size:10px">· '+esc(o.customer)+'</span>':'')+' <span class="plan-chip">'+esc(st)+'</span>'+(o.closeDate?' <span style="color:var(--text-muted);font-size:10px">close '+esc(o.closeDate)+'</span>':' <span style="color:#D97706;font-size:10px">no close date</span>')+'</span>'
+      +'<span style="flex:1">'+esc(o.name||'(opp)')+(o.customer?' <span style="color:var(--text-muted);font-size:10px">· '+esc(o.customer)+'</span>':'')+' <span class="plan-chip">'+esc(st)+'</span>'+(o.closeDate?'':' <span style="color:#D97706;font-size:10px">no close date</span>')+'</span>'
       +'<span style="font-weight:700;white-space:nowrap">'+fmt(Number(o.potential)||0)+'/yr</span></label>';
   }).join('');
-  var ctl='<div style="max-height:32vh;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px">'+list+'</div>';
-  var sel=Object.keys(_stratWins).filter(function(k){return _stratWins[k];});
-  if(!sel.length)return head+ctl+'<div style="font-size:11px;color:var(--text-muted)">Tick one or more pursuits to model winning them.</div>';
-  var winMap={};sel.forEach(function(id){winMap[id]=true;});
-  var won=_stratCashWith(null,winMap);
-  var baseScan=stratScanNegative(model.rows),wonScan=stratScanNegative(won.rows);
-  var totPot=sel.reduce(function(a,id){var o=(D.projects||[]).find(function(p){return p.id===id;});return a+(o?(Number(o.potential)||0):0);},0);
-  var baseProfit=model.rows.reduce(function(a,r){return a+r.profit;},0),wonProfit=won.rows.reduce(function(a,r){return a+r.profit;},0);
-  var noDate=sel.filter(function(id){var o=(D.projects||[]).find(function(p){return p.id===id;});return o&&!o.closeDate;}).length;
-  function stat(lbl,val,color){return '<div style="flex:1;min-width:150px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">'+lbl+'</div><div style="font-size:18px;font-weight:800;'+(color?'color:'+color:'')+'">'+val+'</div></div>';}
-  var gateBase=model.gateMet?_stratMonLbl(model.gateMet):'beyond window',gateWon=won.gateMet?_stratMonLbl(won.gateMet):'beyond window';
-  var chips=sel.map(function(id){var o=(D.projects||[]).find(function(p){return p.id===id;});return '<span class="plan-chip" style="border-color:#16A34A;color:#16A34A">'+esc((o&&o.name)||'opp')+' <a href="#" onclick="event.preventDefault();stratToggleWin(\''+id+'\')" style="color:#DC2626;text-decoration:none;font-weight:700">×</a></span>';}).join(' ');
-  var impact='<div style="margin-bottom:8px">'+chips+'</div>'
-    +'<div style="display:flex;gap:16px;flex-wrap:wrap;border:1px solid #16A34A;border-radius:8px;padding:10px 12px;margin-bottom:8px;background:rgba(22,163,74,0.04)">'
-    +stat('Pursuits won',sel.length+' · '+fmt(totPot)+'/yr','')
-    +stat('Negative-profit months','<span style="color:#DC2626">'+baseScan.count+'</span> → <span style="color:'+(wonScan.count<baseScan.count?'#16A34A':'inherit')+'">'+wonScan.count+'</span>','')
-    +stat('Horizon op. profit',fmt(Math.round(baseProfit))+' → '+fmt(Math.round(wonProfit)),wonProfit>baseProfit?'#16A34A':'')
-    +stat('$1.5M gate ETA',gateBase+' → '+gateWon,(won.gateMet&&(!model.gateMet||(won.gateMet.y*12+won.gateMet.m)<(model.gateMet.y*12+model.gateMet.m)))?'#16A34A':'')
-    +'</div>'
-    +'<div style="margin:6px 0">'+_stratBreakEvenStrip(won.rows)+'</div>'
-    +(noDate?'<div style="font-size:11px;color:#D97706">⚠ '+noDate+' selected pursuit'+(noDate===1?'':'s')+' ha'+(noDate===1?'s':'ve')+' no close date — modeled as earning from the projection start. Set a close date on the opportunity for accurate timing.</div>':'')
-    +'<div style="text-align:right;margin-top:4px"><button class="btn btn-outline btn-sm" onclick="stratClearWins()">Clear</button></div>';
-  return head+ctl+impact;
+  return '<div style="margin-top:14px;border-top:1px dashed var(--border);padding-top:10px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:4px"><div style="font-size:12px;font-weight:700">🏆 Win simulator <span style="font-weight:400;color:var(--text-muted);font-size:11px">— tick pursuits to model winning them at full Potential; the break-even figures above update live</span></div>'+(sel.length?'<button class="btn btn-outline btn-sm" onclick="stratClearWins()">Clear wins</button>':'')+'</div>'
+    +(sel.length?'<div style="font-size:11px;color:#16A34A;font-weight:700;margin-bottom:4px">'+sel.length+' selected · '+fmt(totPot)+'/yr potential applied'+(noDate?' · ⚠ '+noDate+' with no close date (earns from projection start)':'')+'</div>':'')
+    +'<div style="max-height:28vh;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:#fff">'+list+'</div></div>';
 }
 var _stratSlips={};   // oppId → slip months (non-destructive; never written to D.projects)
 function _stratSlipOpps(){return (D.projects||[]).filter(function(p){return projCat(p)==='opportunity'&&p.closeDate;}).filter(function(o){var st=capOppStage?capOppStage(o):(o.stage||'');return st!=='Lost';});}
