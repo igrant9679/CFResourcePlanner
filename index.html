@@ -1046,6 +1046,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 <div class="ov" id="ovDoss" onclick="closeModal('ovDoss')"><div class="mdl" id="mdlDoss" onclick="event.stopPropagation()" style="width:90vw;max-width:760px"></div></div>
 <div class="ov" id="ovSvc" onclick="closeModal('ovSvc')"><div class="mdl" id="mdlSvc" onclick="event.stopPropagation()" style="max-width:640px"></div></div>
 <div class="ov" id="ovForm" onclick="closeModal('ovForm')"><div class="mdl" id="mdlForm" onclick="event.stopPropagation()" style="max-width:560px"></div></div>
+<div class="ov" id="ovProspect" onclick="closeModal('ovProspect')"><div class="mdl" id="mdlProspect" onclick="event.stopPropagation()" style="width:90vw;max-width:720px"></div></div>
 <div class="ov" id="ovCapCmp" onclick="closeModal('ovCapCmp')"><div class="mdl" id="mdlCapCmp" onclick="event.stopPropagation()" style="width:90vw;max-width:900px"></div></div>
 <div class="ov" id="ovNewProp" onclick="closeModal('ovNewProp')"><div class="mdl" id="mdlNewProp" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
 <div class="ov" id="ovProp" onclick="closeModal('ovProp')"><div class="mdl" id="mdlProp" onclick="event.stopPropagation()" style="width:90vw;max-width:90vw"></div></div>
@@ -1423,7 +1424,20 @@ function migrate(){
   });});
   var REV={'p_bclm':{revenue:212756,revenueNote:'→ $265,945/mo Aug 15 · BCLM +25% extension'},'p_fams':{revenue:76944,revenueNote:'Ends Sep 24, 2026 · 85.2% margin'},'p_c1fams':{revenue:25984,revenueNote:'Ends Sep 24, 2026 · was ramping to $100K (re-add as a new project if extended)'},'p_software':{revenue:50000,revenueNote:'$550K ARR floor · 7.65% margin — needs intervention'},'p_marines':{revenue:0,revenueNote:'Active pursuit · SBIR Phase III via ForwardEdge-AI · $1.2M'},'p_salesforce':{revenue:0,revenueNote:'Build phase · 3 engagements seeding'},'p_afosi':{revenue:0,revenueNote:'Proposal due Jun 8 · $1.0M opportunity'},'p_phoenix':{revenue:0,revenueNote:'Software play · repricing initiative'},'p_tableau':{revenue:0,revenueNote:'Internal capability build'}};
   D.projects.forEach(function(p){if(!('revenue' in p)){var d=REV[p.id];p.revenue=d?d.revenue:0;p.revenueNote=d?d.revenueNote:'';}if(!('revenueNote' in p))p.revenueNote='';if(!p.clins)p.clins=[];});
-  planMigrate();authMigrate();oppMigrate();tplMigrate();recruitMigrate();proposalsMigrate();proformaMigrate();}
+  planMigrate();authMigrate();oppMigrate();tplMigrate();recruitMigrate();proposalsMigrate();proformaMigrate();prospectMigrate();}
+function prospectMigrate(){
+  if(!Array.isArray(D.prospects))D.prospects=[];
+  D.prospects.forEach(function(p,i){
+    if(!('kind' in p))p.kind='account';   // 'account' (org) | 'poc' (person)
+    ['name','accountName','contactName','title','email','phone','linkedin','website','industry','location','ownerId','source','notes','nextAction','nextActionDate','convertedOppId'].forEach(function(k){if(!(k in p))p[k]='';});
+    if(!Array.isArray(p.tags))p.tags=[];
+    if(!Array.isArray(p.linkedOppIds))p.linkedOppIds=[];
+    if(!p.status)p.status='To Contact';
+    if(!p.priority)p.priority='Medium';
+    if(!('createdAt' in p))p.createdAt=Date.now();
+    if(!('order' in p))p.order=i;
+  });
+}
 /* ── PROFORMA (CEO second brain) — confidential, Admin-only ──
    Tier B financial/strategic data seeded from the CommunityForce Knowledge Base
    V4 workbook (May 31, 2026). Lives in D.proforma. Defensive: seeds only when
@@ -2043,6 +2057,7 @@ function planRowHTML(a,depth){
       +dateChip
       +planOwnerHTML(a)
       +(proj?'<span class="plan-chip" style="border-color:var(--gold);color:var(--gold)">'+esc(proj.name)+'</span>':'')
+      +(a.prospectId?(function(){var pr=(D.prospects||[]).find(function(x){return x.id===a.prospectId;});return pr?'<span class="plan-chip" style="border-color:#7C3AED;color:#7C3AED" title="BizDev prospect">🎯 '+esc(prospectTitle(pr))+(a.actType?' · '+esc(a.actType):'')+'</span>':'';})():'')
       +((a.updates&&a.updates.length)?'<span class="plan-chip" title="Updates">💬 '+a.updates.length+'</span>':'')
       +((a.attachments&&a.attachments.length)?'<span class="plan-chip" title="Files">📎 '+a.attachments.length+'</span>':'')
     +'</div></div>'
@@ -2097,7 +2112,8 @@ function planCardHTML(a){
   var editable=can('task',a.programId);
   var isProj=(a.kind||'coe')==='project';
   var proj=a.projectId?D.projects.find(function(p){return p.id===a.projectId;}):null;
-  var topLbl=isProj?(proj?esc(proj.name):(a.projectId?'(deleted: '+esc(a.projectDeletedName||'item')+')':'Unassigned'))+(a.parentId?' · subtask':''):esc(progNameOf(a))+(a.parentId?' · subtask':'');
+  var bdProsp=(!proj&&a.prospectId)?(D.prospects||[]).find(function(x){return x.id===a.prospectId;}):null;
+  var topLbl=isProj?(proj?esc(proj.name):(bdProsp?'🎯 '+esc(prospectTitle(bdProsp))+(a.actType?' · '+esc(a.actType):''):(a.projectId?'(deleted: '+esc(a.projectDeletedName||'item')+')':'Unassigned')))+(a.parentId?' · subtask':''):esc(progNameOf(a))+(a.parentId?' · subtask':'');
   return '<div class="plan-card" style="border-left-color:'+(isProj?'#C5A55A':progColorOf(a))+'"'+(editable?' draggable="true" ondragstart="planDragStart(event,\''+a.id+'\')" ondragend="planDragEnd()"':'')+' onclick="openPlanModal(\''+a.id+'\')">'
     +'<div class="plan-card-prog">'+topLbl+'</div>'
     +'<div class="plan-card-sub">'+(a.isMilestone?'◆ ':'')+esc(a.subtask)+'</div>'
@@ -2330,7 +2346,8 @@ function savePlan(){
   var existing=planEditId?D.activities.find(function(x){return x.id===planEditId;}):null;
   var kindForSave=existing?(existing.kind||'coe'):planKind();
   var projId=gv('pl_project')||null;
-  if(kindForSave==='project'&&!projId){alert('Please choose a Related Item (Project, Initiative, or Opportunity) for this task.');return;}
+  var _isBizdev=existing&&existing.prospectId;   // BD tasks are linked to a prospect, not a project
+  if(kindForSave==='project'&&!projId&&!_isBizdev){alert('Please choose a Related Item (Project, Initiative, or Opportunity) for this task.');return;}
   if(kindForSave!=='project'&&!can(planEditId?'task':'addtask',pid)){alert('You do not have permission to save to this program.');return;}
   var ownSel=document.getElementById('pl_owners'),owners=[];
   if(ownSel)Array.prototype.forEach.call(ownSel.options,function(o){if(o.selected)owners.push(o.value);});
@@ -3083,6 +3100,16 @@ var OPP_STATUSES=['New','Qualified','Proposal','Negotiation','Closed Won','Close
 var OPP_STATUS_C={'New':'#546478','Qualified':'#2563EB','Proposal':'#D97706','Negotiation':'#7C3AED','Closed Won':'#2D6A4F','Closed Lost':'#DC2626','On-Hold':'#94A3B8'};
 function oppStatusChip(st){if(!st)return '';var c=OPP_STATUS_C[st]||'#546478';return '<span class="plan-chip" style="border-color:'+c+';color:'+c+'">'+esc(st)+'</span>';}
 var oppMode='board',oppCalRef=null,oppDrag=null;
+/* ── PROSPECTS (BizDev pipeline) — accounts + POCs that BusDev resources intend
+   to contact to source Leads/Opportunities. Stored in D.prospects. BD activities
+   are tracked as kind:'project' activities tagged with a prospectId (bizdev:true),
+   so they ALSO surface in the Project Tasks tracker. ── */
+var PROSPECT_STAGES=[{k:'To Contact',c:'#546478'},{k:'Attempted',c:'#D97706'},{k:'Contacted',c:'#2563EB'},{k:'Engaged',c:'#7C3AED'},{k:'Qualified',c:'#0EA5E9'},{k:'Converted',c:'#059669'},{k:'Dead',c:'#94A3B8'}];
+var PROSPECT_PRIORITIES=['High','Medium','Low'];
+var PROSPECT_PRI_C={High:'#DC2626',Medium:'#D97706',Low:'#546478'};
+var BD_ACT_TYPES=['Call','Email','Meeting','LinkedIn','Research','Follow-up','Event','Other'];
+var prospectMode='board',prospectFilter={owner:''};
+function prospectStageCfg(k){return PROSPECT_STAGES.find(function(s){return s.k===k;})||PROSPECT_STAGES[0];}
 function oppStageCfg(k){return OPP_STAGES.find(function(s){return s.k===k;})||OPP_STAGES[0];}
 function oppDeriveStage(p){var gates=[['delivery','Delivery'],['sales','Sales'],['presales','Presales'],['leadGen','Lead Gen']];for(var i=0;i<gates.length;i++){var v=p[gates[i][0]];if(v&&String(v).trim()&&!/^n\/?a$/i.test(String(v).trim()))return gates[i][1];}return 'Lead Gen';}
 function oppMigrate(){
@@ -3105,11 +3132,18 @@ function oppOwnerHTML(p){if(!p.opr)return '';var ids=planResolveOwners(p.opr);if
 function setOppMode(m){oppMode=m;renderView();}
 var oppView='crm';   /* 'crm' = existing pipeline · 'gov' = Gov Discovery (Module 1) */
 function setOppView(v){oppView=v;renderView();if(v==='gov'&&!_govState.loaded)_govLoad();}
+function _oppSegHTML(active){
+  return '<div class="plan-seg" style="margin-bottom:10px;display:inline-flex">'
+    +'<button class="'+(active==='crm'?'active':'')+'" onclick="setOppView(\'crm\')">CRM Pipeline</button>'
+    +'<button class="'+(active==='prospect'?'active':'')+'" onclick="setOppView(\'prospect\')">🎯 Prospects</button>'
+    +'<button class="'+(active==='gov'?'active':'')+'" onclick="setOppView(\'gov\')">🛰 Gov Discovery</button></div>';
+}
 function renderOppView(q){
   if(oppView==='gov')return _govDiscoveryHTML();
+  if(oppView==='prospect')return _prospectsHTML(q);
   var opps=oppFiltered(q),canEdit=can('globals');
   var html='<div class="plan-wrap">';
-  html+='<div class="plan-seg" style="margin-bottom:10px;display:inline-flex"><button class="active" onclick="setOppView(\'crm\')">CRM Pipeline</button><button onclick="setOppView(\'gov\')">🛰 Gov Discovery</button></div>';
+  html+=_oppSegHTML('crm');
   var byStage={};OPP_STAGES.forEach(function(s){byStage[s.k]=opps.filter(function(p){return (p.stage||'Lead Gen')===s.k;}).length;});
   var totPot=opps.reduce(function(a,p){return a+(Number(p.potential)||0);},0);
   var statusGroups={};opps.forEach(function(p){var st=p.status||'—';if(!statusGroups[st])statusGroups[st]={n:0,v:0};statusGroups[st].n++;statusGroups[st].v+=Number(p.potential)||0;});
@@ -3126,6 +3160,201 @@ function renderOppView(q){
   else if(oppMode==='calendar')html+=oppCalendarHTML(opps);
   else html+=oppBoardHTML(opps);
   return html+'</div>';
+}
+/* ── PROSPECTS view + helpers ── */
+function prospectList(){return D.prospects||[];}
+function prospectMember(id){return id?planMembers().find(function(m){return m.id===id;}):null;}
+function prospectOwnerName(id){var m=prospectMember(id);return m?m.name:'';}
+function prospectTitle(p){return p.name||p.accountName||'(prospect)';}
+function prospectTasks(id){return (D.activities||[]).filter(function(a){return a.prospectId===id;});}
+function prospectOpenTasks(id){return prospectTasks(id).filter(function(a){return a.status!=='done';});}
+function setProspectMode(m){prospectMode=m;renderView();}
+function prospectFiltered(q){
+  return prospectList().filter(function(p){
+    if(prospectFilter.owner&&p.ownerId!==prospectFilter.owner)return false;
+    if(!q)return true;
+    var hay=((p.name||'')+' '+(p.accountName||'')+' '+(p.contactName||'')+' '+(p.title||'')+' '+(p.email||'')+' '+(p.industry||'')+' '+(p.location||'')+' '+(p.notes||'')+' '+(p.source||'')+' '+(p.tags||[]).join(' ')+' '+(p.status||'')).toLowerCase();
+    return hay.indexOf(q)>-1;
+  });
+}
+function _prospectsHTML(q){
+  var canEdit=can('globals');
+  var all=prospectList(),list=prospectFiltered(q);
+  var html='<div class="plan-wrap">'+_oppSegHTML('prospect');
+  var byStage={};PROSPECT_STAGES.forEach(function(s){byStage[s.k]=all.filter(function(p){return (p.status||'To Contact')===s.k;}).length;});
+  var activeCount=all.filter(function(p){return p.status!=='Converted'&&p.status!=='Dead';}).length;
+  html+='<div class="plan-summary"><div class="plan-summary-top"><div><strong style="font-size:14px;color:var(--text-primary)">Prospects</strong>'
+    +'<span style="font-size:12px;color:var(--text-secondary);margin-left:8px">'+all.length+' total &middot; '+activeCount+' active &middot; accounts &amp; POCs BusDev intends to contact for new leads</span></div>'
+    +'<div class="plan-counts">'+PROSPECT_STAGES.map(function(s){return '<span class="plan-chip" style="border-color:'+s.c+';color:'+s.c+'">'+s.k+': '+byStage[s.k]+'</span>';}).join('')+'</div></div></div>';
+  var ownerIds=[];all.forEach(function(p){if(p.ownerId&&ownerIds.indexOf(p.ownerId)===-1)ownerIds.push(p.ownerId);});
+  var ownerOpts='<option value="">All owners</option>'+ownerIds.map(function(id){return '<option value="'+id+'"'+(prospectFilter.owner===id?' selected':'')+'>'+esc(prospectOwnerName(id)||'(owner)')+'</option>';}).join('');
+  html+='<div class="plan-toolbar"><div class="plan-seg">'+[{k:'board',l:'Board'},{k:'list',l:'List'}].map(function(v){return '<button class="'+(prospectMode===v.k?'active':'')+'" onclick="setProspectMode(\''+v.k+'\')">'+v.l+'</button>';}).join('')+'</div>'
+    +'<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
+    +'<select class="fld-sel" style="width:auto" onchange="prospectFilter.owner=this.value;renderView()">'+ownerOpts+'</select>'
+    +(canEdit?'<button class="btn btn-gold btn-sm" onclick="openProspectModal()">+ Prospect</button>':'')+'</div></div>';
+  if(!all.length)return html+'<div class="empty-msg">No prospects yet. Click <strong>+ Prospect</strong> to add an account or point of contact your BusDev team intends to pursue for new leads.</div></div>';
+  if(!list.length)return html+'<div class="empty-msg">No prospects match the current filters.</div></div>';
+  html+=(prospectMode==='list'?_prospectListHTML(list):_prospectBoardHTML(list));
+  return html+'</div>';
+}
+function _prospectKindBadge(p){return '<span class="plan-chip">'+(p.kind==='poc'?'👤 POC':'🏢 Account')+'</span>';}
+function _prospectCardHTML(p){
+  var open=prospectOpenTasks(p.id).length,tasks=prospectTasks(p.id).length;
+  var pri=PROSPECT_PRI_C[p.priority]||'#546478';
+  var ownerNm=prospectOwnerName(p.ownerId);
+  var sub=p.kind==='poc'?[p.title,p.accountName].filter(Boolean).join(' · '):(p.industry||'');
+  return '<div class="plan-card" onclick="openProspectModal(\''+p.id+'\')">'
+    +'<div class="plan-card-sub">'+esc(prospectTitle(p))+'</div>'
+    +(sub?'<div style="font-size:11px;color:var(--text-muted);margin-top:1px">'+esc(sub)+'</div>':'')
+    +(p.nextAction?'<div class="plan-next"><b>Next:</b> '+esc(p.nextAction)+(p.nextActionDate?' <span style="color:var(--text-muted)">('+esc(p.nextActionDate)+')</span>':'')+'</div>':'')
+    +'<div class="plan-meta" style="margin-top:6px">'+_prospectKindBadge(p)
+    +'<span class="plan-chip" style="border-color:'+pri+';color:'+pri+'">'+esc(p.priority||'Medium')+'</span>'
+    +(ownerNm?'<span class="plan-own">'+esc(ownerNm)+'</span>':'<span class="plan-own txt">Unassigned</span>')
+    +(tasks?'<span class="plan-chip" title="BD tasks (open/total)">✓ '+open+'/'+tasks+'</span>':'')
+    +(p.convertedOppId?'<span class="plan-chip" style="border-color:#059669;color:#059669">→ Opp</span>':'')
+    +'</div></div>';
+}
+function _prospectBoardHTML(list){
+  return '<div class="plan-board">'+PROSPECT_STAGES.map(function(s){
+    var col=list.filter(function(p){return (p.status||'To Contact')===s.k;});
+    return '<div class="plan-col"><div class="plan-col-hdr"><span><span class="plan-col-dot" style="background:'+s.c+'"></span>'+s.k+'</span><span style="color:var(--text-muted)">'+col.length+'</span></div>'
+      +(col.map(_prospectCardHTML).join('')||'<div style="font-size:11px;color:var(--text-muted);padding:6px 2px">—</div>')+'</div>';
+  }).join('')+'</div>';
+}
+function _prospectListHTML(list){
+  var sorted=list.slice().sort(function(a,b){return PROSPECT_STAGES.findIndex(function(s){return s.k===a.status;})-PROSPECT_STAGES.findIndex(function(s){return s.k===b.status;});});
+  var html='<div style="display:flex;flex-direction:column;gap:7px">';
+  sorted.forEach(function(p){
+    var sc=prospectStageCfg(p.status),open=prospectOpenTasks(p.id).length,tasks=prospectTasks(p.id).length,ownerNm=prospectOwnerName(p.ownerId);
+    html+='<div class="plan-row" style="cursor:pointer" onclick="openProspectModal(\''+p.id+'\')">'
+      +'<span class="plan-pill" style="background:'+sc.c+';cursor:pointer">'+esc(p.status||'To Contact')+'</span>'
+      +'<div class="plan-row-main"><div class="plan-sub">'+esc(prospectTitle(p))+' '+_prospectKindBadge(p)+'</div>'
+      +(p.nextAction?'<div class="plan-next"><b>Next:</b> '+esc(p.nextAction)+(p.nextActionDate?' ('+esc(p.nextActionDate)+')':'')+'</div>':'')
+      +'<div class="plan-meta">'+(p.kind==='poc'&&p.accountName?'<span class="plan-chip">'+esc(p.accountName)+'</span>':'')+(p.email?'<span class="plan-chip">'+esc(p.email)+'</span>':'')
+      +(ownerNm?'<span class="plan-own">'+esc(ownerNm)+'</span>':'')+(tasks?'<span class="plan-chip" title="BD tasks">✓ '+open+'/'+tasks+' tasks</span>':'')
+      +(p.convertedOppId?'<span class="plan-chip" style="border-color:#059669;color:#059669">→ Opp</span>':'')+'</div></div></div>';
+  });
+  return html+'</div>';
+}
+/* ── Prospect detail / edit modal ── */
+var prospectEditId=null;
+function _prospectKindToggle(){
+  var kind=gv('pr_kind');
+  var lbl=document.getElementById('pr_name_lbl');if(lbl)lbl.textContent=kind==='poc'?'Contact name':'Account / organization name';
+  var aw=document.getElementById('pr_acct_wrap');if(aw)aw.style.display=kind==='poc'?'':'none';
+  var cw=document.getElementById('pr_contact_wrap');if(cw)cw.style.display=kind==='poc'?'none':'';
+}
+function openProspectModal(id){
+  prospectEditId=id||null;
+  var p=id?prospectList().find(function(x){return x.id===id;}):null;
+  var v=p||{kind:'account',name:'',accountName:'',contactName:'',title:'',email:'',phone:'',linkedin:'',website:'',industry:'',location:'',ownerId:'',status:'To Contact',priority:'Medium',source:'',notes:'',nextAction:'',nextActionDate:'',tags:[],linkedOppIds:[],convertedOppId:''};
+  var canEdit=can('globals'),dis=canEdit?'':' disabled',isPoc=v.kind==='poc';
+  function row(a,b){return '<div style="display:flex;gap:10px">'+a+b+'</div>';}
+  function fld(id2,label,val,ph){return '<div class="fld" style="flex:1"><label class="fld-l">'+label+'</label><input class="fld-i" id="'+id2+'" value="'+esc(val||'')+'" placeholder="'+esc(ph||'')+'"'+dis+'></div>';}
+  var h='<div class="mdl-over">Prospect'+(canEdit?'':' · read-only')+'</div><div class="mdl-title">'+(p?esc(prospectTitle(p)):'New Prospect')+'</div>';
+  h+='<div class="fld"><label class="fld-l">Type</label><select class="fld-sel" id="pr_kind" onchange="_prospectKindToggle()"'+dis+'><option value="account"'+(!isPoc?' selected':'')+'>🏢 Account / Organization</option><option value="poc"'+(isPoc?' selected':'')+'>👤 Point of Contact (person)</option></select></div>';
+  h+='<div class="fld"><label class="fld-l"><span id="pr_name_lbl">'+(isPoc?'Contact name':'Account / organization name')+'</span> <span style="color:var(--red)">*</span></label><input class="fld-i" id="pr_name" value="'+esc(v.name)+'"'+dis+'></div>';
+  h+='<div class="fld" id="pr_acct_wrap" style="'+(isPoc?'':'display:none')+'"><label class="fld-l">Organization / account</label><input class="fld-i" id="pr_accountName" value="'+esc(v.accountName)+'"'+dis+'></div>';
+  h+='<div class="fld" id="pr_contact_wrap" style="'+(isPoc?'display:none':'')+'"><label class="fld-l">Primary contact name</label><input class="fld-i" id="pr_contactName" value="'+esc(v.contactName)+'" placeholder="Key POC at this account"'+dis+'></div>';
+  h+=row(fld('pr_title','Title / role',v.title,'e.g. Director of IT'),fld('pr_email','Email',v.email,''));
+  h+=row(fld('pr_phone','Phone',v.phone,''),fld('pr_linkedin','LinkedIn',v.linkedin,''));
+  h+=row(fld('pr_industry','Industry',v.industry,''),fld('pr_location','Location',v.location,''));
+  h+='<div class="fld"><label class="fld-l">Website</label><input class="fld-i" id="pr_website" value="'+esc(v.website)+'"'+dis+'></div>';
+  h+=row('<div class="fld" style="flex:1"><label class="fld-l">Owner (BusDev)</label><select class="fld-sel" id="pr_owner"'+dis+'>'+bdMemberOpts(v.ownerId)+'</select></div>',
+    '<div class="fld" style="flex:1"><label class="fld-l">Status</label><select class="fld-sel" id="pr_status"'+dis+'>'+PROSPECT_STAGES.map(function(s){return '<option value="'+s.k+'"'+(v.status===s.k?' selected':'')+'>'+s.k+'</option>';}).join('')+'</select></div>');
+  h+=row('<div class="fld" style="flex:1"><label class="fld-l">Priority</label><select class="fld-sel" id="pr_priority"'+dis+'>'+PROSPECT_PRIORITIES.map(function(s){return '<option'+(v.priority===s?' selected':'')+'>'+s+'</option>';}).join('')+'</select></div>',
+    fld('pr_source','Source',v.source,'e.g. Conference, referral, inbound'));
+  h+=row(fld('pr_nextAction','Next action',v.nextAction,'e.g. Send intro email'),'<div class="fld" style="flex:1"><label class="fld-l">Next action date</label><input class="fld-i" type="date" id="pr_nextActionDate" value="'+esc(v.nextActionDate||'')+'"'+dis+'></div>');
+  h+='<div class="fld"><label class="fld-l">Tags <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted)">— comma-separated</span></label><input class="fld-i" id="pr_tags" value="'+esc((v.tags||[]).join(', '))+'"'+dis+'></div>';
+  h+='<div class="fld"><label class="fld-l">Notes</label><textarea class="fld-i" id="pr_notes" rows="3"'+dis+'>'+esc(v.notes||'')+'</textarea></div>';
+  if(p){
+    h+='<div class="pl-sec"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><div class="fld-l" style="margin:0">Business-development tasks</div>'+(canEdit?'<button class="btn btn-sec btn-sm" onclick="prospectAddTask(\''+p.id+'\')">+ BD task</button>':'')+'</div>'
+      +'<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">Calls, emails, meetings &amp; research to advance this prospect. These also appear in the <b>Project Tasks</b> tracker.</div>'
+      +'<div style="display:flex;flex-direction:column;gap:6px">'+_prospectTasksHTML(p.id)+'</div></div>';
+    var linkedOpps=(p.linkedOppIds||[]).map(function(oid){return (D.projects||[]).find(function(x){return x.id===oid;});}).filter(Boolean);
+    h+='<div class="pl-sec"><div class="fld-l">Pipeline conversion</div>';
+    if(p.convertedOppId&&(D.projects||[]).some(function(x){return x.id===p.convertedOppId;})){
+      var co=(D.projects||[]).find(function(x){return x.id===p.convertedOppId;});
+      h+='<div style="font-size:12px;color:#059669;font-weight:700;margin:2px 0 6px">✓ Converted to opportunity: '+esc(co.name)+'</div>';
+    } else {
+      h+='<div style="font-size:11px;color:var(--text-muted);margin:2px 0 6px">When this prospect produces a lead, convert it into a CRM opportunity (pre-filled from these details; the prospect\'s BD tasks re-link to the new opportunity).</div>'
+        +(canEdit?'<button class="btn btn-gold btn-sm" onclick="prospectConvert(\''+p.id+'\')">→ Convert to Opportunity</button>':'');
+    }
+    if(linkedOpps.length)h+='<div style="margin-top:6px">'+linkedOpps.map(function(o){return '<span class="plan-chip" style="border-color:var(--gold);color:var(--gold)">'+esc(o.name)+'</span>';}).join(' ')+'</div>';
+    h+='</div>';
+  }
+  h+='<div class="btn-row">'+(canEdit?'<button class="btn btn-navy" style="flex:1" onclick="saveProspect()">Save</button>':'')
+    +(p&&canEdit?'<button class="btn btn-danger-sm" onclick="delProspect(\''+p.id+'\')">Delete</button>':'')
+    +'<button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovProspect\')">'+(canEdit?'Cancel':'Close')+'</button></div>';
+  document.getElementById('mdlProspect').innerHTML=h;
+  openModal('ovProspect');
+}
+function bdMemberOpts(sel){
+  var seen={},out='<option value="">— unassigned —</option>';
+  planMembers().forEach(function(m){if(seen[m.id])return;seen[m.id]=1;out+='<option value="'+m.id+'"'+(sel===m.id?' selected':'')+'>'+esc(m.name)+(m.role?' · '+esc(m.role):'')+'</option>';});
+  return out;
+}
+function _prospectTasksHTML(pid){
+  var ts=prospectTasks(pid).slice().sort(function(a,b){return (a.status==='done'?1:0)-(b.status==='done'?1:0);});
+  if(!ts.length)return '<div style="font-size:11px;color:var(--text-muted)">No BD tasks yet.</div>';
+  return ts.map(function(a){
+    var sc=planStsCfg(a.status);
+    return '<div class="plan-row" style="cursor:pointer" onclick="openPlanModal(\''+a.id+'\')">'
+      +'<select class="plan-pill" style="background:'+sc.c+'" onclick="event.stopPropagation()" onchange="planSetStatus(\''+a.id+'\',this.value);openProspectModal(\''+pid+'\')">'+PLAN_STS.map(function(o){return '<option value="'+o.k+'"'+(o.k===a.status?' selected':'')+'>'+o.l+'</option>';}).join('')+'</select>'
+      +'<div class="plan-row-main"><div class="plan-sub">'+(a.actType?'<span class="plan-chip">'+esc(a.actType)+'</span> ':'')+esc(a.subtask)+'</div>'
+      +'<div class="plan-meta">'+(a.dueDate?'<span class="plan-chip">due '+esc(a.dueDate)+'</span>':'')+planOwnerHTML(a)+'</div></div></div>';
+  }).join('');
+}
+function prospectAddTask(pid){
+  var p=prospectList().find(function(x){return x.id===pid;});if(!p)return;
+  if(!(ME&&(ME.role==='admin'||ME.role==='editor'))){toast('You need editor access to add BD tasks.','error');return;}
+  var memOpts=[{value:'',label:'— unassigned —'}],seen={};
+  planMembers().forEach(function(m){if(seen[m.id])return;seen[m.id]=1;memOpts.push({value:m.id,label:m.name+(m.role?' · '+m.role:'')});});
+  openFormModal({over:'BD Task · '+prospectTitle(p),title:'New BD task',submitLabel:'Add task',
+    fields:[
+      {key:'title',label:'Task',type:'text',required:true,placeholder:'e.g. Intro call with CIO'},
+      {key:'type',label:'Activity type',type:'select',value:'Call',options:BD_ACT_TYPES.map(function(t){return {value:t,label:t};})},
+      {key:'assignee',label:'Assign to (BusDev resource)',type:'select',value:p.ownerId||'',options:memOpts},
+      {key:'due',label:'Due date',type:'date',value:''},
+      {key:'status',label:'Status',type:'select',value:'todo',options:PLAN_STS.map(function(s){return {value:s.k,label:s.l};})}],
+    onSubmit:function(vals){
+      var owner=vals.assignee?planMembers().find(function(m){return m.id===vals.assignee;}):null;
+      D.activities.push({id:uid(),kind:'project',bizdev:true,prospectId:pid,actType:vals.type||'Other',programId:null,parentId:null,task:'',subtask:(vals.title||'').trim(),outline:'',objective:'',phase:'Month 1',status:vals.status||'todo',start:'',dueDate:vals.due||'',isMilestone:false,ownerText:owner?owner.name:'',owners:vals.assignee?[vals.assignee]:[],alloc:'',projectId:p.convertedOppId||null,pm:ME?ME.name:'',order:D.activities.length,updates:[],attachments:[]});
+      save();openProspectModal(pid);
+    }});
+}
+function saveProspect(){
+  if(!can('globals')){toast('No permission.','error');return;}
+  var name=gv('pr_name').trim();if(!name){alert('Name is required.');return;}
+  var data={kind:gv('pr_kind'),name:name,accountName:gv('pr_accountName').trim(),contactName:gv('pr_contactName').trim(),title:gv('pr_title').trim(),email:gv('pr_email').trim(),phone:gv('pr_phone').trim(),linkedin:gv('pr_linkedin').trim(),website:gv('pr_website').trim(),industry:gv('pr_industry').trim(),location:gv('pr_location').trim(),ownerId:gv('pr_owner'),status:gv('pr_status'),priority:gv('pr_priority'),source:gv('pr_source').trim(),nextAction:gv('pr_nextAction').trim(),nextActionDate:gv('pr_nextActionDate'),notes:gv('pr_notes').trim(),tags:gv('pr_tags').split(',').map(function(t){return t.trim();}).filter(Boolean)};
+  if(prospectEditId){var p=prospectList().find(function(x){return x.id===prospectEditId;});if(p){data.updatedAt=Date.now();Object.assign(p,data);}}
+  else{D.prospects=D.prospects||[];data.id=uid();data.createdAt=Date.now();data.createdBy=ME?ME.name:'';data.linkedOppIds=[];data.convertedOppId='';data.order=D.prospects.length;D.prospects.push(data);}
+  closeModal('ovProspect');save();renderView();
+}
+function delProspect(id){
+  if(!can('globals')){toast('No permission.','error');return;}
+  var bdOnly=prospectTasks(id).filter(function(a){return !a.projectId;}).length;
+  if(!confirm('Delete this prospect'+(bdOnly?' and its '+bdOnly+' BD-only task(s)':'')+'? (Tasks already linked to a converted opportunity are kept.)'))return;
+  D.prospects=(D.prospects||[]).filter(function(x){return x.id!==id;});
+  D.activities=(D.activities||[]).filter(function(a){return !(a.prospectId===id&&!a.projectId);});
+  (D.activities||[]).forEach(function(a){if(a.prospectId===id){a.prospectId=null;a.bizdev=false;}});
+  closeModal('ovProspect');save();renderView();
+}
+function prospectConvert(id){
+  if(!can('globals')){toast('No permission.','error');return;}
+  var p=prospectList().find(function(x){return x.id===id;});if(!p)return;
+  if(p.convertedOppId&&(D.projects||[]).some(function(x){return x.id===p.convertedOppId;})){toast('Already converted — switching to the CRM pipeline.','info');closeModal('ovProspect');setOppView('crm');return;}
+  var owner=prospectOwnerName(p.ownerId);
+  var customer=p.kind==='poc'?(p.accountName||p.name):(p.name);
+  var oppName=customer||'New Opportunity';
+  var poc=p.kind==='poc'?p.name:(p.contactName||'');
+  var opp={id:uid(),category:'opportunity',name:oppName,customer:customer||'',leadGen:owner||'(BusDev)',presales:'',sales:'',delivery:'',opr:owner||'',team:'',comment:'Converted from BizDev prospect'+(poc?' · POC: '+poc:''),changeRequested:'',closeDate:'',targetRevenue:0,revenue:0,revenueNote:'',description:p.notes||'',attachments:[],parentId:null,pm:'',potential:0,status:'Qualified',probabilityClose:''};
+  opp.stage=oppDeriveStage(opp);
+  D.projects.push(opp);
+  p.convertedOppId=opp.id;p.linkedOppIds=p.linkedOppIds||[];if(p.linkedOppIds.indexOf(opp.id)===-1)p.linkedOppIds.push(opp.id);
+  if(p.status!=='Converted')p.status='Converted';
+  prospectTasks(p.id).forEach(function(a){if(!a.projectId)a.projectId=opp.id;});
+  closeModal('ovProspect');save();toast('Converted to opportunity — added to the CRM pipeline (Lead Gen).','success');setOppView('crm');
 }
 /* ── GOV DISCOVERY (Module 1 client) — SAM.gov + forecast imports + recompete
    flags, scored against the Company Profile, feeding the CRM pipeline and the
@@ -3146,7 +3375,7 @@ function _govLoad(){
 function _govDiscoveryHTML(){
   var f=_govState.filters,list=_govState.list;
   var html='<div class="plan-wrap">';
-  html+='<div class="plan-seg" style="margin-bottom:10px;display:inline-flex"><button onclick="setOppView(\'crm\')">CRM Pipeline</button><button class="active" onclick="setOppView(\'gov\')">🛰 Gov Discovery</button></div>';
+  html+=_oppSegHTML('gov');
   html+='<div class="plan-summary"><div class="plan-summary-top"><div><strong style="font-size:14px;color:var(--text-primary)">Government Opportunity Discovery</strong>'
     +'<span style="font-size:12px;color:var(--text-secondary);margin-left:8px">SAM.gov + agency forecasts + USAspending recompete flags, scored against the Company Profile</span></div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap">'

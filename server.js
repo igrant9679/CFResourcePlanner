@@ -211,6 +211,7 @@ const PROTECTED_ARRAYS = [
   'accounts',
   'knowledgeBank',        // proposal knowledge-bank metadata (text lives in knowledge_docs)
   'resumeBank',           // dedicated standalone resume uploads
+  'prospects',            // BizDev prospects (accounts + POCs) in the pipeline
 ];
 
 app.post('/api/data', async (req, res) => {
