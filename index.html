@@ -3202,7 +3202,9 @@ function _prospectCardHTML(p){
   var open=prospectOpenTasks(p.id).length,tasks=prospectTasks(p.id).length;
   var pri=PROSPECT_PRI_C[p.priority]||'#546478';
   var ownerNm=prospectOwnerName(p.ownerId);
-  var sub=p.kind==='poc'?[p.title,p.accountName].filter(Boolean).join(' · '):(p.industry||'');
+  var sub;
+  if(p.kind==='poc'){sub=[p.title,p.accountName].filter(Boolean).join(' · ');}
+  else{var contact=p.contactName?('👤 '+p.contactName+(p.title?' · '+p.title:'')):'';sub=[contact,p.industry].filter(Boolean).join('  ·  ');}
   return '<div class="plan-card" onclick="openProspectModal(\''+p.id+'\')">'
     +'<div class="plan-card-sub">'+esc(prospectTitle(p))+'</div>'
     +(sub?'<div style="font-size:11px;color:var(--text-muted);margin-top:1px">'+esc(sub)+'</div>':'')
@@ -3230,7 +3232,7 @@ function _prospectListHTML(list){
       +'<span class="plan-pill" style="background:'+sc.c+';cursor:pointer">'+esc(p.status||'To Contact')+'</span>'
       +'<div class="plan-row-main"><div class="plan-sub">'+esc(prospectTitle(p))+' '+_prospectKindBadge(p)+'</div>'
       +(p.nextAction?'<div class="plan-next"><b>Next:</b> '+esc(p.nextAction)+(p.nextActionDate?' ('+esc(p.nextActionDate)+')':'')+'</div>':'')
-      +'<div class="plan-meta">'+(p.kind==='poc'&&p.accountName?'<span class="plan-chip">'+esc(p.accountName)+'</span>':'')+(p.email?'<span class="plan-chip">'+esc(p.email)+'</span>':'')
+      +'<div class="plan-meta">'+(p.kind==='poc'&&p.accountName?'<span class="plan-chip">'+esc(p.accountName)+'</span>':'')+(p.kind!=='poc'&&p.contactName?'<span class="plan-chip">👤 '+esc(p.contactName)+(p.title?' · '+esc(p.title):'')+'</span>':'')+(p.email?'<span class="plan-chip">'+esc(p.email)+'</span>':'')
       +(ownerNm?'<span class="plan-own">'+esc(ownerNm)+'</span>':'')+(tasks?'<span class="plan-chip" title="BD tasks">✓ '+open+'/'+tasks+' tasks</span>':'')
       +(p.convertedOppId?'<span class="plan-chip" style="border-color:#059669;color:#059669">→ Opp</span>':'')+'</div></div></div>';
   });
