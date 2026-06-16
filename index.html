@@ -3108,7 +3108,7 @@ var PROSPECT_STAGES=[{k:'To Contact',c:'#546478'},{k:'Attempted',c:'#D97706'},{k
 var PROSPECT_PRIORITIES=['High','Medium','Low'];
 var PROSPECT_PRI_C={High:'#DC2626',Medium:'#D97706',Low:'#546478'};
 var BD_ACT_TYPES=['Call','Email','Meeting','LinkedIn','Research','Follow-up','Event','Other'];
-var prospectMode='board',prospectFilter={owner:''};
+var prospectMode='board',prospectFilter={owner:''},prospectCalRef=null;
 function prospectStageCfg(k){return PROSPECT_STAGES.find(function(s){return s.k===k;})||PROSPECT_STAGES[0];}
 function oppStageCfg(k){return OPP_STAGES.find(function(s){return s.k===k;})||OPP_STAGES[0];}
 function oppDeriveStage(p){var gates=[['delivery','Delivery'],['sales','Sales'],['presales','Presales'],['leadGen','Lead Gen']];for(var i=0;i<gates.length;i++){var v=p[gates[i][0]];if(v&&String(v).trim()&&!/^n\/?a$/i.test(String(v).trim()))return gates[i][1];}return 'Lead Gen';}
@@ -3188,13 +3188,13 @@ function _prospectsHTML(q){
     +'<div class="plan-counts">'+PROSPECT_STAGES.map(function(s){return '<span class="plan-chip" style="border-color:'+s.c+';color:'+s.c+'">'+s.k+': '+byStage[s.k]+'</span>';}).join('')+'</div></div></div>';
   var ownerIds=[];all.forEach(function(p){if(p.ownerId&&ownerIds.indexOf(p.ownerId)===-1)ownerIds.push(p.ownerId);});
   var ownerOpts='<option value="">All owners</option>'+ownerIds.map(function(id){return '<option value="'+id+'"'+(prospectFilter.owner===id?' selected':'')+'>'+esc(prospectOwnerName(id)||'(owner)')+'</option>';}).join('');
-  html+='<div class="plan-toolbar"><div class="plan-seg">'+[{k:'board',l:'Board'},{k:'list',l:'List'}].map(function(v){return '<button class="'+(prospectMode===v.k?'active':'')+'" onclick="setProspectMode(\''+v.k+'\')">'+v.l+'</button>';}).join('')+'</div>'
+  html+='<div class="plan-toolbar"><div class="plan-seg">'+[{k:'board',l:'Board'},{k:'list',l:'List'},{k:'calendar',l:'Calendar'}].map(function(v){return '<button class="'+(prospectMode===v.k?'active':'')+'" onclick="setProspectMode(\''+v.k+'\')">'+v.l+'</button>';}).join('')+'</div>'
     +'<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
     +'<select class="fld-sel" style="width:auto" onchange="prospectFilter.owner=this.value;renderView()">'+ownerOpts+'</select>'
     +(canEdit?'<button class="btn btn-gold btn-sm" onclick="openProspectModal()">+ Prospect</button>':'')+'</div></div>';
   if(!all.length)return html+'<div class="empty-msg">No prospects yet. Click <strong>+ Prospect</strong> to add an account or point of contact your BusDev team intends to pursue for new leads.</div></div>';
   if(!list.length)return html+'<div class="empty-msg">No prospects match the current filters.</div></div>';
-  html+=(prospectMode==='list'?_prospectListHTML(list):_prospectBoardHTML(list));
+  html+=(prospectMode==='list'?_prospectListHTML(list):prospectMode==='calendar'?_prospectCalendarHTML(list):_prospectBoardHTML(list));
   return html+'</div>';
 }
 function _prospectKindBadge(p){return '<span class="plan-chip">'+(p.kind==='poc'?'👤 POC':'🏢 Account')+'</span>';}
@@ -3237,6 +3237,20 @@ function _prospectListHTML(list){
       +(p.convertedOppId?'<span class="plan-chip" style="border-color:#059669;color:#059669">→ Opp</span>':'')+'</div></div></div>';
   });
   return html+'</div>';
+}
+function prospectCalNav(n){if(!prospectCalRef)prospectCalRef=new Date();prospectCalRef=new Date(prospectCalRef.getFullYear(),prospectCalRef.getMonth()+n,1);renderView();}
+function _prospectCalendarHTML(list){
+  // Plot prospects on their next-action date so BusDev sees the week's follow-ups at a glance.
+  var dated=list.map(function(p){var d=planParseDate(p.nextActionDate);return d?{p:p,d:d}:null;}).filter(Boolean);
+  if(!prospectCalRef){var base=dated.length?dated[0].d:new Date();prospectCalRef=new Date(base.getFullYear(),base.getMonth(),1);}
+  var ref=prospectCalRef,y=ref.getFullYear(),m=ref.getMonth(),first=new Date(y,m,1),sd=first.getDay(),gs=new Date(y,m,1-sd);
+  var dows=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var html='<div class="cal-nav"><button class="btn btn-sec btn-sm" onclick="prospectCalNav(-1)">‹ Prev</button><strong style="font-size:14px">'+planMonthName(m)+' '+y+'</strong><button class="btn btn-sec btn-sm" onclick="prospectCalNav(1)">Next ›</button></div>';
+  html+='<div class="cal-grid">'+dows.map(function(d){return '<div class="cal-dow">'+d+'</div>';}).join('');
+  for(var i=0;i<42;i++){var cd=new Date(gs.getFullYear(),gs.getMonth(),gs.getDate()+i),inM=cd.getMonth()===m,items=dated.filter(function(x){return planSameDay(x.d,cd);});
+    var chips=items.slice(0,3).map(function(x){var sc=prospectStageCfg(x.p.status);var lbl=prospectTitle(x.p)+(x.p.nextAction?' — '+x.p.nextAction:'');return '<div class="cal-item" style="border-left:3px solid '+sc.c+'" onclick="openProspectModal(\''+x.p.id+'\')" title="'+esc(lbl)+'">'+esc(prospectTitle(x.p))+'</div>';}).join('');
+    html+='<div class="cal-cell'+(inM?'':' cal-out')+'"><div class="cal-day">'+cd.getDate()+'</div>'+chips+(items.length>3?'<div class="cal-more">+'+(items.length-3)+' more</div>':'')+'</div>';}
+  html+='</div><div style="font-size:11px;color:var(--text-muted);margin-top:8px">Prospects appear on their <b>Next action date</b> (set one when editing a prospect). '+dated.length+' of '+list.length+' have a date.</div>';return html;
 }
 /* ── Prospect detail / edit modal ── */
 var prospectEditId=null;
