@@ -11711,6 +11711,50 @@ function renderClinsSection(pid){
     +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Break down this contract’s revenue into CLINs and pin resources to each line for profit/loss visibility.</div>'
     +clinTable+asnTable+'</div>';
 }
+/* ── SUBSCRIPTION CLIENTS (software ARR) → derives the project's monthly revenue ── */
+function subClientsRevenueMonthly(p){var t=(p.subClients||[]).reduce(function(s,c){return s+(Number(c.value)||0);},0);return Math.round(t/12);}
+function renderSubClientsSection(pid){
+  var p=D.projects.find(function(x){return x.id===pid;});if(!p)return '';
+  var subs=p.subClients||[];
+  var total=subs.reduce(function(s,c){return s+(Number(c.value)||0);},0),monthly=Math.round(total/12);
+  var head='<div class="fld"><div class="fld-l" style="display:flex;justify-content:space-between;align-items:center"><span>Active Subscription Clients</span>'
+    +'<span><input type="file" id="sc_file_'+pid+'" accept=".xlsx,.xls,.csv" style="display:none" onchange="subClientsUpload(\''+pid+'\')"><button class="btn btn-navy btn-sm" onclick="document.getElementById(\'sc_file_'+pid+'\').click()">'+(subs.length?'&#8635; Re-upload':'&#8593; Upload clients')+'</button></span></div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Upload active software subscription clients (XLSX/CSV with Account Name, Product, Renewal Date, Total Opp Value). The summed annual value &divide; 12 becomes this project&rsquo;s monthly revenue, replacing the manual figure.</div>';
+  if(!subs.length)return head+'<div style="font-size:11px;color:var(--text-muted);padding:6px 0">No clients uploaded yet &mdash; the monthly revenue above is entered manually.</div></div>';
+  var meta=p.subClientsMeta||{};
+  var summary='<div style="display:flex;gap:16px;flex-wrap:wrap;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:rgba(22,163,74,0.04)">'
+    +'<div style="flex:1;min-width:110px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Clients</div><div style="font-size:19px;font-weight:800">'+subs.length+'</div></div>'
+    +'<div style="flex:1;min-width:110px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Total ARR</div><div style="font-size:19px;font-weight:800">'+fmt(total)+'</div></div>'
+    +'<div style="flex:1;min-width:110px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Monthly revenue</div><div style="font-size:19px;font-weight:800;color:var(--green)">'+fmt(monthly)+'/mo</div></div>'
+    +'<div style="align-self:center"><button class="btn btn-outline btn-sm" onclick="subClientsClear(\''+pid+'\')">Clear &amp; revert to manual</button></div></div>'
+    +(meta.uploadedAt?'<div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">Uploaded '+new Date(meta.uploadedAt).toLocaleString()+(meta.fileName?' &middot; '+esc(meta.fileName):'')+'</div>':'');
+  var byProduct={};subs.forEach(function(c){var k=c.product||'(unspecified)';byProduct[k]=(byProduct[k]||0)+(Number(c.value)||0);});
+  var prodChips=Object.keys(byProduct).sort(function(a,b){return byProduct[b]-byProduct[a];}).map(function(k){return '<span class="plan-chip">'+esc(k)+': '+fmt(byProduct[k])+'</span>';}).join('');
+  var sorted=subs.slice().sort(function(a,b){return (Number(b.value)||0)-(Number(a.value)||0);}),shown=sorted.slice(0,60);
+  var rows=shown.map(function(c){return '<tr><td style="padding:2px 8px 2px 0">'+esc(c.account)+'</td><td style="color:var(--text-muted)">'+esc(c.product||'')+'</td><td style="color:var(--text-muted);white-space:nowrap">'+esc(c.renewalDate||'')+'</td><td style="text-align:right;white-space:nowrap">'+fmt(Number(c.value)||0)+'</td></tr>';}).join('');
+  var table='<div style="margin:4px 0 2px">'+prodChips+'</div>'
+    +'<div style="max-height:38vh;overflow:auto;border-top:1px solid var(--border);padding-top:6px"><table style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr style="text-align:left"><th>Account</th><th>Product</th><th>Renewal</th><th style="text-align:right">Value/yr</th></tr></thead><tbody>'+rows+'</tbody></table>'
+    +(sorted.length>shown.length?'<div style="font-size:10px;color:var(--text-muted);padding:4px 0">+ '+(sorted.length-shown.length)+' more&hellip;</div>':'')+'</div>';
+  return head+summary+table+'</div>';
+}
+function subClientsUpload(pid){
+  var inp=document.getElementById('sc_file_'+pid),f=inp&&inp.files&&inp.files[0];if(!f)return;
+  var p=D.projects.find(function(x){return x.id===pid;});if(!p)return;
+  toast('Parsing '+f.name+'…','info');
+  var fd=new FormData();fd.append('file',f);
+  fetch('/api/subclients/parse',{method:'POST',body:fd}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||'parse failed');return j;});}).then(function(j){
+    p.subClients=j.clients;p.subClientsMeta={uploadedAt:Date.now(),fileName:f.name,total:j.total,count:j.count};
+    p.revenueFromSubs=true;p.revenue=j.monthly;if(p.category!=='project')p.category='project';
+    p.revenueNote='Auto-derived from '+j.count+' active subscription clients · '+fmt(j.total)+' ARR (uploaded '+new Date().toLocaleDateString()+')';
+    save();toast('Imported '+j.count+' clients · '+fmt(j.monthly)+'/mo revenue applied.','success',6000);openEditProject(pid);
+  }).catch(function(e){toast('Upload failed: '+(e&&e.message||e),'error',7000);});
+}
+function subClientsClear(pid){
+  var p=D.projects.find(function(x){return x.id===pid;});if(!p)return;
+  if(!confirm('Remove the uploaded client list and revert to a manually-entered monthly revenue? (The current derived figure stays until you edit it.)'))return;
+  delete p.subClients;delete p.subClientsMeta;delete p.revenueFromSubs;
+  save();openEditProject(pid);
+}
 /* ── PROJECT SCHEDULED REVENUE / COST CHANGES (steps + escalator) ── */
 function _projEscRow(pid,kind,e){
   var pre='ep_'+kind,label=kind==='re'?'Revenue':'Cost';
@@ -11748,7 +11792,9 @@ var labels={project:'Project',initiative:'Initiative',overhead:'Overhead Item',o
 var excl=projDescendantIds(pid);
 var parentOpts='<option value="">None (top-level)</option>'+D.projects.filter(function(q){return excl.indexOf(q.id)===-1&&projCat(q)===cat;}).map(function(q){return '<option value="'+q.id+'"'+((p.parentId===q.id)?' selected':'')+'>'+esc(q.name)+'</option>';}).join('');
 var catOpts=['project','initiative','opportunity','overhead'].map(function(c){return '<option value="'+c+'"'+(c===cat?' selected':'')+'>'+labels[c]+'</option>';}).join('');
-var revField=cat==='project'?fN('ep_rev','Monthly Revenue ($)',p.revenue||0):cat==='initiative'?fN('ep_rev','Expected Monthly Revenue ($) — future',p.targetRevenue||0):cat==='opportunity'?fN('ep_rev','Potential Monthly Value ($) — pipeline',p.targetRevenue||0):'';
+var revField;
+if(cat==='project'&&p.revenueFromSubs){revField='<div class="fld"><label class="fld-l" for="ep_rev">Monthly Revenue ($)</label><input class="fld-i" id="ep_rev" type="number" value="'+(p.revenue||0)+'" readonly style="background:var(--page-bg);color:var(--text-muted)"><div style="font-size:9px;color:var(--green);margin-top:3px">Auto-derived from '+((p.subClients||[]).length)+' subscription clients (see &ldquo;Active Subscription Clients&rdquo; below). Clear the upload to edit manually.</div></div>';}
+else revField=cat==='project'?fN('ep_rev','Monthly Revenue ($)',p.revenue||0):cat==='initiative'?fN('ep_rev','Expected Monthly Revenue ($) — future',p.targetRevenue||0):cat==='opportunity'?fN('ep_rev','Potential Monthly Value ($) — pipeline',p.targetRevenue||0):'';
 document.getElementById('mdlDeptEdit').innerHTML=
 '<div class="mdl-over">Edit '+labels[cat]+'</div><div class="mdl-title">'+esc(p.name)+'</div>'
 +fT('ep_name','Name',p.name)
@@ -11756,6 +11802,7 @@ document.getElementById('mdlDeptEdit').innerHTML=
 +revField
 +(cat!=='opportunity'?('<div class="fld-row2"><div class="fld"><label class="fld-l" for="ep_start">Start month (optional)</label><input class="fld-i" type="month" id="ep_start" value="'+esc(p.startDate||'')+'"></div><div class="fld"><label class="fld-l" for="ep_end">End month (optional)</label><input class="fld-i" type="month" id="ep_end" value="'+esc(p.endDate||'')+'"></div></div><div style="font-size:9px;color:var(--text-muted);margin:-4px 0 8px">Revenue counts in Capacity / Strategic Planning only within this window. Blank = active across the whole horizon.</div>'):'')
 +((cat==='project'||cat==='initiative')?'<div id="ep_sched_wrap">'+_projSchedEditorHTML(p)+'</div>':'')
++(cat==='project'?renderSubClientsSection(pid):'')
 +(cat==='project'?renderClinsSection(pid):'')
 +(cat==='opportunity'?oppEditFields(p):'')
 +fT('ep_note','Note / Context',p.revenueNote||'')
@@ -11808,7 +11855,8 @@ var p=D.projects.find(function(x){return x.id===pid;});if(!p)return;
 var name=gv('ep_name').trim();if(name)p.name=name;
 var newCat=gv('ep_cat')||'project';var catChanged=newCat!==projCat(p);p.category=newCat;
 var rv=document.getElementById('ep_rev');
-if(newCat==='project'){p.revenue=rv?(Number(rv.value)||0):(p.revenue||0);p.targetRevenue=0;}
+if(newCat==='project'&&p.revenueFromSubs){p.revenue=subClientsRevenueMonthly(p);p.targetRevenue=0;}
+else if(newCat==='project'){p.revenue=rv?(Number(rv.value)||0):(p.revenue||0);p.targetRevenue=0;}
 else if(isPipelineCat(newCat)){p.targetRevenue=rv?(Number(rv.value)||0):(p.targetRevenue||0);p.revenue=0;}
 else{p.revenue=0;p.targetRevenue=0;}
 if(newCat==='opportunity'){var sEl=document.getElementById('ep_stage');if(sEl)p.stage=sEl.value;p.customer=gv('ep_customer');p.leadGen=gv('ep_lg');p.presales=gv('ep_ps');p.sales=gv('ep_sales');p.delivery=gv('ep_deliv');p.opr=gv('ep_opr');p.pm=gv('ep_pm');p.team=gv('ep_team');p.closeDate=gv('ep_close');p.changeRequested=gv('ep_change');var potEl=document.getElementById('ep_potential');p.potential=potEl?(Number(potEl.value)||0):(p.potential||0);p.status=gv('ep_status');var prEl=document.getElementById('ep_prob');if(prEl)p.probabilityClose=(prEl.value===''?'':Math.max(0,Math.min(100,Number(prEl.value)||0)));var _ie=document.getElementById('ep_inits');if(_ie)p.initiativeIds=Array.from(_ie.selectedOptions).map(function(o){return o.value;});}

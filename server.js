@@ -826,6 +826,59 @@ app.post('/api/govops/import', upload.single('file'), async (req, res) => {
     res.json({ ...stats, errors: errors.slice(0, 10) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// Parse an uploaded subscription-client spreadsheet (XLSX/CSV) into normalized
+// rows. Stateless — returns the parsed clients + totals; the client stores them
+// on the project. Auto-detects the header row and maps common column names.
+app.post('/api/subclients/parse', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file' });
+    const XLSX = require('xlsx');
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: false });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: true });
+    if (!aoa.length) return res.status(400).json({ error: 'Empty spreadsheet' });
+    // Find the header row (first row that has an "account" and a "value/amount/arr/revenue" column) within the first 15 rows.
+    let hi = -1;
+    for (let i = 0; i < Math.min(aoa.length, 15); i++) {
+      const cells = aoa[i].map((c) => String(c).toLowerCase());
+      if (cells.some((c) => c.includes('account')) && cells.some((c) => /value|amount|arr|revenue/.test(c))) { hi = i; break; }
+    }
+    if (hi < 0) hi = 0;
+    const headers = aoa[hi].map((c) => String(c).trim());
+    const findCol = (re) => headers.findIndex((h) => re.test(h));
+    const ci = {
+      account: findCol(/account|client|customer|organi/i),
+      product: findCol(/product/i),
+      renewalDate: findCol(/renewal\s*date|renew/i),
+      renewalYear: findCol(/renewal\s*year|year/i),
+      value: findCol(/total\s*opp|value|amount|arr|revenue/i),
+      country: findCol(/country/i),
+    };
+    if (ci.account < 0 || ci.value < 0) return res.status(400).json({ error: 'Could not find the "Account Name" and "Total Opp Value" columns. Expected a header row with those columns.' });
+    const toDate = (v) => {
+      if (v === '' || v == null) return '';
+      if (typeof v === 'number') { const d = XLSX.SSF.parse_date_code(v); if (d) return [d.y, String(d.m).padStart(2, '0'), String(d.d).padStart(2, '0')].join('-'); }
+      const dt = new Date(v); return isNaN(dt.getTime()) ? String(v) : dt.toISOString().slice(0, 10);
+    };
+    const clients = []; let total = 0;
+    for (const row of aoa.slice(hi + 1)) {
+      const account = String(row[ci.account] || '').trim();
+      if (!account) continue;
+      const value = Number(String(row[ci.value]).replace(/[$,\s]/g, '')) || 0;
+      total += value;
+      clients.push({
+        account,
+        product: ci.product >= 0 ? String(row[ci.product] || '').trim() : '',
+        renewalDate: ci.renewalDate >= 0 ? toDate(row[ci.renewalDate]) : '',
+        renewalYear: ci.renewalYear >= 0 ? String(row[ci.renewalYear] || '').trim() : '',
+        value,
+        country: ci.country >= 0 ? String(row[ci.country] || '').trim() : '',
+      });
+    }
+    if (!clients.length) return res.status(400).json({ error: 'No client rows found under the header.' });
+    res.json({ clients, total, count: clients.length, monthly: Math.round(total / 12) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 app.get('/api/govops/runs', async (req, res) => {
   try {
     const r = await pool.query('SELECT id, source, trigger_kind, started_at, finished_at, fetched, added, updated, errors, digest FROM ingestion_runs ORDER BY id DESC LIMIT 40');
