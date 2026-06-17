@@ -3759,6 +3759,7 @@ function capBuildRoster(){
       allocSchedule:m.allocSchedule?JSON.parse(JSON.stringify(m.allocSchedule)):null,
       contractor:!!m.contractor,
       furloughDate:m.furloughDate||'',
+      note:m.note||'',
       projects:(m.projects||[]).map(function(x){return (typeof x==='object')?{id:x.id,pct:Number(x.pct)||0,clinId:x.clinId}:{id:x,pct:100};})};
   });
 }
@@ -5227,6 +5228,8 @@ function _stratLadderTiers(row,roster){
   // (variable), W2 on a deferrable initiative → Tier 4, all other non-billable W2 →
   // Tier 2. (No standalone comp-cut tier: trimming billable salaries is off-policy.)
   var contractorItems=[],benchItems=[],deferLabor={};        // deferLabor[pid] = $ of non-billable W2 labor on that deferrable initiative
+  // Lead each resource lever with their Notes / Transition Plan (member.note), then the allocation context.
+  var resNote=function(pn,ctx){var n=String(pn.note||'').trim();return n?(n+(ctx?' · '+ctx:'')):ctx;};
   roster.filter(function(pn){return capPersonActive(pn,y,m);}).forEach(function(pn){
     if(_capFurloughed(pn,y,m)||_capNotYetStarted(pn,y,m))return;  // furloughed → off the forecast; not-yet-started future hire → not on payroll yet
     var cst=capPersonCostAt(pn,y,m);
@@ -5234,8 +5237,8 @@ function _stratLadderTiers(row,roster){
     var parts=pids.map(function(pid){return {pid:pid,pct:memberProjPctAt(pn,pid,y,m)};}).filter(function(x){return x.pct>0;});
     var tot=parts.reduce(function(a,x){return a+x.pct;},0);
     if(tot<=0){                                              // bench / unallocated — fully non-billable; cutting = furlough
-      if(pn.contractor)contractorItems.push({name:pn.name,amount:Math.round(cst),note:'bench — unallocated'});
-      else benchItems.push({name:pn.name,amount:Math.round(cst),note:'bench — unallocated'});
+      if(pn.contractor)contractorItems.push({name:pn.name,amount:Math.round(cst),note:resNote(pn,'bench — unallocated')});
+      else benchItems.push({name:pn.name,amount:Math.round(cst),note:resNote(pn,'bench — unallocated')});
       return;
     }
     var cAmt=0,bAmt=0,cOn=[],bOn=[];
@@ -5247,8 +5250,8 @@ function _stratLadderTiers(row,roster){
       else if(c==='initiative'&&defer[x.pid]){deferLabor[x.pid]=(deferLabor[x.pid]||0)+share;}  // non-billable W2 on a deferrable initiative
       else {bAmt+=share;bOn.push(pnm);}                       // other non-billable W2 (rev-positive initiative + overhead)
     });
-    if(cAmt>0)contractorItems.push({name:pn.name,amount:Math.round(cAmt),note:'non-billable on '+(cOn.filter(Boolean).join(', ')||'—')});
-    if(bAmt>0)benchItems.push({name:pn.name,amount:Math.round(bAmt),note:'non-billable on '+(bOn.filter(Boolean).join(', ')||'—')});
+    if(cAmt>0)contractorItems.push({name:pn.name,amount:Math.round(cAmt),note:resNote(pn,'non-billable on '+(cOn.filter(Boolean).join(', ')||'—'))});
+    if(bAmt>0)benchItems.push({name:pn.name,amount:Math.round(bAmt),note:resNote(pn,'non-billable on '+(bOn.filter(Boolean).join(', ')||'—'))});
   });
   var _byAmt=function(a,b){return b.amount-a.amount;},_sum=function(a,it){return a+it.amount;};
   contractorItems.sort(_byAmt);benchItems.sort(_byAmt);
