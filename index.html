@@ -1009,6 +1009,7 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
       <button class="tab" id="tabCap" onclick="switchTab('cap')">Capacity Planning</button>
       <button class="tab" id="tabPPlan" onclick="switchTab('pplan')">Resource Planning</button>
       <button class="tab" id="tabProj" onclick="switchTab('proj')">Projects</button>
+      <button class="tab tab-confidential" id="tabContracts" onclick="switchTab('contracts')">&#128193; Contract Mgmt</button>
       <button class="tab" id="tabInit" onclick="switchTab('init')">Initiatives</button>
       <button class="tab" id="tabOpp" onclick="switchTab('opp')">Opportunities</button>
       <button class="tab" id="tabProp" onclick="switchTab('prop')">Proposals</button>
@@ -1424,7 +1425,7 @@ function migrate(){
   });});
   var REV={'p_bclm':{revenue:212756,revenueNote:'→ $265,945/mo Aug 15 · BCLM +25% extension'},'p_fams':{revenue:76944,revenueNote:'Ends Sep 24, 2026 · 85.2% margin'},'p_c1fams':{revenue:25984,revenueNote:'Ends Sep 24, 2026 · was ramping to $100K (re-add as a new project if extended)'},'p_software':{revenue:50000,revenueNote:'$550K ARR floor · 7.65% margin — needs intervention'},'p_marines':{revenue:0,revenueNote:'Active pursuit · SBIR Phase III via ForwardEdge-AI · $1.2M'},'p_salesforce':{revenue:0,revenueNote:'Build phase · 3 engagements seeding'},'p_afosi':{revenue:0,revenueNote:'Proposal due Jun 8 · $1.0M opportunity'},'p_phoenix':{revenue:0,revenueNote:'Software play · repricing initiative'},'p_tableau':{revenue:0,revenueNote:'Internal capability build'}};
   D.projects.forEach(function(p){if(!('revenue' in p)){var d=REV[p.id];p.revenue=d?d.revenue:0;p.revenueNote=d?d.revenueNote:'';}if(!('revenueNote' in p))p.revenueNote='';if(!p.clins)p.clins=[];});
-  planMigrate();authMigrate();oppMigrate();tplMigrate();recruitMigrate();proposalsMigrate();proformaMigrate();prospectMigrate();}
+  planMigrate();authMigrate();oppMigrate();tplMigrate();recruitMigrate();proposalsMigrate();proformaMigrate();prospectMigrate();contractsMigrate();}
 function prospectMigrate(){
   if(!Array.isArray(D.prospects))D.prospects=[];
   D.prospects.forEach(function(p,i){
@@ -2665,7 +2666,7 @@ function openUnallocatedModal(){
   openModal('ovForm');
 }
 
-function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',recruit:'tabRecruit',init:'tabInit',opp:'tabOpp',prop:'tabProp',over:'tabOver',orgchart:'tabChart',res:'tabRes',cap:'tabCap',class:'tabClass',plan:'tabPlan',ptask:'tabPTask',pplan:'tabPPlan',reports:'tabReports',strat:'tabStrat',proforma:'tabProforma'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
+function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',contracts:'tabContracts',recruit:'tabRecruit',init:'tabInit',opp:'tabOpp',prop:'tabProp',over:'tabOver',orgchart:'tabChart',res:'tabRes',cap:'tabCap',class:'tabClass',plan:'tabPlan',ptask:'tabPTask',pplan:'tabPPlan',reports:'tabReports',strat:'tabStrat',proforma:'tabProforma'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
 
 function cardHTML(m,did){
 var dept=D.departments.find(function(d){return d.id===did;});
@@ -3129,6 +3130,184 @@ function _projDetailBody(p){
   html+=_initCard('Proposals associated ('+props.length+')',propInner);
   if((p.attachments||[]).length)html+=_initCard('Attachments',projAttachHTML(p).replace('margin-top:7px',''));
   return html;
+}
+/* ── CONTRACTS MANAGEMENT MODULE — self-contained contract staff planning.
+   Data lives ONLY in D.contracts; nothing links to departments/projects/members
+   or the cash model. Optional one-way bridges (TBH position → Recruiting req) are
+   explicit and opt-in. Phase 1: import + staff-planning grid + rollups. ── */
+var _contractSel='',contractFilter={oy:'',company:'',group:'',status:''};
+function contractsMigrate(){
+  if(!Array.isArray(D.contracts))D.contracts=[];
+  D.contracts.forEach(function(c){
+    if(!c.id)c.id=uid();
+    ['name','number','customer','prime'].forEach(function(k){if(!(k in c))c[k]='';});
+    if(!Array.isArray(c.positions))c.positions=[];
+    if(!Array.isArray(c.pricing))c.pricing=[];
+    if(!Array.isArray(c.scenarios))c.scenarios=[];
+    if(!c.funding||typeof c.funding!=='object')c.funding={};
+    c.positions.forEach(function(p){if(!p.id)p.id=uid();if(!('status' in p))p.status='Filled';});
+  });
+}
+function contractCur(){var cs=D.contracts||[];return cs.find(function(c){return c.id===_contractSel;})||cs[0]||null;}
+function contractSetSel(id){_contractSel=id;renderView();}
+function contractSetFilter(k,v){contractFilter[k]=v;renderView();}
+function _ctFilteredPos(c){
+  return (c.positions||[]).filter(function(p){
+    if(contractFilter.oy&&(p.oy||'')!==contractFilter.oy)return false;
+    if(contractFilter.company&&(p.company||'')!==contractFilter.company)return false;
+    if(contractFilter.group&&(p.workstreamGroup||'')!==contractFilter.group)return false;
+    if(contractFilter.status&&(p.status||'Filled')!==contractFilter.status)return false;
+    return true;
+  });
+}
+function renderContractsView(q){
+  if(!canProforma())return '<div class="empty-msg">No access. Contract Management is restricted to Admin.</div>';
+  var cs=D.contracts||[];
+  var html='<div class="proj-scroll">'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:10px">'
+    +'<div><div style="font-size:18px;font-weight:800">Contract Management — Staff Planning</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Standalone contract staffing plans. This data is <b>separate</b> from Resources, Projects and the cash model — nothing here flows into Capacity or Strategy.</div></div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+    +'<input type="file" id="ct_import_file" accept=".xlsx,.xls" style="display:none" onchange="contractImport()">'
+    +'<button class="btn btn-gold btn-sm" onclick="document.getElementById(\'ct_import_file\').click()">&#8593; Import staffing workbook</button>'
+    +'<button class="btn btn-sec btn-sm" onclick="contractAddNew()">+ New contract</button>'
+    +'</div></div>';
+  if(!cs.length)return html+'<div class="empty-msg">No contracts yet. Click <b>Import staffing workbook</b> to load a staffing plan (XLSX with workstream / resource / FTE / company / rate / annual cost columns), or <b>+ New contract</b> to start one manually.</div></div>';
+  var c=contractCur();
+  html+='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">'
+    +'<label style="font-size:12px;font-weight:700;color:var(--text-secondary)">Contract</label>'
+    +'<select class="fld-sel" style="max-width:340px;min-width:200px" onchange="contractSetSel(this.value)">'+cs.map(function(x){return '<option value="'+x.id+'"'+(x.id===c.id?' selected':'')+'>'+esc(x.name||'(contract)')+(x.number?' · '+esc(x.number):'')+'</option>';}).join('')+'</select>'
+    +'<button class="btn btn-sec btn-sm" onclick="contractEditCore(\''+c.id+'\')">&#9998; Edit details</button>'
+    +'<button class="btn btn-danger-sm btn-sm" onclick="contractDelete(\''+c.id+'\')">Delete contract</button>'
+    +(c.customer||c.prime?'<span style="font-size:11px;color:var(--text-muted)">'+esc([c.customer,c.prime].filter(Boolean).join(' · '))+'</span>':'')
+    +'</div>';
+  return html+_contractStaffHTML(c)+'</div>';
+}
+function _contractStaffHTML(c){
+  var pos=c.positions||[],fpos=_ctFilteredPos(c);
+  var totFte=pos.reduce(function(a,p){return a+(Number(p.fte)||0);},0);
+  var totAnnual=pos.reduce(function(a,p){return a+(Number(p.annualCost)||0);},0);
+  var primeCost=pos.filter(function(p){return /prime/i.test(p.company);}).reduce(function(a,p){return a+(Number(p.annualCost)||0);},0);
+  var subCost=totAnnual-primeCost,tbh=pos.filter(function(p){return p.status==='TBH'||p.status==='TBD';});
+  var floor=c.funding&&c.funding.floor,target=c.funding&&c.funding.target;
+  function kpi(lbl,val,sub,color){return '<div style="flex:1;min-width:120px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">'+lbl+'</div><div style="font-size:19px;font-weight:800;'+(color?'color:'+color:'')+'">'+val+'</div>'+(sub?'<div style="font-size:10px;color:var(--text-muted)">'+sub+'</div>':'')+'</div>';}
+  var kpis='<div style="display:flex;gap:16px;flex-wrap:wrap;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:12px">'
+    +kpi('Total FTE',totFte.toFixed(2),pos.length+' positions','')
+    +kpi('Annual cost',fmt(Math.round(totAnnual)),'@ 1,860 hrs/FTE','')
+    +kpi('Monthly burn',fmt(Math.round(totAnnual/12))+'/mo','','')
+    +kpi('Prime / Sub',(totAnnual?Math.round(primeCost/totAnnual*100):0)+'% / '+(totAnnual?Math.round(subCost/totAnnual*100):0)+'%','prime vs subcontract','')
+    +kpi('TBH / open',String(tbh.length),tbh.length?'positions to fill':'fully staffed',tbh.length?'var(--amber)':'var(--green)')
+    +(floor?kpi('Contract floor',fmt(floor),target?'target '+fmt(target):'','var(--text-secondary)'):'')
+    +'</div>';
+  var ud=function(key){var s={};pos.forEach(function(p){var v=p[key]||'';if(v)s[v]=1;});return Object.keys(s).sort();};
+  function fsel(key,label,vals){return '<select class="fld-sel" style="width:auto" onchange="contractSetFilter(\''+key+'\',this.value)"><option value="">'+label+'</option>'+vals.map(function(v){return '<option value="'+esc(v)+'"'+(contractFilter[key]===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select>';}
+  var anyFilter=contractFilter.oy||contractFilter.company||contractFilter.group||contractFilter.status;
+  var filters='<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">'
+    +(ud('oy').length?fsel('oy','All option years',ud('oy')):'')
+    +fsel('group','All workstreams',ud('workstreamGroup'))
+    +fsel('company','All companies',ud('company'))
+    +fsel('status','All statuses',['Filled','TBH','TBD','Reserve'])
+    +'<button class="btn btn-navy btn-sm" onclick="contractAddPos(\''+c.id+'\')">+ Position</button>'
+    +(anyFilter?'<button class="btn btn-outline btn-sm" onclick="contractFilter={oy:\'\',company:\'\',group:\'\',status:\'\'};renderView()">Clear</button>':'')
+    +'</div>';
+  var byCo={};fpos.forEach(function(p){var k=p.company||'(unspecified)';(byCo[k]=byCo[k]||{fte:0,cost:0});byCo[k].fte+=Number(p.fte)||0;byCo[k].cost+=Number(p.annualCost)||0;});
+  var coChips=Object.keys(byCo).sort(function(a,b){return byCo[b].cost-byCo[a].cost;}).map(function(k){return '<span class="plan-chip">'+esc(k)+': '+byCo[k].fte.toFixed(2)+' FTE · '+fmt(Math.round(byCo[k].cost))+'</span>';}).join('');
+  var groups=[];fpos.forEach(function(p){var g=p.workstreamGroup||'(ungrouped)';if(groups.indexOf(g)===-1)groups.push(g);});
+  var tableHTML=groups.map(function(g){
+    var gp=fpos.filter(function(p){return (p.workstreamGroup||'(ungrouped)')===g;});
+    var gFte=gp.reduce(function(a,p){return a+(Number(p.fte)||0);},0),gCost=gp.reduce(function(a,p){return a+(Number(p.annualCost)||0);},0);
+    return '<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:800;background:var(--page-bg);padding:5px 8px;border-radius:6px;display:flex;justify-content:space-between"><span>'+esc(g)+'</span><span style="color:var(--text-secondary)">'+gFte.toFixed(2)+' FTE · '+fmt(Math.round(gCost))+'</span></div>'
+      +'<table style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr style="text-align:left;color:var(--text-muted);font-size:9px;text-transform:uppercase;letter-spacing:.3px"><th style="padding:3px 6px 3px 0">Resource</th><th>Role</th><th>Company</th><th>LCAT</th><th style="text-align:right">FTE</th><th style="text-align:right">Rate</th><th style="text-align:right">Annual</th><th>Civilian Lead</th><th>PWS</th><th></th></tr></thead><tbody>'
+      +gp.map(function(p){return _ctPosRow(c,p);}).join('')+'</tbody></table></div>';
+  }).join('');
+  if(!fpos.length)tableHTML='<div class="empty-msg">No positions'+(anyFilter?' match the filters':' yet — click + Position or import a workbook')+'.</div>';
+  return kpis+(coChips?'<div style="margin-bottom:10px;display:flex;gap:5px;flex-wrap:wrap">'+coChips+'</div>':'')+filters+tableHTML;
+}
+function _ctPosRow(c,p){
+  var stC={Filled:'var(--green)',TBH:'#D97706',TBD:'#D97706',Reserve:'#7C3AED'}[p.status]||'var(--text-muted)';
+  var bridge=(p.status==='TBH'||p.status==='TBD')?'<button class="btn btn-outline btn-sm" style="font-size:9px;padding:1px 5px" onclick="contractPosToRecruiting(\''+c.id+'\',\''+p.id+'\')" title="Create a Recruiting requisition from this open position (one-way; the contract plan is unchanged)">&rarr; Req</button> ':'';
+  return '<tr style="border-top:1px solid var(--border)">'
+    +'<td style="padding:3px 6px 3px 0"><span style="cursor:pointer;font-weight:600" onclick="contractEditPos(\''+c.id+'\',\''+p.id+'\')">'+esc(p.resource||'(TBH)')+'</span> <span class="plan-chip" style="border-color:'+stC+';color:'+stC+';font-size:9px;padding:0 5px">'+esc(p.status||'Filled')+'</span></td>'
+    +'<td>'+esc(p.role||'')+'</td><td>'+esc(p.company||'')+'</td><td>'+esc(p.lcat||'')+'</td>'
+    +'<td style="text-align:right">'+(Number(p.fte)||0)+'</td><td style="text-align:right;white-space:nowrap">'+(p.rateHr?'$'+p.rateHr:'')+'</td>'
+    +'<td style="text-align:right;white-space:nowrap">'+fmt(Number(p.annualCost)||0)+'</td>'
+    +'<td>'+esc(p.civilianLead||'')+'</td><td style="white-space:nowrap">'+esc(p.pwsRef||'')+'</td>'
+    +'<td style="text-align:right;white-space:nowrap">'+bridge+'<button class="btn btn-danger-sm btn-sm" style="font-size:9px;padding:1px 5px" onclick="contractDelPos(\''+c.id+'\',\''+p.id+'\')">&#10005;</button></td></tr>';
+}
+function contractImport(){
+  var inp=document.getElementById('ct_import_file'),f=inp&&inp.files&&inp.files[0];if(!f)return;
+  toast('Parsing '+f.name+'…','info');
+  var fd=new FormData();fd.append('file',f);
+  fetch('/api/contracts/parse-staffing',{method:'POST',body:fd}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||'parse failed');return j;});}).then(function(j){
+    var c={id:uid(),name:j.name||'Imported contract',number:j.number||'',customer:'',prime:'',
+      positions:(j.positions||[]).map(function(p){p.id=uid();return p;}),
+      pricing:j.pricing||[],scenarios:j.scenarios||[],funding:j.funding||{},importedAt:Date.now(),importedFile:f.name};
+    D.contracts=D.contracts||[];D.contracts.push(c);_contractSel=c.id;contractFilter={oy:'',company:'',group:'',status:''};
+    save();toast('Imported '+c.positions.length+' positions · '+(j.totalFTE||0)+' FTE · '+fmt(Math.round(j.totalAnnual||0))+' annual.','success',6000);renderView();
+  }).catch(function(e){toast('Import failed: '+(e&&e.message||e),'error',7000);});
+}
+function contractAddNew(){
+  openFormModal({over:'Contract Management',title:'New contract',submitLabel:'Create',
+    fields:[{key:'name',label:'Contract name',type:'text',required:true,placeholder:'e.g. BCLM'},{key:'number',label:'Contract number',type:'text',placeholder:'e.g. FA701423C0029'},{key:'customer',label:'Customer / agency',type:'text'},{key:'prime',label:'Prime',type:'text'}],
+    onSubmit:function(v){var c={id:uid(),name:v.name.trim(),number:(v.number||'').trim(),customer:(v.customer||'').trim(),prime:(v.prime||'').trim(),positions:[],pricing:[],scenarios:[],funding:{},createdAt:Date.now()};D.contracts=D.contracts||[];D.contracts.push(c);_contractSel=c.id;save();renderView();toast('Contract created.','success');}});
+}
+function contractEditCore(cid){
+  var c=(D.contracts||[]).find(function(x){return x.id===cid;});if(!c)return;
+  openFormModal({over:'Contract Management',title:'Edit contract — '+esc(c.name),submitLabel:'Save',
+    fields:[{key:'name',label:'Contract name',type:'text',required:true,value:c.name},{key:'number',label:'Contract number',type:'text',value:c.number},{key:'customer',label:'Customer / agency',type:'text',value:c.customer},{key:'prime',label:'Prime',type:'text',value:c.prime},{key:'floor',label:'Contract floor ($/yr, optional)',type:'number',value:(c.funding&&c.funding.floor)||''},{key:'target',label:'Funding target ($/yr, optional)',type:'number',value:(c.funding&&c.funding.target)||''}],
+    onSubmit:function(v){c.name=v.name.trim();c.number=(v.number||'').trim();c.customer=(v.customer||'').trim();c.prime=(v.prime||'').trim();c.funding=c.funding||{};if(v.floor)c.funding.floor=Number(v.floor)||0;if(v.target)c.funding.target=Number(v.target)||0;save();renderView();toast('Saved.','success');}});
+}
+function contractDelete(cid){
+  if(!confirm('Delete this contract and all its staff-planning data? This cannot be undone.'))return;
+  D.contracts=(D.contracts||[]).filter(function(x){return x.id!==cid;});if(_contractSel===cid)_contractSel='';save();renderView();
+}
+function _ctPosFields(p){
+  p=p||{};
+  return [{key:'resource',label:'Resource (name or “TBH …”)',type:'text',value:p.resource||''},
+    {key:'status',label:'Status',type:'select',value:p.status||'Filled',options:['Filled','TBH','TBD','Reserve'].map(function(s){return {value:s,label:s};})},
+    {key:'oy',label:'Option year',type:'text',value:p.oy||''},
+    {key:'workstreamGroup',label:'Workstream group',type:'text',value:p.workstreamGroup||''},
+    {key:'workstream',label:'Workstream',type:'text',value:p.workstream||''},
+    {key:'role',label:'Role / title',type:'text',value:p.role||''},
+    {key:'company',label:'Company',type:'text',value:p.company||''},
+    {key:'lcat',label:'LCAT',type:'text',value:p.lcat||''},
+    {key:'fte',label:'FTE',type:'number',value:(p.fte!=null?p.fte:'')},
+    {key:'rateHr',label:'Rate ($/hr)',type:'number',value:(p.rateHr!=null?p.rateHr:'')},
+    {key:'annualCost',label:'Annual cost ($) — blank = rate × FTE × 1,860',type:'number',value:(p.annualCost!=null?p.annualCost:'')},
+    {key:'civilianLead',label:'Civilian lead',type:'text',value:p.civilianLead||''},
+    {key:'pwsRef',label:'PWS reference',type:'text',value:p.pwsRef||''}];
+}
+function _ctApplyPos(p,v){
+  p.resource=(v.resource||'').trim()||'(TBH)';p.status=v.status||'Filled';p.oy=(v.oy||'').trim();
+  p.workstreamGroup=(v.workstreamGroup||'').trim();p.workstream=(v.workstream||'').trim();p.role=(v.role||'').trim();
+  p.company=(v.company||'').trim();p.lcat=(v.lcat||'').trim();p.fte=Number(v.fte)||0;p.rateHr=Number(v.rateHr)||0;
+  p.civilianLead=(v.civilianLead||'').trim();p.pwsRef=(v.pwsRef||'').trim();
+  var ac=Number(v.annualCost)||0;p.annualCost=ac||Math.round(p.rateHr*p.fte*1860);
+}
+function contractAddPos(cid){
+  var c=(D.contracts||[]).find(function(x){return x.id===cid;});if(!c)return;
+  openFormModal({over:'Contract Management',title:'New position',submitLabel:'Add',fields:_ctPosFields(null),
+    onSubmit:function(v){var p={id:uid()};_ctApplyPos(p,v);c.positions=c.positions||[];c.positions.push(p);save();renderView();toast('Position added.','success');}});
+}
+function contractEditPos(cid,pid){
+  var c=(D.contracts||[]).find(function(x){return x.id===cid;});if(!c)return;var p=(c.positions||[]).find(function(x){return x.id===pid;});if(!p)return;
+  openFormModal({over:'Contract Management',title:'Edit position — '+esc(p.resource||'(TBH)'),submitLabel:'Save',fields:_ctPosFields(p),
+    onSubmit:function(v){_ctApplyPos(p,v);save();renderView();toast('Position saved.','success');}});
+}
+function contractDelPos(cid,pid){
+  var c=(D.contracts||[]).find(function(x){return x.id===cid;});if(!c)return;
+  if(!confirm('Delete this position?'))return;
+  c.positions=(c.positions||[]).filter(function(x){return x.id!==pid;});save();renderView();
+}
+function contractPosToRecruiting(cid,pid){
+  if(typeof canRecruit==='function'&&!canRecruit()){toast('You need Recruiting access to create a requisition.','error');return;}
+  var c=(D.contracts||[]).find(function(x){return x.id===cid;});if(!c)return;var p=(c.positions||[]).find(function(x){return x.id===pid;});if(!p)return;
+  if(!confirm('Create a Recruiting requisition for this open position?\n\nOne-way: it copies the role into Recruiting. The contract plan is unchanged and nothing syncs back.'))return;
+  D.recruitings=D.recruitings||[];
+  D.recruitings.push({id:uid(),status:'open',jdTitle:(p.role||'Open position')+' — '+(c.name||'contract'),
+    jdDescription:'Sourced from contract staffing plan <b>'+esc(c.name||'')+'</b>'+(c.number?' ('+esc(c.number)+')':'')+'.<br>Workstream: '+esc(p.workstream||p.workstreamGroup||'—')+' · LCAT: '+esc(p.lcat||'—')+' · '+(p.fte||0)+' FTE'+(p.civilianLead?' · Civilian lead: '+esc(p.civilianLead):'')+(p.pwsRef?' · PWS '+esc(p.pwsRef):'')+'.',
+    busDevId:'',pmId:'',projectId:'',departmentId:'',jdAttachments:[],createdAt:Date.now(),updatedAt:Date.now(),createdBy:ME?ME.id:'',proposalContingent:false,proposalId:'',rfpRoleSnapshot:null,contractSourceId:cid});
+  save();toast('Recruiting requisition created for “'+(p.role||'position')+'”. Open the Recruiting tab to staff it.','success',6000);
 }
 var orgMode='hier';
 var ORG_VIEWS=[{k:'hier',l:'Hierarchical'},{k:'horiz',l:'Flat / Horizontal'},{k:'matrix',l:'Matrix'},{k:'func',l:'Functional'},{k:'div',l:'Division'}];
@@ -3846,6 +4025,7 @@ function renderView(){
   else if(viewMode==='proj')html=renderProjectsView(q);
   else if(viewMode==='init')html=renderInitiativesView(q);
   else if(viewMode==='opp')html=renderOppView(q);
+  else if(viewMode==='contracts')html=renderContractsView(q);
   else if(viewMode==='over')html=renderProjView(q,'overhead');
   else if(viewMode==='orgchart')html=renderOrgChartView(q);
   else if(viewMode==='plan'||viewMode==='ptask')html=renderPlanView(q);
@@ -12836,7 +13016,7 @@ function rptCsvBuiltin(key){var f=RPT_CSV[key],b=rptBuiltin(key);if(!f||(b&&b.fi
 /* ── AUTH & PERMISSIONS (client-side roles only — not API security) ── */
 var AUTH_USER='khaja@communityforce.com',AUTH_PASS='Namtra_CF27',DEFAULT_PW='CommunityForce2026';
 var ME=null;
-var SECTIONS=[{k:'proforma',tab:'tabProforma',l:'Proforma'},{k:'strat',tab:'tabStrat',l:'Strategy'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'pplan',tab:'tabPPlan',l:'Resource Planning'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources'},{k:'reports',tab:'tabReports',l:'Reports'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'plan',tab:'tabPlan',l:'COE Tasks'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'orgchart',tab:'tabChart',l:'Org Chart'}];
+var SECTIONS=[{k:'proforma',tab:'tabProforma',l:'Proforma'},{k:'strat',tab:'tabStrat',l:'Strategy'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'pplan',tab:'tabPPlan',l:'Resource Planning'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'contracts',tab:'tabContracts',l:'Contract Mgmt'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources'},{k:'reports',tab:'tabReports',l:'Reports'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'plan',tab:'tabPlan',l:'COE Tasks'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'orgchart',tab:'tabChart',l:'Org Chart'}];
 function emailFromName(name){var clean=(name||'').replace(/\(.*?\)/g,'').replace(/[^A-Za-z .\-]/g,'').trim();var parts=clean.split(/\s+/).filter(Boolean);var local=parts.length>=2?(parts[0]+'.'+parts[parts.length-1]):(parts[0]||'user');return local.toLowerCase().replace(/[^a-z0-9.]/g,'')+'@communityforce.com';}
 function authMigrate(){
   if(!D.accounts)D.accounts=[];

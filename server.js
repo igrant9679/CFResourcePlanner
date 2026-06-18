@@ -212,6 +212,7 @@ const PROTECTED_ARRAYS = [
   'knowledgeBank',        // proposal knowledge-bank metadata (text lives in knowledge_docs)
   'resumeBank',           // dedicated standalone resume uploads
   'prospects',            // BizDev prospects (accounts + POCs) in the pipeline
+  'contracts',            // Contract Management staff-planning (self-contained)
 ];
 
 app.post('/api/data', async (req, res) => {
@@ -877,6 +878,120 @@ app.post('/api/subclients/parse', upload.single('file'), async (req, res) => {
     }
     if (!clients.length) return res.status(400).json({ error: 'No client rows found under the header.' });
     res.json({ clients, total, count: clients.length, monthly: Math.round(total / 12) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Parse a contract STAFFING workbook (e.g. BCLM OY2/OY3) into a self-contained
+// contract object: positions (one row per resource), pricing (CLINs), funding
+// targets, and funding scenarios. Stateless — the client stores it in D.contracts.
+app.post('/api/contracts/parse-staffing', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file' });
+    const XLSX = require('xlsx');
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: false });
+    const sheetByName = (re) => wb.SheetNames.find((n) => re.test(n));
+    const aoaOf = (name) => name ? XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: '', raw: true }) : [];
+    const num = (v) => { const n = Number(String(v == null ? '' : v).replace(/[$,\s]/g, '')); return isNaN(n) ? 0 : n; };
+    const findHeader = (aoa, mustHave) => { for (let i = 0; i < Math.min(aoa.length, 8); i++) { const cells = aoa[i].map((c) => String(c).toLowerCase()); if (mustHave.every((re) => cells.some((c) => re.test(c)))) return i; } return -1; };
+
+    // ── Positions: prefer the normalized "Resource Assignments" sheet ──
+    const posSheet = sheetByName(/resource assignments/i) || sheetByName(/staffing/i);
+    const aoa = aoaOf(posSheet);
+    const titleBlob = aoa.slice(0, 3).map((r) => r.join(' ')).join(' ');
+    const oyMatch = titleBlob.match(/option year\s*(\d)|OY\s*(\d)/i);
+    const oy = oyMatch ? ('OY' + (oyMatch[1] || oyMatch[2])) : '';
+    const positions = [];
+    const hi = findHeader(aoa, [/\bfte\b/, /company/, /role|title/]);
+    if (hi >= 0) {
+      const hg = aoa[hi].map((c) => String(c).toLowerCase());
+      const col = (re, exclude) => { for (let i = 0; i < hg.length; i++) { if (re.test(hg[i]) && i !== exclude) return i; } return -1; };
+      const ciGroup = col(/workstream group/);
+      const ci = {
+        group: ciGroup, workstream: col(/workstream/, ciGroup),
+        resource: col(/assigned resource|resource name|^resource/), role: col(/role|title/),
+        fte: col(/\bfte\b|^fte/), company: col(/company/), lcat: col(/lcat/),
+        rate: col(/rate/), annual: col(/annual cost|^total/), lead: col(/civilian lead|^lead/), pws: col(/pws/),
+      };
+      let lastGroup = '';
+      for (const row of aoa.slice(hi + 1)) {
+        const grp = ci.group >= 0 ? String(row[ci.group] || '').trim() : '';
+        if (grp) lastGroup = grp;
+        const resource = ci.resource >= 0 ? String(row[ci.resource] || '').trim() : '';
+        const ws = ci.workstream >= 0 ? String(row[ci.workstream] || '').trim() : '';
+        if (!resource) continue;   // skip subtotal/total rows (blank resource) — a real position is always named (or "TBH …")
+        if (/subtotal|grand total|^total\b/i.test(resource) || /subtotal|grand total/i.test(ws)) continue;
+        const fte = ci.fte >= 0 ? num(row[ci.fte]) : 0;
+        const rateHr = ci.rate >= 0 ? num(row[ci.rate]) : 0;
+        let annual = ci.annual >= 0 ? num(row[ci.annual]) : 0;
+        if (!annual && rateHr && fte) annual = Math.round(rateHr * fte * 1860);
+        const status = /\b(tbh|tbd|tbc|tbb|to be|placeholder)\b/i.test(resource) ? 'TBH' : (/reserve/i.test(resource) ? 'Reserve' : 'Filled');
+        positions.push({
+          oy, workstreamGroup: lastGroup, workstream: ws, resource,
+          role: ci.role >= 0 ? String(row[ci.role] || '').trim() : '',
+          fte, company: ci.company >= 0 ? String(row[ci.company] || '').trim() : '',
+          lcat: ci.lcat >= 0 ? String(row[ci.lcat] || '').trim() : '',
+          rateHr, annualCost: annual,
+          civilianLead: ci.lead >= 0 ? String(row[ci.lead] || '').trim() : '',
+          pwsRef: ci.pws >= 0 ? String(row[ci.pws] || '').trim() : '', status, notes: '',
+        });
+      }
+    }
+
+    // ── Pricing (CLINs by option year) ──
+    const pricing = [];
+    const prA = aoaOf(sheetByName(/pricing/i));
+    const phi = findHeader(prA, [/clin|cost element/, /amount/]);
+    if (phi >= 0) {
+      const hg = prA[phi].map((c) => String(c).toLowerCase());
+      const col = (re) => hg.findIndex((c) => re.test(c));
+      const pc = { period: col(/period/), pop: col(/pop/), clin: col(/clin/), element: col(/element/), orig: col(/original/), revised: col(/revised/), notes: col(/notes/) };
+      let lastPeriod = '', lastPop = '';
+      for (const row of prA.slice(phi + 1)) {
+        const period = pc.period >= 0 ? String(row[pc.period] || '').trim() : '';
+        if (period) lastPeriod = period;
+        const pop = pc.pop >= 0 ? String(row[pc.pop] || '').trim() : '';
+        if (pop) lastPop = pop;
+        const element = pc.element >= 0 ? String(row[pc.element] || '').trim() : '';
+        const clin = pc.clin >= 0 ? String(row[pc.clin] || '').trim() : '';
+        if (!element && !clin) continue;
+        pricing.push({ period: lastPeriod, pop: lastPop, clin, element, original: pc.orig >= 0 ? num(row[pc.orig]) : 0, revised: pc.revised >= 0 ? num(row[pc.revised]) : 0, notes: pc.notes >= 0 ? String(row[pc.notes] || '').trim() : '' });
+      }
+    }
+
+    // ── Funding targets (floor / baseline / target) from the spend-justification sheet ──
+    const funding = {};
+    const fjA = aoaOf(sheetByName(/justification|spend/i));
+    for (const row of fjA) {
+      const label = String(row[0] || '').toLowerCase();
+      const lastNum = row.reduce((acc, c) => { const n = num(c); return n ? n : acc; }, 0);
+      if (!lastNum) continue;
+      if (/floor/.test(label) && !funding.floor) funding.floor = lastNum;
+      else if (/baseline/.test(label) && !funding.baseline) funding.baseline = lastNum;
+      else if (/funding target/.test(label) && !funding.target) funding.target = lastNum;
+      else if (/combined/.test(label) && !funding.combined) funding.combined = lastNum;
+    }
+
+    // ── Funding scenarios (A/B/C comparison) ──
+    const scenarios = [];
+    const scA = aoaOf(sheetByName(/funding scenario|scenario/i));
+    const shi = findHeader(scA, [/scenario a|dimension/]);
+    if (shi >= 0) {
+      for (const row of scA.slice(shi + 1)) {
+        const dim = String(row[0] || '').trim();
+        if (!dim) continue;
+        scenarios.push({ dimension: dim, a: String(row[1] || '').trim(), b: String(row[2] || '').trim(), c: String(row[3] || '').trim(), notes: String(row[4] || '').trim() });
+      }
+    }
+
+    const numberMatch = titleBlob.match(/\bFA\w{10,}\b/) || (prA.length ? prA.map((r) => r.join(' ')).join(' ').match(/\bFA\w{10,}\b/) : null);
+    res.json({
+      name: (req.body && req.body.name) || 'BCLM',
+      number: numberMatch ? numberMatch[0] : '',
+      positions, pricing, funding, scenarios,
+      count: positions.length,
+      totalFTE: Math.round(positions.reduce((a, p) => a + (Number(p.fte) || 0), 0) * 100) / 100,
+      totalAnnual: positions.reduce((a, p) => a + (Number(p.annualCost) || 0), 0),
+    });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.get('/api/govops/runs', async (req, res) => {
