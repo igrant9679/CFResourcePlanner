@@ -3142,7 +3142,7 @@ function _projDetailBody(p){
    or the cash model. Optional one-way bridges (TBH position → Recruiting req) are
    explicit and opt-in. Phase 1: import + staff-planning grid + rollups. ── */
 var _contractSel='',contractFilter={oy:'',company:'',group:'',status:''},contractGroupBy='workstreamGroup',_ctGroupList=[];
-var CT_GROUPBY=[{k:'workstreamGroup',l:'Workstream'},{k:'civilianLead',l:'Civilian Lead'},{k:'company',l:'Company'}];
+var CT_GROUPBY=[{k:'workstreamGroup',l:'Workstream'},{k:'civilianLead',l:'Civilian Lead'},{k:'contractorLead',l:'Contractor Lead'},{k:'company',l:'Company'}];
 function contractSetGroupBy(k){contractGroupBy=k;renderView();}
 function contractsMigrate(){
   if(!Array.isArray(D.contracts))D.contracts=[];
@@ -3243,7 +3243,7 @@ function _contractStaffHTML(c){
       :'<tr><td colspan="11" style="padding:8px;font-size:11px;color:var(--text-muted);font-style:italic">No positions in this '+esc(GLBL.toLowerCase())+' yet — click <b>+ Position</b>.</td></tr>';
     return '<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:12px">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;background:linear-gradient(135deg,var(--navy),var(--navy-light));color:#fff"><span style="font-size:13px;font-weight:800">'+esc(g)+'</span><span style="display:flex;gap:10px;align-items:center"><span style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.85);white-space:nowrap">'+gFte.toFixed(2)+' FTE · '+fmt(Math.round(gCost))+'</span>'+addBtn+'</span></div>'
-      +'<div style="overflow-x:auto"><table style="width:100%;font-size:11.5px;border-collapse:collapse;min-width:920px"><thead><tr style="text-align:left;color:var(--text-muted);font-size:9px;text-transform:uppercase;letter-spacing:.3px;background:var(--page-bg)"><th style="padding:5px 8px">Resource</th><th style="padding:5px 8px">Role</th><th style="padding:5px 8px">LCAT</th><th style="padding:5px 8px">Company</th><th style="padding:5px 8px;text-align:right">FTE</th><th style="padding:5px 8px;text-align:right">$/hr</th><th style="padding:5px 8px;text-align:right">Annual</th><th style="padding:5px 8px">Civilian Lead</th><th style="padding:5px 8px">PWS</th><th style="padding:5px 8px">Status</th><th style="padding:5px 8px"></th></tr></thead><tbody>'
+      +'<div style="overflow-x:auto"><table style="width:100%;font-size:11.5px;border-collapse:collapse;min-width:920px"><thead><tr style="text-align:left;color:var(--text-muted);font-size:9px;text-transform:uppercase;letter-spacing:.3px;background:var(--page-bg)"><th style="padding:5px 8px">Resource</th><th style="padding:5px 8px">Contractor Lead</th><th style="padding:5px 8px">LCAT</th><th style="padding:5px 8px">Company</th><th style="padding:5px 8px;text-align:right">FTE</th><th style="padding:5px 8px;text-align:right">$/hr</th><th style="padding:5px 8px;text-align:right">Annual</th><th style="padding:5px 8px">Civilian Lead</th><th style="padding:5px 8px">PWS</th><th style="padding:5px 8px">Status</th><th style="padding:5px 8px"></th></tr></thead><tbody>'
       +rows+'</tbody></table></div></div>';
   }).join('');
   if(!groups.length)tableHTML='<div class="empty-msg">No positions'+(anyFilter?' match the filters':' yet — click + Position or import a workbook')+'.</div>';
@@ -3266,7 +3266,7 @@ function _ctPosRow(c,p,i){
   var bridge=(p.status==='TBH'||p.status==='TBD')?'<button class="btn btn-outline btn-sm" style="font-size:9px;padding:1px 6px" onclick="contractPosToRecruiting(\''+c.id+'\',\''+p.id+'\')" title="Create a Recruiting requisition from this open position (one-way)">&rarr; Req</button> ':'';
   return '<tr style="border-top:1px solid var(--border);'+bg+'">'
     +'<td style="padding:2px 4px;min-width:140px">'+cin('resource')+'</td>'
-    +'<td style="padding:2px 4px;min-width:130px">'+cin('role')+'</td>'
+    +'<td style="padding:2px 4px;min-width:130px">'+cin('contractorLead')+'</td>'
     +'<td style="padding:2px 4px;min-width:120px">'+cin('lcat')+'</td>'
     +'<td style="padding:2px 4px;min-width:130px">'+cin('company')+'</td>'
     +'<td style="padding:2px 4px;width:58px">'+cin('fte','number')+'</td>'
@@ -3335,6 +3335,7 @@ function _ctPosFields(p,c){
     {key:'rateHr',label:'Rate ($/hr)',type:'number',value:(p.rateHr!=null?p.rateHr:'')},
     {key:'annualCost',label:'Annual cost ($) — blank = rate × FTE × 1,860',type:'number',value:(p.annualCost!=null?p.annualCost:'')},
     {key:'civilianLead',label:'Civilian lead',type:'text',value:p.civilianLead||''},
+    {key:'contractorLead',label:'Contractor lead',type:'text',value:p.contractorLead||''},
     {key:'pwsRef',label:'PWS reference',type:'text',value:p.pwsRef||''}];
 }
 function _ctApplyPos(p,v,c){
@@ -3343,7 +3344,7 @@ function _ctApplyPos(p,v,c){
   p.resource=(v.resource||'').trim()||'(TBH)';p.status=v.status||'Filled';p.oy=(v.oy||'').trim();
   p.workstreamGroup=wg;p.workstream=(v.workstream||'').trim();p.role=(v.role||'').trim();
   p.company=(v.company||'').trim();p.lcat=(v.lcat||'').trim();p.fte=Number(v.fte)||0;p.rateHr=Number(v.rateHr)||0;
-  p.civilianLead=(v.civilianLead||'').trim();p.pwsRef=(v.pwsRef||'').trim();
+  p.civilianLead=(v.civilianLead||'').trim();p.contractorLead=(v.contractorLead||'').trim();p.pwsRef=(v.pwsRef||'').trim();
   var ac=Number(v.annualCost)||0;p.annualCost=ac||Math.round(p.rateHr*p.fte*1860);
 }
 function contractAddPos(cid,preset){
