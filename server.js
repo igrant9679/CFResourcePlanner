@@ -894,48 +894,65 @@ app.post('/api/contracts/parse-staffing', upload.single('file'), async (req, res
     const num = (v) => { const n = Number(String(v == null ? '' : v).replace(/[$,\s]/g, '')); return isNaN(n) ? 0 : n; };
     const findHeader = (aoa, mustHave) => { for (let i = 0; i < Math.min(aoa.length, 8); i++) { const cells = aoa[i].map((c) => String(c).toLowerCase()); if (mustHave.every((re) => cells.some((c) => re.test(c)))) return i; } return -1; };
 
-    // ── Positions: prefer the normalized "Resource Assignments" sheet ──
-    const posSheet = sheetByName(/resource assignments/i) || sheetByName(/staffing/i);
-    const aoa = aoaOf(posSheet);
-    const titleBlob = aoa.slice(0, 3).map((r) => r.join(' ')).join(' ');
-    const oyMatch = titleBlob.match(/option year\s*(\d)|OY\s*(\d)/i);
-    const oy = oyMatch ? ('OY' + (oyMatch[1] || oyMatch[2])) : '';
-    const positions = [];
-    const hi = findHeader(aoa, [/\bfte\b/, /company/, /role|title/]);
-    if (hi >= 0) {
+    // ── Positions: read each staffing sheet, tagging rows with their option year. ──
+    // Handles BOTH the normalized "Resource Assignments" layout (one row per named
+    // resource) and the "requirements" layout (Role + Quantity, names in Comments).
+    function extractPositions(aoa) {
+      if (!aoa || !aoa.length) return [];
+      const title = aoa.slice(0, 3).map((r) => r.join(' ')).join(' ');
+      const oyM = title.match(/option year\s*(\d)|\bOY\s*(\d)/i);
+      const oy = oyM ? ('OY' + (oyM[1] || oyM[2])) : '';
+      let hi = -1;
+      for (let i = 0; i < Math.min(aoa.length, 8); i++) {
+        const cells = aoa[i].map((c) => String(c).toLowerCase());
+        if (cells.some((c) => /workstream/.test(c)) && cells.some((c) => /role|title/.test(c)) && cells.some((c) => /\bfte\b|^fte|quantity|\bqty\b/.test(c))) { hi = i; break; }
+      }
+      if (hi < 0) return [];
       const hg = aoa[hi].map((c) => String(c).toLowerCase());
       const col = (re, exclude) => { for (let i = 0; i < hg.length; i++) { if (re.test(hg[i]) && i !== exclude) return i; } return -1; };
       const ciGroup = col(/workstream group/);
+      const ciAssigned = col(/assigned resource|resource name/);   // explicit named-resource column ⇒ assignments layout
       const ci = {
         group: ciGroup, workstream: col(/workstream/, ciGroup),
-        resource: col(/assigned resource|resource name|^resource/), role: col(/role|title/),
-        fte: col(/\bfte\b|^fte/), company: col(/company/), lcat: col(/lcat/),
-        rate: col(/rate/), annual: col(/annual cost|^total/), lead: col(/civilian lead|^lead/), pws: col(/pws/),
+        resource: ciAssigned >= 0 ? ciAssigned : col(/^resource|comments|named|incumbent/),
+        role: col(/role|title/), fte: col(/\bfte\b|^fte|quantity|\bqty\b/),
+        company: col(/company/), lcat: col(/lcat/), rate: col(/rate/),
+        annual: col(/annual\s*cost|annual/), lead: col(/civilian lead|^lead/), pws: col(/pws/),
       };
-      let lastGroup = '';
+      const requireResource = ciAssigned >= 0;   // assignments: each row needs a named resource; requirements: needs a role
+      const out = []; let lastGroup = '';
       for (const row of aoa.slice(hi + 1)) {
         const grp = ci.group >= 0 ? String(row[ci.group] || '').trim() : '';
         if (grp) lastGroup = grp;
         const resource = ci.resource >= 0 ? String(row[ci.resource] || '').trim() : '';
+        const role = ci.role >= 0 ? String(row[ci.role] || '').trim() : '';
         const ws = ci.workstream >= 0 ? String(row[ci.workstream] || '').trim() : '';
-        if (!resource) continue;   // skip subtotal/total rows (blank resource) — a real position is always named (or "TBH …")
-        if (/subtotal|grand total|^total\b/i.test(resource) || /subtotal|grand total/i.test(ws)) continue;
+        if (/subtotal|grand total|^total\b/i.test(resource) || /subtotal|grand total/i.test(ws) || /subtotal|grand total/i.test(role)) continue;
+        if (requireResource ? !resource : (!role && !resource)) continue;
         const fte = ci.fte >= 0 ? num(row[ci.fte]) : 0;
         const rateHr = ci.rate >= 0 ? num(row[ci.rate]) : 0;
         let annual = ci.annual >= 0 ? num(row[ci.annual]) : 0;
         if (!annual && rateHr && fte) annual = Math.round(rateHr * fte * 1860);
-        const status = /\b(tbh|tbd|tbc|tbb|to be|placeholder)\b/i.test(resource) ? 'TBH' : (/reserve/i.test(resource) ? 'Reserve' : 'Filled');
-        positions.push({
-          oy, workstreamGroup: lastGroup, workstream: ws, resource,
-          role: ci.role >= 0 ? String(row[ci.role] || '').trim() : '',
-          fte, company: ci.company >= 0 ? String(row[ci.company] || '').trim() : '',
+        const status = /\b(tbh|tbd|tbc|tbb|to be|placeholder|open)\b/i.test(resource) ? 'TBH' : (/reserve/i.test(resource) ? 'Reserve' : (resource ? 'Filled' : 'TBH'));
+        out.push({
+          oy, workstreamGroup: lastGroup || ws, workstream: ws, resource: resource || '(TBH)', role, fte,
+          company: ci.company >= 0 ? String(row[ci.company] || '').trim() : '',
           lcat: ci.lcat >= 0 ? String(row[ci.lcat] || '').trim() : '',
           rateHr, annualCost: annual,
           civilianLead: ci.lead >= 0 ? String(row[ci.lead] || '').trim() : '',
           pwsRef: ci.pws >= 0 ? String(row[ci.pws] || '').trim() : '', status, notes: '',
         });
       }
+      return out;
     }
+    const posSheets = [];
+    const oy3a = sheetByName(/resource assignments/i); if (oy3a) posSheets.push(oy3a);
+    const oy2s = sheetByName(/oy2.*staffing/i); if (oy2s) posSheets.push(oy2s);
+    if (!posSheets.length) { const s = sheetByName(/staffing/i); if (s) posSheets.push(s); }
+    let positions = [];
+    posSheets.forEach((sn) => { positions = positions.concat(extractPositions(aoaOf(sn))); });
+    const titleBlob = (aoaOf(posSheets[0] || '').slice(0, 3).map((r) => r.join(' ')).join(' '));
+    const byOy = []; positions.forEach((p) => { if (p.oy && byOy.indexOf(p.oy) < 0) byOy.push(p.oy); });
 
     // ── Pricing (CLINs by option year) ──
     const pricing = [];
@@ -987,7 +1004,7 @@ app.post('/api/contracts/parse-staffing', upload.single('file'), async (req, res
     res.json({
       name: (req.body && req.body.name) || 'BCLM',
       number: numberMatch ? numberMatch[0] : '',
-      positions, pricing, funding, scenarios,
+      positions, pricing, funding, scenarios, byOy,
       count: positions.length,
       totalFTE: Math.round(positions.reduce((a, p) => a + (Number(p.fte) || 0), 0) * 100) / 100,
       totalAnnual: positions.reduce((a, p) => a + (Number(p.annualCost) || 0), 0),

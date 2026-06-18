@@ -174,6 +174,11 @@ body{font-family:"Segoe UI","Helvetica Neue","Trebuchet MS",Tahoma,sans-serif;ba
 .proj-scroll::-webkit-scrollbar{height:7px;}
 .proj-scroll::-webkit-scrollbar-track{background:transparent;}
 .proj-scroll::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:4px;}
+.ct-cell{width:100%;border:1px solid transparent;background:transparent;border-radius:4px;padding:3px 5px;font-size:11.5px;color:var(--text-primary);font-family:inherit;box-sizing:border-box;}
+.ct-cell:hover{border-color:var(--border);}
+.ct-cell:focus{border-color:var(--navy);background:#fff;outline:none;}
+.ct-cell.num{text-align:right;}
+select.ct-cell{cursor:pointer;-webkit-appearance:none;appearance:none;}
 .proj-card{flex:0 0 300px;width:300px;background:var(--card-bg);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow-sm);overflow:hidden;display:flex;flex-direction:column;}
 .proj-hdr{padding:13px 15px;display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid var(--border);gap:8px;}
 .proj-hdr-left{flex:1;min-width:0;}
@@ -2909,7 +2914,7 @@ function _initDetailHTML(){
     +'<button class="btn btn-sec btn-sm" onclick="openEditProject(\''+p.id+'\')">&#9998; Edit core</button>'
     +'<button class="btn btn-sec btn-sm" onclick="_initEditDetails(\''+p.id+'\')">&#9998; Edit briefing fields</button>'
     +'</div>';
-  return '<div class="proj-scroll">'+sel+_initDetailBody(p)+'</div>';
+  return '<div style="max-width:1100px;margin:0 auto">'+sel+_initDetailBody(p)+'</div>';
 }
 function _initEditDetails(id){
   var p=(D.projects||[]).find(function(x){return x.id===id;});if(!p)return;
@@ -2941,6 +2946,12 @@ function _initOppProb(o){return (o.probabilityClose!=null&&o.probabilityClose!==
 function _initCard(title,inner,actions){
   return '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:12px">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px"><div style="font-size:13px;font-weight:800">'+title+'</div>'+(actions||'')+'</div>'+inner+'</div>';
+}
+// Section card with a navy header bar (matches the Contract Management layout).
+function _navSection(title,inner,actions){
+  return '<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:12px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;background:linear-gradient(135deg,var(--navy),var(--navy-light));color:#fff"><span style="font-size:13px;font-weight:800">'+title+'</span>'+(actions?'<span style="display:flex;gap:6px">'+actions+'</span>':'')+'</div>'
+    +'<div style="padding:12px 14px">'+inner+'</div></div>';
 }
 function _initProseBlock(txt,empty,editFn,id){
   var body=txt?'<div style="font-size:12px;color:var(--text-secondary);line-height:1.5;white-space:pre-wrap">'+esc(txt)+'</div>':'<div style="font-size:12px;color:var(--text-muted);font-style:italic">'+empty+'</div>';
@@ -3062,7 +3073,7 @@ function _projDetailHTML(){
     +'<select class="fld-sel" style="max-width:360px;flex:1;min-width:220px" onchange="projSetDetail(this.value)">'+opts+'</select>'
     +'<button class="btn btn-sec btn-sm" onclick="openEditProject(\''+p.id+'\')">&#9998; Edit core</button>'
     +'</div>';
-  return '<div class="proj-scroll">'+sel+_projDetailBody(p)+'</div>';
+  return '<div style="max-width:1100px;margin:0 auto">'+sel+_projDetailBody(p)+'</div>';
 }
 function _projDetailBody(p){
   var all=allM();
@@ -3080,55 +3091,50 @@ function _projDetailBody(p){
   var tasks=(D.activities||[]).filter(function(a){return a.projectId===p.id&&(a.kind||'coe')==='project';});
   var tasksDone=tasks.filter(function(a){return a.status==='done';}).length;
   var props=(D.proposals||[]).filter(function(pr){return pr.opportunityId===p.id||(pr.pricing&&pr.pricing.linkedProjectId===p.id);});
-  function stat(lbl,val,sub,color){return '<div style="flex:1;min-width:130px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">'+lbl+'</div><div style="font-size:19px;font-weight:800;'+(color?'color:'+color:'')+'">'+val+'</div>'+(sub?'<div style="font-size:10px;color:var(--text-muted)">'+sub+'</div>':'')+'</div>';}
-  // Header
-  var html='<div style="background:linear-gradient(135deg,var(--navy),var(--navy-light));color:#fff;border-radius:var(--radius);padding:14px 16px;margin-bottom:12px">'
+  function kpi(lbl,val,sub,color){return '<div style="flex:1;min-width:120px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">'+lbl+'</div><div style="font-size:19px;font-weight:800;'+(color?'color:'+color:'')+'">'+val+'</div>'+(sub?'<div style="font-size:10px;color:var(--text-muted)">'+sub+'</div>':'')+'</div>';}
+  // Header (hero)
+  var html='<div style="background:linear-gradient(135deg,var(--navy),var(--navy-light));color:#fff;border-radius:10px;padding:14px 16px;margin-bottom:12px">'
     +'<div style="font-size:18px;font-weight:800">'+esc(p.name)+(p.fiscalYear?' <span style="font-size:11px;font-weight:700;background:rgba(255,255,255,0.18);padding:2px 8px;border-radius:10px;vertical-align:middle">'+esc(p.fiscalYear)+'</span>':'')+'</div>'
     +'<div style="font-size:11px;color:rgba(255,255,255,0.6);margin-top:3px">'+(p.pm?'PM: '+esc(p.pm)+' &nbsp;·&nbsp; ':'')+'Active '+esc(p.startDate||'start')+' → '+esc(p.endDate||'ongoing')+'</div>'
     +(p.description?'<div style="font-size:12px;color:rgba(255,255,255,0.8);margin-top:7px;line-height:1.45">'+sanitizeHTML(p.description)+'</div>':'')
     +'</div>';
-  // Executive summary at top (sized to ~2–3 cards)
+  // Executive summary (top), full-width navy section
   var execInner=p.narrative
-    ?'<div style="font-size:13px;color:var(--text-secondary);line-height:1.65;min-height:150px">'+sanitizeHTML(p.narrative)+'</div>'
-    :'<div style="font-size:12.5px;color:var(--text-muted);font-style:italic;min-height:150px;display:flex;align-items:center;justify-content:center;text-align:center">No executive summary yet — capture the reasoning and justification. Click “+ Add”.</div>';
-  html+=_initCard('Executive summary',execInner,'<button class="btn btn-sec btn-sm" style="font-size:11px;padding:3px 10px" onclick="stratEditNarrative(\''+p.id+'\')">'+(p.narrative?'&#9998; Edit':'+ Add')+'</button>');
-  // Financials & scorecard
-  html+=_initCard('Financials &amp; scorecard',
-    '<div style="display:flex;gap:16px;flex-wrap:wrap">'
-    +stat('Monthly revenue',fmt(revNow)+'/mo',p.fiscalYear||'real revenue','var(--green)')
-    +stat('Monthly cost (labor)',fmt(costMo)+'/mo',assigned.length+' assigned','')
-    +stat('Net / mo',fmt(net)+'/mo','revenue − labor',net>=0?'var(--green)':'var(--red)')
-    +stat('Margin',margin==null?'—':margin+'%','of revenue',margin==null?'':(margin>=0?'var(--green)':'var(--red)'))
-    +stat('FY'+String(ny).slice(2)+' contribution',fmt(Math.round(contrib)),'projected this calendar year','')
-    +(clins.length?stat('CLIN revenue',fmt(clinRev)+'/mo',clins.length+' CLIN'+(clins.length===1?'':'s'),''):'')
-    +'</div>'
-    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">'
-    +(mileAll.length?'<span class="plan-chip">'+mileDone+'/'+mileAll.length+' milestones</span>':'')
-    +(tasks.length?'<span class="plan-chip">'+tasksDone+'/'+tasks.length+' tasks done</span>':'')
-    +'</div>');
+    ?'<div style="font-size:13px;color:var(--text-secondary);line-height:1.65;min-height:140px">'+sanitizeHTML(p.narrative)+'</div>'
+    :'<div style="font-size:12.5px;color:var(--text-muted);font-style:italic;min-height:140px;display:flex;align-items:center;justify-content:center;text-align:center">No executive summary yet — capture the reasoning and justification. Click “+ Add”.</div>';
+  html+=_navSection('Executive summary',execInner,'<button class="btn btn-sec btn-sm" style="font-size:11px;padding:3px 10px" onclick="stratEditNarrative(\''+p.id+'\')">'+(p.narrative?'&#9998; Edit':'+ Add')+'</button>');
+  // Financials — read-only KPI strip (matches the Contract Management layout)
+  html+='<div style="display:flex;gap:16px;flex-wrap:wrap;background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px">'
+    +kpi('Monthly revenue',fmt(revNow)+'/mo',p.fiscalYear||'real revenue','var(--green)')
+    +kpi('Monthly cost',fmt(costMo)+'/mo',assigned.length+' assigned','')
+    +kpi('Net / mo',fmt(net)+'/mo','revenue − labor',net>=0?'var(--green)':'var(--red)')
+    +kpi('Margin',margin==null?'—':margin+'%','of revenue',margin==null?'':(margin>=0?'var(--green)':'var(--red)'))
+    +kpi('FY'+String(ny).slice(2)+' contribution',fmt(Math.round(contrib)),'projected this calendar year','')
+    +(clins.length?kpi('CLIN revenue',fmt(clinRev)+'/mo',clins.length+' CLIN'+(clins.length===1?'':'s'),''):'')
+    +'</div>';
   // CLIN breakdown
   if(clins.length){
-    var clinInner='<table style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr style="color:var(--text-muted);text-align:left"><th style="padding:2px 0">CLIN</th><th>Title</th><th style="text-align:right">Revenue/mo</th><th style="text-align:right">Cost</th><th style="text-align:right">P/L</th></tr></thead><tbody>'
-      +clins.map(function(c){var rev=Number(c.revenue)||0,cost=clinAssignedCost(p.id,c.id),pl=rev-cost;return '<tr style="border-top:1px solid var(--border)"><td style="padding:3px 0">'+esc(c.number||'')+'</td><td>'+esc(c.title||c.positionTitle||'')+'</td><td style="text-align:right">'+fmt(rev)+'</td><td style="text-align:right;color:var(--red)">'+fmt(cost)+'</td><td style="text-align:right;font-weight:700;color:'+(pl>=0?'var(--green)':'var(--red)')+'">'+(pl<0?'−':'')+fmt(Math.abs(pl))+'</td></tr>';}).join('')
+    var clinInner='<table style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr style="color:var(--text-muted);text-align:left;font-size:9px;text-transform:uppercase"><th style="padding:3px 6px 3px 0">CLIN</th><th>Title</th><th style="text-align:right">Revenue/mo</th><th style="text-align:right">Cost</th><th style="text-align:right">P/L</th></tr></thead><tbody>'
+      +clins.map(function(c){var rev=Number(c.revenue)||0,cost=clinAssignedCost(p.id,c.id),pl=rev-cost;return '<tr style="border-top:1px solid var(--border)"><td style="padding:3px 6px 3px 0">'+esc(c.number||'')+'</td><td>'+esc(c.title||c.positionTitle||'')+'</td><td style="text-align:right">'+fmt(rev)+'</td><td style="text-align:right;color:var(--red)">'+fmt(cost)+'</td><td style="text-align:right;font-weight:700;color:'+(pl>=0?'var(--green)':'var(--red)')+'">'+(pl<0?'−':'')+fmt(Math.abs(pl))+'</td></tr>';}).join('')
       +'</tbody></table>';
-    html+=_initCard('CLIN breakdown ('+clins.length+')',clinInner,'<button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 8px" onclick="openEditProject(\''+p.id+'\')">&#9998; Edit CLINs</button>');
+    html+=_navSection('CLIN breakdown ('+clins.length+')',clinInner,'<button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 8px" onclick="openEditProject(\''+p.id+'\')">&#9998; Edit CLINs</button>');
   }
   // People assigned
   var peopleInner=assigned.length
     ?'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:4px 14px">'+assigned.map(function(m){var pct=projDisplayPct(m,p.id);return '<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:3px 0;font-size:12px"><span class="proj-mem-link" onclick="openPersonProfile(\''+m.id+'\')" style="cursor:pointer">'+esc(m.name)+' <span style="color:var(--text-muted);font-size:10px">'+esc(m._dn||'')+'</span></span><span style="font-weight:600">'+pct+'% · '+fmt(Math.round(m.cost*pct/100))+'</span></div>';}).join('')+'</div>'
     :'<div style="font-size:12px;color:var(--text-muted);font-style:italic">No resources assigned.</div>';
-  html+=_initCard('People assigned ('+assigned.length+')',peopleInner);
+  html+=_navSection('People assigned ('+assigned.length+')',peopleInner);
   // Milestones
   var mileInner=mileAll.length
     ?'<div style="font-size:12px">'+mileAll.map(function(a){var ic=a.status==='done'?'✓':a.status==='blocked'?'⛔':'○';var col=a.status==='done'?'var(--green)':a.status==='blocked'?'var(--red)':'var(--text-muted)';return '<div style="padding:3px 0;border-bottom:1px solid var(--border)"><span style="color:'+col+';font-weight:700">'+ic+'</span> '+esc(a.subtask||a.task||'milestone')+(a.dueDate?' <span style="color:var(--text-muted);font-size:10px">· due '+esc(a.dueDate)+'</span>':'')+'</div>';}).join('')+'</div>'
     :'<div style="font-size:12px;color:var(--text-muted);font-style:italic">No milestones yet.</div>';
-  html+=_initCard('Milestones ('+mileDone+'/'+mileAll.length+')',mileInner,'<button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 8px" onclick="stratAddMilestone(\''+p.id+'\')">+ Milestone</button>');
+  html+=_navSection('Milestones ('+mileDone+'/'+mileAll.length+')',mileInner,'<button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 8px" onclick="stratAddMilestone(\''+p.id+'\')">+ Milestone</button>');
   // Proposals associated
   var propInner=props.length
     ?'<div>'+props.map(function(pr){return '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding:5px 0;font-size:12px"><span>'+esc(pr.title||'(untitled proposal)')+'</span><span style="display:flex;gap:8px;align-items:center"><span class="plan-chip">'+esc(pr.status||'draft')+'</span><a href="#" onclick="event.preventDefault();viewMode=\'prop\';renderView()" style="font-size:11px;font-weight:700">Open →</a></span></div>';}).join('')+'</div>'
     :'<div style="font-size:12px;color:var(--text-muted);font-style:italic">No proposals linked to this project.</div>';
-  html+=_initCard('Proposals associated ('+props.length+')',propInner);
-  if((p.attachments||[]).length)html+=_initCard('Attachments',projAttachHTML(p).replace('margin-top:7px',''));
+  html+=_navSection('Proposals associated ('+props.length+')',propInner);
+  if((p.attachments||[]).length)html+=_navSection('Attachments',projAttachHTML(p).replace('margin-top:7px',''));
   return html;
 }
 /* ── CONTRACTS MANAGEMENT MODULE — self-contained contract staff planning.
@@ -3184,15 +3190,20 @@ function renderContractsView(q){
   return html+_contractStaffHTML(c)+'</div>';
 }
 function _contractStaffHTML(c){
-  var pos=c.positions||[],fpos=_ctFilteredPos(c);
-  var totFte=pos.reduce(function(a,p){return a+(Number(p.fte)||0);},0);
-  var totAnnual=pos.reduce(function(a,p){return a+(Number(p.annualCost)||0);},0);
-  var primeCost=pos.filter(function(p){return /prime/i.test(p.company);}).reduce(function(a,p){return a+(Number(p.annualCost)||0);},0);
-  var subCost=totAnnual-primeCost,tbh=pos.filter(function(p){return p.status==='TBH'||p.status==='TBD';});
+  var pos=c.positions||[];
+  // Default the option-year filter to the latest OY when a contract spans multiple
+  // years, so KPIs reflect a single year (not OY2 + OY3 summed simultaneously).
+  var oys=[];pos.forEach(function(p){if(p.oy&&oys.indexOf(p.oy)===-1)oys.push(p.oy);});oys.sort();
+  if(oys.length>1&&!contractFilter.oy)contractFilter.oy=oys[oys.length-1];
+  var fpos=_ctFilteredPos(c);
+  var totFte=fpos.reduce(function(a,p){return a+(Number(p.fte)||0);},0);
+  var totAnnual=fpos.reduce(function(a,p){return a+(Number(p.annualCost)||0);},0);
+  var primeCost=fpos.filter(function(p){return /prime/i.test(p.company);}).reduce(function(a,p){return a+(Number(p.annualCost)||0);},0);
+  var subCost=totAnnual-primeCost,tbh=fpos.filter(function(p){return p.status==='TBH'||p.status==='TBD';});
   var floor=c.funding&&c.funding.floor,target=c.funding&&c.funding.target;
   function kpi(lbl,val,sub,color){return '<div style="flex:1;min-width:120px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">'+lbl+'</div><div style="font-size:19px;font-weight:800;'+(color?'color:'+color:'')+'">'+val+'</div>'+(sub?'<div style="font-size:10px;color:var(--text-muted)">'+sub+'</div>':'')+'</div>';}
   var kpis='<div style="display:flex;gap:16px;flex-wrap:wrap;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:12px">'
-    +kpi('Total FTE',totFte.toFixed(2),pos.length+' positions','')
+    +kpi('Total FTE',totFte.toFixed(2),(fpos.length!==pos.length?fpos.length+' of '+pos.length:pos.length)+' positions'+(contractFilter.oy?' · '+esc(contractFilter.oy):''),'')
     +kpi('Annual cost',fmt(Math.round(totAnnual)),'@ 1,860 hrs/FTE','')
     +kpi('Monthly burn',fmt(Math.round(totAnnual/12))+'/mo','','')
     +kpi('Prime / Sub',(totAnnual?Math.round(primeCost/totAnnual*100):0)+'% / '+(totAnnual?Math.round(subCost/totAnnual*100):0)+'%','prime vs subcontract','')
@@ -3219,38 +3230,59 @@ function _contractStaffHTML(c){
     var gFte=gp.reduce(function(a,p){return a+(Number(p.fte)||0);},0),gCost=gp.reduce(function(a,p){return a+(Number(p.annualCost)||0);},0);
     return '<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:12px">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;background:linear-gradient(135deg,var(--navy),var(--navy-light));color:#fff"><span style="font-size:13px;font-weight:800">'+esc(g)+'</span><span style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.85);white-space:nowrap">'+gFte.toFixed(2)+' FTE · '+fmt(Math.round(gCost))+'</span></div>'
-      +'<div style="overflow-x:auto"><table style="width:100%;font-size:11.5px;border-collapse:collapse;min-width:760px"><thead><tr style="text-align:left;color:var(--text-muted);font-size:9px;text-transform:uppercase;letter-spacing:.3px;background:var(--page-bg)"><th style="padding:5px 8px">Resource</th><th style="padding:5px 8px">Role / LCAT</th><th style="padding:5px 8px">Company</th><th style="padding:5px 8px;text-align:right">FTE</th><th style="padding:5px 8px;text-align:right">$/hr</th><th style="padding:5px 8px;text-align:right">Annual</th><th style="padding:5px 8px">Civilian Lead</th><th style="padding:5px 8px">PWS</th><th style="padding:5px 8px"></th></tr></thead><tbody>'
+      +'<div style="overflow-x:auto"><table style="width:100%;font-size:11.5px;border-collapse:collapse;min-width:920px"><thead><tr style="text-align:left;color:var(--text-muted);font-size:9px;text-transform:uppercase;letter-spacing:.3px;background:var(--page-bg)"><th style="padding:5px 8px">Resource</th><th style="padding:5px 8px">Role</th><th style="padding:5px 8px">LCAT</th><th style="padding:5px 8px">Company</th><th style="padding:5px 8px;text-align:right">FTE</th><th style="padding:5px 8px;text-align:right">$/hr</th><th style="padding:5px 8px;text-align:right">Annual</th><th style="padding:5px 8px">Civilian Lead</th><th style="padding:5px 8px">PWS</th><th style="padding:5px 8px">Status</th><th style="padding:5px 8px"></th></tr></thead><tbody>'
       +gp.map(function(p,i){return _ctPosRow(c,p,i);}).join('')+'</tbody></table></div></div>';
   }).join('');
   if(!fpos.length)tableHTML='<div class="empty-msg">No positions'+(anyFilter?' match the filters':' yet — click + Position or import a workbook')+'.</div>';
   return kpis+coRollup+filters+'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:6px">Positions by workstream</div>'+tableHTML;
 }
+// Inline edit of a position field. fte/rate recompute annual; annual can be
+// overridden directly. Re-renders so the (read-only) totals refresh.
+function contractUpdatePos(cid,pid,field,val){
+  var c=(D.contracts||[]).find(function(x){return x.id===cid;});if(!c)return;
+  var p=(c.positions||[]).find(function(x){return x.id===pid;});if(!p)return;
+  if(field==='fte'||field==='rateHr'){p[field]=Number(val)||0;p.annualCost=Math.round((Number(p.rateHr)||0)*(Number(p.fte)||0)*1860);}
+  else if(field==='annualCost'){p.annualCost=Number(val)||0;}
+  else {p[field]=val;}
+  save();renderView();
+}
 function _ctPosRow(c,p,i){
-  var stC={Filled:'var(--green)',TBH:'#D97706',TBD:'#D97706',Reserve:'#7C3AED'}[p.status]||'var(--text-muted)';
   var bg=(i%2)?'background:var(--page-bg);':'';
-  var badge='<span style="display:inline-block;font-size:8px;font-weight:800;letter-spacing:.3px;border:1px solid '+stC+';color:'+stC+';border-radius:8px;padding:0 6px;vertical-align:middle;white-space:nowrap">'+esc((p.status||'Filled').toUpperCase())+'</span>';
-  var bridge=(p.status==='TBH'||p.status==='TBD')?'<button class="btn btn-outline btn-sm" style="font-size:9px;padding:1px 6px" onclick="contractPosToRecruiting(\''+c.id+'\',\''+p.id+'\')" title="Create a Recruiting requisition from this open position (one-way; the contract plan is unchanged)">&rarr; Req</button> ':'';
+  function cin(field,type){var v=p[field]==null?'':p[field];return '<input class="ct-cell'+(type==='number'?' num':'')+'" type="'+(type||'text')+'"'+(type==='number'?' step="any"':'')+' value="'+esc(String(v))+'" onchange="contractUpdatePos(\''+c.id+'\',\''+p.id+'\',\''+field+'\',this.value)">';}
+  var stSel='<select class="ct-cell" onchange="contractUpdatePos(\''+c.id+'\',\''+p.id+'\',\'status\',this.value)">'+['Filled','TBH','TBD','Reserve'].map(function(s){return '<option'+((p.status||'Filled')===s?' selected':'')+'>'+s+'</option>';}).join('')+'</select>';
+  var bridge=(p.status==='TBH'||p.status==='TBD')?'<button class="btn btn-outline btn-sm" style="font-size:9px;padding:1px 6px" onclick="contractPosToRecruiting(\''+c.id+'\',\''+p.id+'\')" title="Create a Recruiting requisition from this open position (one-way)">&rarr; Req</button> ':'';
   return '<tr style="border-top:1px solid var(--border);'+bg+'">'
-    +'<td style="padding:5px 8px"><span style="cursor:pointer;font-weight:600;color:var(--navy)" onclick="contractEditPos(\''+c.id+'\',\''+p.id+'\')">'+esc(p.resource||'(TBH)')+'</span> '+badge+'</td>'
-    +'<td style="padding:5px 8px">'+esc(p.role||'')+(p.lcat?'<div style="font-size:9px;color:var(--text-muted)">'+esc(p.lcat)+'</div>':'')+'</td>'
-    +'<td style="padding:5px 8px">'+esc(p.company||'')+'</td>'
-    +'<td style="padding:5px 8px;text-align:right">'+(Number(p.fte)||0)+'</td>'
-    +'<td style="padding:5px 8px;text-align:right;white-space:nowrap">'+(p.rateHr?'$'+p.rateHr:'')+'</td>'
-    +'<td style="padding:5px 8px;text-align:right;white-space:nowrap;font-weight:600">'+fmt(Number(p.annualCost)||0)+'</td>'
-    +'<td style="padding:5px 8px">'+esc(p.civilianLead||'')+'</td>'
-    +'<td style="padding:5px 8px;white-space:nowrap">'+esc(p.pwsRef||'')+'</td>'
-    +'<td style="padding:5px 8px;text-align:right;white-space:nowrap">'+bridge+'<button class="btn btn-danger-sm btn-sm" style="font-size:9px;padding:1px 5px" onclick="contractDelPos(\''+c.id+'\',\''+p.id+'\')">&#10005;</button></td></tr>';
+    +'<td style="padding:2px 4px;min-width:140px">'+cin('resource')+'</td>'
+    +'<td style="padding:2px 4px;min-width:130px">'+cin('role')+'</td>'
+    +'<td style="padding:2px 4px;min-width:120px">'+cin('lcat')+'</td>'
+    +'<td style="padding:2px 4px;min-width:130px">'+cin('company')+'</td>'
+    +'<td style="padding:2px 4px;width:58px">'+cin('fte','number')+'</td>'
+    +'<td style="padding:2px 4px;width:72px">'+cin('rateHr','number')+'</td>'
+    +'<td style="padding:2px 4px;width:96px">'+cin('annualCost','number')+'</td>'
+    +'<td style="padding:2px 4px;min-width:120px">'+cin('civilianLead')+'</td>'
+    +'<td style="padding:2px 4px;width:72px">'+cin('pwsRef')+'</td>'
+    +'<td style="padding:2px 4px;width:90px">'+stSel+'</td>'
+    +'<td style="padding:2px 4px;text-align:right;white-space:nowrap">'+bridge
+      +'<button class="btn btn-sec btn-sm" style="font-size:9px;padding:1px 5px" onclick="contractEditPos(\''+c.id+'\',\''+p.id+'\')" title="Edit all fields (workstream, option year, notes)">&#9998;</button> '
+      +'<button class="btn btn-danger-sm btn-sm" style="font-size:9px;padding:1px 5px" onclick="contractDelPos(\''+c.id+'\',\''+p.id+'\')" title="Delete">&#10005;</button></td></tr>';
 }
 function contractImport(){
   var inp=document.getElementById('ct_import_file'),f=inp&&inp.files&&inp.files[0];if(!f)return;
   toast('Parsing '+f.name+'…','info');
   var fd=new FormData();fd.append('file',f);
   fetch('/api/contracts/parse-staffing',{method:'POST',body:fd}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j&&j.error||'parse failed');return j;});}).then(function(j){
-    var c={id:uid(),name:j.name||'Imported contract',number:j.number||'',customer:'',prime:'',
-      positions:(j.positions||[]).map(function(p){p.id=uid();return p;}),
-      pricing:j.pricing||[],scenarios:j.scenarios||[],funding:j.funding||{},importedAt:Date.now(),importedFile:f.name};
-    D.contracts=D.contracts||[];D.contracts.push(c);_contractSel=c.id;contractFilter={oy:'',company:'',group:'',status:''};
-    save();toast('Imported '+c.positions.length+' positions · '+(j.totalFTE||0)+' FTE · '+fmt(Math.round(j.totalAnnual||0))+' annual.','success',6000);renderView();
+    var positions=(j.positions||[]).map(function(p){p.id=uid();return p;});
+    D.contracts=D.contracts||[];
+    var existing=j.number&&D.contracts.find(function(x){return x.number&&x.number===j.number;});
+    if(existing){
+      if(!confirm('A contract "'+(existing.name||existing.number)+'" already exists. Replace its staffing plan with this import ('+positions.length+' positions)?'))return;
+      existing.positions=positions;existing.pricing=j.pricing||[];existing.scenarios=j.scenarios||[];existing.funding=j.funding||existing.funding||{};existing.importedAt=Date.now();existing.importedFile=f.name;_contractSel=existing.id;
+    } else {
+      var c={id:uid(),name:j.name||'Imported contract',number:j.number||'',customer:'',prime:'',positions:positions,pricing:j.pricing||[],scenarios:j.scenarios||[],funding:j.funding||{},importedAt:Date.now(),importedFile:f.name};
+      D.contracts.push(c);_contractSel=c.id;
+    }
+    contractFilter={oy:'',company:'',group:'',status:''};
+    save();toast('Imported '+positions.length+' positions · '+(j.totalFTE||0)+' FTE · '+fmt(Math.round(j.totalAnnual||0))+' annual'+((j.byOy&&j.byOy.length>1)?' across '+j.byOy.length+' option years':'')+'.','success',6500);renderView();
   }).catch(function(e){toast('Import failed: '+(e&&e.message||e),'error',7000);});
 }
 function contractAddNew(){
