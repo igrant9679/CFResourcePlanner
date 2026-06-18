@@ -3163,7 +3163,7 @@ function _ctFilteredPos(c){
 function renderContractsView(q){
   if(!canProforma())return '<div class="empty-msg">No access. Contract Management is restricted to Admin.</div>';
   var cs=D.contracts||[];
-  var html='<div class="proj-scroll">'
+  var html='<div style="max-width:1300px;margin:0 auto">'
     +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:10px">'
     +'<div><div style="font-size:18px;font-weight:800">Contract Management — Staff Planning</div>'
     +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Standalone contract staffing plans. This data is <b>separate</b> from Resources, Projects and the cash model — nothing here flows into Capacity or Strategy.</div></div>'
@@ -3211,28 +3211,35 @@ function _contractStaffHTML(c){
     +(anyFilter?'<button class="btn btn-outline btn-sm" onclick="contractFilter={oy:\'\',company:\'\',group:\'\',status:\'\'};renderView()">Clear</button>':'')
     +'</div>';
   var byCo={};fpos.forEach(function(p){var k=p.company||'(unspecified)';(byCo[k]=byCo[k]||{fte:0,cost:0});byCo[k].fte+=Number(p.fte)||0;byCo[k].cost+=Number(p.annualCost)||0;});
-  var coChips=Object.keys(byCo).sort(function(a,b){return byCo[b].cost-byCo[a].cost;}).map(function(k){return '<span class="plan-chip">'+esc(k)+': '+byCo[k].fte.toFixed(2)+' FTE · '+fmt(Math.round(byCo[k].cost))+'</span>';}).join('');
+  var coChips=Object.keys(byCo).sort(function(a,b){return byCo[b].cost-byCo[a].cost;}).map(function(k){return '<span style="display:inline-flex;gap:6px;align-items:baseline;border:1px solid var(--border);border-radius:14px;padding:3px 11px;font-size:11px;background:var(--card-bg)"><b>'+esc(k)+'</b><span style="color:var(--text-muted)">'+byCo[k].fte.toFixed(2)+' FTE · '+fmt(Math.round(byCo[k].cost))+'</span></span>';}).join('');
+  var coRollup=coChips?'<div style="margin-bottom:12px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:5px">By company</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+coChips+'</div></div>':'';
   var groups=[];fpos.forEach(function(p){var g=p.workstreamGroup||'(ungrouped)';if(groups.indexOf(g)===-1)groups.push(g);});
   var tableHTML=groups.map(function(g){
     var gp=fpos.filter(function(p){return (p.workstreamGroup||'(ungrouped)')===g;});
     var gFte=gp.reduce(function(a,p){return a+(Number(p.fte)||0);},0),gCost=gp.reduce(function(a,p){return a+(Number(p.annualCost)||0);},0);
-    return '<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:800;background:var(--page-bg);padding:5px 8px;border-radius:6px;display:flex;justify-content:space-between"><span>'+esc(g)+'</span><span style="color:var(--text-secondary)">'+gFte.toFixed(2)+' FTE · '+fmt(Math.round(gCost))+'</span></div>'
-      +'<table style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr style="text-align:left;color:var(--text-muted);font-size:9px;text-transform:uppercase;letter-spacing:.3px"><th style="padding:3px 6px 3px 0">Resource</th><th>Role</th><th>Company</th><th>LCAT</th><th style="text-align:right">FTE</th><th style="text-align:right">Rate</th><th style="text-align:right">Annual</th><th>Civilian Lead</th><th>PWS</th><th></th></tr></thead><tbody>'
-      +gp.map(function(p){return _ctPosRow(c,p);}).join('')+'</tbody></table></div>';
+    return '<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:12px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;background:linear-gradient(135deg,var(--navy),var(--navy-light));color:#fff"><span style="font-size:13px;font-weight:800">'+esc(g)+'</span><span style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.85);white-space:nowrap">'+gFte.toFixed(2)+' FTE · '+fmt(Math.round(gCost))+'</span></div>'
+      +'<div style="overflow-x:auto"><table style="width:100%;font-size:11.5px;border-collapse:collapse;min-width:760px"><thead><tr style="text-align:left;color:var(--text-muted);font-size:9px;text-transform:uppercase;letter-spacing:.3px;background:var(--page-bg)"><th style="padding:5px 8px">Resource</th><th style="padding:5px 8px">Role / LCAT</th><th style="padding:5px 8px">Company</th><th style="padding:5px 8px;text-align:right">FTE</th><th style="padding:5px 8px;text-align:right">$/hr</th><th style="padding:5px 8px;text-align:right">Annual</th><th style="padding:5px 8px">Civilian Lead</th><th style="padding:5px 8px">PWS</th><th style="padding:5px 8px"></th></tr></thead><tbody>'
+      +gp.map(function(p,i){return _ctPosRow(c,p,i);}).join('')+'</tbody></table></div></div>';
   }).join('');
   if(!fpos.length)tableHTML='<div class="empty-msg">No positions'+(anyFilter?' match the filters':' yet — click + Position or import a workbook')+'.</div>';
-  return kpis+(coChips?'<div style="margin-bottom:10px;display:flex;gap:5px;flex-wrap:wrap">'+coChips+'</div>':'')+filters+tableHTML;
+  return kpis+coRollup+filters+'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:6px">Positions by workstream</div>'+tableHTML;
 }
-function _ctPosRow(c,p){
+function _ctPosRow(c,p,i){
   var stC={Filled:'var(--green)',TBH:'#D97706',TBD:'#D97706',Reserve:'#7C3AED'}[p.status]||'var(--text-muted)';
-  var bridge=(p.status==='TBH'||p.status==='TBD')?'<button class="btn btn-outline btn-sm" style="font-size:9px;padding:1px 5px" onclick="contractPosToRecruiting(\''+c.id+'\',\''+p.id+'\')" title="Create a Recruiting requisition from this open position (one-way; the contract plan is unchanged)">&rarr; Req</button> ':'';
-  return '<tr style="border-top:1px solid var(--border)">'
-    +'<td style="padding:3px 6px 3px 0"><span style="cursor:pointer;font-weight:600" onclick="contractEditPos(\''+c.id+'\',\''+p.id+'\')">'+esc(p.resource||'(TBH)')+'</span> <span class="plan-chip" style="border-color:'+stC+';color:'+stC+';font-size:9px;padding:0 5px">'+esc(p.status||'Filled')+'</span></td>'
-    +'<td>'+esc(p.role||'')+'</td><td>'+esc(p.company||'')+'</td><td>'+esc(p.lcat||'')+'</td>'
-    +'<td style="text-align:right">'+(Number(p.fte)||0)+'</td><td style="text-align:right;white-space:nowrap">'+(p.rateHr?'$'+p.rateHr:'')+'</td>'
-    +'<td style="text-align:right;white-space:nowrap">'+fmt(Number(p.annualCost)||0)+'</td>'
-    +'<td>'+esc(p.civilianLead||'')+'</td><td style="white-space:nowrap">'+esc(p.pwsRef||'')+'</td>'
-    +'<td style="text-align:right;white-space:nowrap">'+bridge+'<button class="btn btn-danger-sm btn-sm" style="font-size:9px;padding:1px 5px" onclick="contractDelPos(\''+c.id+'\',\''+p.id+'\')">&#10005;</button></td></tr>';
+  var bg=(i%2)?'background:var(--page-bg);':'';
+  var badge='<span style="display:inline-block;font-size:8px;font-weight:800;letter-spacing:.3px;border:1px solid '+stC+';color:'+stC+';border-radius:8px;padding:0 6px;vertical-align:middle;white-space:nowrap">'+esc((p.status||'Filled').toUpperCase())+'</span>';
+  var bridge=(p.status==='TBH'||p.status==='TBD')?'<button class="btn btn-outline btn-sm" style="font-size:9px;padding:1px 6px" onclick="contractPosToRecruiting(\''+c.id+'\',\''+p.id+'\')" title="Create a Recruiting requisition from this open position (one-way; the contract plan is unchanged)">&rarr; Req</button> ':'';
+  return '<tr style="border-top:1px solid var(--border);'+bg+'">'
+    +'<td style="padding:5px 8px"><span style="cursor:pointer;font-weight:600;color:var(--navy)" onclick="contractEditPos(\''+c.id+'\',\''+p.id+'\')">'+esc(p.resource||'(TBH)')+'</span> '+badge+'</td>'
+    +'<td style="padding:5px 8px">'+esc(p.role||'')+(p.lcat?'<div style="font-size:9px;color:var(--text-muted)">'+esc(p.lcat)+'</div>':'')+'</td>'
+    +'<td style="padding:5px 8px">'+esc(p.company||'')+'</td>'
+    +'<td style="padding:5px 8px;text-align:right">'+(Number(p.fte)||0)+'</td>'
+    +'<td style="padding:5px 8px;text-align:right;white-space:nowrap">'+(p.rateHr?'$'+p.rateHr:'')+'</td>'
+    +'<td style="padding:5px 8px;text-align:right;white-space:nowrap;font-weight:600">'+fmt(Number(p.annualCost)||0)+'</td>'
+    +'<td style="padding:5px 8px">'+esc(p.civilianLead||'')+'</td>'
+    +'<td style="padding:5px 8px;white-space:nowrap">'+esc(p.pwsRef||'')+'</td>'
+    +'<td style="padding:5px 8px;text-align:right;white-space:nowrap">'+bridge+'<button class="btn btn-danger-sm btn-sm" style="font-size:9px;padding:1px 5px" onclick="contractDelPos(\''+c.id+'\',\''+p.id+'\')">&#10005;</button></td></tr>';
 }
 function contractImport(){
   var inp=document.getElementById('ct_import_file'),f=inp&&inp.files&&inp.files[0];if(!f)return;
