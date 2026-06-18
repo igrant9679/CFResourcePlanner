@@ -926,6 +926,7 @@ app.post('/api/contracts/parse-staffing', upload.single('file'), async (req, res
         role: col(/role|title/), fte: col(/\bfte\b|^fte|quantity|\bqty\b/),
         company: col(/company/), lcat: col(/lcat/), rate: col(/rate/),
         annual: col(/annual\s*cost|annual/), lead: col(/civilian lead|^lead/), pws: col(/pws/),
+        desc: col(/full description|description/),
       };
       const requireResource = ciAssigned >= 0;   // assignments: each row needs a named resource; requirements: needs a role
       const out = []; let lastGroup = '';
@@ -955,6 +956,7 @@ app.post('/api/contracts/parse-staffing', upload.single('file'), async (req, res
           rateHr, annualCost: annual,
           civilianLead: ci.lead >= 0 ? String(row[ci.lead] || '').trim() : '',
           pwsRef: ci.pws >= 0 ? String(row[ci.pws] || '').trim() : '', status, notes: '',
+          description: ci.desc >= 0 ? String(row[ci.desc] || '').trim() : '',
         });
       }
       return out;
@@ -967,6 +969,31 @@ app.post('/api/contracts/parse-staffing', upload.single('file'), async (req, res
     posSheets.forEach((sn) => { positions = positions.concat(extractPositions(aoaOf(sn))); });
     const titleBlob = (aoaOf(posSheets[0] || '').slice(0, 3).map((r) => r.join(' ')).join(' '));
     const byOy = []; positions.forEach((p) => { if (p.oy && byOy.indexOf(p.oy) < 0) byOy.push(p.oy); });
+
+    // ── Descriptions: the assignments sheet has none, so build a lookup from the
+    // "Role Descriptions" sheet (keyed by OY + workstream + role, with fallbacks)
+    // and fill in any position missing a description. ──
+    const descMap = {};
+    const rdA = aoaOf(sheetByName(/role descriptions/i));
+    const rhi = findHeader(rdA, [/workstream/, /full description|description/]);
+    if (rhi >= 0) {
+      const hg = rdA[rhi].map((c) => String(c).toLowerCase());
+      const col = (re, ex) => { for (let i = 0; i < hg.length; i++) { if (re.test(hg[i]) && i !== ex) return i; } return -1; };
+      const wsg = col(/workstream group/);
+      const rc = { oy: col(/option year|^oy\b/), ws: col(/workstream/, wsg), role: col(/role|title/), desc: col(/full description|description/) };
+      const norm = (s) => String(s || '').trim().toLowerCase();
+      for (const row of rdA.slice(rhi + 1)) {
+        const d = rc.desc >= 0 ? String(row[rc.desc] || '').trim() : ''; if (!d) continue;
+        const oy = rc.oy >= 0 ? norm(row[rc.oy]) : '', ws = rc.ws >= 0 ? norm(row[rc.ws]) : '', role = rc.role >= 0 ? norm(row[rc.role]) : '';
+        if (!ws) continue;
+        [oy + '|' + ws + '|' + role, oy + '|' + ws, '*|' + ws + '|' + role, '*|' + ws].forEach((k) => { if (!descMap[k]) descMap[k] = d; });
+      }
+    }
+    positions.forEach((p) => {
+      if (p.description) return;
+      const oy = String(p.oy || '').trim().toLowerCase(), ws = String(p.workstream || '').trim().toLowerCase(), role = String(p.role || '').trim().toLowerCase();
+      p.description = descMap[oy + '|' + ws + '|' + role] || descMap[oy + '|' + ws] || descMap['*|' + ws + '|' + role] || descMap['*|' + ws] || '';
+    });
 
     // ── Pricing (CLINs by option year) ──
     const pricing = [];

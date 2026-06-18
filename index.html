@@ -3142,7 +3142,7 @@ function _projDetailBody(p){
    or the cash model. Optional one-way bridges (TBH position → Recruiting req) are
    explicit and opt-in. Phase 1: import + staff-planning grid + rollups. ── */
 var _contractSel='',contractFilter={oy:'',company:'',group:'',status:''},contractGroupBy='workstreamGroup',_ctGroupList=[];
-var CT_GROUPBY=[{k:'workstreamGroup',l:'Workstream'},{k:'civilianLead',l:'Civilian Lead'},{k:'contractorLead',l:'Contractor Lead'},{k:'company',l:'Company'}];
+var CT_GROUPBY=[{k:'workstreamGroup',l:'Workstream'},{k:'civilianLead',l:'Civilian Lead'},{k:'contractorLead',l:'Contractor Lead'},{k:'company',l:'Company'},{k:'resource',l:'Person'}];
 function contractSetGroupBy(k){contractGroupBy=k;renderView();}
 function contractsMigrate(){
   if(!Array.isArray(D.contracts))D.contracts=[];
@@ -3235,7 +3235,10 @@ function _contractStaffHTML(c){
   var groups=[];fpos.forEach(function(p){var g=(p[gkey]||'(unassigned)');if(groups.indexOf(g)===-1)groups.push(g);});
   if(byWs&&!contractFilter.group)(c.workstreamGroups||[]).forEach(function(g){if(g&&groups.indexOf(g)===-1)groups.push(g);});   // show explicitly-added (empty) workstreams
   _ctGroupList=groups;
-  var tableHTML=groups.map(function(g,gi){
+  // Person view: group by resource and show each position's description (briefing layout).
+  var tableHTML;
+  if(gkey==='resource'){tableHTML=_ctPersonHTML(c,fpos);}
+  else tableHTML=groups.map(function(g,gi){
     var gp=fpos.filter(function(p){return (p[gkey]||'(unassigned)')===g;});
     var gFte=gp.reduce(function(a,p){return a+(Number(p.fte)||0);},0),gCost=gp.reduce(function(a,p){return a+(Number(p.annualCost)||0);},0);
     var addBtn='<button class="btn btn-sec btn-sm" style="font-size:9px;padding:1px 7px" onclick="contractAddPosToGroup(\''+c.id+'\','+gi+')" title="Add a position to this group">+ Position</button>';
@@ -3258,6 +3261,28 @@ function contractUpdatePos(cid,pid,field,val){
   else if(field==='annualCost'){p.annualCost=Number(val)||0;}
   else {p[field]=val;}
   save();renderView();
+}
+// Person-grouped briefing view: one card per resource, listing their position(s)
+// with the role description shown in full.
+function _ctPersonHTML(c,fpos){
+  var byP={};fpos.forEach(function(p){var k=p.resource||'(TBH)';(byP[k]=byP[k]||[]).push(p);});
+  var names=Object.keys(byP).sort(function(a,b){return a.localeCompare(b);});
+  if(!names.length)return '<div class="empty-msg">No positions match the filters.</div>';
+  return names.map(function(nm){
+    var ps=byP[nm];
+    var fte=ps.reduce(function(a,p){return a+(Number(p.fte)||0);},0),cost=ps.reduce(function(a,p){return a+(Number(p.annualCost)||0);},0);
+    var body=ps.map(function(p){
+      var meta=[p.workstreamGroup,p.contractorLead?'Lead: '+p.contractorLead:'',p.company,p.oy,(Number(p.fte)||0)+' FTE',(p.rateHr?'$'+p.rateHr+'/hr':''),p.lcat].filter(Boolean).join(' · ');
+      return '<div style="border-top:1px solid var(--border);padding:8px 0">'
+        +'<div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline"><div style="font-size:12px;font-weight:700;cursor:pointer;color:var(--navy)" onclick="contractEditPos(\''+c.id+'\',\''+p.id+'\')">'+esc(p.workstream||p.role||p.workstreamGroup||'(position)')+(p.role?' <span style="font-weight:400;color:var(--text-muted)">— '+esc(p.role)+'</span>':'')+'</div><div style="font-size:11px;color:var(--text-muted);white-space:nowrap">'+fmt(Number(p.annualCost)||0)+'/yr</div></div>'
+        +'<div style="font-size:10px;color:var(--text-muted);margin:2px 0 4px">'+esc(meta)+'</div>'
+        +(p.description?'<div style="font-size:12px;color:var(--text-secondary);line-height:1.5;white-space:pre-wrap">'+esc(p.description)+'</div>':'<div style="font-size:11px;color:var(--text-muted);font-style:italic">No description — add one via the position editor.</div>')
+        +'</div>';
+    }).join('');
+    return '<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:12px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;background:linear-gradient(135deg,var(--navy),var(--navy-light));color:#fff"><span style="font-size:13px;font-weight:800">'+esc(nm)+'</span><span style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.85);white-space:nowrap">'+ps.length+' position'+(ps.length===1?'':'s')+' · '+fte.toFixed(2)+' FTE · '+fmt(Math.round(cost))+'</span></div>'
+      +'<div style="padding:4px 14px 10px">'+body+'</div></div>';
+  }).join('');
 }
 function _ctPosRow(c,p,i){
   var bg=(i%2)?'background:var(--page-bg);':'';
@@ -3336,7 +3361,8 @@ function _ctPosFields(p,c){
     {key:'annualCost',label:'Annual cost ($) — blank = rate × FTE × 1,860',type:'number',value:(p.annualCost!=null?p.annualCost:'')},
     {key:'civilianLead',label:'Civilian lead',type:'text',value:p.civilianLead||''},
     {key:'contractorLead',label:'Contractor lead',type:'text',value:p.contractorLead||''},
-    {key:'pwsRef',label:'PWS reference',type:'text',value:p.pwsRef||''}];
+    {key:'pwsRef',label:'PWS reference',type:'text',value:p.pwsRef||''},
+    {key:'description',label:'Description',type:'textarea',rows:4,value:p.description||''}];
 }
 function _ctApplyPos(p,v,c){
   var wg=v.workstreamGroup||'';
@@ -3344,7 +3370,7 @@ function _ctApplyPos(p,v,c){
   p.resource=(v.resource||'').trim()||'(TBH)';p.status=v.status||'Filled';p.oy=(v.oy||'').trim();
   p.workstreamGroup=wg;p.workstream=(v.workstream||'').trim();p.role=(v.role||'').trim();
   p.company=(v.company||'').trim();p.lcat=(v.lcat||'').trim();p.fte=Number(v.fte)||0;p.rateHr=Number(v.rateHr)||0;
-  p.civilianLead=(v.civilianLead||'').trim();p.contractorLead=(v.contractorLead||'').trim();p.pwsRef=(v.pwsRef||'').trim();
+  p.civilianLead=(v.civilianLead||'').trim();p.contractorLead=(v.contractorLead||'').trim();p.pwsRef=(v.pwsRef||'').trim();p.description=(v.description||'').trim();
   var ac=Number(v.annualCost)||0;p.annualCost=ac||Math.round(p.rateHr*p.fte*1860);
 }
 function contractAddPos(cid,preset){
