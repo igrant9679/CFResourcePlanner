@@ -3516,7 +3516,7 @@ function oppMigrate(){
   var hasOpps=D.projects.some(function(p){return projCat(p)==='opportunity';});
   if(!D.oppSeeded&&!hasOpps){PIPELINE_SEED.forEach(function(s){var o={id:uid(),category:'opportunity',name:(s.program||s.customer||'Opportunity'),customer:s.customer||'',leadGen:s.leadGen||'',presales:s.presales||'',sales:s.sales||'',delivery:s.delivery||'',opr:s.opr||'',team:s.team||'',comment:s.comment||'',changeRequested:s.changeRequested||'',closeDate:'',targetRevenue:0,revenue:0,revenueNote:'',description:s.comment||'',attachments:[],parentId:null,pm:'',potential:0,status:''};var ex=OPP_ENRICH[o.name]||{};o.pm=ex.pm||'';o.potential=ex.potential||0;o.status=ex.status||'';o.closeDate=ex.closeDate||'';o.stage=oppDeriveStage(o);D.projects.push(o);});D.oppSeeded=true;}
   else if(!D.oppSeeded){D.oppSeeded=true;}  // mark as seeded so bootstrap auto-save doesn't keep firing
-  D.projects.forEach(function(p){if(projCat(p)==='opportunity'){['customer','leadGen','presales','sales','delivery','opr','team','comment','changeRequested','closeDate','pm','status'].forEach(function(k){if(!(k in p))p[k]='';});if(!('potential' in p))p.potential=0;if(!('probabilityClose' in p))p.probabilityClose='';if(!p.stage)p.stage=oppDeriveStage(p);if(!p.attachments)p.attachments=[];}});
+  D.projects.forEach(function(p){if(projCat(p)==='opportunity'){['customer','leadGen','presales','sales','delivery','opr','team','comment','changeRequested','closeDate','pm','status'].forEach(function(k){if(!(k in p))p[k]='';});if(!('potential' in p))p.potential=0;if(!('probabilityClose' in p))p.probabilityClose='';if(!p.stage)p.stage=oppDeriveStage(p);if(!p.attachments)p.attachments=[];if(!Array.isArray(p.nextSteps))p.nextSteps=[];}});
   // OPP_ENRICH already only fills MISSING fields (!p.closeDate, !p.potential
   // etc. all use falsy checks so set values are preserved). Once the flag is
   // set the block is skipped entirely. Marking the flag if missing so the
@@ -4002,7 +4002,8 @@ function govStartProposal(id){
   setTimeout(function(){openProposalDetail(prop.id);},200);
   toast('Proposal created from the gov opportunity — upload the solicitation in its Shred tab to build the requirements matrix.','success',7000);
 }
-function oppCardInner(p){return '<div class="plan-card-prog">'+esc(p.customer||'')+'</div><div class="plan-card-sub">'+esc(p.name)+'</div><div class="plan-meta">'+(p.potential?'<span class="plan-chip" style="border-color:var(--gold);color:var(--gold)">'+fmt(p.potential)+'</span>':'')+oppStatusChip(p.status)+oppOwnerHTML(p)+(p.closeDate?'<span class="plan-chip">&#128197; '+esc(p.closeDate)+'</span>':'')+'</div>';}
+function oppNextStepChip(p){var ns=p.nextSteps||[];if(!ns.length)return '';var open=ns.filter(function(s){return !s.done;}).length;return '<span class="plan-chip" title="'+esc(ns.filter(function(s){return !s.done;}).map(function(s){return '• '+s.text;}).join('\n')||'all done')+'">&#9745; '+open+'/'+ns.length+' next</span>';}
+function oppCardInner(p){return '<div class="plan-card-prog">'+esc(p.customer||'')+'</div><div class="plan-card-sub">'+esc(p.name)+'</div><div class="plan-meta">'+(p.potential?'<span class="plan-chip" style="border-color:var(--gold);color:var(--gold)">'+fmt(p.potential)+'</span>':'')+oppStatusChip(p.status)+oppOwnerHTML(p)+(p.closeDate?'<span class="plan-chip">&#128197; '+esc(p.closeDate)+'</span>':'')+oppNextStepChip(p)+'</div>';}
 function oppBoardHTML(opps){
   return '<div class="plan-board" style="grid-template-columns:repeat('+OPP_STAGES.length+',minmax(0,1fr))">'+OPP_STAGES.map(function(s){
     var col=opps.filter(function(p){return (p.stage||'Lead Gen')===s.k;}),ed=can('globals');
@@ -4060,8 +4061,40 @@ function oppEditFields(p){
     +'<div class="fld"><label class="fld-l">Exp Close / Decision date</label><input class="fld-i" type="date" id="ep_close" value="'+esc(p.closeDate||'')+'"></div>'
     +'<div class="fld"><label class="fld-l">Team</label><input class="fld-i" id="ep_team" value="'+esc(p.team||'')+'"></div>'
     +'<div class="fld"><label class="fld-l">Change Requested</label><textarea class="fld-i" id="ep_change" rows="2">'+esc(p.changeRequested||'')+'</textarea></div>'
+    +'<div class="fld"><label class="fld-l">Next Steps <span style="font-weight:400;color:var(--text-muted);font-size:10px">— action items; check off as completed</span></label>'
+      +'<div id="opp_ns_list">'+renderOppNextSteps(p)+'</div>'
+      +'<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><input class="fld-i" id="opp_ns_text" placeholder="Add a next step…" style="flex:1;min-width:160px" onkeydown="if(event.key===\'Enter\'){event.preventDefault();oppAddNextStep(\''+p.id+'\');}"><input class="fld-i" id="opp_ns_due" type="date" style="max-width:150px" title="Optional due date"><button class="btn btn-sec btn-sm" onclick="oppAddNextStep(\''+p.id+'\')">+ Add</button></div></div>'
     +(function(){var inits=(D.projects||[]).filter(function(x){return projCat(x)==='initiative';});if(!inits.length)return '';return '<div class="fld"><label class="fld-l">Linked initiative(s) <span style="font-weight:400;color:var(--text-muted);font-size:10px">— which practice/initiative this pursuit substantiates</span></label><select class="fld-sel" id="ep_inits" multiple size="'+Math.min(5,Math.max(2,inits.length))+'">'+inits.map(function(it){return '<option value="'+it.id+'"'+(((p.initiativeIds||[]).indexOf(it.id)>-1)?' selected':'')+'>'+esc(it.name)+'</option>';}).join('')+'</select><div style="font-size:10px;color:var(--text-muted);margin-top:2px">Ctrl/Cmd-click to select multiple. Rolls up as initiative impact on the Initiative detail tab.</div></div>';})()
     +oppWorkflowHTML(p);
+}
+/* ── OPPORTUNITY NEXT STEPS (multiple action items per opportunity) ── */
+function renderOppNextSteps(p){
+  var ns=p.nextSteps||[];
+  if(!ns.length)return '<div style="font-size:11px;color:var(--text-muted);padding:4px 0">No next steps yet.</div>';
+  return ns.map(function(s){
+    return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #F1F5F9;font-size:12px">'
+      +'<input type="checkbox" '+(s.done?'checked':'')+' onchange="oppToggleNextStep(\''+p.id+'\',\''+s.id+'\')" style="margin:0">'
+      +'<span style="flex:1;'+(s.done?'text-decoration:line-through;color:var(--text-muted)':'')+'">'+esc(s.text)+(s.due?' <span style="color:var(--text-muted);font-size:10px">&middot; due '+esc(s.due)+'</span>':'')+'</span>'
+      +'<button class="btn btn-danger-sm btn-sm" onclick="oppDelNextStep(\''+p.id+'\',\''+s.id+'\')" title="Delete">&#10005;</button></div>';
+  }).join('');
+}
+function _oppNsRefresh(p){var el=document.getElementById('opp_ns_list');if(el)el.innerHTML=renderOppNextSteps(p);}
+function oppAddNextStep(pid){
+  var p=(D.projects||[]).find(function(x){return x.id===pid;});if(!p)return;
+  var t=gv('opp_ns_text').trim();if(!t)return;
+  if(!Array.isArray(p.nextSteps))p.nextSteps=[];
+  p.nextSteps.push({id:uid(),text:t,due:gv('opp_ns_due')||'',done:false,createdAt:Date.now()});
+  save();_oppNsRefresh(p);
+  var ti=document.getElementById('opp_ns_text');if(ti){ti.value='';ti.focus();}var di=document.getElementById('opp_ns_due');if(di)di.value='';
+}
+function oppToggleNextStep(pid,nsId){
+  var p=(D.projects||[]).find(function(x){return x.id===pid;});if(!p)return;
+  var s=(p.nextSteps||[]).find(function(x){return x.id===nsId;});if(!s)return;
+  s.done=!s.done;save();_oppNsRefresh(p);
+}
+function oppDelNextStep(pid,nsId){
+  var p=(D.projects||[]).find(function(x){return x.id===pid;});if(!p)return;
+  p.nextSteps=(p.nextSteps||[]).filter(function(x){return x.id!==nsId;});save();_oppNsRefresh(p);
 }
 /* ── PERSON FILE / RESUME ATTACHMENTS ── */
 function findMember(mid){var res=null;D.departments.forEach(function(d){d.members.forEach(function(m){if(m.id===mid)res={m:m,d:d};});});return res;}
