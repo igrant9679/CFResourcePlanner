@@ -927,6 +927,12 @@ app.post('/api/contracts/parse-staffing', upload.single('file'), async (req, res
         const resource = ci.resource >= 0 ? String(row[ci.resource] || '').trim() : '';
         const role = ci.role >= 0 ? String(row[ci.role] || '').trim() : '';
         const ws = ci.workstream >= 0 ? String(row[ci.workstream] || '').trim() : '';
+        // Some sheets stack a SECOND table lower down with a different column layout
+        // (e.g. the OY2 "adds" block where col positions shift). Stop at that
+        // re-declared header so we don't read rates into the resource column.
+        const lc = row.map((cell) => String(cell).toLowerCase());
+        if (lc.some((cell) => /rate\s*\/\s*hr|feai lcat|resource\s*\/\s*service|monthly burn/.test(cell))) break;
+        if (/^fte$/i.test(role) || /^fte$/i.test(resource)) continue;   // section FTE-total marker row
         if (/subtotal|grand total|^total\b/i.test(resource) || /subtotal|grand total/i.test(ws) || /subtotal|grand total/i.test(role)) continue;
         if (requireResource ? !resource : (!role && !resource)) continue;
         const fte = ci.fte >= 0 ? num(row[ci.fte]) : 0;

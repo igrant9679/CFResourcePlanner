@@ -3313,13 +3313,21 @@ function contractDelete(cid){
   if(!confirm('Delete this contract and all its staff-planning data? This cannot be undone.'))return;
   D.contracts=(D.contracts||[]).filter(function(x){return x.id!==cid;});if(_contractSel===cid)_contractSel='';save();renderView();
 }
-function _ctPosFields(p){
-  p=p||{};
+// Workstream dropdown options for a contract: existing workstreams + the current
+// value + a "new workstream" sentinel (resolved via prompt on save).
+function _ctWsOptions(c,cur){
+  var set={};(c.positions||[]).forEach(function(p){if(p.workstreamGroup)set[p.workstreamGroup]=1;});
+  (c.workstreamGroups||[]).forEach(function(g){if(g)set[g]=1;});
+  if(cur)set[cur]=1;
+  return [{value:'',label:'— none —'}].concat(Object.keys(set).sort().map(function(g){return {value:g,label:g};})).concat([{value:'__new__',label:'➕ New workstream…'}]);
+}
+function _ctPosFields(p,c){
+  p=p||{};c=c||{};
   return [{key:'resource',label:'Resource (name or “TBH …”)',type:'text',value:p.resource||''},
     {key:'status',label:'Status',type:'select',value:p.status||'Filled',options:['Filled','TBH','TBD','Reserve'].map(function(s){return {value:s,label:s};})},
     {key:'oy',label:'Option year',type:'text',value:p.oy||''},
-    {key:'workstreamGroup',label:'Workstream group',type:'text',value:p.workstreamGroup||''},
-    {key:'workstream',label:'Workstream',type:'text',value:p.workstream||''},
+    {key:'workstreamGroup',label:'Workstream',type:'select',value:p.workstreamGroup||'',options:_ctWsOptions(c,p.workstreamGroup||'')},
+    {key:'workstream',label:'Workstream detail (optional)',type:'text',value:p.workstream||''},
     {key:'role',label:'Role / title',type:'text',value:p.role||''},
     {key:'company',label:'Company',type:'text',value:p.company||''},
     {key:'lcat',label:'LCAT',type:'text',value:p.lcat||''},
@@ -3329,17 +3337,19 @@ function _ctPosFields(p){
     {key:'civilianLead',label:'Civilian lead',type:'text',value:p.civilianLead||''},
     {key:'pwsRef',label:'PWS reference',type:'text',value:p.pwsRef||''}];
 }
-function _ctApplyPos(p,v){
+function _ctApplyPos(p,v,c){
+  var wg=v.workstreamGroup||'';
+  if(wg==='__new__'){var nm=prompt('New workstream name:');wg=(nm||'').trim();if(wg&&c){c.workstreamGroups=c.workstreamGroups||[];if(c.workstreamGroups.indexOf(wg)<0&&!(c.positions||[]).some(function(x){return (x.workstreamGroup||'')===wg;}))c.workstreamGroups.push(wg);}}
   p.resource=(v.resource||'').trim()||'(TBH)';p.status=v.status||'Filled';p.oy=(v.oy||'').trim();
-  p.workstreamGroup=(v.workstreamGroup||'').trim();p.workstream=(v.workstream||'').trim();p.role=(v.role||'').trim();
+  p.workstreamGroup=wg;p.workstream=(v.workstream||'').trim();p.role=(v.role||'').trim();
   p.company=(v.company||'').trim();p.lcat=(v.lcat||'').trim();p.fte=Number(v.fte)||0;p.rateHr=Number(v.rateHr)||0;
   p.civilianLead=(v.civilianLead||'').trim();p.pwsRef=(v.pwsRef||'').trim();
   var ac=Number(v.annualCost)||0;p.annualCost=ac||Math.round(p.rateHr*p.fte*1860);
 }
 function contractAddPos(cid,preset){
   var c=(D.contracts||[]).find(function(x){return x.id===cid;});if(!c)return;
-  openFormModal({over:'Contract Management',title:'New position',submitLabel:'Add',fields:_ctPosFields(preset||null),
-    onSubmit:function(v){var p={id:uid()};_ctApplyPos(p,v);c.positions=c.positions||[];c.positions.push(p);save();renderView();toast('Position added.','success');}});
+  openFormModal({over:'Contract Management',title:'New position',submitLabel:'Add',fields:_ctPosFields(preset||null,c),
+    onSubmit:function(v){var p={id:uid()};_ctApplyPos(p,v,c);c.positions=c.positions||[];c.positions.push(p);save();renderView();toast('Position added.','success');}});
 }
 // "+ Position" inside a group card — pre-fills the active group-by dimension.
 function contractAddPosToGroup(cid,gi){
@@ -3360,8 +3370,8 @@ function contractAddWorkstream(cid){
 }
 function contractEditPos(cid,pid){
   var c=(D.contracts||[]).find(function(x){return x.id===cid;});if(!c)return;var p=(c.positions||[]).find(function(x){return x.id===pid;});if(!p)return;
-  openFormModal({over:'Contract Management',title:'Edit position — '+esc(p.resource||'(TBH)'),submitLabel:'Save',fields:_ctPosFields(p),
-    onSubmit:function(v){_ctApplyPos(p,v);save();renderView();toast('Position saved.','success');}});
+  openFormModal({over:'Contract Management',title:'Edit position — '+esc(p.resource||'(TBH)'),submitLabel:'Save',fields:_ctPosFields(p,c),
+    onSubmit:function(v){_ctApplyPos(p,v,c);save();renderView();toast('Position saved.','success');}});
 }
 function contractDelPos(cid,pid){
   var c=(D.contracts||[]).find(function(x){return x.id===cid;});if(!c)return;
