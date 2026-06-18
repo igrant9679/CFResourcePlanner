@@ -2826,6 +2826,15 @@ function renderProjView(q,category){
   var meta={project:{noun:'project',plural:'projects',label:'Projects',empty:'No projects yet'},initiative:{noun:'initiative',plural:'initiatives',label:'Initiatives',empty:'No initiatives yet'},overhead:{noun:'overhead item',plural:'overhead items',label:'Overhead',empty:'No overhead items yet'},opportunity:{noun:'opportunity',plural:'opportunities',label:'Opportunities',empty:'No opportunities yet'}}[category];
   var pipe=isPipelineCat(category);
   var all=allM(),tops=topLevelByCat(category),html='<div class="proj-scroll">';
+  var fyBar='';
+  if(category==='project'){
+    var _fys=[];tops.forEach(function(pp){if(pp.fiscalYear&&_fys.indexOf(pp.fiscalYear)===-1)_fys.push(pp.fiscalYear);});_fys.sort();
+    if(projFyFilter&&_fys.indexOf(projFyFilter)===-1)projFyFilter='';   // stale filter → reset
+    if(projFyFilter)tops=tops.filter(function(pp){return (pp.fiscalYear||'')===projFyFilter;});
+    if(_fys.length)fyBar='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px"><label style="font-size:12px;font-weight:700;color:var(--text-secondary)">Fiscal year</label>'
+      +'<select class="fld-sel" style="width:auto" onchange="projFyFilter=this.value;renderView()"><option value="">All fiscal years</option>'+_fys.map(function(f){return '<option value="'+esc(f)+'"'+(projFyFilter===f?' selected':'')+'>'+esc(f)+'</option>';}).join('')+'</select>'
+      +(projFyFilter?'<span style="font-size:11px;color:var(--text-muted)">'+tops.length+' project'+(tops.length===1?'':'s')+' in '+esc(projFyFilter)+'</span>':'')+'</div>';
+  }
   var totalRev=0,totalCost=0;
   tops.forEach(function(proj){var r=projRollupData(proj.id,all);totalRev+=r.revenue;totalCost+=r.cost;});
   var pfOh=(category==='overhead'&&typeof proformaOverheadMonthly==='function')?proformaOverheadMonthly():0;
@@ -2834,6 +2843,7 @@ function renderProjView(q,category){
   var revWord=category==='opportunity'?'Total potential value: ':category==='initiative'?'Total expected rev: ':'Total revenue: ';
   var sumLine=category==='overhead'?('Total fixed overhead (G&amp;A): <strong style="color:var(--red)">'+fmt(totalCost)+'/mo</strong>'+(ohPeople>0?' <span style="font-size:10px;color:var(--text-muted)">· '+fmt(ohPeople)+'/mo of people on these cost centers counts as Payroll in Capacity, not Overhead</span>':'')):(revWord+'<strong style="color:'+(pipe?'var(--amber)':'var(--green)')+'">'+fmt(totalRev)+'/mo</strong> &middot; Total cost: <strong>'+fmt(totalCost)+'/mo</strong>');
   html+='<div style="padding:10px 14px;margin-bottom:14px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;color:var(--text-secondary)"><strong style="font-size:13px;color:var(--text-primary)">'+meta.label+'</strong> &middot; '+tops.length+' '+(tops.length===1?meta.noun:meta.plural)+' &middot; '+sumLine+'</div>';
+  html+=fyBar;
   if(category!=='opportunity'){var _un=unallocatedMembers();if(_un.length)html+='<div style="margin-bottom:14px;padding:9px 13px;background:#FEF3C7;border:1px solid #FCD34D;border-radius:var(--radius);font-size:12px;color:#92400E">&#9888; <b>'+_un.length+'</b> resource'+(_un.length===1?'':'s')+' in your departments '+(_un.length===1?'is':'are')+' not allocated to any project or overhead item, so '+(_un.length===1?'it':'they')+' won\'t appear on these pages. <a href="#" onclick="openUnallocatedModal();return false;" style="color:#92400E;font-weight:700;text-decoration:underline">Review &amp; assign &rarr;</a></div>';}
   if(category==='overhead'&&pfOh>0){
     var cs=(D.proforma||{}).costStructure||{};
@@ -2860,6 +2870,7 @@ function renderProjView(q,category){
       +(proj.description?'<div style="font-size:11px;color:var(--text-secondary);margin:3px 0 6px;line-height:1.4">'+esc(proj.description)+'</div>':'')
       +projFinBlock(rev,tc,proj.revenueNote,noteClass,category)
       +((proj.startDate||proj.endDate)?'<div style="font-size:10px;color:var(--text-muted);margin-top:4px">&#128197; Active '+esc(proj.startDate||'start')+' → '+esc(proj.endDate||'ongoing')+'</div>':'')
+      +(proj.fiscalYear?'<div style="margin-top:4px"><span class="plan-chip" style="border-color:var(--gold);color:var(--gold)">'+esc(proj.fiscalYear)+'</span></div>':'')
       +'<div class="proj-cnt" style="margin-top:5px">'+(hasKids?fl.length+' direct &middot; '+rollup.count+' total':fl.length+' '+(fl.length===1?'person':'people'))+' assigned</div>'
       +projAttachHTML(proj);
     html+='<div class="proj-card">'
@@ -2959,6 +2970,12 @@ function _initDetailBody(p){
     +'<div style="font-size:11px;color:rgba(255,255,255,0.6);margin-top:3px">'+(p.owner||p.opr?'Owner: '+esc(p.owner||p.opr)+' &nbsp;·&nbsp; ':'')+'Active '+esc(p.startDate||'start')+' → '+esc(p.endDate||'ongoing')+'</div>'
     +(p.description?'<div style="font-size:12px;color:rgba(255,255,255,0.8);margin-top:7px;line-height:1.45">'+sanitizeHTML(p.description)+'</div>':'')
     +'</div>';
+  // Executive summary — moved to the top, sized to ~2–3 cards (full width, tall).
+  var execInner=p.narrative
+    ?'<div style="font-size:13px;color:var(--text-secondary);line-height:1.65;min-height:170px">'+sanitizeHTML(p.narrative)+'</div>'
+    :'<div style="font-size:12.5px;color:var(--text-muted);font-style:italic;min-height:170px;display:flex;align-items:center;justify-content:center;text-align:center">No executive summary yet — capture the reasoning, idea and justification. Click “+ Add”.</div>';
+  var execBtn='<button class="btn btn-sec btn-sm" style="font-size:11px;padding:3px 10px" onclick="stratEditNarrative(\''+p.id+'\')">'+(p.narrative?'&#9998; Edit':'+ Add')+'</button>';
+  html+=_initCard('Executive summary',execInner,execBtn);
   // Financials + scorecard KPIs
   html+=_initCard('Financials &amp; scorecard',
     '<div style="display:flex;gap:16px;flex-wrap:wrap">'
@@ -2986,7 +3003,6 @@ function _initDetailBody(p){
     +_initCard('Source (lead)',srcInner,'<button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 8px" onclick="_initEditDetails(\''+p.id+'\')">&#9998; Edit</button>')
     +_initCard('Strategic relevance to CommunityForce',strat.body,strat.btn)
     +_initCard('Market / industry relevance &amp; opportunity',mkt.body,mkt.btn)
-    +_initCard('Executive summary',(p.narrative?'<div style="font-size:12px;color:var(--text-secondary);line-height:1.5;max-height:240px;overflow:auto">'+sanitizeHTML(p.narrative)+'</div>':'<div style="font-size:12px;color:var(--text-muted);font-style:italic">No executive summary yet — the reasoning, idea and justification.</div>'),'<button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 8px" onclick="stratEditNarrative(\''+p.id+'\')">'+(p.narrative?'&#9998; Edit':'+ Add')+'</button>')
     +'</div>';
   // Linked opportunities — the pipeline this initiative is driving (impact / substantiation)
   var loInner = linkedOpps.length
@@ -3018,6 +3034,102 @@ function _initDetailBody(p){
   return html;
 }
 
+/* ── PROJECTS: List ↔ Detail sub-tabs + fiscal-year field/filter. Detail mirrors
+   the Initiative deep-dive, tailored to a contract project (revenue, CLINs,
+   margin, people, milestones, proposals). ── */
+var FISCAL_YEARS=['FY2024','FY2025','FY2026','FY2027','FY2028','FY2029','FY2030'];
+function _fyOpts(cur){
+  var h='<option value="">— none —</option>'+FISCAL_YEARS.map(function(f){return '<option value="'+f+'"'+(cur===f?' selected':'')+'>'+f+'</option>';}).join('');
+  if(cur&&FISCAL_YEARS.indexOf(cur)===-1)h+='<option value="'+esc(cur)+'" selected>'+esc(cur)+'</option>';
+  return h;
+}
+var projFyFilter='',projSubTab='list',_projDetailId='';
+function projSetTab(t){projSubTab=t;renderView();}
+function projSetDetail(id){_projDetailId=id;renderView();}
+function renderProjectsView(q){
+  var tabs=[['list','All projects'],['detail','Project detail']];
+  var bar='<div class="pf-subtabs">'+tabs.map(function(t){return '<button class="pf-subtab'+(projSubTab===t[0]?' active':'')+'" onclick="projSetTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
+  return '<div>'+bar+(projSubTab==='detail'?_projDetailHTML():renderProjView(q,'project'))+'</div>';
+}
+function _projDetailHTML(){
+  var projs=(D.projects||[]).filter(function(p){return projCat(p)==='project';});
+  if(!projs.length)return '<div class="empty-msg">No projects yet — add one on the “All projects” tab.</div>';
+  var p=projs.find(function(x){return x.id===_projDetailId;})||projs[0];
+  var opts=projs.map(function(x){return '<option value="'+x.id+'"'+(x.id===p.id?' selected':'')+'>'+esc(x.name)+(x.fiscalYear?' ('+esc(x.fiscalYear)+')':'')+'</option>';}).join('');
+  var sel='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">'
+    +'<label style="font-size:12px;font-weight:700;color:var(--text-secondary)">Project</label>'
+    +'<select class="fld-sel" style="max-width:360px;flex:1;min-width:220px" onchange="projSetDetail(this.value)">'+opts+'</select>'
+    +'<button class="btn btn-sec btn-sm" onclick="openEditProject(\''+p.id+'\')">&#9998; Edit core</button>'
+    +'</div>';
+  return '<div class="proj-scroll">'+sel+_projDetailBody(p)+'</div>';
+}
+function _projDetailBody(p){
+  var all=allM();
+  var roll=projRollupData(p.id,all);
+  var revNow=itemRev(p),costMo=roll.cost,net=revNow-costMo;
+  var margin=revNow>0?Math.round(net/revNow*100):null;
+  var now=new Date(),ny=now.getFullYear(),nm=now.getMonth();
+  var roster=capBuildRoster(),rows=[];
+  try{rows=(capProjData(roster,0,(typeof _capPipeOpts==='function'?_capPipeOpts():{}))||{}).rows||[];}catch(e){}
+  var contrib=rows.filter(function(r){return r.y===ny;}).reduce(function(a,r){return a+((capInWindow(p,r.y,r.m)&&capProjRevAt)?capProjRevAt(p,r.y,r.m):0);},0);
+  var assigned=all.filter(function(m){return projIds(m).indexOf(p.id)>-1;});
+  var clins=p.clins||[],clinRev=projClinRevenue(p);
+  var mileAll=(D.activities||[]).filter(function(a){return a.projectId===p.id&&a.isMilestone;});
+  var mileDone=mileAll.filter(function(a){return a.status==='done';}).length;
+  var tasks=(D.activities||[]).filter(function(a){return a.projectId===p.id&&(a.kind||'coe')==='project';});
+  var tasksDone=tasks.filter(function(a){return a.status==='done';}).length;
+  var props=(D.proposals||[]).filter(function(pr){return pr.opportunityId===p.id||(pr.pricing&&pr.pricing.linkedProjectId===p.id);});
+  function stat(lbl,val,sub,color){return '<div style="flex:1;min-width:130px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">'+lbl+'</div><div style="font-size:19px;font-weight:800;'+(color?'color:'+color:'')+'">'+val+'</div>'+(sub?'<div style="font-size:10px;color:var(--text-muted)">'+sub+'</div>':'')+'</div>';}
+  // Header
+  var html='<div style="background:linear-gradient(135deg,var(--navy),var(--navy-light));color:#fff;border-radius:var(--radius);padding:14px 16px;margin-bottom:12px">'
+    +'<div style="font-size:18px;font-weight:800">'+esc(p.name)+(p.fiscalYear?' <span style="font-size:11px;font-weight:700;background:rgba(255,255,255,0.18);padding:2px 8px;border-radius:10px;vertical-align:middle">'+esc(p.fiscalYear)+'</span>':'')+'</div>'
+    +'<div style="font-size:11px;color:rgba(255,255,255,0.6);margin-top:3px">'+(p.pm?'PM: '+esc(p.pm)+' &nbsp;·&nbsp; ':'')+'Active '+esc(p.startDate||'start')+' → '+esc(p.endDate||'ongoing')+'</div>'
+    +(p.description?'<div style="font-size:12px;color:rgba(255,255,255,0.8);margin-top:7px;line-height:1.45">'+sanitizeHTML(p.description)+'</div>':'')
+    +'</div>';
+  // Executive summary at top (sized to ~2–3 cards)
+  var execInner=p.narrative
+    ?'<div style="font-size:13px;color:var(--text-secondary);line-height:1.65;min-height:150px">'+sanitizeHTML(p.narrative)+'</div>'
+    :'<div style="font-size:12.5px;color:var(--text-muted);font-style:italic;min-height:150px;display:flex;align-items:center;justify-content:center;text-align:center">No executive summary yet — capture the reasoning and justification. Click “+ Add”.</div>';
+  html+=_initCard('Executive summary',execInner,'<button class="btn btn-sec btn-sm" style="font-size:11px;padding:3px 10px" onclick="stratEditNarrative(\''+p.id+'\')">'+(p.narrative?'&#9998; Edit':'+ Add')+'</button>');
+  // Financials & scorecard
+  html+=_initCard('Financials &amp; scorecard',
+    '<div style="display:flex;gap:16px;flex-wrap:wrap">'
+    +stat('Monthly revenue',fmt(revNow)+'/mo',p.fiscalYear||'real revenue','var(--green)')
+    +stat('Monthly cost (labor)',fmt(costMo)+'/mo',assigned.length+' assigned','')
+    +stat('Net / mo',fmt(net)+'/mo','revenue − labor',net>=0?'var(--green)':'var(--red)')
+    +stat('Margin',margin==null?'—':margin+'%','of revenue',margin==null?'':(margin>=0?'var(--green)':'var(--red)'))
+    +stat('FY'+String(ny).slice(2)+' contribution',fmt(Math.round(contrib)),'projected this calendar year','')
+    +(clins.length?stat('CLIN revenue',fmt(clinRev)+'/mo',clins.length+' CLIN'+(clins.length===1?'':'s'),''):'')
+    +'</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">'
+    +(mileAll.length?'<span class="plan-chip">'+mileDone+'/'+mileAll.length+' milestones</span>':'')
+    +(tasks.length?'<span class="plan-chip">'+tasksDone+'/'+tasks.length+' tasks done</span>':'')
+    +'</div>');
+  // CLIN breakdown
+  if(clins.length){
+    var clinInner='<table style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr style="color:var(--text-muted);text-align:left"><th style="padding:2px 0">CLIN</th><th>Title</th><th style="text-align:right">Revenue/mo</th><th style="text-align:right">Cost</th><th style="text-align:right">P/L</th></tr></thead><tbody>'
+      +clins.map(function(c){var rev=Number(c.revenue)||0,cost=clinAssignedCost(p.id,c.id),pl=rev-cost;return '<tr style="border-top:1px solid var(--border)"><td style="padding:3px 0">'+esc(c.number||'')+'</td><td>'+esc(c.title||c.positionTitle||'')+'</td><td style="text-align:right">'+fmt(rev)+'</td><td style="text-align:right;color:var(--red)">'+fmt(cost)+'</td><td style="text-align:right;font-weight:700;color:'+(pl>=0?'var(--green)':'var(--red)')+'">'+(pl<0?'−':'')+fmt(Math.abs(pl))+'</td></tr>';}).join('')
+      +'</tbody></table>';
+    html+=_initCard('CLIN breakdown ('+clins.length+')',clinInner,'<button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 8px" onclick="openEditProject(\''+p.id+'\')">&#9998; Edit CLINs</button>');
+  }
+  // People assigned
+  var peopleInner=assigned.length
+    ?'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:4px 14px">'+assigned.map(function(m){var pct=projDisplayPct(m,p.id);return '<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:3px 0;font-size:12px"><span class="proj-mem-link" onclick="openPersonProfile(\''+m.id+'\')" style="cursor:pointer">'+esc(m.name)+' <span style="color:var(--text-muted);font-size:10px">'+esc(m._dn||'')+'</span></span><span style="font-weight:600">'+pct+'% · '+fmt(Math.round(m.cost*pct/100))+'</span></div>';}).join('')+'</div>'
+    :'<div style="font-size:12px;color:var(--text-muted);font-style:italic">No resources assigned.</div>';
+  html+=_initCard('People assigned ('+assigned.length+')',peopleInner);
+  // Milestones
+  var mileInner=mileAll.length
+    ?'<div style="font-size:12px">'+mileAll.map(function(a){var ic=a.status==='done'?'✓':a.status==='blocked'?'⛔':'○';var col=a.status==='done'?'var(--green)':a.status==='blocked'?'var(--red)':'var(--text-muted)';return '<div style="padding:3px 0;border-bottom:1px solid var(--border)"><span style="color:'+col+';font-weight:700">'+ic+'</span> '+esc(a.subtask||a.task||'milestone')+(a.dueDate?' <span style="color:var(--text-muted);font-size:10px">· due '+esc(a.dueDate)+'</span>':'')+'</div>';}).join('')+'</div>'
+    :'<div style="font-size:12px;color:var(--text-muted);font-style:italic">No milestones yet.</div>';
+  html+=_initCard('Milestones ('+mileDone+'/'+mileAll.length+')',mileInner,'<button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 8px" onclick="stratAddMilestone(\''+p.id+'\')">+ Milestone</button>');
+  // Proposals associated
+  var propInner=props.length
+    ?'<div>'+props.map(function(pr){return '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding:5px 0;font-size:12px"><span>'+esc(pr.title||'(untitled proposal)')+'</span><span style="display:flex;gap:8px;align-items:center"><span class="plan-chip">'+esc(pr.status||'draft')+'</span><a href="#" onclick="event.preventDefault();viewMode=\'prop\';renderView()" style="font-size:11px;font-weight:700">Open →</a></span></div>';}).join('')+'</div>'
+    :'<div style="font-size:12px;color:var(--text-muted);font-style:italic">No proposals linked to this project.</div>';
+  html+=_initCard('Proposals associated ('+props.length+')',propInner);
+  if((p.attachments||[]).length)html+=_initCard('Attachments',projAttachHTML(p).replace('margin-top:7px',''));
+  return html;
+}
 var orgMode='hier';
 var ORG_VIEWS=[{k:'hier',l:'Hierarchical'},{k:'horiz',l:'Flat / Horizontal'},{k:'matrix',l:'Matrix'},{k:'func',l:'Functional'},{k:'div',l:'Division'}];
 var ORG_DESC={hier:'Reporting lines (reports-to), top-down.',horiz:'Same reporting lines, flowing left-to-right.',matrix:'Function (team) × project-assignment grid — the classic matrix org.',func:'Grouped by functional team / department.',div:'Grouped by business line / contract.'};
@@ -3731,7 +3843,7 @@ function renderView(){
   applyRoleUI();renderStats();
   var q=(document.getElementById('searchInput').value||'').toLowerCase().trim();var html;
   if(viewMode==='org')html=renderOrgView(q);
-  else if(viewMode==='proj')html=renderProjView(q,'project');
+  else if(viewMode==='proj')html=renderProjectsView(q);
   else if(viewMode==='init')html=renderInitiativesView(q);
   else if(viewMode==='opp')html=renderOppView(q);
   else if(viewMode==='over')html=renderProjView(q,'overhead');
@@ -11805,6 +11917,7 @@ document.getElementById('mdlDeptEdit').innerHTML=
 +fT('ep_name','Name',p.name)
 +'<div class="fld"><label class="fld-l" for="ep_cat">Category</label><select class="fld-sel" id="ep_cat">'+catOpts+'</select><div style="font-size:9px;color:var(--text-muted);margin-top:3px">Changing category? Save, then reopen to set its revenue.</div></div>'
 +revField
++(cat==='project'?'<div class="fld"><label class="fld-l" for="ep_fy">Fiscal year</label><select class="fld-sel" id="ep_fy">'+_fyOpts(p.fiscalYear||'')+'</select></div>':'')
 +(cat!=='opportunity'?('<div class="fld-row2"><div class="fld"><label class="fld-l" for="ep_start">Start month (optional)</label><input class="fld-i" type="month" id="ep_start" value="'+esc(p.startDate||'')+'"></div><div class="fld"><label class="fld-l" for="ep_end">End month (optional)</label><input class="fld-i" type="month" id="ep_end" value="'+esc(p.endDate||'')+'"></div></div><div style="font-size:9px;color:var(--text-muted);margin:-4px 0 8px">Revenue counts in Capacity / Strategic Planning only within this window. Blank = active across the whole horizon.</div>'):'')
 +((cat==='project'||cat==='initiative')?'<div id="ep_sched_wrap">'+_projSchedEditorHTML(p)+'</div>':'')
 +(cat==='project'?renderSubClientsSection(pid):'')
@@ -11868,6 +11981,7 @@ if(newCat==='opportunity'){var sEl=document.getElementById('ep_stage');if(sEl)p.
 p.revenueNote=gv('ep_note');p.description=rtGet('ep_desc');p.parentId=catChanged?null:(gv('ep_parent')||null);
 var stEl=document.getElementById('ep_start');if(stEl)p.startDate=stEl.value||'';
 var enEl=document.getElementById('ep_end');if(enEl)p.endDate=enEl.value||'';
+var fyEl=document.getElementById('ep_fy');if(fyEl)p.fiscalYear=fyEl.value||'';
 closeModal('ovDeptEdit');save();
 var el=document.getElementById('projList');if(el)el.innerHTML=renderProjList(p.category);
 renderView();}
