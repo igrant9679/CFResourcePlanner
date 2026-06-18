@@ -3867,8 +3867,15 @@ function govApplySearch(id){var s=(_govPipe().searches||[]).find(function(x){ret
 /* ── SOURCES MANAGER: built-in adapter toggles + URL feed/file sources ── */
 function govSourcesModal(){
   var gp=_govPipe();gp.settings=gp.settings||{};gp.settings.sources=gp.settings.sources||{};gp.urlSources=gp.urlSources||[];
+  if(!Array.isArray(gp.settings.ingestKeywords))gp.settings.ingestKeywords=[];
   var s=gp.settings.sources;
   var samKey=!!((gp.settings||{}).samApiKey);
+  var kws=gp.settings.ingestKeywords;
+  var kwChips=kws.length?kws.map(function(k,i){return '<span class="plan-chip" style="border-color:var(--gold);color:var(--gold)">'+esc(k)+' <a href="#" onclick="event.preventDefault();govDelKeyword('+i+')" style="color:var(--red);text-decoration:none;font-weight:700">&times;</a></span>';}).join(' '):'<span style="font-size:11px;color:var(--text-muted)">No keywords — every opportunity is ingested.</span>';
+  var kwSection='<span class="fld-section-hdr" style="margin-top:0">Keyword filter — download criteria</span>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Only RFPs/opportunities whose <b>title or description</b> matches one of these keywords are downloaded &amp; kept — across every source. Leave empty to ingest everything.</div>'
+    +'<div style="margin-bottom:6px">'+kwChips+'</div>'
+    +'<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px"><input class="fld-i" id="gov_kw_input" style="flex:1" placeholder="e.g. Salesforce, grants management, Qlik, data analytics" onkeydown="if(event.key===\'Enter\'){event.preventDefault();govAddKeyword();}"><button class="btn btn-navy btn-sm" onclick="govAddKeyword()">+ Add</button></div>';
   function tgl(k,label,desc){
     var on=s[k]!==false;
     return '<div style="display:flex;gap:8px;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--border)">'
@@ -3886,7 +3893,8 @@ function govSourcesModal(){
   document.getElementById('mdlAdmin').innerHTML=
     '<div class="mdl-over">Gov Discovery</div><div class="mdl-title">Data Sources</div>'
     +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">All sources run in the daily ingestion and "Run ingestion now". Each fails independently and logs its errors — a broken source never blocks the others, and retiring one is a checkbox.</div>'
-    +'<span class="fld-section-hdr" style="margin-top:0">Built-in adapters (live APIs)</span>'
+    +kwSection
+    +'<span class="fld-section-hdr">Built-in adapters (live APIs)</span>'
     +tgl('sam','SAM.gov Opportunities API','Presolicitations, sources sought, solicitations, amendments. '+(samKey?'<span style="color:var(--green)">API key set ✓</span>':'<span style="color:#D97706">Needs the API key — Admin → Integrations → Data Sources</span>'))
     +tgl('apfs','DHS APFS (apfs-cloud.dhs.gov)','Full DHS forecast incl. incumbents, contract numbers, POC emails — the richest free source. No key needed. Filtered to your Company Profile NAICS.')
     +tgl('fpds','FPDS recompete leads','Queries FPDS ATOM for contracts in your NAICS ending 12–18 months out — surfaces them as [Recompete] leads with incumbent + value. No key needed.')
@@ -3908,6 +3916,15 @@ function govSourcesModal(){
   openModal('ovAdmin');
 }
 function govToggleSource(k,on){var gp=_govPipe();gp.settings=gp.settings||{};gp.settings.sources=gp.settings.sources||{};gp.settings.sources[k]=!!on;save();}
+function govAddKeyword(){
+  var gp=_govPipe();gp.settings=gp.settings||{};gp.settings.ingestKeywords=gp.settings.ingestKeywords||[];
+  var raw=gv('gov_kw_input')||'';
+  raw.split(',').map(function(t){return t.trim();}).filter(Boolean).forEach(function(kw){
+    if(gp.settings.ingestKeywords.map(function(x){return x.toLowerCase();}).indexOf(kw.toLowerCase())===-1)gp.settings.ingestKeywords.push(kw);
+  });
+  save();govSourcesModal();
+}
+function govDelKeyword(i){var gp=_govPipe();if(gp.settings&&Array.isArray(gp.settings.ingestKeywords)){gp.settings.ingestKeywords.splice(i,1);save();govSourcesModal();}}
 function govToggleUrlSource(id,on){var u=(_govPipe().urlSources||[]).find(function(x){return x.id===id;});if(u){u.enabled=!!on;save();}}
 function govDelUrlSource(id){var gp=_govPipe();gp.urlSources=(gp.urlSources||[]).filter(function(x){return x.id!==id;});save();govSourcesModal();}
 function govAddUrlSource(){

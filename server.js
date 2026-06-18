@@ -499,6 +499,7 @@ async function govProfile() {
     naics: ident.naics || [],
     setAsides: [ident.ownershipType || 'Small Business'].concat((gp.settings && gp.settings.setAsides) || []),
     keywords: ((gp.settings && gp.settings.keywords) || []).concat(keywords).slice(0, 40),
+    ingestKeywords: ((gp.settings && gp.settings.ingestKeywords) || []).filter(Boolean),   // explicit download filter
     agencies: agencies.slice(0, 40),
     weights: (gp.settings && gp.settings.weights) || null,
     searches: gp.searches || [],
@@ -509,6 +510,13 @@ async function govProfile() {
 }
 async function govUpsert(unified, profile, stats) {
   if (!unified || !unified.title) return;
+  // Keyword download criteria: when set, only keep opportunities whose title or
+  // description matches at least one keyword (case-insensitive). Applies to all sources.
+  const kws = (profile && profile.ingestKeywords) || [];
+  if (kws.length) {
+    const hay = ((unified.title || '') + ' ' + (unified.description || '')).toLowerCase();
+    if (!kws.some((k) => hay.indexOf(String(k).toLowerCase()) > -1)) { if (stats) stats.filtered = (stats.filtered || 0) + 1; return; }
+  }
   const cand = await pool.query(
     `SELECT id, solnum, title, agency, naics, lifecycle, timeline FROM gov_opportunities
      WHERE archived = false AND (solnum = $1 OR left(coalesce(naics,''),4) = left($2,4) OR $2 = '') LIMIT 400`,
