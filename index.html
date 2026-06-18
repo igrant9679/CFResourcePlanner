@@ -3121,7 +3121,7 @@ function _projDetailBody(p){
   }
   // People assigned
   var peopleInner=assigned.length
-    ?'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:4px 14px">'+assigned.map(function(m){var pct=projDisplayPct(m,p.id);return '<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:3px 0;font-size:12px"><span class="proj-mem-link" onclick="openPersonProfile(\''+m.id+'\')" style="cursor:pointer">'+esc(m.name)+' <span style="color:var(--text-muted);font-size:10px">'+esc(m._dn||'')+'</span></span><span style="font-weight:600">'+pct+'% · '+fmt(Math.round(m.cost*pct/100))+'</span></div>';}).join('')+'</div>'
+    ?'<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px 14px">'+assigned.map(function(m){var pct=projDisplayPct(m,p.id);return '<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:3px 0;font-size:12px"><span class="proj-mem-link" onclick="openPersonProfile(\''+m.id+'\')" style="cursor:pointer">'+esc(m.name)+' <span style="color:var(--text-muted);font-size:10px">'+esc(m._dn||'')+'</span></span><span style="font-weight:600">'+pct+'% · '+fmt(Math.round(m.cost*pct/100))+'</span></div>';}).join('')+'</div>'
     :'<div style="font-size:12px;color:var(--text-muted);font-style:italic">No resources assigned.</div>';
   html+=_navSection('People assigned ('+assigned.length+')',peopleInner);
   // Milestones
@@ -3141,7 +3141,9 @@ function _projDetailBody(p){
    Data lives ONLY in D.contracts; nothing links to departments/projects/members
    or the cash model. Optional one-way bridges (TBH position → Recruiting req) are
    explicit and opt-in. Phase 1: import + staff-planning grid + rollups. ── */
-var _contractSel='',contractFilter={oy:'',company:'',group:'',status:''};
+var _contractSel='',contractFilter={oy:'',company:'',group:'',status:''},contractGroupBy='workstreamGroup',_ctGroupList=[];
+var CT_GROUPBY=[{k:'workstreamGroup',l:'Workstream'},{k:'civilianLead',l:'Civilian Lead'},{k:'company',l:'Company'}];
+function contractSetGroupBy(k){contractGroupBy=k;renderView();}
 function contractsMigrate(){
   if(!Array.isArray(D.contracts))D.contracts=[];
   D.contracts.forEach(function(c){
@@ -3150,6 +3152,7 @@ function contractsMigrate(){
     if(!Array.isArray(c.positions))c.positions=[];
     if(!Array.isArray(c.pricing))c.pricing=[];
     if(!Array.isArray(c.scenarios))c.scenarios=[];
+    if(!Array.isArray(c.workstreamGroups))c.workstreamGroups=[];   // explicitly-added (possibly empty) workstreams
     if(!c.funding||typeof c.funding!=='object')c.funding={};
     c.positions.forEach(function(p){if(!p.id)p.id=uid();if(!('status' in p))p.status='Filled';});
   });
@@ -3213,28 +3216,38 @@ function _contractStaffHTML(c){
   var ud=function(key){var s={};pos.forEach(function(p){var v=p[key]||'';if(v)s[v]=1;});return Object.keys(s).sort();};
   function fsel(key,label,vals){return '<select class="fld-sel" style="width:auto" onchange="contractSetFilter(\''+key+'\',this.value)"><option value="">'+label+'</option>'+vals.map(function(v){return '<option value="'+esc(v)+'"'+(contractFilter[key]===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select>';}
   var anyFilter=contractFilter.oy||contractFilter.company||contractFilter.group||contractFilter.status;
+  var byWs=contractGroupBy==='workstreamGroup';
   var filters='<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">'
     +(ud('oy').length?fsel('oy','All option years',ud('oy')):'')
     +fsel('group','All workstreams',ud('workstreamGroup'))
     +fsel('company','All companies',ud('company'))
     +fsel('status','All statuses',['Filled','TBH','TBD','Reserve'])
     +'<button class="btn btn-navy btn-sm" onclick="contractAddPos(\''+c.id+'\')">+ Position</button>'
+    +(byWs?'<button class="btn btn-sec btn-sm" onclick="contractAddWorkstream(\''+c.id+'\')">+ Workstream</button>':'')
     +(anyFilter?'<button class="btn btn-outline btn-sm" onclick="contractFilter={oy:\'\',company:\'\',group:\'\',status:\'\'};renderView()">Clear</button>':'')
     +'</div>';
+  // Group-by toggle: Workstream / Civilian Lead / Company.
+  var groupBar='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Group by</span><div class="plan-seg">'+CT_GROUPBY.map(function(g){return '<button class="'+(contractGroupBy===g.k?'active':'')+'" onclick="contractSetGroupBy(\''+g.k+'\')">'+g.l+'</button>';}).join('')+'</div></div>';
   var byCo={};fpos.forEach(function(p){var k=p.company||'(unspecified)';(byCo[k]=byCo[k]||{fte:0,cost:0});byCo[k].fte+=Number(p.fte)||0;byCo[k].cost+=Number(p.annualCost)||0;});
   var coChips=Object.keys(byCo).sort(function(a,b){return byCo[b].cost-byCo[a].cost;}).map(function(k){return '<span style="display:inline-flex;gap:6px;align-items:baseline;border:1px solid var(--border);border-radius:14px;padding:3px 11px;font-size:11px;background:var(--card-bg)"><b>'+esc(k)+'</b><span style="color:var(--text-muted)">'+byCo[k].fte.toFixed(2)+' FTE · '+fmt(Math.round(byCo[k].cost))+'</span></span>';}).join('');
   var coRollup=coChips?'<div style="margin-bottom:12px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:5px">By company</div><div style="display:flex;gap:6px;flex-wrap:wrap">'+coChips+'</div></div>':'';
-  var groups=[];fpos.forEach(function(p){var g=p.workstreamGroup||'(ungrouped)';if(groups.indexOf(g)===-1)groups.push(g);});
-  var tableHTML=groups.map(function(g){
-    var gp=fpos.filter(function(p){return (p.workstreamGroup||'(ungrouped)')===g;});
+  var gkey=contractGroupBy,GLBL=(CT_GROUPBY.find(function(x){return x.k===gkey;})||{}).l||'Group';
+  var groups=[];fpos.forEach(function(p){var g=(p[gkey]||'(unassigned)');if(groups.indexOf(g)===-1)groups.push(g);});
+  if(byWs&&!contractFilter.group)(c.workstreamGroups||[]).forEach(function(g){if(g&&groups.indexOf(g)===-1)groups.push(g);});   // show explicitly-added (empty) workstreams
+  _ctGroupList=groups;
+  var tableHTML=groups.map(function(g,gi){
+    var gp=fpos.filter(function(p){return (p[gkey]||'(unassigned)')===g;});
     var gFte=gp.reduce(function(a,p){return a+(Number(p.fte)||0);},0),gCost=gp.reduce(function(a,p){return a+(Number(p.annualCost)||0);},0);
+    var addBtn='<button class="btn btn-sec btn-sm" style="font-size:9px;padding:1px 7px" onclick="contractAddPosToGroup(\''+c.id+'\','+gi+')" title="Add a position to this group">+ Position</button>';
+    var rows=gp.length?gp.map(function(p,i){return _ctPosRow(c,p,i);}).join('')
+      :'<tr><td colspan="11" style="padding:8px;font-size:11px;color:var(--text-muted);font-style:italic">No positions in this '+esc(GLBL.toLowerCase())+' yet — click <b>+ Position</b>.</td></tr>';
     return '<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:12px">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;background:linear-gradient(135deg,var(--navy),var(--navy-light));color:#fff"><span style="font-size:13px;font-weight:800">'+esc(g)+'</span><span style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.85);white-space:nowrap">'+gFte.toFixed(2)+' FTE · '+fmt(Math.round(gCost))+'</span></div>'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;background:linear-gradient(135deg,var(--navy),var(--navy-light));color:#fff"><span style="font-size:13px;font-weight:800">'+esc(g)+'</span><span style="display:flex;gap:10px;align-items:center"><span style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.85);white-space:nowrap">'+gFte.toFixed(2)+' FTE · '+fmt(Math.round(gCost))+'</span>'+addBtn+'</span></div>'
       +'<div style="overflow-x:auto"><table style="width:100%;font-size:11.5px;border-collapse:collapse;min-width:920px"><thead><tr style="text-align:left;color:var(--text-muted);font-size:9px;text-transform:uppercase;letter-spacing:.3px;background:var(--page-bg)"><th style="padding:5px 8px">Resource</th><th style="padding:5px 8px">Role</th><th style="padding:5px 8px">LCAT</th><th style="padding:5px 8px">Company</th><th style="padding:5px 8px;text-align:right">FTE</th><th style="padding:5px 8px;text-align:right">$/hr</th><th style="padding:5px 8px;text-align:right">Annual</th><th style="padding:5px 8px">Civilian Lead</th><th style="padding:5px 8px">PWS</th><th style="padding:5px 8px">Status</th><th style="padding:5px 8px"></th></tr></thead><tbody>'
-      +gp.map(function(p,i){return _ctPosRow(c,p,i);}).join('')+'</tbody></table></div></div>';
+      +rows+'</tbody></table></div></div>';
   }).join('');
-  if(!fpos.length)tableHTML='<div class="empty-msg">No positions'+(anyFilter?' match the filters':' yet — click + Position or import a workbook')+'.</div>';
-  return kpis+coRollup+filters+'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:6px">Positions by workstream</div>'+tableHTML;
+  if(!groups.length)tableHTML='<div class="empty-msg">No positions'+(anyFilter?' match the filters':' yet — click + Position or import a workbook')+'.</div>';
+  return kpis+coRollup+filters+groupBar+'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:6px">Positions by '+esc(GLBL.toLowerCase())+'</div>'+tableHTML;
 }
 // Inline edit of a position field. fte/rate recompute annual; annual can be
 // overridden directly. Re-renders so the (read-only) totals refresh.
@@ -3323,10 +3336,27 @@ function _ctApplyPos(p,v){
   p.civilianLead=(v.civilianLead||'').trim();p.pwsRef=(v.pwsRef||'').trim();
   var ac=Number(v.annualCost)||0;p.annualCost=ac||Math.round(p.rateHr*p.fte*1860);
 }
-function contractAddPos(cid){
+function contractAddPos(cid,preset){
   var c=(D.contracts||[]).find(function(x){return x.id===cid;});if(!c)return;
-  openFormModal({over:'Contract Management',title:'New position',submitLabel:'Add',fields:_ctPosFields(null),
+  openFormModal({over:'Contract Management',title:'New position',submitLabel:'Add',fields:_ctPosFields(preset||null),
     onSubmit:function(v){var p={id:uid()};_ctApplyPos(p,v);c.positions=c.positions||[];c.positions.push(p);save();renderView();toast('Position added.','success');}});
+}
+// "+ Position" inside a group card — pre-fills the active group-by dimension.
+function contractAddPosToGroup(cid,gi){
+  var g=_ctGroupList[gi];var preset={};
+  if(g&&g!=='(unassigned)')preset[contractGroupBy]=g;
+  contractAddPos(cid,preset);
+}
+// Add an (initially empty) workstream group to the contract.
+function contractAddWorkstream(cid){
+  var c=(D.contracts||[]).find(function(x){return x.id===cid;});if(!c)return;
+  openFormModal({over:'Contract Management',title:'New workstream',submitLabel:'Add',
+    intro:'Adds a workstream group. It appears as an empty section you can add positions to.',
+    fields:[{key:'name',label:'Workstream group name',type:'text',required:true,placeholder:'e.g. Data, Analytics & Cloud'}],
+    onSubmit:function(v){var nm=(v.name||'').trim();if(!nm)return;c.workstreamGroups=c.workstreamGroups||[];
+      var exists=c.workstreamGroups.indexOf(nm)>-1||(c.positions||[]).some(function(p){return (p.workstreamGroup||'')===nm;});
+      if(exists){toast('That workstream already exists.','warn');return;}
+      c.workstreamGroups.push(nm);contractGroupBy='workstreamGroup';save();renderView();toast('Workstream “'+nm+'” added — use its “+ Position” to staff it.','success');}});
 }
 function contractEditPos(cid,pid){
   var c=(D.contracts||[]).find(function(x){return x.id===cid;});if(!c)return;var p=(c.positions||[]).find(function(x){return x.id===pid;});if(!p)return;
