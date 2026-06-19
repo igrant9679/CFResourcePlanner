@@ -4387,7 +4387,9 @@ function contractDash(c){
   // (incl. the completed history) that are missing by taskId, preserving edits to
   // existing tasks. Runs once per dashboard.
   if(_ctIsBclm(c)&&!d._taskSeedV2){var have={};d.tasks.forEach(function(t){if(t.taskId)have[t.taskId]=1;});CT_BCLM_TASKS.forEach(function(t){if(t.taskId&&!have[t.taskId])d.tasks.push(structuredClone(t));});d._taskSeedV2=true;}
-  d.tasks.forEach(function(t){if(!t.id)t.id=uid();['taskId','name','bucket','ws','priority','progress','start','due','completedDate','completedBy','desc'].forEach(function(f){if(typeof t[f]!=='string')t[f]=t[f]==null?'':String(t[f]);});if(!t.ws)t.ws='Support';if(!t.priority)t.priority='Medium';if(!Array.isArray(t.assignees))t.assignees=[];if(!Array.isArray(t.labels))t.labels=[];t.late=!!t.late;});
+  d.tasks.forEach(function(t){if(!t.id)t.id=uid();['taskId','name','bucket','ws','wsx','priority','progress','start','due','completedDate','completedBy','desc'].forEach(function(f){if(typeof t[f]!=='string')t[f]=t[f]==null?'':String(t[f]);});if(!t.ws)t.ws='Support';if(!t.priority)t.priority='Medium';if(!Array.isArray(t.assignees))t.assignees=[];if(!Array.isArray(t.labels))t.labels=[];t.late=!!t.late;});
+  // One-time auto-map of tasks to a SPHERE workstream (WS0–WS14) by keyword; editable after.
+  if(_ctIsBclm(c)&&!d._wsxSeeded){d.tasks.forEach(function(t){if(!t.wsx)t.wsx=_ctWsxGuess(t);});d._wsxSeeded=true;}
   d.resources.forEach(function(r){if(!r.id)r.id=uid();['name','kind','org','ws','role','note'].forEach(function(f){if(typeof r[f]!=='string')r[f]=r[f]==null?'':String(r[f]);});});
   // Completed-task scope: which completed tasks to EXCLUDE from completed/accomplishment views.
   d.completedFilter=(d.completedFilter&&typeof d.completedFilter==='object')?d.completedFilter:{years:[],buckets:[],ws:[]};
@@ -4780,10 +4782,47 @@ function _ctWsPanel(cid,ws,tasks,res){
    "Workstream Details & Resources" view.
    ════════════════════════════════════════════════════════════════════════ */
 var _ctByGroupFilter={group:'',priority:'',progress:'',late:false,showCompleted:false};
+var _ctByGroupMode='wsx'; // 'wsx' = group by SPHERE workstream (WS0–WS14); 'ws' = Transformation/Support
+function ctByGroupSetMode(m){_ctByGroupMode=m;renderView();}
 function ctByGroupSetFilter(k,v){if(k==='late')_ctByGroupFilter.late=!_ctByGroupFilter.late;else if(k==='showCompleted')_ctByGroupFilter.showCompleted=!_ctByGroupFilter.showCompleted;else _ctByGroupFilter[k]=v;renderView();}
 function ctByGroupClear(){_ctByGroupFilter={group:'',priority:'',progress:'',late:false,showCompleted:false};renderView();}
+// Auto-map a task to a SPHERE workstream (WS0–WS14) by keyword. '' = unassigned.
+function _ctWsxGuess(t){var s=((t.name||'')+' '+(t.desc||'')+' '+((t.labels||[]).join(' ')));
+  if(/\bADVANA\b|\bFAMS\b/i.test(s))return 'WS1';
+  if(/\bDITIP\b/i.test(s))return 'WS10';
+  if(/SNAP-?IT/i.test(s))return 'WS11';
+  if(/\bEKR\b|\bARIS\b/i.test(s))return 'WS9';
+  if(/BEA Cert|cert tool/i.test(s))return 'WS12';
+  if(/\bIRB\b/i.test(s))return 'WS3';
+  if(/\bOOC\b|batch ooc/i.test(s))return 'WS8';
+  if(/parade/i.test(s))return 'WS5';
+  if(/auditability/i.test(s))return 'WS6';
+  if(/\bIDM\b|\bOEP\b/i.test(s))return 'WS4';
+  if(/reporting logic/i.test(s))return 'WS2';
+  if(/SPHERE/i.test(s)&&/\b(change request|CR\b|enhancement)/i.test(s))return 'WS14';
+  if(/steady.?state|platform optim/i.test(s))return 'WS13';
+  return '';}
+// <select> options of the contract's SPHERE workstreams (wid only, full name in tooltip).
+function _ctWsxOpts(sw,cur){var o='<option value="">— none —</option>'+sw.map(function(w){return '<option value="'+esc(w.wid)+'"'+(cur===w.wid?' selected':'')+' title="'+esc(w.name||'')+'">'+esc(w.wid)+'</option>';}).join('');if(cur&&!sw.some(function(w){return w.wid===cur;}))o+='<option selected>'+esc(cur)+'</option>';return o;}
+function _ctBgRow(cid,t,sw){var done=_ctIsDone(t);
+  return '<tr style="border-top:1px solid var(--border)'+(done?';opacity:.62':'')+'">'
+   +'<td style="padding:5px 8px;font-weight:600;cursor:help" title="'+_ctTaskTip(t)+'">'+(done?'<span style="color:'+CTD.transformation+';margin-right:5px">&#10003;</span>':(t.late?'<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+CTD.red+';margin-right:5px"></span>':''))+esc(t.name)+(t.desc?' <span style="color:var(--text-muted);font-size:9px">&#9432;</span>':'')+'</td>'
+   +'<td style="padding:5px 8px;color:var(--text-muted)">'+esc(t.bucket||'(no group)')+'</td>'
+   +'<td style="padding:5px 8px">'+_ctPill(t.priority,CTD_PRIO[t.priority]||CTD.support)+'</td>'
+   +'<td style="padding:5px 8px;white-space:nowrap">'+esc(t.progress||'—')+'</td>'
+   +'<td style="padding:5px 8px;white-space:nowrap;color:'+(t.late?CTD.red:'var(--text-muted)')+'">'+esc(done?(t.completedDate||''):(t.due||''))+'</td>'
+   +'<td style="padding:5px 8px;color:var(--text-secondary)">'+esc((t.assignees||[]).join(', ')||'—')+'</td>'
+   +'<td style="padding:5px 8px">'+_ctPill(t.ws==='Transformation'?'T':'S',t.ws==='Transformation'?CTD.transformation:CTD.support)+'</td>'
+   +'<td style="padding:5px 8px"><select class="ct-cell" style="width:auto" title="Assign SPHERE workstream" onchange="ctDashSetRow(\''+cid+'\',\'tasks\',\''+t.id+'\',\'wsx\',this.value)">'+_ctWsxOpts(sw,t.wsx||'')+'</select></td></tr>';}
+function _ctBgSection(cid,label,color,ts,sw){
+  var rows=ts.length?ts.map(function(t){return _ctBgRow(cid,t,sw);}).join(''):'<tr><td colspan="8" style="padding:8px;font-size:11px;color:var(--text-muted);font-style:italic">No tasks.</td></tr>';
+  return '<div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px">'
+   +'<div style="background:'+color+';color:#fff;padding:9px 14px;display:flex;justify-content:space-between;align-items:center"><div style="font-size:14px;font-weight:800">'+esc(label)+'</div><div style="font-size:12px;opacity:.9">'+ts.length+' task'+(ts.length===1?'':'s')+'</div></div>'
+   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:820px"><thead><tr style="text-align:left;color:var(--text-secondary);font-size:9px;text-transform:uppercase;background:var(--page-bg)"><th style="padding:5px 8px">Task</th><th style="padding:5px 8px">Group</th><th style="padding:5px 8px">Priority</th><th style="padding:5px 8px">Status</th><th style="padding:5px 8px">Due / Done</th><th style="padding:5px 8px">Assignees</th><th style="padding:5px 8px">T/S</th><th style="padding:5px 8px">WS</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+}
 function _ctDashByGroupHTML(c){
-  var d=contractDash(c),cid=c.id,tasks=_ctScopedTasks(d),f=_ctByGroupFilter;
+  var d=contractDash(c),cid=c.id,tasks=_ctScopedTasks(d),f=_ctByGroupFilter,mode=_ctByGroupMode;
+  var sw=(d.sphere&&d.sphere.workstreams)||[];
   var groups={};tasks.forEach(function(t){var b=t.bucket||'(no group)';groups[b]=(groups[b]||0)+1;});
   var gkeys=Object.keys(groups).sort();
   var doneN=tasks.filter(_ctIsDone).length;
@@ -4794,10 +4833,12 @@ function _ctDashByGroupHTML(c){
     if(f.progress&&t.progress!==f.progress)return false;
     if(f.late&&!t.late)return false;return true;}
   var shown=tasks.filter(match);
+  var anyF=f.group||f.priority||f.progress||f.late||f.showCompleted;
+  var modeSeg='<div class="plan-seg" style="margin-bottom:12px"><button class="'+(mode==='wsx'?'active':'')+'" onclick="ctByGroupSetMode(\'wsx\')">By SPHERE Workstream</button><button class="'+(mode==='ws'?'active':'')+'" onclick="ctByGroupSetMode(\'ws\')">By Transformation / Support</button></div>';
   var gsel='<select class="fld-sel" style="width:auto;max-width:320px" onchange="ctByGroupSetFilter(\'group\',this.value)"><option value="">All groups ('+tasks.length+')</option>'+gkeys.map(function(g){return '<option value="'+esc(g)+'"'+(f.group===g?' selected':'')+'>'+esc(g)+' ('+groups[g]+')</option>';}).join('')+'</select>';
   function fsel(key,label,vals){return '<select class="fld-sel" style="width:auto" onchange="ctByGroupSetFilter(\''+key+'\',this.value)"><option value="">'+label+'</option>'+vals.map(function(v){return '<option value="'+esc(v)+'"'+(f[key]===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select>';}
-  var anyF=f.group||f.priority||f.progress||f.late||f.showCompleted;
-  var bar='<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Filter the task tracker by <b>group</b>; tasks are organized under their <b>workstream</b> (Transformation vs Support). Hover a task for details.</div>'
+  var bar=modeSeg
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">'+(mode==='wsx'?'Tasks grouped by <b>SPHERE workstream</b> (WS0–WS14). Use the <b>WS</b> dropdown on a row to assign/reassign its workstream.':'Tasks grouped by <b>Transformation / Support</b>.')+' Filter by group, priority, status. Hover a task for details.</div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:14px">'
     +'<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Group</span>'+gsel
     +fsel('priority','All priorities',['Urgent','Important','Medium','Low'])
@@ -4805,21 +4846,19 @@ function _ctDashByGroupHTML(c){
     +'<button class="btn '+(f.late?'btn-navy':'btn-outline')+' btn-sm" onclick="ctByGroupSetFilter(\'late\')">Late only</button>'
     +'<button class="btn '+(f.showCompleted?'btn-navy':'btn-outline')+' btn-sm" onclick="ctByGroupSetFilter(\'showCompleted\')">'+(f.showCompleted?'Hide':'Show')+' completed ('+doneN+')</button>'
     +(anyF?'<button class="btn btn-outline btn-sm" onclick="ctByGroupClear()">Clear</button>':'')+'</div>';
-  var body=['Transformation','Support'].map(function(ws){
-    var color=ws==='Transformation'?CTD.transformation:CTD.support;
-    var wt=shown.filter(function(t){return t.ws===ws;});
-    var rows=wt.length?wt.map(function(t){var done=_ctIsDone(t);return '<tr style="border-top:1px solid var(--border)'+(done?';opacity:.62':'')+'">'
-      +'<td style="padding:5px 8px;font-weight:600;cursor:help" title="'+_ctTaskTip(t)+'">'+(done?'<span style="color:'+CTD.transformation+';margin-right:5px">&#10003;</span>':(t.late?'<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+CTD.red+';margin-right:5px"></span>':''))+esc(t.name)+(t.desc?' <span style="color:var(--text-muted);font-size:9px">&#9432;</span>':'')+'</td>'
-      +'<td style="padding:5px 8px;color:var(--text-muted)">'+esc(t.bucket||'(no group)')+'</td>'
-      +'<td style="padding:5px 8px">'+_ctPill(t.priority,CTD_PRIO[t.priority]||CTD.support)+'</td>'
-      +'<td style="padding:5px 8px;white-space:nowrap">'+esc(t.progress||'—')+'</td>'
-      +'<td style="padding:5px 8px;white-space:nowrap;color:'+(t.late?CTD.red:'var(--text-muted)')+'">'+esc(done?(t.completedDate||''):(t.due||''))+'</td>'
-      +'<td style="padding:5px 8px;color:var(--text-secondary)">'+esc((t.assignees||[]).join(', ')||'—')+'</td></tr>';}).join('')
-      :'<tr><td colspan="6" style="padding:8px;font-size:11px;color:var(--text-muted);font-style:italic">No tasks'+(anyF?' match the filter':'')+'.</td></tr>';
-    return '<div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px">'
-      +'<div style="background:'+color+';color:#fff;padding:9px 14px;display:flex;justify-content:space-between;align-items:center"><div style="font-size:15px;font-weight:800">'+ws+'</div><div style="font-size:12px;opacity:.9">'+wt.length+' task'+(wt.length===1?'':'s')+(f.group?' · '+esc(f.group):'')+'</div></div>'
-      +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:680px"><thead><tr style="text-align:left;color:var(--text-secondary);font-size:9px;text-transform:uppercase;background:var(--page-bg)"><th style="padding:5px 8px">Task</th><th style="padding:5px 8px">Group</th><th style="padding:5px 8px">Priority</th><th style="padding:5px 8px">Status</th><th style="padding:5px 8px">Due / Done</th><th style="padding:5px 8px">Assignees</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
-  }).join('');
+  var body;
+  if(mode==='ws'){
+    body=['Transformation','Support'].map(function(ws){return _ctBgSection(cid,ws,ws==='Transformation'?CTD.transformation:CTD.support,shown.filter(function(t){return t.ws===ws;}),sw);}).join('');
+  } else {
+    var byWsx={};shown.forEach(function(t){var k=t.wsx||'';(byWsx[k]=byWsx[k]||[]).push(t);});
+    var sections='';
+    sw.forEach(function(w){var ts=byWsx[w.wid]||[];if(ts.length)sections+=_ctBgSection(cid,w.wid+' · '+(w.name||''),CTD.transformation,ts,sw);});
+    Object.keys(byWsx).forEach(function(k){if(k&&!sw.some(function(w){return w.wid===k;}))sections+=_ctBgSection(cid,k,CTD.gray,byWsx[k],sw);});
+    if((byWsx['']||[]).length)sections+=_ctBgSection(cid,'Unassigned — not mapped to a SPHERE workstream',CTD.gray,byWsx[''],sw);
+    var emptyWs=sw.filter(function(w){return !(byWsx[w.wid]||[]).length;});
+    body=(sections||'<div class="empty-msg">No tasks'+(anyF?' match the filter':'')+'.</div>')
+      +(emptyWs.length?'<div style="font-size:10px;color:var(--text-muted);margin-top:2px">'+emptyWs.length+' workstream'+(emptyWs.length===1?'':'s')+' with no matching tasks hidden: '+emptyWs.map(function(w){return esc(w.wid);}).join(', ')+'</div>':'');
+  }
   return bar+body;
 }
 function _ctDashWorkstreamsHTML(c,people){
