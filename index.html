@@ -9533,7 +9533,7 @@ function _pdSectionsHTML(p,tpl){
   }
   return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">'
     +'<div style="font-size:12px;color:var(--text-muted)">Section-by-section authoring. Pick a section, draft with AI, edit in place, rewrite in CF voice, then run Gap Analysis to verify every RFP requirement is covered.</div>'
-    +'<div style="text-align:right"><button id="pd_gen_btn2" type="button" class="btn btn-gold btn-sm" onclick="pdGenerateFullProposal(\''+p.id+'\')" title="Draft all AI sections from the BusDev Brief + RFP + Knowledge Bank">&#10024; Generate All</button> '+gapBtn+gapSummary+'<div id="pd_gen_status2" style="font-size:11px;color:#7C3AED;margin-top:4px"></div></div>'
+    +'<div style="text-align:right"><button id="pd_gen_btn2" type="button" class="btn btn-gold btn-sm" onclick="pdGenerateFullProposal(\''+p.id+'\')" title="One click: draft every AI section from the BusDev Brief + RFP + Knowledge Bank — and follows your Custom AI instructions">&#10024; Draft All Sections</button> '+gapBtn+gapSummary+(p.customPrompt&&p.customPrompt.trim()?'<div style="font-size:10px;color:var(--text-muted);margin-top:3px">✦ Custom AI instructions will be applied</div>':'')+'<div id="pd_gen_status2" style="font-size:11px;color:#7C3AED;margin-top:4px"></div></div>'
     +'</div>'
     +'<div class="sec-layout">'
     +'<div class="sec-list">'+sidebar+'</div>'
@@ -9710,7 +9710,7 @@ function pdGenerateFullProposal(id){
   var aiSecs=p.sections.filter(function(s){return s.source==='ai'||s.source==='hybrid';});
   if(!aiSecs.length){alert('This template has no AI-fillable sections (mark sections as "ai" or "hybrid" in the template).');return;}
   var already=aiSecs.filter(function(s){return (s.html||'').trim();}).length;
-  if(!confirm('Generate '+aiSecs.length+' section'+(aiSecs.length===1?'':'s')+' with AI from the BusDev brief, the RFP, and the Knowledge Bank?'+(already?'\n\n'+already+' section'+(already===1?'':'s')+' already have content — existing text will be used as a starting point and rewritten.':'')))return;
+  if(!confirm('Draft '+aiSecs.length+' section'+(aiSecs.length===1?'':'s')+' with AI from the BusDev brief, the RFP, and the Knowledge Bank?'+((p.customPrompt&&p.customPrompt.trim())?'\n\nYour custom AI instructions will be applied to every section.':'')+(already?'\n\n'+already+' section'+(already===1?'':'s')+' already have content — existing text will be used as a starting point and rewritten.':'')))return;
   var llm=_propLLMOpts(p);
   // The Generate controls render in two places (Brief tab and Sections header)
   // under distinct ids; drive whichever is currently in the DOM.
