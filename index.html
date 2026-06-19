@@ -4353,6 +4353,22 @@ function _ctDashEmpty(){return {
   overdueTasks:[],tasks:[],resources:[]
 };}
 function _ctIsBclm(c){return /bclm/i.test(c.name||'')||(c.number||'').replace(/[^a-z0-9]/gi,'').toUpperCase()==='FA701423C0029';}
+// Pre-filled task-group objectives (derived from the tracker tasks + BCLM brief).
+// Seeded into dashboard.groupObjectives for BCLM; editable in the UI.
+var CT_GROUP_OBJECTIVES={
+  'Rationalize BMA - BEA & BPR':'Maintains the DAF Business Enterprise Architecture and business-process reengineering (Title 10 §2222). Objectives: refresh FY27 BEA OA/E2E/LRP, resolve DAF EKR product gaps, define CERT-to-EKR/ITIPS data exchange, and integrate systems to leaf-level OAs/E2Es.',
+  'Proactive Analytics/Manage ICP':'Runs the IDM certification ("conditions") cycle and portfolio analytics for the ICP. Objectives: FY27 IDM requirements planning and MDE mapping, auto-calculate auditability/DLMS conditions, and service system-retirement data calls.',
+  'Rationalize BMA - Auditability & Sunsets':'Tracks system sunsets/retirements and audit compliance in ITIPS. Objectives: keep ITIPS target-system and acquisition-phase data accurate, manage SFFAS/FFMSR edit rights, and drive legacy-system sunset.',
+  'SAF/CNBB Leadership':'Direct deliverables and support for CNBB leadership. Objectives: produce leadership reports (e.g., eMASS Rev5), coordinate DBC taskers, respond to transparency/oversight memos (M-26-10), and maintain TEAMS/SharePoint collaboration.',
+  'External (TMTs, OSD, DOGE, etc.)':'Responds to external taskers routed through ETMS2/TMT from OSD, DAF and DOGE. Objectives: deliver timely, compliant responses to data calls and RFIs (portfolio consolidation, Zero Trust/Cloud One rationalization, 8140 workforce).',
+  'Accelerate Cloud Adoption/ICAM':'Drives cloud adoption and identity/access management (ICAM) across the portfolio. Objectives: run the cloud exemption/waiver process and reporting, the migration acceleration pilot, an ICAM process for PfMs, and a cloud financial model.',
+  'BMA Governance & Acquisition':'Governs the BMA acquisition lifecycle (BCAC). Objectives: define ATP exit criteria, BMA lifecycle BPR governance recommendations, OA/E2E mappings, and in-processing artifacts.',
+  'SEC Action Items':'Tracks and closes Senior Enterprise Council (SEC) action items. Objective: resolve SEC-assigned action items on schedule.',
+  'BMAC Action Items':'Tracks and closes Business Mission Area Council (BMAC) action items from periodic meetings. Objective: close BMAC action items per meeting.',
+  'Monthly Recurring Governance':'Runs the recurring governance meeting cadence. Objective: coordinate and execute the monthly governance meetings and events.',
+  'Align BMA Funding':'Aligns BMA funding to portfolio priorities (POM/FY27). Objective: produce funding analysis/reporting (e.g., funding-increase report) to align BMA funding.',
+  'Archive Completed Taskers 2024 - 2025':'Historical archive of completed taskers from 2024–2025; no active work. Record only — exclude from active management via the Completed-scope filter.'
+};
 // Lazily create + normalize a contract's dashboard so old / hand-edited data
 // never crashes the renderer. Adds ids to every list row.
 function contractDash(c){
@@ -4394,7 +4410,28 @@ function contractDash(c){
   // Completed-task scope: which completed tasks to EXCLUDE from completed/accomplishment views.
   d.completedFilter=(d.completedFilter&&typeof d.completedFilter==='object')?d.completedFilter:{years:[],buckets:[],ws:[]};
   ['years','buckets','ws'].forEach(function(k){if(!Array.isArray(d.completedFilter[k]))d.completedFilter[k]=[];});
+  // Per-task-group objective / "about" text (editable; AI-draftable). One-time seed for BCLM.
+  d.groupObjectives=(d.groupObjectives&&typeof d.groupObjectives==='object')?d.groupObjectives:{};
+  if(_ctIsBclm(c)&&!d._groupObjSeeded){Object.keys(CT_GROUP_OBJECTIVES).forEach(function(k){if(!d.groupObjectives[k])d.groupObjectives[k]=CT_GROUP_OBJECTIVES[k];});d._groupObjSeeded=true;}
   return d;
+}
+function _ctGroupObj(d,bucket){return (d&&d.groupObjectives&&d.groupObjectives[bucket])||'';}
+function ctGroupObjEdit(cid,encB){var c=_ctdC(cid);if(!c)return;var d=contractDash(c);var b=decodeURIComponent(encB);
+  openFormModal({over:'Task group',title:'Objective — '+esc(b),submitLabel:'Save',
+    intro:'What this task group is about and its objectives. Use “AI draft” to generate from the group’s tasks.',
+    fields:[{key:'txt',label:'Objective / about',type:'textarea',rows:6,value:_ctGroupObj(d,b)}],
+    onSubmit:function(v){d.groupObjectives=d.groupObjectives||{};d.groupObjectives[b]=(v.txt||'').trim();save();renderView();toast('Objective saved.','success');}});
+}
+function ctGroupObjAI(cid,encB){var c=_ctdC(cid);if(!c)return;var d=contractDash(c);var b=decodeURIComponent(encB);
+  var tasks=(d.tasks||[]).filter(function(t){return (t.bucket||'(no group)')===b;});
+  if(!tasks.length){toast('No tasks in this group to summarize.','warn');return;}
+  if(typeof llmComplete!=='function'){toast('AI is unavailable.','error');return;}
+  var sample=tasks.slice(0,40).map(function(t){return '- '+t.name+(t.desc?': '+String(t.desc).slice(0,120):'');}).join('\n');
+  toast('Drafting objective for “'+b+'”…','info');
+  llmComplete({system:'You are a federal program analyst supporting a DoD business-systems governance contract. Given the tasks in a task group, write a concise 2–4 sentence summary of what the group is about and its key objectives. Be specific and grounded in the tasks. No preamble, no markdown headers.',
+    messages:[{role:'user',content:'Task group: '+b+'\n\nTasks:\n'+sample+'\n\nWrite the group’s purpose and key objectives.'}],max_tokens:320})
+   .then(function(resp){var txt=(llmExtractText(resp)||'').trim();if(!txt)throw new Error('empty response');d.groupObjectives=d.groupObjectives||{};d.groupObjectives[b]=txt;save();renderView();toast('AI draft saved for “'+b+'”.','success');})
+   .catch(function(e){toast('AI draft failed: '+(e&&e.message||e),'error',6000);});
 }
 function _ctdC(cid){return (D.contracts||[]).find(function(x){return x.id===cid;})||null;}
 function _ctdArr(d,coll){return coll.split('.').reduce(function(o,k){return o&&o[k];},d);}
@@ -4859,7 +4896,13 @@ function _ctDashByGroupHTML(c){
     body=(sections||'<div class="empty-msg">No tasks'+(anyF?' match the filter':'')+'.</div>')
       +(emptyWs.length?'<div style="font-size:10px;color:var(--text-muted);margin-top:2px">'+emptyWs.length+' workstream'+(emptyWs.length===1?'':'s')+' with no matching tasks hidden: '+emptyWs.map(function(w){return esc(w.wid);}).join(', ')+'</div>':'');
   }
-  return bar+body;
+  var objBox='';
+  if(f.group){var ob=_ctGroupObj(d,f.group),eb=encodeURIComponent(f.group);
+    objBox='<div style="border:1px solid var(--border);border-left:3px solid '+CTD.support+';border-radius:8px;padding:10px 14px;margin-bottom:14px;background:var(--card-bg)">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div style="font-size:12px;font-weight:800">Objective — '+esc(f.group)+'</div>'
+      +'<div style="display:flex;gap:6px"><button class="btn btn-sec btn-sm" style="font-size:10px" onclick="ctGroupObjEdit(\''+cid+'\',\''+eb+'\')">&#9998; Edit</button><button class="btn btn-outline btn-sm" style="font-size:10px" onclick="ctGroupObjAI(\''+cid+'\',\''+eb+'\')" title="Draft from this group\'s tasks using AI">&#10024; AI draft</button></div></div>'
+      +'<div style="font-size:12px;color:var(--text-secondary);margin-top:6px;white-space:pre-wrap">'+(ob?esc(ob):'<span style="font-style:italic;color:var(--text-muted)">No objective set — click AI draft or Edit.</span>')+'</div></div>';}
+  return bar+objBox+body;
 }
 function _ctDashWorkstreamsHTML(c,people){
   var d=contractDash(c),cid=c.id,tasks=_ctScopedTasks(d),res=d.resources||[];
@@ -4963,7 +5006,8 @@ function _ctDashReportsHTML(c){
   h+='<div style="font-size:15px;font-weight:800;margin-bottom:2px">Task groups — status</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Where each task group stands: completed vs. in flight vs. not started, what is late or urgent, and overall completion.</div>';
   h+='<div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin-bottom:22px"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:780px"><thead><tr style="text-align:left;color:var(--text-secondary);font-size:10px;text-transform:uppercase;letter-spacing:.3px;background:var(--page-bg)"><th style="padding:7px 8px">Task group</th><th style="padding:7px 8px">WS</th><th style="padding:7px 8px;text-align:right">Total</th><th style="padding:7px 8px;text-align:right">Done</th><th style="padding:7px 8px;text-align:right">In progress</th><th style="padding:7px 8px;text-align:right">Not started</th><th style="padding:7px 8px;text-align:right">Late</th><th style="padding:7px 8px;text-align:right">Urgent</th><th style="padding:7px 8px;width:150px">Completion</th></tr></thead><tbody>'
     +gk.map(function(b){var g=groups[b];var wsDom=(g.ws.Transformation||0)>=(g.ws.Support||0)?'Transformation':'Support';var col=wsDom==='Transformation'?CTD.transformation:CTD.support;var pct=g.total?Math.round(g.done/g.total*100):0;
-      return '<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px;font-weight:600">'+esc(b)+'</td>'
+      var ob=_ctGroupObj(d,b),eb=encodeURIComponent(b);
+      return '<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px;font-weight:600;min-width:230px"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span>'+esc(b)+'</span><button class="btn btn-sec btn-sm" style="font-size:9px;padding:0 5px" title="Edit objective" onclick="ctGroupObjEdit(\''+c.id+'\',\''+eb+'\')">&#9998;</button><button class="btn btn-outline btn-sm" style="font-size:9px;padding:0 5px" title="AI draft objective from tasks" onclick="ctGroupObjAI(\''+c.id+'\',\''+eb+'\')">&#10024;</button></div>'+(ob?'<div style="font-size:10px;color:var(--text-muted);font-weight:400;margin-top:3px;max-width:400px" title="'+esc(ob)+'">'+esc(ob.length>120?ob.slice(0,120)+'…':ob)+'</div>':'<div style="font-size:10px;color:var(--text-muted);font-style:italic;font-weight:400;margin-top:3px">No objective set</div>')+'</td>'
         +'<td style="padding:6px 8px">'+_ctPill(wsDom==='Transformation'?'T':'S',col)+'</td>'
         +'<td style="padding:6px 8px;text-align:right;font-weight:700">'+g.total+'</td>'
         +'<td style="padding:6px 8px;text-align:right;color:'+CTD.transformation+';font-weight:700">'+g.done+'</td>'
