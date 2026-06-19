@@ -3789,7 +3789,9 @@ function _contractDashHTML(c){
   h+='<div class="plan-seg" style="margin-bottom:16px">'
     +'<button class="'+(dtab==='overview'?'active':'')+'" onclick="ctDashSetSubtab(\'overview\')">Overview</button>'
     +'<button class="'+(dtab==='workstreams'?'active':'')+'" onclick="ctDashSetSubtab(\'workstreams\')">Workstream Details &amp; Resources</button>'
+    +'<button class="'+(dtab==='reports'?'active':'')+'" onclick="ctDashSetSubtab(\'reports\')">Reports</button>'
     +'</div>';
+  if(dtab==='reports')return h+_ctDashReportsHTML(c);
   if(dtab==='workstreams')return h+_ctDashWorkstreamsHTML(c,people);
   // Summary cards
   h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">'
@@ -4011,7 +4013,7 @@ function _ctWsPanel(cid,ws,tasks,res){
   var resChips=wres.length?wres.map(function(r){return '<span style="display:inline-flex;align-items:center;gap:4px;border:1px solid '+color+'66;background:'+color+'14;border-radius:14px;padding:2px 4px 2px 10px;font-size:11px">'+esc(r.name)+(r.kind?' <span style="color:var(--text-muted);font-size:9px">'+esc(r.kind)+'</span>':'')+'<button class="btn btn-outline btn-sm" style="font-size:9px;padding:0 5px;border-radius:10px" title="Remove from '+ws+'" onclick="ctDashSetRow(\''+cid+'\',\'resources\',\''+r.id+'\',\'ws\',\'\')">&#10005;</button></span>';}).join(' '):'<span style="font-size:11px;color:var(--text-muted);font-style:italic">No resources assigned to '+ws+' yet.</span>';
   var buckets={};shown.forEach(function(t){var b=t.bucket||'(no bucket)';(buckets[b]=buckets[b]||[]).push(t);});
   var bkeys=Object.keys(buckets).sort();
-  var taskHTML=bkeys.length?bkeys.map(function(b){return '<div style="margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;padding:4px 0 2px">'+esc(b)+' <span style="color:'+color+'">('+buckets[b].length+')</span></div><table style="width:100%;border-collapse:collapse;font-size:11.5px">'+buckets[b].map(function(t){return _ctTaskRow(cid,t,color);}).join('')+'</table></div>';}).join(''):'<div style="font-size:12px;color:var(--text-muted);font-style:italic;padding:8px 0">No tasks'+((ctDashWsFilter.priority||ctDashWsFilter.progress||ctDashWsFilter.late)?' match the filter':'')+'.</div>';
+  var taskHTML=bkeys.length?bkeys.map(function(b){return '<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:800;color:'+color+';text-transform:uppercase;letter-spacing:.3px;background:'+color+'1f;border-left:3px solid '+color+';border-radius:4px;padding:5px 9px;margin-bottom:5px">'+esc(b)+' <span style="opacity:.75">('+buckets[b].length+')</span></div><table style="width:100%;border-collapse:collapse;font-size:11.5px">'+buckets[b].map(function(t){return _ctTaskRow(cid,t,color);}).join('')+'</table></div>';}).join(''):'<div style="font-size:12px;color:var(--text-muted);font-style:italic;padding:8px 0">No tasks'+((ctDashWsFilter.priority||ctDashWsFilter.progress||ctDashWsFilter.late)?' match the filter':'')+'.</div>';
   return '<div style="flex:1;min-width:330px;border:1px solid var(--border);border-radius:12px;overflow:hidden">'
     +'<div style="background:'+color+';color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">'
       +'<div><div style="font-size:15px;font-weight:800">'+ws+'</div><div style="font-size:11px;opacity:.9">'+(ws==='Transformation'?'supplier · builds capabilities':'customer · uses them to govern')+'</div></div>'
@@ -4088,6 +4090,89 @@ function ctDashEditAssignees(cid,tid){
     intro:'Pick from the contract-local resource list. Add new people via “+ Add resource”.',
     fields:[{key:'who',label:'Assigned resources',type:'checkboxes',value:(t.assignees||[]),options:people.map(function(n){return {value:n,label:n};})}],
     onSubmit:function(v){t.assignees=Array.isArray(v.who)?v.who:[];save();renderView();toast('Assignees updated.','success');}});
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   REPORTS — executive / program-manager rollup over the live task data.
+   Task-group status, workstream rollup, overdue triage, resource workload,
+   upcoming due dates, and SPHERE program status. Print-friendly (MSR/PMP).
+   ════════════════════════════════════════════════════════════════════════ */
+function _ctDueTs(s){var m=/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(s||'');if(!m)return null;var y=+m[3];if(y<100)y+=2000;return new Date(y,(+m[1])-1,+m[2]).getTime();}
+function _ctDashReportsHTML(c){
+  var d=contractDash(c),tasks=d.tasks||[],res=d.resources||[];
+  var PR={Urgent:0,Important:1,Medium:2,Low:3};
+  var n=tasks.length;
+  var inprog=tasks.filter(function(t){return t.progress==='In progress';}).length;
+  var notst=tasks.filter(function(t){return t.progress==='Not started';}).length;
+  var late=tasks.filter(function(t){return t.late;}).length;
+  var urgent=tasks.filter(function(t){return t.priority==='Urgent';}).length;
+  var tW=tasks.filter(function(t){return t.ws==='Transformation';}).length, sW=n-tW;
+  var h='<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Executive / program-manager view — live rollup of <b>'+n+'</b> active tasks across this contract. Use <b>Print / PDF</b> for the monthly status brief.</div>';
+  // KPI strip
+  h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px">'
+    +_ctMini('Active tasks',n,'in the plan',false)
+    +_ctMini('In progress',inprog,(n?Math.round(inprog/n*100):0)+'% of active',false)
+    +_ctMini('Not started',notst,(n?Math.round(notst/n*100):0)+'% of active',false)
+    +_ctMini('Late',late,(n?Math.round(late/n*100):0)+'% of active',late>0)
+    +_ctMini('Urgent',urgent,'priority',urgent>0)
+    +_ctMini('Transformation',tW,'supplier',false)
+    +_ctMini('Support',sW,'customer',false)
+    +_ctMini('Resources',res.length,'people',false)
+    +'</div>';
+  // Task-group status table
+  var groups={};tasks.forEach(function(t){var b=t.bucket||'(no bucket)';var g=groups[b]||(groups[b]={total:0,inprog:0,notst:0,late:0,urgent:0,ws:{}});g.total++;if(t.progress==='In progress')g.inprog++;if(t.progress==='Not started')g.notst++;if(t.late)g.late++;if(t.priority==='Urgent')g.urgent++;g.ws[t.ws]=(g.ws[t.ws]||0)+1;});
+  var gk=Object.keys(groups).sort(function(a,b){return groups[b].total-groups[a].total;});
+  h+='<div style="font-size:15px;font-weight:800;margin-bottom:8px">Task groups — status</div>';
+  h+='<div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin-bottom:22px"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:740px"><thead><tr style="text-align:left;color:var(--text-secondary);font-size:10px;text-transform:uppercase;letter-spacing:.3px;background:var(--page-bg)"><th style="padding:7px 8px">Task group</th><th style="padding:7px 8px">WS</th><th style="padding:7px 8px;text-align:right">Total</th><th style="padding:7px 8px;text-align:right">In progress</th><th style="padding:7px 8px;text-align:right">Not started</th><th style="padding:7px 8px;text-align:right">Late</th><th style="padding:7px 8px;text-align:right">Urgent</th><th style="padding:7px 8px;width:150px">Progress</th></tr></thead><tbody>'
+    +gk.map(function(b){var g=groups[b];var wsDom=(g.ws.Transformation||0)>=(g.ws.Support||0)?'Transformation':'Support';var col=wsDom==='Transformation'?CTD.transformation:CTD.support;var pct=g.total?Math.round(g.inprog/g.total*100):0;
+      return '<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px;font-weight:600">'+esc(b)+'</td>'
+        +'<td style="padding:6px 8px">'+_ctPill(wsDom==='Transformation'?'T':'S',col)+'</td>'
+        +'<td style="padding:6px 8px;text-align:right;font-weight:700">'+g.total+'</td>'
+        +'<td style="padding:6px 8px;text-align:right">'+g.inprog+'</td>'
+        +'<td style="padding:6px 8px;text-align:right;color:var(--text-muted)">'+g.notst+'</td>'
+        +'<td style="padding:6px 8px;text-align:right">'+(g.late?'<b style="color:'+CTD.red+'">'+g.late+'</b>':'0')+'</td>'
+        +'<td style="padding:6px 8px;text-align:right">'+(g.urgent?'<b style="color:'+CTD.red+'">'+g.urgent+'</b>':'0')+'</td>'
+        +'<td style="padding:6px 8px"><div style="display:flex;height:14px;border-radius:4px;overflow:hidden;background:var(--page-bg)"><div style="width:'+pct+'%;background:'+col+'"></div></div><div style="font-size:9px;color:var(--text-muted);margin-top:2px">'+pct+'% in progress</div></td></tr>';
+    }).join('')+'</tbody></table></div>';
+  // Workstream rollup cards
+  h+='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:22px">'+['Transformation','Support'].map(function(ws){
+    var color=ws==='Transformation'?CTD.transformation:CTD.support;var wt=tasks.filter(function(t){return t.ws===ws;});
+    var pc={Urgent:0,Important:0,Medium:0,Low:0};wt.forEach(function(t){pc[t.priority]=(pc[t.priority]||0)+1;});
+    var topB={};wt.forEach(function(t){var b=t.bucket||'(none)';topB[b]=(topB[b]||0)+1;});var tb=Object.keys(topB).sort(function(a,b){return topB[b]-topB[a];}).slice(0,3);
+    return '<div style="flex:1;min-width:280px;border:1px solid var(--border);border-radius:12px;overflow:hidden"><div style="background:'+color+';color:#fff;padding:9px 14px;font-weight:800">'+ws+' — '+wt.length+' tasks</div><div style="padding:12px 14px;font-size:12px">'
+      +'<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px"><span><b style="color:'+CTD.red+'">'+wt.filter(function(t){return t.late;}).length+'</b> late</span><span><b>'+wt.filter(function(t){return t.progress==='In progress';}).length+'</b> in progress</span><span><b>'+wt.filter(function(t){return t.progress==='Not started';}).length+'</b> not started</span></div>'
+      +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);margin-bottom:4px">Priority mix</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'+['Urgent','Important','Medium','Low'].map(function(p){return _ctPill(p+' '+(pc[p]||0),CTD_PRIO[p]);}).join('')+'</div>'
+      +'<div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);margin-bottom:4px">Top groups</div><div style="color:var(--text-secondary);line-height:1.6">'+(tb.map(function(b){return esc(b)+' <b>('+topB[b]+')</b>';}).join('<br>')||'—')+'</div>'
+      +'</div></div>';
+  }).join('')+'</div>';
+  // Overdue triage
+  var lateTasks=tasks.filter(function(t){return t.late;}).sort(function(a,b){return (PR[a.priority]-PR[b.priority])||((_ctDueTs(a.due)||0)-(_ctDueTs(b.due)||0));});
+  h+='<div style="font-size:15px;font-weight:800;margin-bottom:8px">Overdue — needs triage ('+lateTasks.length+')</div>';
+  h+='<div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin-bottom:22px"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:720px"><thead><tr style="text-align:left;color:var(--text-secondary);font-size:10px;text-transform:uppercase;background:var(--page-bg)"><th style="padding:7px 8px">Task</th><th style="padding:7px 8px">Group</th><th style="padding:7px 8px">WS</th><th style="padding:7px 8px">Priority</th><th style="padding:7px 8px">Due</th><th style="padding:7px 8px">Owners</th></tr></thead><tbody>'
+    +(lateTasks.length?lateTasks.map(function(t){var col=t.ws==='Transformation'?CTD.transformation:CTD.support;return '<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px;box-shadow:inset 3px 0 0 '+CTD.red+';font-weight:600">'+esc(t.name)+'</td><td style="padding:6px 8px;color:var(--text-muted)">'+esc(t.bucket)+'</td><td style="padding:6px 8px">'+_ctPill(t.ws==='Transformation'?'T':'S',col)+'</td><td style="padding:6px 8px">'+_ctPill(t.priority,CTD_PRIO[t.priority]||CTD.support)+'</td><td style="padding:6px 8px;color:'+CTD.red+';white-space:nowrap">'+esc(t.due)+'</td><td style="padding:6px 8px;color:var(--text-secondary)">'+esc((t.assignees||[]).join(', ')||'—')+'</td></tr>';}).join(''):'<tr><td colspan="6" style="padding:10px;color:var(--text-muted)">No late tasks.</td></tr>')+'</tbody></table></div>';
+  // Resource workload
+  var rl={};tasks.forEach(function(t){(t.assignees||[]).forEach(function(a){var r=rl[a]||(rl[a]={n:0,late:0});r.n++;if(t.late)r.late++;});});
+  var rk=Object.keys(rl).sort(function(a,b){return rl[b].n-rl[a].n;}).slice(0,12);
+  var rmax=rk.reduce(function(m,k){return Math.max(m,rl[k].n);},0);
+  h+='<div style="font-size:15px;font-weight:800;margin-bottom:8px">Resource workload <span style="font-weight:400;font-size:12px;color:var(--text-muted)">(top '+rk.length+' by active tasks)</span></div>';
+  h+='<div style="margin-bottom:22px">'+(rk.length?rk.map(function(k){var extra=rl[k].late?'<span style="font-size:10px;color:'+CTD.red+'">'+rl[k].late+' late</span>':'';return _ctBar(k,rl[k].n,rmax,CTD.support,extra);}).join(''):'<div class="empty-msg">No assignments.</div>')+'</div>';
+  // Upcoming due dates
+  var now=Date.now();var up=tasks.map(function(t){return {t:t,ts:_ctDueTs(t.due)};}).filter(function(x){return x.ts&&x.ts>=now-86400000;}).sort(function(a,b){return a.ts-b.ts;}).slice(0,10);
+  h+='<div style="font-size:15px;font-weight:800;margin-bottom:8px">Upcoming due dates</div>';
+  h+='<div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin-bottom:22px"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:560px"><thead><tr style="text-align:left;color:var(--text-secondary);font-size:10px;text-transform:uppercase;background:var(--page-bg)"><th style="padding:7px 8px">Due</th><th style="padding:7px 8px">Task</th><th style="padding:7px 8px">WS</th><th style="padding:7px 8px">Priority</th></tr></thead><tbody>'
+    +(up.length?up.map(function(x){var t=x.t;var col=t.ws==='Transformation'?CTD.transformation:CTD.support;return '<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px;white-space:nowrap;font-weight:600">'+esc(t.due)+'</td><td style="padding:6px 8px">'+esc(t.name)+'</td><td style="padding:6px 8px">'+_ctPill(t.ws==='Transformation'?'T':'S',col)+'</td><td style="padding:6px 8px">'+_ctPill(t.priority,CTD_PRIO[t.priority]||CTD.support)+'</td></tr>';}).join(''):'<tr><td colspan="4" style="padding:10px;color:var(--text-muted)">No upcoming dated tasks.</td></tr>')+'</tbody></table></div>';
+  // SPHERE program status (compact)
+  var s=d.sphere;var pdone=s.tasks.total?Math.round(s.tasks.done/s.tasks.total*100):0;
+  var gateSum={ok:0,atrisk:0,blocked:0};(s.accessGates||[]).forEach(function(g){gateSum[g.state]=(gateSum[g.state]||0)+1;});
+  h+='<div style="font-size:15px;font-weight:800;margin-bottom:8px">SPHERE program status</div>';
+  h+='<div style="border:1px solid var(--border);border-radius:12px;padding:14px"><div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px">'
+    +_ctMini('Go-live',esc(s.goLive||'—'),s.goLiveNote||'',false)
+    +_ctMini('Plan complete',pdone+'%',s.tasks.done+' of '+s.tasks.total+' tasks',false)
+    +_ctMini('Milestones',s.milestones.done+' / '+s.milestones.total,s.milestones.atRisk+' at risk',false)
+    +_ctMini('High risks',s.highRisksOpen,'open',s.highRisksOpen>0)+'</div>'
+    +'<div style="display:flex;gap:5px;margin-bottom:8px">'+(s.migrationPath||[]).map(function(m){var col=CTD_ST[m.status]||CTD_ST.ns,tx=CTD_STTX[m.status]||'#2c2c2a';return '<div title="'+esc(m.title||'')+'" style="flex:1;height:24px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;background:'+col+';color:'+tx+'">'+esc(m.label)+'</div>';}).join('')+'</div>'
+    +'<div style="font-size:12px;color:var(--text-secondary)">Access gates: <b style="color:'+CTD.transformation+'">'+gateSum.ok+'</b> granted · <b style="color:'+CTD.amber+'">'+gateSum.atrisk+'</b> at risk · <b style="color:'+CTD.red+'">'+gateSum.blocked+'</b> blocked</div></div>';
+  return h;
 }
 
 var orgMode='hier';
