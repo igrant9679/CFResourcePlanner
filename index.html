@@ -1122,7 +1122,7 @@ departments:[
 {id:'junaid_t',name:'Junaid Anwar',role:'Product / Tech',cost:12500,badge:'Triad',projects:['p_software','p_phoenix'],skillsets:['sk8','sk4'],reportsTo:'Khaja Syed',hub:false,sme:true,associate:false,note:'W2 — $150K eff. May 1',reassess:false}]},
 {id:'bclm',name:'BCLM Team',subtitle:'Federal Anchor · 22 people',accent:'#2D6A4F',members:[
 {id:'b1',name:'SpiritOne',role:'Senior Federal Lead',cost:40194,badge:'',projects:['p_bclm','p_fams'],skillsets:['sk7','sk5'],reportsTo:'Khaja Syed',hub:true,sme:true,associate:false,note:'→ $66,794 Oct+',reassess:false},
-{id:'b2',name:'Don Van Meter',role:'Senior Federal Lead',cost:17640,badge:'',projects:['p_bclm','p_fams'],skillsets:['sk7','sk5'],reportsTo:'SpiritOne',hub:true,sme:true,associate:false,note:'',reassess:false},
+{id:'b2',name:'Donald Vanmeter',role:'Senior Federal Lead',cost:17640,badge:'',projects:['p_bclm','p_fams'],skillsets:['sk7','sk5'],reportsTo:'SpiritOne',hub:true,sme:true,associate:false,note:'',reassess:false},
 {id:'b3',name:'Todd Phillip',role:'Senior Engineer',cost:17600,badge:'',projects:['p_bclm'],skillsets:['sk3','sk8'],reportsTo:'SpiritOne',hub:false,sme:true,associate:false,note:'',reassess:false},
 {id:'b4',name:'Karl Omatsola',role:'Senior Engineer',cost:13640,badge:'',projects:['p_bclm'],skillsets:['sk3','sk8'],reportsTo:'SpiritOne',hub:false,sme:true,associate:false,note:'Asking 50% to 70%',reassess:false},
 {id:'b5',name:'Eric Merc',role:'Senior Engineer',cost:13000,badge:'',projects:['p_bclm'],skillsets:['sk3'],reportsTo:'SpiritOne',hub:false,sme:true,associate:false,note:'',reassess:false},
@@ -1627,7 +1627,7 @@ function proformaMigrate(){
   if(!D.kbTimelineSeeded){ (D.projects||[]).forEach(function(p){ if(TL[p.id])p.timeline=TL[p.id]; }); D.kbTimelineSeeded=true; }
   // ── Member cost schedules (only where Oct+ cost differs from Jun–Sep) — matched by name ──
   var COST={'SpiritOne':[{from:'2026-06',cost:40194},{from:'2026-10',cost:66794}],
-    'Don Van Meter':[{from:'2026-06',cost:17640},{from:'2026-10',cost:22640}],
+    'Donald Vanmeter':[{from:'2026-06',cost:17640},{from:'2026-10',cost:22640}],
     'Educian (related party)':[{from:'2026-06',cost:10000},{from:'2026-10',cost:5000}],
     'Hashim Kalla':[{from:'2026-06',cost:2000}],'Ajaz Ahmed Beigh':[{from:'2026-06',cost:700}]};
   (D.departments||[]).forEach(function(d){(d.members||[]).forEach(function(m){
