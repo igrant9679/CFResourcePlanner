@@ -4385,6 +4385,9 @@ function contractDash(c){
   if(_ctIsBclm(c)&&!d._taskSeedV2){var have={};d.tasks.forEach(function(t){if(t.taskId)have[t.taskId]=1;});CT_BCLM_TASKS.forEach(function(t){if(t.taskId&&!have[t.taskId])d.tasks.push(structuredClone(t));});d._taskSeedV2=true;}
   d.tasks.forEach(function(t){if(!t.id)t.id=uid();['taskId','name','bucket','ws','priority','progress','start','due','completedDate','desc'].forEach(function(f){if(typeof t[f]!=='string')t[f]=t[f]==null?'':String(t[f]);});if(!t.ws)t.ws='Support';if(!t.priority)t.priority='Medium';if(!Array.isArray(t.assignees))t.assignees=[];if(!Array.isArray(t.labels))t.labels=[];t.late=!!t.late;});
   d.resources.forEach(function(r){if(!r.id)r.id=uid();['name','kind','org','ws','role','note'].forEach(function(f){if(typeof r[f]!=='string')r[f]=r[f]==null?'':String(r[f]);});});
+  // Completed-task scope: which completed tasks to EXCLUDE from completed/accomplishment views.
+  d.completedFilter=(d.completedFilter&&typeof d.completedFilter==='object')?d.completedFilter:{years:[],buckets:[],ws:[]};
+  ['years','buckets','ws'].forEach(function(k){if(!Array.isArray(d.completedFilter[k]))d.completedFilter[k]=[];});
   return d;
 }
 function _ctdC(cid){return (D.contracts||[]).find(function(x){return x.id===cid;})||null;}
@@ -4683,6 +4686,49 @@ function _ctTaskMatch(t){var f=ctDashWsFilter;
   if(f.progress&&t.progress!==f.progress)return false;
   if(f.late&&!t.late)return false;return true;}
 function ctDashManageResources(cid){contractDashTab='workstreams';renderView();}
+/* ---- Completed-task scope: exclude completed tasks by year / group / workstream ---- */
+function _ctDoneYear(t){var m=/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(t.completedDate||'');if(!m)return '(no date)';var y=+m[3];if(y<100)y+=2000;return String(y);}
+function _ctScopedTasks(d){var cf=d.completedFilter||{};var ey=cf.years||[],eb=cf.buckets||[],ew=cf.ws||[];
+  if(!ey.length&&!eb.length&&!ew.length)return d.tasks||[];
+  return (d.tasks||[]).filter(function(t){if(!_ctIsDone(t))return true;
+    if(ey.indexOf(_ctDoneYear(t))>-1)return false;
+    if(eb.indexOf(t.bucket||'(no bucket)')>-1)return false;
+    if(ew.indexOf(t.ws)>-1)return false;return true;});}
+function ctDashToggleCompleted(cid,kind,value){var c=_ctdC(cid);if(!c)return;var d=contractDash(c);var cf=d.completedFilter=d.completedFilter||{years:[],buckets:[],ws:[]};var arr=cf[kind]=cf[kind]||[];var i=arr.indexOf(value);if(i>-1)arr.splice(i,1);else arr.push(value);save();renderView();}
+function ctDashResetCompletedScope(cid){var c=_ctdC(cid);if(!c)return;var d=contractDash(c);d.completedFilter={years:[],buckets:[],ws:[]};save();renderView();}
+function ctDashExcludeGroupsModal(cid){
+  var c=_ctdC(cid);if(!c)return;var d=contractDash(c);var cf=d.completedFilter=d.completedFilter||{years:[],buckets:[],ws:[]};
+  var bset={};(d.tasks||[]).filter(_ctIsDone).forEach(function(t){var b=t.bucket||'(no bucket)';bset[b]=(bset[b]||0)+1;});
+  var opts=Object.keys(bset).sort().map(function(b){return {value:b,label:b+' ('+bset[b]+' completed)'};});
+  openFormModal({over:'Completed scope',title:'Exclude completed task groups',submitLabel:'Apply',
+    intro:'Checked groups are EXCLUDED from completed / accomplishment views. Active tasks are unaffected.',
+    fields:[{key:'ex',label:'Exclude these groups',type:'checkboxes',value:(cf.buckets||[]),options:opts}],
+    onSubmit:function(v){cf.buckets=Array.isArray(v.ex)?v.ex:[];save();renderView();toast('Completed scope updated.','success');}});
+}
+// Compact control shown atop completed-bearing views. Persists on the dashboard
+// and applies globally (Reports, PPR, Resource Dashboard, Workstream Details).
+function _ctCompletedScopeBar(cid,d){
+  var cf=d.completedFilter||{years:[],buckets:[],ws:[]};
+  var allDone=(d.tasks||[]).filter(_ctIsDone);
+  if(!allDone.length)return '';
+  var shownDone=_ctScopedTasks(d).filter(_ctIsDone).length;
+  var yset={};allDone.forEach(function(t){var y=_ctDoneYear(t);yset[y]=(yset[y]||0)+1;});
+  function chip(kind,val,label){var ex=(cf[kind]||[]).indexOf(val)>-1;return '<button class="btn btn-sm '+(ex?'btn-outline':'btn-navy')+'" style="font-size:10px;padding:2px 8px;'+(ex?'opacity:.5;text-decoration:line-through':'')+'" title="'+(ex?'Excluded — click to include':'Included — click to exclude')+'" onclick="ctDashToggleCompleted(\''+cid+'\',\''+kind+'\',\''+esc(val).replace(/'/g,"\\'")+'\')">'+esc(label)+'</button>';}
+  var yChips=Object.keys(yset).sort().map(function(y){return chip('years',y,y+' ('+yset[y]+')');}).join(' ');
+  var wsChips=['Transformation','Support'].map(function(w){var cnt=allDone.filter(function(t){return t.ws===w;}).length;return chip('ws',w,w[0]+' ('+cnt+')');}).join(' ');
+  var anyEx=(cf.years||[]).length||(cf.buckets||[]).length||(cf.ws||[]).length;
+  return '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:14px;background:var(--card-bg)">'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+    +'<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Completed scope</span>'
+    +'<span style="font-size:11px;color:'+(anyEx?CTD.amber:'var(--text-secondary)')+'">'+shownDone+' of '+allDone.length+' completed included</span>'
+    +'<span style="width:1px;height:16px;background:var(--border)"></span>'
+    +'<span style="font-size:10px;color:var(--text-muted)">Year:</span>'+yChips
+    +'<span style="font-size:10px;color:var(--text-muted);margin-left:4px">WS:</span>'+wsChips
+    +'<button class="btn btn-sec btn-sm" style="font-size:10px;padding:2px 8px" onclick="ctDashExcludeGroupsModal(\''+cid+'\')">Groups…'+((cf.buckets||[]).length?' ('+cf.buckets.length+' excl)':'')+'</button>'
+    +(anyEx?'<button class="btn btn-outline btn-sm" style="font-size:10px;padding:2px 8px" onclick="ctDashResetCompletedScope(\''+cid+'\')">Reset</button>':'')
+    +'</div>'
+    +'<div style="font-size:10px;color:var(--text-muted);margin-top:5px">Excluded completed tasks drop out of all completed / accomplishment views. Active tasks are never affected.</div></div>';
+}
 function _ctTaskRow(cid,t,color){
   var pc=CTD_PRIO[t.priority]||CTD.support, other=t.ws==='Transformation'?'Support':'Transformation', done=_ctIsDone(t);
   var asg=(t.assignees||[]).length?(t.assignees||[]).map(function(a){return '<span style="display:inline-block;background:var(--page-bg);border-radius:10px;padding:1px 7px;font-size:10px;margin:1px 2px">'+esc(a)+'</span>';}).join(''):'<span style="font-size:10px;color:var(--text-muted);font-style:italic">unassigned</span>';
@@ -4716,7 +4762,7 @@ function _ctWsPanel(cid,ws,tasks,res){
       +taskHTML+'</div></div>';
 }
 function _ctDashWorkstreamsHTML(c,people){
-  var d=contractDash(c),cid=c.id,tasks=d.tasks||[],res=d.resources||[];
+  var d=contractDash(c),cid=c.id,tasks=_ctScopedTasks(d),res=d.resources||[];
   var prios=['Urgent','Important','Medium','Low'],progs=['Not started','In progress','Completed'];
   function fsel(key,label,vals){return '<select class="fld-sel" style="width:auto" onchange="ctDashSetWsFilter(\''+key+'\',this.value)"><option value="">'+label+'</option>'+vals.map(function(v){return '<option value="'+esc(v)+'"'+(ctDashWsFilter[key]===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select>';}
   var anyF=ctDashWsFilter.priority||ctDashWsFilter.progress||ctDashWsFilter.late;
@@ -4741,7 +4787,7 @@ function _ctDashWorkstreamsHTML(c,people){
         +'<td style="padding:5px 8px;text-align:right;white-space:nowrap"><button class="btn btn-sec btn-sm" style="font-size:9px;padding:1px 5px" onclick="ctDashEditResource(\''+cid+'\',\''+r.id+'\')">&#9998;</button> <button class="btn btn-danger-sm btn-sm" style="font-size:9px;padding:1px 5px" onclick="ctDashDelRow(\''+cid+'\',\'resources\',\''+r.id+'\')">&#10005;</button></td></tr>';}).join('')
       +'</tbody></table></div>';
   } else resTable+='<div class="empty-msg" style="margin-top:8px">No resources yet — click + Add resource.</div>';
-  return intro+filterBar+panels+resTable;
+  return intro+filterBar+_ctCompletedScopeBar(cid,d)+panels+resTable;
 }
 /* ---- resource + task mutators (self-contained) ---- */
 function _ctResFields(r,presetWs){r=r||{};return [
@@ -4791,7 +4837,7 @@ function ctDashEditAssignees(cid,tid){
    ════════════════════════════════════════════════════════════════════════ */
 function _ctDueTs(s){var m=/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(s||'');if(!m)return null;var y=+m[3];if(y<100)y+=2000;return new Date(y,(+m[1])-1,+m[2]).getTime();}
 function _ctDashReportsHTML(c){
-  var d=contractDash(c),tasks=d.tasks||[],res=d.resources||[];
+  var d=contractDash(c),tasks=_ctScopedTasks(d),res=d.resources||[];
   var PR={Urgent:0,Important:1,Medium:2,Low:3};
   var active=tasks.filter(function(t){return !_ctIsDone(t);}), doneArr=tasks.filter(_ctIsDone);
   var n=active.length, nDone=doneArr.length, nTot=tasks.length, compPct=nTot?Math.round(nDone/nTot*100):0;
@@ -4799,7 +4845,8 @@ function _ctDashReportsHTML(c){
   var notst=active.filter(function(t){return t.progress==='Not started';}).length;
   var late=active.filter(function(t){return t.late;}).length;
   var urgent=active.filter(function(t){return t.priority==='Urgent';}).length;
-  var h='<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Executive / program-manager view — <b>'+nTot+'</b> tasks total: <b>'+nDone+'</b> completed, <b>'+n+'</b> active. Use <b>Print / PDF</b> for the monthly status brief.</div>';
+  var h='<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Executive / program-manager view — <b>'+nTot+'</b> tasks in scope: <b>'+nDone+'</b> completed, <b>'+n+'</b> active. Use <b>Print / PDF</b> for the monthly status brief.</div>';
+  h+=_ctCompletedScopeBar(c.id,d);
   // KPI strip
   h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px">'
     +_ctMini('Completed',nDone,compPct+'% of all tasks',false)
@@ -4877,7 +4924,7 @@ function _ctMlabel(k){var p=k.split('-');return MON[(+p[1])-1]+" '"+p[0].slice(2
 var _ctResDashSel='';
 function ctResDashSel(encN){_ctResDashSel=decodeURIComponent(encN);renderView();}
 function _ctResStats(c){
-  var d=contractDash(c),tasks=d.tasks||[],people={};
+  var d=contractDash(c),tasks=_ctScopedTasks(d),people={};
   (d.resources||[]).forEach(function(r){if(!people[r.name])people[r.name]={name:r.name,kind:r.kind||'',org:r.org||'',ws:r.ws||'',active:0,inprog:0,late:0,done:0,total:0};});
   tasks.forEach(function(t){(t.assignees||[]).forEach(function(a){if(/^\(/.test(a))return;var p=people[a]||(people[a]={name:a,kind:'',org:'',ws:'',active:0,inprog:0,late:0,done:0,total:0});p.total++;if(_ctIsDone(t)){p.done++;}else{p.active++;if(t.progress==='In progress')p.inprog++;if(t.late)p.late++;}});});
   return Object.keys(people).map(function(k){return people[k];}).sort(function(a,b){return b.active-a.active||b.done-a.done||a.name.localeCompare(b.name);});
@@ -4892,7 +4939,7 @@ function _ctTaskMiniTable(rows,mode){
     +'</tbody></table></div>';
 }
 function _contractResourceDashHTML(c){
-  var d=contractDash(c),cid=c.id,tasks=d.tasks||[];
+  var d=contractDash(c),cid=c.id,tasks=_ctScopedTasks(d);
   var stats=_ctResStats(c);
   var intro='<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Per-resource view of the task tracker — what each person is <b>performing now</b> and has <b>performed</b>. Self-contained to Contract Management.</div>';
   if(!stats.length)return intro+'<div class="empty-msg">No resources or assigned tasks yet. Add them in Portfolio Dashboard → Workstream Details.</div>';
@@ -4917,7 +4964,7 @@ function _contractResourceDashHTML(c){
     +'<div style="font-size:13px;font-weight:800;margin-bottom:6px">Performing now ('+act.length+')</div>'+_ctTaskMiniTable(act,'active')
     +'<div style="font-size:13px;font-weight:800;margin:16px 0 6px">Performed / completed ('+don.length+')</div>'+_ctTaskMiniTable(don,'done')
     +'</div></div>';
-  return intro+tbl+detail;
+  return intro+_ctCompletedScopeBar(cid,d)+tbl+detail;
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -4925,7 +4972,7 @@ function _contractResourceDashHTML(c){
    accomplished to date: deliveries, throughput, current state, SPHERE, team.
    ════════════════════════════════════════════════════════════════════════ */
 function _contractPPRHTML(c){
-  var d=contractDash(c),cid=c.id,tasks=d.tasks||[],res=d.resources||[],s=d.sphere;
+  var d=contractDash(c),cid=c.id,tasks=_ctScopedTasks(d),res=d.resources||[],s=d.sphere;
   var done=tasks.filter(_ctIsDone),active=tasks.filter(function(t){return !_ctIsDone(t);});
   var nTot=tasks.length,nDone=done.length,nAct=active.length,compPct=nTot?Math.round(nDone/nTot*100):0;
   var late=active.filter(function(t){return t.late;}).length,inprog=active.filter(function(t){return t.progress==='In progress';}).length;
@@ -4933,6 +4980,7 @@ function _contractPPRHTML(c){
   var contrib={};done.forEach(function(t){(t.assignees||[]).forEach(function(a){if(/^\(/.test(a))return;contrib[a]=(contrib[a]||0)+1;});});
   var nEngaged=res.length;
   var h='<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Executive performance review for <b>'+esc(c.name||'this contract')+'</b>'+(c.number?' ('+esc(c.number)+')':'')+(d.meta.updated?' · as of '+esc(d.meta.updated):'')+'. What the contract has accomplished to date, current state, and outlook. <b>Print / PDF</b> for the PMR packet.</div>';
+  h+=_ctCompletedScopeBar(cid,d);
   // Headline
   h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px">'
     +_ctMini('Accomplished',nDone,'tasks completed',false)
