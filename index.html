@@ -8225,7 +8225,7 @@ function propTplSecAdd(tid){
 var _npState={mode:'',rfpAttachmentId:'',rfpFileName:'',extracted:null,extracting:false,opportunityId:'',createNewOpp:false,templateId:'',title:'',customer:'',provider:'',model:''};
 function openNewProposalModal(){
   if(!canProposal()){alert('You don\'t have permission.');return;}
-  _npState={mode:'',rfpAttachmentId:'',rfpFileName:'',extracted:null,extracting:false,opportunityId:'',createNewOpp:false,templateId:(D.proposalTemplates&&D.proposalTemplates[0]?D.proposalTemplates[0].id:''),title:'',customer:'',provider:'',model:''};
+  _npState={mode:'',rfpAttachmentId:'',rfpFileName:'',extracted:null,extracting:false,opportunityId:'',createNewOpp:false,templateId:(D.proposalTemplates&&D.proposalTemplates[0]?D.proposalTemplates[0].id:''),title:'',customer:'',provider:'',model:'',customPrompt:''};
   renderNewProposalModal();
   openModal('ovNewProp');
 }
@@ -8255,6 +8255,7 @@ function renderNewProposalModal(){
     } else if(st.extracted){
       body+=_npExtractPreviewHTML(st.extracted);
       body+=_npLinkOppHTML(st.extracted);
+      body+=_npCustomPromptHTML();
       body+='<div class="btn-row" style="margin-top:14px">'
         +'<button class="btn btn-navy" style="flex:1" onclick="_npCreateFromRFP()">Create Proposal</button>'
         +'<button class="btn btn-sec" onclick="_npReextract()">Re-extract</button>'
@@ -8268,11 +8269,16 @@ function renderNewProposalModal(){
       +'<div class="fld"><label class="fld-l">Customer</label><input class="fld-i" id="np_cust" value="'+esc(st.customer)+'" placeholder="e.g. Air Force OSI"></div>'
       +'<div style="display:flex;gap:10px"><div class="fld" style="flex:1"><label class="fld-l">Linked Opportunity</label><select class="fld-sel" id="np_opp">'+oppOpts+'</select></div>'
       +'<div class="fld" style="flex:1"><label class="fld-l">Template</label><select class="fld-sel" id="np_tpl">'+tplOpts+'</select></div></div>'
+      +_npCustomPromptHTML()
       +'<div class="btn-row" style="margin-top:14px">'
       +'<button class="btn btn-navy" style="flex:1" onclick="_npCreateManual()">Create Proposal</button>'
       +'<button class="btn btn-sec" onclick="_npChoose(\'\')">&larr; Back</button></div>';
   }
   document.getElementById('mdlNewProp').innerHTML=body;
+}
+function _npCustomPromptHTML(){
+  return '<div class="fld"><label class="fld-l">Custom AI instructions (optional) <span style="font-weight:400;color:var(--text-muted);font-size:10px">— guides AI drafting for this proposal; e.g. “only generate the Technical Approach in detail”, focus, tone, length, win themes</span></label>'
+    +'<textarea class="fld-i" id="np_custom" rows="2" placeholder="Optional. Applies to every AI section draft for this proposal." onchange="_npState.customPrompt=this.value">'+esc(_npState.customPrompt||'')+'</textarea></div>';
 }
 function _npChoose(mode){_npState.mode=mode;renderNewProposalModal();}
 function _npRefreshModels(){
@@ -8412,6 +8418,7 @@ function _npCreateFromRFP(){
       keyDates:ex.keyDates||[]
     },
     sections:[],
+    customPrompt:(gv('np_custom')||'').trim(),
     pastPerformance:{matches:[],generatedAt:0},
     coverSheet:{certIds:(D.corporateCertifications||[]).filter(function(c){return !c.expiresAt||new Date(c.expiresAt)>Date.now();}).map(function(c){return c.id;}),generatedAt:Date.now()},
     pricing:{mode:'manual',linkedProjectId:'',items:[]},
@@ -8441,6 +8448,7 @@ function _npCreateManual(){
     templateId:tplId,
     rfp:{customer:cust,requirements:[],requiredCerts:[],requiredClearances:[],requiredRoles:[],deliverables:[],evaluationCriteria:[],keyDates:[]},
     sections:[],
+    customPrompt:(gv('np_custom')||'').trim(),
     pastPerformance:{matches:[],generatedAt:0},
     coverSheet:{certIds:(D.corporateCertifications||[]).filter(function(c){return !c.expiresAt||new Date(c.expiresAt)>Date.now();}).map(function(c){return c.id;}),generatedAt:Date.now()},
     pricing:{mode:'manual',linkedProjectId:'',items:[]},
@@ -9512,6 +9520,7 @@ function _pdSectionsHTML(p,tpl){
       +(activeSec.evidence&&activeSec.evidence.length?'<div style="font-size:10px;color:var(--text-muted);margin-bottom:8px"><b>Required evidence:</b> '+activeSec.evidence.map(esc).join(' · ')+'</div>':'')
       +richEditor('pd_sec_html',activeSec.html||'',{disabled:activeSec.source==='computed',placeholder:'Section content. Use the AI Draft button above to generate a first draft, then edit freely.',tall:true})
       +(activeSec.source==='computed'?'':aiBar('pd_sec_html',{proposalId:p.id,fieldLabel:'proposal section "'+(activeSec.title||'').replace(/"/g,'')+'"',outputFormat:'html'}))
+      +(activeSec.source==='computed'?'':'<div style="margin-top:10px;border-top:1px dashed var(--border);padding-top:8px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);margin-bottom:4px">Refine with a prompt <span style="font-weight:400;text-transform:none;letter-spacing:0">— edits only this section, not the rest of the proposal</span></div><div style="display:flex;gap:6px;align-items:flex-start"><input class="fld-i" id="pd_sec_refine" placeholder="e.g. tighten to ~200 words and add a risk-mitigation paragraph" style="flex:1" onkeydown="if(event.key===\'Enter\'){event.preventDefault();pdSectionRefine(\''+p.id+'\',\''+activeSec.id+'\');}"><button type="button" class="ai-btn" onclick="pdSectionRefine(\''+p.id+'\',\''+activeSec.id+'\')">&#9999; Apply edit</button></div></div>')
       +'</div>';
   }
   // Gap analysis chip
@@ -9613,7 +9622,8 @@ function _propSectionPrompt(p,s,kbBlock,partnerBlock){
     +((t.indexOf('cert')>-1||t.indexOf('capabilit')>-1)?'\n\nACTIVE CERTIFICATIONS:\n'+(_propBuildCertCtx(p)||'(none selected)'):'')
     +(s.evidence&&s.evidence.length?'\n\nREQUIRED EVIDENCE: '+s.evidence.join(', ')+'.':'')
     +(s.pageBudget?'\n\nTARGET LENGTH: roughly '+s.pageBudget+' page'+(s.pageBudget===1?'':'s')+' of professional prose.':'')
-    +(s.html&&s.html.trim()?'\n\nEXISTING DRAFT (rewrite/improve this rather than starting fresh):\n'+s.html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').slice(0,2000):'');
+    +(s.html&&s.html.trim()?'\n\nEXISTING DRAFT (rewrite/improve this rather than starting fresh):\n'+s.html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').slice(0,2000):'')
+    +(p.customPrompt&&p.customPrompt.trim()?'\n\nPROPOSAL-OWNER CUSTOM INSTRUCTIONS (highest priority — follow these; they override defaults where they conflict):\n'+p.customPrompt.trim():'');
   return {sys:sys,instruction:instruction};
 }
 function _pdBriefHTML(p){
@@ -9991,6 +10001,32 @@ function pdSectionAIDraft(propId,secId){
     .catch(function(e){alert('Section draft failed: '+(e&&e.message||e));})
     .finally(function(){if(btn){btn.disabled=false;btn.textContent='✨ '+(s.draftedAt?'Re-draft':'Draft with AI');}});
   });
+}
+// Edit ONE section per a free-text instruction, without regenerating the rest.
+function pdSectionRefine(propId,secId){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  var s=p.sections.find(function(x){return x.id===secId;});if(!s)return;
+  var instrEl=document.getElementById('pd_sec_refine');var instr=instrEl?instrEl.value.trim():'';
+  if(!instr){alert('Type an instruction for how to edit this section.');return;}
+  var el=document.getElementById('pd_sec_html');var cur=el?el.innerHTML:(s.html||'');
+  var stripped=cur.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  if(!stripped){alert('This section is empty — draft it first, then refine.');return;}
+  var sys='You edit a SINGLE proposal section per the user\'s instruction. Apply only the requested change to the provided content — do not rewrite unrelated parts and do not touch other sections. Preserve every fact, number, customer name, date, and citation unless the instruction explicitly changes them. Output ONLY clean HTML in the same structural style as the input. No markdown, no code fences, no commentary.';
+  var instruction='EDIT INSTRUCTION:\n'+instr+'\n\nSECTION: "'+(s.title||'')+'"\n\nCURRENT CONTENT (HTML — edit in place):\n'+cur;
+  var llm=_propLLMOpts(p);
+  var btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent='✎ Editing…';}
+  llmComplete({provider:llm.provider,model:llm.model,system:sys,messages:[{role:'user',content:instruction}],max_tokens:4000})
+    .then(function(j){
+      var html=llmExtractText(j).trim().replace(/^```html\s*/i,'').replace(/```$/,'').trim();
+      if(!html)throw new Error('Empty response from LLM.');
+      openAIPreview({title:'Refine · '+s.title,html:html,onApply:function(finalHtml){
+        s.html=finalHtml;s.draftedAt=Date.now();
+        p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'section.refined',payload:{section:s.title,instruction:instr.slice(0,120)}});
+        save();renderProposalDetail(propId);
+      }});
+    })
+    .catch(function(e){alert('Refine failed: '+(e&&e.message||e));})
+    .finally(function(){if(btn){btn.disabled=false;btn.innerHTML='&#9999; Apply edit';}});
 }
 function pdSectionVoiceRewrite(propId,secId){
   var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
