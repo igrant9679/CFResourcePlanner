@@ -3190,7 +3190,11 @@ function renderContractsView(q){
     +'<button class="btn btn-danger-sm btn-sm" onclick="contractDelete(\''+c.id+'\')">Delete contract</button>'
     +(c.customer||c.prime?'<span style="font-size:11px;color:var(--text-muted)">'+esc([c.customer,c.prime].filter(Boolean).join(' · '))+'</span>':'')
     +'</div>';
-  return html+_contractStaffHTML(c)+'</div>';
+  var tabSeg='<div class="plan-seg" style="margin-bottom:14px">'
+    +'<button class="'+(contractTab==='staff'?'active':'')+'" onclick="contractSetTab(\'staff\')">Staff Planning</button>'
+    +'<button class="'+(contractTab==='dash'?'active':'')+'" onclick="contractSetTab(\'dash\')">Portfolio Dashboard</button>'
+    +'</div>';
+  return html+tabSeg+(contractTab==='dash'?_contractDashHTML(c):_contractStaffHTML(c))+'</div>';
 }
 function _contractStaffHTML(c){
   var pos=c.positions||[];
@@ -3415,6 +3419,404 @@ function contractPosToRecruiting(cid,pid){
     busDevId:'',pmId:'',projectId:'',departmentId:'',jdAttachments:[],createdAt:Date.now(),updatedAt:Date.now(),createdBy:ME?ME.id:'',proposalContingent:false,proposalId:'',rfpRoleSnapshot:null,contractSourceId:cid});
   save();toast('Recruiting requisition created for “'+(p.role||'position')+'”. Open the Recruiting tab to staff it.','success',6000);
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   PORTFOLIO DASHBOARD — second tab on a contract (Contract Management).
+   Incorporates the standalone bclm-dashboard.html into Atlas. Charts are
+   native CSS bars (no Chart.js / no network). Owners, leads, and workstream
+   classification tie into the contract roster + org members. Everything is
+   editable through Atlas form modals + inline dropdowns. Data: c.dashboard.
+   ════════════════════════════════════════════════════════════════════════ */
+var contractTab='staff';
+function contractSetTab(t){contractTab=t;renderView();}
+var CTD={transformation:'#1d9e75',support:'#185fa5',amber:'#ef9f27',red:'#e24b4a',gray:'#b4b2a9'};
+var CTD_ST={done:'#1d9e75',atrisk:'#ef9f27',ns:'#b4b2a9'};
+var CTD_STTX={done:'#ffffff',atrisk:'#412402',ns:'#2c2c2a'};
+var CTD_GATE={ok:'#1d9e75',atrisk:'#ef9f27',blocked:'#e24b4a'};
+var CTD_GATELBL={ok:'Access granted',atrisk:'Access at risk',blocked:'Not requested'};
+var CTD_PRIO={Urgent:'#e24b4a',Important:'#ef9f27',Medium:'#185fa5',Low:'#b4b2a9'};
+// BCLM snapshot from the brief / prototype. Used to seed the BCLM contract's
+// dashboard; non-BCLM contracts start from an empty skeleton. ids are added by
+// contractDash() on normalize, so each contract gets its own.
+var CT_DASH_BCLM={
+  meta:{updated:'2026-06-19',classification:'Unclassified'},
+  deriveSplit:false,
+  workstreams:{
+    transformation:{count:26,label:'Transformation · supplier',hint:'builds capabilities'},
+    support:{count:72,label:'Support · customer',hint:'uses them to govern'}
+  },
+  overdue:{total:18,support:16,transformation:2},
+  wsClass:{},personWs:{},
+  transformationFamilies:[
+    {name:'EA & data integration',count:14,lead:''},
+    {name:'SPHERE analytics & automation',count:9,lead:''},
+    {name:'Cloud & rationalization tooling',count:3,lead:''}
+  ],
+  supportAreas:[
+    {name:'BEA / BPR advisory',count:14,lead:''},
+    {name:'Auditability & sunsets',count:12,lead:''},
+    {name:'CNBB leadership',count:10,lead:''},
+    {name:'External taskers (ETMS2)',count:9,lead:''},
+    {name:'ICP governance use',count:7,lead:''},
+    {name:'Cloud governance & waivers',count:6,lead:''},
+    {name:'BMA governance & acq',count:4,lead:''},
+    {name:'SEC action items',count:4,lead:''},
+    {name:'BMAC action items',count:3,lead:''},
+    {name:'Recurring governance',count:2,lead:''},
+    {name:'Align BMA funding',count:1,lead:''}
+  ],
+  sphere:{
+    goLive:'15 Aug',goLiveNote:'slipped from 30 Jun',planVersion:'plan v3 · risk log 5 Jun',lead:'',
+    tasks:{total:183,done:53,wip:37,notStarted:80,deferred:7},
+    milestones:{total:20,done:4,onTrack:2,atRisk:2,notStarted:12},
+    highRisksOpen:6,
+    migrationPath:[
+      {label:'Access',status:'done',title:'Access established',owner:''},
+      {label:'DITPR',status:'done',title:'DITPR pipeline operational',owner:''},
+      {label:'Logic',status:'done',title:'Business logic dev complete',owner:''},
+      {label:'ITIPS',status:'atrisk',title:'ITIPS data on ADVANA — at risk',owner:''},
+      {label:'Dash',status:'ns',title:'Dashboards built — not started',owner:''},
+      {label:'UAT',status:'ns',title:'Parity + UAT — not started',owner:''},
+      {label:'Cutover',status:'ns',title:'Go-live + FAMS decommission',owner:''}
+    ],
+    accessGates:[
+      {name:'EKR',state:'atrisk',stateLabel:'Access at risk',desc:'16 tasks · submitted via DAF, awaiting provisioning · gates OA/E2E data',owner:''},
+      {name:'DITIP',state:'blocked',stateLabel:'Not requested',desc:'16 tasks · access request not yet submitted · earliest gate to close',owner:''},
+      {name:'SNAP-IT',state:'ok',stateLabel:'Access granted',desc:'16 tasks · access in hand · discovery can proceed',owner:''}
+    ],
+    workstreams:[
+      {wid:'WS0',name:'Program Management',total:3,done:1,wip:2,notStarted:0,deferred:0,lead:'',note:''},
+      {wid:'WS1',name:'ADVANA Migration (FAMS→ADVANA)',total:79,done:30,wip:18,notStarted:25,deferred:0,lead:'',note:''},
+      {wid:'WS2',name:'Reporting Logic Governance',total:4,done:3,wip:1,notStarted:0,deferred:0,lead:'',note:''},
+      {wid:'WS3',name:'IRB Component Automation',total:7,done:7,wip:0,notStarted:0,deferred:0,lead:'',note:''},
+      {wid:'WS4',name:'IDM Tracker & FY27 Dev',total:6,done:5,wip:0,notStarted:1,deferred:0,lead:'',note:''},
+      {wid:'WS5',name:'Portfolio Parade Dashboard',total:8,done:0,wip:4,notStarted:4,deferred:0,lead:'',note:''},
+      {wid:'WS6',name:'DBS Auditability Dashboard',total:3,done:0,wip:0,notStarted:0,deferred:3,lead:'',note:'deferred'},
+      {wid:'WS7',name:'Historical IDM (OEP) Ingest',total:4,done:0,wip:0,notStarted:0,deferred:4,lead:'',note:'deferred'},
+      {wid:'WS8',name:'Batch OOC',total:4,done:3,wip:1,notStarted:0,deferred:0,lead:'',note:''},
+      {wid:'WS9',name:'EKR data source',total:16,done:0,wip:2,notStarted:14,deferred:0,lead:'',note:''},
+      {wid:'WS10',name:'DITIP data source',total:16,done:0,wip:0,notStarted:16,deferred:0,lead:'',note:''},
+      {wid:'WS11',name:'SNAP-IT data source',total:16,done:1,wip:1,notStarted:14,deferred:0,lead:'',note:''},
+      {wid:'WS12',name:'BEA Cert Tool',total:6,done:0,wip:0,notStarted:6,deferred:0,lead:'',note:''},
+      {wid:'WS13',name:'Platform Optimization & Steady-State Support',total:10,done:3,wip:7,notStarted:0,deferred:0,lead:'',note:'ongoing Support consumption'},
+      {wid:'WS14',name:'SPHERE Change Requests',total:1,done:0,wip:1,notStarted:0,deferred:0,lead:'',note:'ongoing Support consumption'}
+    ]
+  },
+  overdueTasks:[
+    {task:'FY27 IDM Requirements Planning',area:'ICP governance',ws:'Support',priority:'Urgent',due:'06/17',owner:''},
+    {task:'DOGE – Portfolio Consolidation Review Template',area:'External',ws:'Support',priority:'Urgent',due:'06/16',owner:''},
+    {task:'June 2025-2027 Rev5 eMASS Report',area:'CNBB Leadership',ws:'Support',priority:'Important',due:'06/11',owner:''},
+    {task:'Develop Change Control Board for BMA Mgmt',area:'ICP / automation',ws:'Transformation',priority:'Important',due:'06/12',owner:''},
+    {task:'Review DBC Tasker & Develop Taskers',area:'CNBB Leadership',ws:'Support',priority:'Important',due:'05/13',owner:''},
+    {task:'HAF-251211-RZZX (SEC Charter coord)',area:'External',ws:'Support',priority:'Important',due:'05/27',owner:''},
+    {task:'ACTION LeFEVRE: OOC MABSM',area:'ICP governance',ws:'Support',priority:'Medium',due:'06/18',owner:''},
+    {task:'Task Non-Cloud Systems – Cloud Exemption',area:'Cloud governance',ws:'Support',priority:'Medium',due:'06/17',owner:''},
+    {task:'Auto Calculate Auditability Conditions',area:'SPHERE automation',ws:'Transformation',priority:'Medium',due:'06/17',owner:''},
+    {task:'Auto calculate DLMS Condition (LOGIT PCAT)',area:'ICP governance',ws:'Support',priority:'Medium',due:'06/18',owner:''},
+    {task:'Summarized ATP Exit Criteria',area:'BMA governance',ws:'Support',priority:'Medium',due:'06/18',owner:''},
+    {task:'SEC Action Item SEC20260325-04',area:'SEC action items',ws:'Support',priority:'Medium',due:'05/27',owner:''},
+    {task:'SEC Action Item SEC20260325-02',area:'SEC action items',ws:'Support',priority:'Medium',due:'05/27',owner:''},
+    {task:'SEC Action Item SEC20260325-03 (DCCC)',area:'SEC action items',ws:'Support',priority:'Medium',due:'05/27',owner:''},
+    {task:'SEC Action Item SEC20260325-03 (9HC6)',area:'SEC action items',ws:'Support',priority:'Medium',due:'05/27',owner:''},
+    {task:'M-26-10 Transparency & Oversight Memo',area:'CNBB Leadership',ws:'Support',priority:'Medium',due:'04/06',owner:''},
+    {task:'LOG IT Glossary Terms',area:'CNBB Leadership',ws:'Support',priority:'Medium',due:'04/03',owner:''},
+    {task:'ACAT III Active Programs',area:'CNBB Leadership',ws:'Support',priority:'Medium',due:'03/20',owner:''}
+  ]
+};
+function _ctDashEmpty(){return {
+  meta:{updated:'',classification:'Unclassified'},deriveSplit:false,
+  workstreams:{transformation:{count:0,label:'Transformation · supplier',hint:'builds capabilities'},support:{count:0,label:'Support · customer',hint:'uses them to govern'}},
+  overdue:{total:0,support:0,transformation:0},wsClass:{},personWs:{},
+  transformationFamilies:[],supportAreas:[],
+  sphere:{goLive:'',goLiveNote:'',planVersion:'',lead:'',tasks:{total:0,done:0,wip:0,notStarted:0,deferred:0},milestones:{total:0,done:0,onTrack:0,atRisk:0,notStarted:0},highRisksOpen:0,migrationPath:[],accessGates:[],workstreams:[]},
+  overdueTasks:[]
+};}
+function _ctIsBclm(c){return /bclm/i.test(c.name||'')||(c.number||'').replace(/[^a-z0-9]/gi,'').toUpperCase()==='FA701423C0029';}
+// Lazily create + normalize a contract's dashboard so old / hand-edited data
+// never crashes the renderer. Adds ids to every list row.
+function contractDash(c){
+  if(!c.dashboard||typeof c.dashboard!=='object')c.dashboard=_ctIsBclm(c)?structuredClone(CT_DASH_BCLM):_ctDashEmpty();
+  var d=c.dashboard;
+  d.meta=d.meta||{};if(typeof d.meta.classification!=='string')d.meta.classification='Unclassified';if(typeof d.meta.updated!=='string')d.meta.updated='';
+  if(typeof d.deriveSplit!=='boolean')d.deriveSplit=false;
+  d.wsClass=(d.wsClass&&typeof d.wsClass==='object')?d.wsClass:{};
+  d.personWs=(d.personWs&&typeof d.personWs==='object')?d.personWs:{};
+  d.workstreams=d.workstreams||{};
+  ['transformation','support'].forEach(function(k){var w=d.workstreams[k]=d.workstreams[k]||{};w.count=Number(w.count)||0;if(typeof w.label!=='string')w.label=(k==='transformation'?'Transformation · supplier':'Support · customer');if(typeof w.hint!=='string')w.hint=(k==='transformation'?'builds capabilities':'uses them to govern');});
+  d.overdue=d.overdue||{};['total','support','transformation'].forEach(function(k){d.overdue[k]=Number(d.overdue[k])||0;});
+  ['transformationFamilies','supportAreas','overdueTasks'].forEach(function(k){if(!Array.isArray(d[k]))d[k]=[];d[k].forEach(function(r){if(!r.id)r.id=uid();});});
+  d.transformationFamilies.forEach(function(r){r.count=Number(r.count)||0;if(typeof r.lead!=='string')r.lead='';if(typeof r.name!=='string')r.name='';});
+  d.supportAreas.forEach(function(r){r.count=Number(r.count)||0;if(typeof r.lead!=='string')r.lead='';if(typeof r.name!=='string')r.name='';});
+  d.overdueTasks.forEach(function(r){['task','area','ws','priority','due','owner'].forEach(function(f){if(typeof r[f]!=='string')r[f]=r[f]==null?'':String(r[f]);});if(!r.priority)r.priority='Medium';if(!r.ws)r.ws='Support';});
+  var s=d.sphere=d.sphere||{};['goLive','goLiveNote','planVersion','lead'].forEach(function(f){if(typeof s[f]!=='string')s[f]='';});
+  s.tasks=s.tasks||{};['total','done','wip','notStarted','deferred'].forEach(function(f){s.tasks[f]=Number(s.tasks[f])||0;});
+  s.milestones=s.milestones||{};['total','done','onTrack','atRisk','notStarted'].forEach(function(f){s.milestones[f]=Number(s.milestones[f])||0;});
+  s.highRisksOpen=Number(s.highRisksOpen)||0;
+  ['migrationPath','accessGates','workstreams'].forEach(function(k){if(!Array.isArray(s[k]))s[k]=[];s[k].forEach(function(r){if(!r.id)r.id=uid();});});
+  s.migrationPath.forEach(function(r){if(!r.status)r.status='ns';['label','title','owner'].forEach(function(f){if(typeof r[f]!=='string')r[f]='';});});
+  s.accessGates.forEach(function(r){if(!r.state)r.state='blocked';['name','stateLabel','desc','owner'].forEach(function(f){if(typeof r[f]!=='string')r[f]='';});});
+  s.workstreams.forEach(function(r){['wid','name','lead','note'].forEach(function(f){if(typeof r[f]!=='string')r[f]='';});['total','done','wip','notStarted','deferred'].forEach(function(f){r[f]=Number(r[f])||0;});});
+  return d;
+}
+function _ctdC(cid){return (D.contracts||[]).find(function(x){return x.id===cid;})||null;}
+function _ctdArr(d,coll){return coll.split('.').reduce(function(o,k){return o&&o[k];},d);}
+// People that exist in the app: this contract's (non-TBH) roster + org members.
+function ctDashPeople(c){
+  var set={};
+  (c.positions||[]).forEach(function(p){var r=(p.resource||'').trim();if(r&&!/tbh|tbd|\(unassigned\)/i.test(r))set[r]=1;});
+  if(typeof allM==='function')allM().forEach(function(m){if(m&&m.name)set[m.name]=1;});
+  return Object.keys(set).sort(function(a,b){return a.localeCompare(b);});
+}
+function _ctClassGuess(g){return /transform|automat|\bbuild|sphere|advana|integrat|\bekr\b|cloud tool|analytic|develop|data (layer|source|integration)/i.test(g||'')?'transformation':'support';}
+function ctDashClassOf(c,grp){var d=c.dashboard||{};return (d.wsClass&&d.wsClass[grp])||_ctClassGuess(grp);}
+// Per-person rollup: which workstream, how much contract FTE, how many overdue.
+function _ctDashTeam(c){
+  var d=contractDash(c),people=ctDashPeople(c);
+  return people.map(function(nm){
+    var pos=(c.positions||[]).filter(function(p){return (p.resource||'').trim()===nm;});
+    var fte=pos.reduce(function(a,p){return a+(Number(p.fte)||0);},0);
+    var grp=pos.length?(pos[0].workstreamGroup||''):'';
+    var cls=d.personWs[nm]||(grp?ctDashClassOf(c,grp):'');
+    var co=(pos.map(function(p){return p.company;}).filter(Boolean))[0]||'';
+    var roles=pos.map(function(p){return p.role||p.lcat;}).filter(Boolean);
+    var od=(d.overdueTasks||[]).filter(function(t){return (t.owner||'')===nm;}).length;
+    return {name:nm,fte:fte,grp:grp,cls:cls,company:co,roles:roles,posCount:pos.length,overdue:od};
+  });
+}
+function _ctPill(text,color){return '<span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;background:'+color+'24;color:'+color+'">'+esc(text)+'</span>';}
+function _ctPeopleOpts(people,cur){
+  var o='<option value="">— unassigned —</option>'+people.map(function(n){return '<option'+(n===cur?' selected':'')+'>'+esc(n)+'</option>';}).join('');
+  if(cur&&people.indexOf(cur)<0)o+='<option selected>'+esc(cur)+'</option>';
+  return o;
+}
+function _ctPplSelOpts(people,cur){var o=[{value:'',label:'— unassigned —'}].concat(people.map(function(n){return {value:n,label:n};}));if(cur&&people.indexOf(cur)<0)o.push({value:cur,label:cur});return o;}
+// One horizontal CSS bar (chart row). extra = trailing controls (lead/edit/del).
+function _ctBar(label,count,max,color,extra){
+  var w=max>0?Math.round((Number(count)||0)/max*100):0;
+  return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">'
+    +'<div style="flex:0 0 190px;font-size:12px;color:var(--text-secondary);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(label)+'">'+esc(label)+'</div>'
+    +'<div style="flex:1;background:var(--page-bg);border-radius:6px;height:20px;min-width:50px"><div style="width:'+w+'%;background:'+color+';height:100%;border-radius:6px;min-width:3px"></div></div>'
+    +'<div style="flex:0 0 34px;font-size:13px;font-weight:800;text-align:right">'+(Number(count)||0)+'</div>'
+    +(extra?'<div style="flex:0 0 auto;display:flex;gap:4px;align-items:center">'+extra+'</div>':'')
+    +'</div>';
+}
+function _ctMini(label,val,hint,danger){
+  return '<div style="flex:1;min-width:120px;background:'+(danger?CTD.red+'1a':'var(--page-bg)')+';border-radius:8px;padding:11px 13px">'
+    +'<div style="font-size:12px;color:'+(danger?CTD.red:'var(--text-muted)')+'">'+esc(label)+'</div>'
+    +'<div style="font-size:20px;font-weight:800;'+(danger?'color:'+CTD.red:'')+'">'+val+'</div>'
+    +(hint?'<div style="font-size:11px;color:var(--text-muted)">'+esc(hint)+'</div>':'')+'</div>';
+}
+
+function _contractDashHTML(c){
+  var d=contractDash(c),s=d.sphere,people=ctDashPeople(c),team=_ctDashTeam(c),cid=c.id;
+  // Derived split from the roster (headcount + FTE per workstream).
+  var split={transformation:{n:0,fte:0},support:{n:0,fte:0},unassigned:{n:0,fte:0}};
+  team.forEach(function(r){var k=(r.cls==='transformation')?'transformation':(r.cls==='support'?'support':'unassigned');split[k].n++;split[k].fte+=r.fte;});
+  var tBig=d.deriveSplit?split.transformation.n:d.workstreams.transformation.count;
+  var sBig=d.deriveSplit?split.support.n:d.workstreams.support.count;
+  var tSub=d.deriveSplit?(d.workstreams.transformation.count+' tasks'):(split.transformation.n+' people · '+split.transformation.fte.toFixed(1)+' FTE');
+  var sSub=d.deriveSplit?(d.workstreams.support.count+' tasks'):(split.support.n+' people · '+split.support.fte.toFixed(1)+' FTE');
+  var h='';
+  // Header + toolbar
+  h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px">'
+    +'<div><div style="font-size:16px;font-weight:800">'+esc(c.name||'Contract')+' — portfolio dashboard</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">'+esc([c.customer,c.prime].filter(Boolean).join(' · ')||'Supplier → customer view')+(d.meta.updated?' · updated '+esc(d.meta.updated):'')+'</div></div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+    +'<button class="btn btn-sec btn-sm" onclick="ctDashEditSummary(\''+cid+'\')">&#9998; Edit summary</button>'
+    +'<button class="btn btn-sec btn-sm" onclick="ctDashToggleDerive(\''+cid+'\')" title="Flow + cards by manual task counts, or by roster-derived headcount">Flow: '+(d.deriveSplit?'people':'tasks')+'</button>'
+    +'<button class="btn btn-outline btn-sm" onclick="ctDashEditJSON(\''+cid+'\')">{ } JSON</button>'
+    +'<button class="btn btn-outline btn-sm" onclick="ctDashReset(\''+cid+'\')">Reset</button>'
+    +'<button class="btn btn-gold btn-sm" onclick="window.print()">Print / PDF</button>'
+    +'</div></div>';
+  // Summary cards
+  h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">'
+    +'<div style="flex:1;min-width:170px;background:var(--page-bg);border-left:3px solid '+CTD.transformation+';border-radius:8px;padding:14px 16px"><div style="font-size:13px;color:var(--text-secondary)">'+esc(d.workstreams.transformation.label)+'</div><div style="font-size:26px;font-weight:800">'+tBig+'</div><div style="font-size:12px;color:var(--text-muted)">'+esc(d.workstreams.transformation.hint)+' · '+esc(tSub)+'</div></div>'
+    +'<div style="flex:1;min-width:170px;background:var(--page-bg);border-left:3px solid '+CTD.support+';border-radius:8px;padding:14px 16px"><div style="font-size:13px;color:var(--text-secondary)">'+esc(d.workstreams.support.label)+'</div><div style="font-size:26px;font-weight:800">'+sBig+'</div><div style="font-size:12px;color:var(--text-muted)">'+esc(d.workstreams.support.hint)+' · '+esc(sSub)+'</div></div>'
+    +'<div style="flex:1;min-width:170px;background:'+CTD.red+'1a;border-radius:8px;padding:14px 16px"><div style="font-size:13px;color:'+CTD.red+'">Support overdue</div><div style="font-size:26px;font-weight:800;color:'+CTD.red+'">'+d.overdue.support+'</div><div style="font-size:12px;color:'+CTD.red+'">of '+d.overdue.total+' total overdue</div></div>'
+    +'</div>';
+  // Supplier -> customer flow
+  var tf=d.deriveSplit?(split.transformation.n||1):(d.workstreams.transformation.count||1);
+  var sf=d.deriveSplit?(split.support.n||1):(d.workstreams.support.count||1);
+  h+='<div style="display:flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:18px">'
+    +'<div style="flex:'+tf+';background:'+CTD.transformation+'1f;padding:14px 16px"><div style="font-size:13px;font-weight:700;color:'+CTD.transformation+'">Transformation builds</div><div style="font-size:12px;color:'+CTD.transformation+'">SPHERE/ADVANA · automation · EA/EKR · cloud</div></div>'
+    +'<div style="display:flex;align-items:center;background:var(--page-bg);padding:0 10px;color:var(--text-muted);font-size:18px">&rarr;</div>'
+    +'<div style="flex:'+sf+';background:'+CTD.support+'1f;padding:14px 16px"><div style="font-size:13px;font-weight:700;color:'+CTD.support+'">Support consumes</div><div style="font-size:12px;color:'+CTD.support+'">taskers · IDM cycles · audit · sunsets · governance decisions</div></div>'
+    +'</div>';
+  // SPHERE panel
+  h+='<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:18px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">'
+    +'<div style="font-size:15px;font-weight:700">SPHERE program — true status <span style="font-weight:400;font-size:12px;color:var(--text-muted)">(largest Transformation effort · '+esc(s.planVersion||'')+')</span></div>'
+    +'<div style="display:flex;gap:8px;align-items:center">'+(s.goLive?_ctPill('Go-live '+s.goLive+(s.goLiveNote?' · '+s.goLiveNote:''),CTD.amber):'')+'<button class="btn btn-sec btn-sm" onclick="ctDashEditSphere(\''+cid+'\')">&#9998;</button></div></div>'
+    +'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">'
+    +_ctMini('Plan tasks',s.tasks.total,s.tasks.done+' done · '+s.tasks.wip+' WIP · '+s.tasks.notStarted+' to start',false)
+    +_ctMini('Milestones',s.milestones.done+' / '+s.milestones.total,s.milestones.onTrack+' on track · '+s.milestones.atRisk+' at risk · '+s.milestones.notStarted+' to start',false)
+    +_ctMini('High risks open',s.highRisksOpen,'incl. scope > capacity',true)
+    +_ctMini('SPHERE lead',(s.lead?esc(s.lead):'—'),'program lead',false)+'</div>'
+    +'<div style="font-size:13px;font-weight:700;margin-bottom:4px">Migration path — milestone status <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(click a step to edit)</span> '
+    +'<button class="btn btn-sec btn-sm" style="font-size:9px;padding:1px 6px" onclick="ctDashAddStep(\''+cid+'\')">+ Step</button></div>'
+    +'<div style="display:flex;gap:5px;margin:6px 0">'+s.migrationPath.map(function(m){var col=CTD_ST[m.status]||CTD_ST.ns,tx=CTD_STTX[m.status]||'#2c2c2a';return '<div title="'+esc(m.title||'')+(m.owner?' — '+esc(m.owner):'')+'" onclick="ctDashEditStep(\''+cid+'\',\''+m.id+'\')" style="flex:1;height:30px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;background:'+col+';color:'+tx+';cursor:pointer">'+esc(m.label)+'</div>';}).join('')+'</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:14px;font-size:11px;color:var(--text-muted);margin-top:4px"><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+CTD_ST.done+'"></span> Complete</span><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+CTD_ST.atrisk+'"></span> At risk</span><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+CTD_ST.ns+'"></span> Not started</span></div>'
+    +'</div>';
+  // Access gates
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><div style="font-size:14px;font-weight:700">Critical path — external data-source access gates</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">These unlock SPHERE’s broader IT-portfolio data. Assign an owner from the roster.</div></div><button class="btn btn-sec btn-sm" onclick="ctDashAddGate(\''+cid+'\')">+ Gate</button></div>';
+  h+=s.accessGates.map(function(g){return '<div style="display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:8px;flex-wrap:wrap">'
+    +'<span style="font-size:13px;font-weight:700;min-width:74px">'+esc(g.name)+'</span>'
+    +_ctPill(g.stateLabel||CTD_GATELBL[g.state]||'',CTD_GATE[g.state]||CTD.gray)
+    +'<span style="font-size:12px;color:var(--text-secondary);flex:1;min-width:150px">'+esc(g.desc)+'</span>'
+    +'<span style="font-size:10px;color:var(--text-muted)">Owner</span><select class="ct-cell" style="width:auto" onchange="ctDashSetRow(\''+cid+'\',\'sphere.accessGates\',\''+g.id+'\',\'owner\',this.value)">'+_ctPeopleOpts(people,g.owner)+'</select>'
+    +'<button class="btn btn-sec btn-sm" style="font-size:9px;padding:1px 6px" onclick="ctDashEditGate(\''+cid+'\',\''+g.id+'\')">&#9998;</button>'
+    +'<button class="btn btn-danger-sm btn-sm" style="font-size:9px;padding:1px 6px" onclick="ctDashDelRow(\''+cid+'\',\'sphere.accessGates\',\''+g.id+'\')">&#10005;</button></div>';}).join('');
+  // SPHERE internal workstreams (WS0-WS14)
+  h+='<div style="height:8px"></div><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><div style="font-size:14px;font-weight:700">SPHERE internal workstreams (WS0–WS14)</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Finer-grained plan feeding the panel above. WS13/WS14 are ongoing <b>Support</b> consumption of the platform.</div></div><button class="btn btn-sec btn-sm" onclick="ctDashAddWs(\''+cid+'\')">+ Workstream</button></div>';
+  if(s.workstreams.length){
+    h+='<div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin-bottom:18px"><table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:780px"><thead><tr style="text-align:left;color:var(--text-muted);font-size:9px;text-transform:uppercase;letter-spacing:.3px;background:var(--page-bg)"><th style="padding:6px 8px">WS</th><th style="padding:6px 8px">Name</th><th style="padding:6px 8px">Lead</th><th style="padding:6px 8px;text-align:right">Total</th><th style="padding:6px 8px;text-align:right">Done</th><th style="padding:6px 8px;text-align:right">WIP</th><th style="padding:6px 8px;text-align:right">To start</th><th style="padding:6px 8px;text-align:right">Def</th><th style="padding:6px 8px;width:110px">Progress</th><th style="padding:6px 8px"></th></tr></thead><tbody>'
+      +s.workstreams.map(function(w){var prog=w.total?Math.round(w.done/w.total*100):0;return '<tr style="border-top:1px solid var(--border)">'
+        +'<td style="padding:5px 8px;font-weight:800">'+esc(w.wid)+'</td>'
+        +'<td style="padding:5px 8px">'+esc(w.name)+(w.note?' <span style="font-size:10px;color:'+CTD.amber+'">· '+esc(w.note)+'</span>':'')+'</td>'
+        +'<td style="padding:5px 8px"><select class="ct-cell" style="width:auto" onchange="ctDashSetRow(\''+cid+'\',\'sphere.workstreams\',\''+w.id+'\',\'lead\',this.value)">'+_ctPeopleOpts(people,w.lead)+'</select></td>'
+        +'<td style="padding:5px 8px;text-align:right;font-weight:700">'+w.total+'</td><td style="padding:5px 8px;text-align:right;color:'+CTD.transformation+'">'+w.done+'</td><td style="padding:5px 8px;text-align:right;color:'+CTD.amber+'">'+w.wip+'</td><td style="padding:5px 8px;text-align:right">'+w.notStarted+'</td><td style="padding:5px 8px;text-align:right;color:var(--text-muted)">'+w.deferred+'</td>'
+        +'<td style="padding:5px 8px"><div style="background:var(--page-bg);border-radius:5px;height:14px;overflow:hidden"><div style="width:'+prog+'%;background:'+CTD.transformation+';height:100%"></div></div></td>'
+        +'<td style="padding:5px 8px;white-space:nowrap;text-align:right"><button class="btn btn-sec btn-sm" style="font-size:9px;padding:1px 5px" onclick="ctDashEditWs(\''+cid+'\',\''+w.id+'\')">&#9998;</button> <button class="btn btn-danger-sm btn-sm" style="font-size:9px;padding:1px 5px" onclick="ctDashDelRow(\''+cid+'\',\'sphere.workstreams\',\''+w.id+'\')">&#10005;</button></td></tr>';}).join('')
+      +'</tbody></table></div>';
+  } else h+='<div class="empty-msg" style="margin-bottom:18px">No SPHERE workstreams yet — click + Workstream.</div>';
+  // Transformation queue chart
+  var fmax=d.transformationFamilies.reduce(function(m,f){return Math.max(m,f.count);},0);
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div style="font-size:14px;font-weight:700;margin-bottom:8px">Transformation queue by capability family ('+d.workstreams.transformation.count+' active)</div><button class="btn btn-sec btn-sm" onclick="ctDashAddFamily(\''+cid+'\')">+ Family</button></div>';
+  h+=(d.transformationFamilies.length?d.transformationFamilies.map(function(f){var extra='<span style="font-size:10px;color:var(--text-muted)">Lead</span><select class="ct-cell" style="width:auto" onchange="ctDashSetRow(\''+cid+'\',\'transformationFamilies\',\''+f.id+'\',\'lead\',this.value)">'+_ctPeopleOpts(people,f.lead)+'</select><button class="btn btn-sec btn-sm" style="font-size:9px;padding:1px 5px" onclick="ctDashEditFamily(\''+cid+'\',\''+f.id+'\')">&#9998;</button><button class="btn btn-danger-sm btn-sm" style="font-size:9px;padding:1px 5px" onclick="ctDashDelRow(\''+cid+'\',\'transformationFamilies\',\''+f.id+'\')">&#10005;</button>';return _ctBar(f.name,f.count,fmax,CTD.transformation,extra);}).join(''):'<div class="empty-msg">No families yet.</div>');
+  // Support queue chart
+  var amax=d.supportAreas.reduce(function(m,a){return Math.max(m,a.count);},0);
+  h+='<div style="height:14px"></div><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><div style="font-size:14px;font-weight:700">Support queue by area ('+d.workstreams.support.count+' active)</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">The customer side: where adoption shows up, and where deadline pressure lives.</div></div><button class="btn btn-sec btn-sm" onclick="ctDashAddArea(\''+cid+'\')">+ Area</button></div>';
+  h+=(d.supportAreas.length?d.supportAreas.map(function(a){var extra='<span style="font-size:10px;color:var(--text-muted)">Lead</span><select class="ct-cell" style="width:auto" onchange="ctDashSetRow(\''+cid+'\',\'supportAreas\',\''+a.id+'\',\'lead\',this.value)">'+_ctPeopleOpts(people,a.lead)+'</select><button class="btn btn-sec btn-sm" style="font-size:9px;padding:1px 5px" onclick="ctDashEditArea(\''+cid+'\',\''+a.id+'\')">&#9998;</button><button class="btn btn-danger-sm btn-sm" style="font-size:9px;padding:1px 5px" onclick="ctDashDelRow(\''+cid+'\',\'supportAreas\',\''+a.id+'\')">&#10005;</button>';return _ctBar(a.name,a.count,amax,CTD.support,extra);}).join(''):'<div class="empty-msg">No areas yet.</div>');
+  // Roster by workstream group (derived from contract positions, classified)
+  var grp={};(c.positions||[]).forEach(function(p){var g=p.workstreamGroup||'(unassigned)';grp[g]=(grp[g]||0)+1;});
+  var gkeys=Object.keys(grp).sort();var gmax=gkeys.reduce(function(m,k){return Math.max(m,grp[k]);},0);
+  h+='<div style="height:14px"></div><div style="font-size:14px;font-weight:700">Roster by workstream group <span style="font-weight:400;font-size:12px;color:var(--text-muted)">(positions, derived from the staffing plan)</span></div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Classify each workstream group as Transformation or Support — this drives the derived headcount split.</div>';
+  h+=(gkeys.length?gkeys.map(function(g){var cls=ctDashClassOf(c,g);var col=cls==='transformation'?CTD.transformation:(cls==='support'?CTD.support:CTD.gray);var sel='<select class="ct-cell" style="width:auto" onchange="ctDashSetClass(\''+cid+'\',\''+encodeURIComponent(g)+'\',this.value)"><option value="">— auto —</option><option value="transformation"'+(cls==='transformation'?' selected':'')+'>Transformation</option><option value="support"'+(cls==='support'?' selected':'')+'>Support</option></select>';return _ctBar(g,grp[g],gmax,col,sel);}).join(''):'<div class="empty-msg">No positions on this contract yet — add staffing in the Staff Planning tab.</div>');
+  // Team panel
+  h+='<div style="height:16px"></div><div style="font-size:14px;font-weight:700">Team — workstream & load</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Real people from this contract’s roster + the org. Workstream defaults from their position’s group; override per person. Load = overdue items owned.</div>';
+  if(team.length){
+    h+='<div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin-bottom:18px"><table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:720px"><thead><tr style="text-align:left;color:var(--text-muted);font-size:9px;text-transform:uppercase;letter-spacing:.3px;background:var(--page-bg)"><th style="padding:6px 8px">Person</th><th style="padding:6px 8px">Workstream</th><th style="padding:6px 8px">Company</th><th style="padding:6px 8px">Role(s)</th><th style="padding:6px 8px;text-align:right">Positions</th><th style="padding:6px 8px;text-align:right">FTE</th><th style="padding:6px 8px;text-align:right">Overdue</th></tr></thead><tbody>'
+      +team.map(function(r){var col=r.cls==='transformation'?CTD.transformation:(r.cls==='support'?CTD.support:CTD.gray);
+        var sel='<select class="ct-cell" style="width:auto" onchange="ctDashSetPersonWs(\''+cid+'\',\''+encodeURIComponent(r.name)+'\',this.value)"><option value="">— from group —</option><option value="transformation"'+(r.cls==='transformation'?' selected':'')+'>Transformation</option><option value="support"'+(r.cls==='support'?' selected':'')+'>Support</option></select>';
+        return '<tr style="border-top:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+col+';margin-right:6px"></span>'+esc(r.name)+'</td>'
+          +'<td style="padding:5px 8px">'+sel+(r.grp?'<div style="font-size:9px;color:var(--text-muted);margin-top:1px">'+esc(r.grp)+'</div>':'')+'</td>'
+          +'<td style="padding:5px 8px;color:var(--text-secondary)">'+esc(r.company||'—')+'</td>'
+          +'<td style="padding:5px 8px;color:var(--text-muted)">'+esc(r.roles.slice(0,2).join(', ')||'—')+'</td>'
+          +'<td style="padding:5px 8px;text-align:right">'+r.posCount+'</td>'
+          +'<td style="padding:5px 8px;text-align:right">'+r.fte.toFixed(2)+'</td>'
+          +'<td style="padding:5px 8px;text-align:right">'+(r.overdue?'<span style="font-weight:700;color:'+CTD.red+'">'+r.overdue+'</span>':'0')+'</td></tr>';
+      }).join('')+'</tbody></table></div>';
+  } else h+='<div class="empty-msg" style="margin-bottom:18px">No people found. Add positions with named resources in Staff Planning, or add org members.</div>';
+  // Overdue table
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><div style="font-size:14px;font-weight:700">Overdue — needs triage ('+d.overdue.total+')</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">'+d.overdue.support+' of '+d.overdue.total+' are Support / governance work. Assign owners from the roster.</div></div><button class="btn btn-sec btn-sm" onclick="ctDashAddTask(\''+cid+'\')">+ Task</button></div>';
+  h+='<div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:820px"><thead><tr style="text-align:left;color:var(--text-muted);font-size:10px;text-transform:uppercase;letter-spacing:.3px;background:var(--page-bg)"><th style="padding:7px 8px">Task</th><th style="padding:7px 8px">Area</th><th style="padding:7px 8px">Workstream</th><th style="padding:7px 8px">Owner</th><th style="padding:7px 8px">Priority / Due</th><th style="padding:7px 8px"></th></tr></thead><tbody>';
+  h+=(d.overdueTasks.length?d.overdueTasks.map(function(t){
+    return '<tr style="border-top:1px solid var(--border)">'
+      +'<td style="padding:6px 8px;box-shadow:inset 3px 0 0 '+CTD.red+'">'+esc(t.task)+'</td>'
+      +'<td style="padding:6px 8px;color:var(--text-muted)">'+esc(t.area)+'</td>'
+      +'<td style="padding:6px 8px"><select class="ct-cell" style="width:auto" onchange="ctDashSetRow(\''+cid+'\',\'overdueTasks\',\''+t.id+'\',\'ws\',this.value)"><option'+(t.ws==='Support'?' selected':'')+'>Support</option><option'+(t.ws==='Transformation'?' selected':'')+'>Transformation</option></select></td>'
+      +'<td style="padding:6px 8px"><select class="ct-cell" style="width:auto" onchange="ctDashSetRow(\''+cid+'\',\'overdueTasks\',\''+t.id+'\',\'owner\',this.value)">'+_ctPeopleOpts(people,t.owner)+'</select></td>'
+      +'<td style="padding:6px 8px;white-space:nowrap"><select class="ct-cell" style="width:auto" onchange="ctDashSetRow(\''+cid+'\',\'overdueTasks\',\''+t.id+'\',\'priority\',this.value)">'+['Urgent','Important','Medium','Low'].map(function(p){return '<option'+(t.priority===p?' selected':'')+'>'+p+'</option>';}).join('')+'</select> <span style="color:var(--text-muted);font-size:11px">'+esc(t.due)+'</span></td>'
+      +'<td style="padding:6px 8px;white-space:nowrap;text-align:right"><button class="btn btn-sec btn-sm" style="font-size:9px;padding:1px 5px" onclick="ctDashEditTask(\''+cid+'\',\''+t.id+'\')">&#9998;</button> <button class="btn btn-danger-sm btn-sm" style="font-size:9px;padding:1px 5px" onclick="ctDashDelRow(\''+cid+'\',\'overdueTasks\',\''+t.id+'\')">&#10005;</button></td></tr>';
+  }).join(''):'<tr><td colspan="6" style="padding:10px;color:var(--text-muted);font-style:italic">No overdue tasks — click + Task to add one.</td></tr>');
+  h+='</tbody></table></div>';
+  h+='<div style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:18px;padding-top:12px;border-top:1px solid var(--border)">Portfolio management overlay · every number is editable here · marking: <b>'+esc(d.meta.classification||'Unclassified')+'</b></div>';
+  return h;
+}
+
+/* ---- dashboard mutators (all persist + re-render) ---- */
+function ctDashSetRow(cid,coll,id,field,val){
+  var c=_ctdC(cid);if(!c)return;var d=contractDash(c);var arr=_ctdArr(d,coll);if(!Array.isArray(arr))return;
+  var row=arr.find(function(x){return x.id===id;});if(!row)return;
+  if(['count','total','done','wip','notStarted','deferred','highRisksOpen'].indexOf(field)>-1)val=Number(val)||0;
+  row[field]=val;save();renderView();
+}
+function ctDashSetClass(cid,encG,val){var c=_ctdC(cid);if(!c)return;var d=contractDash(c);var g=decodeURIComponent(encG);if(!val)delete d.wsClass[g];else d.wsClass[g]=val;save();renderView();}
+function ctDashSetPersonWs(cid,encN,val){var c=_ctdC(cid);if(!c)return;var d=contractDash(c);var nm=decodeURIComponent(encN);if(!val)delete d.personWs[nm];else d.personWs[nm]=val;save();renderView();}
+function ctDashToggleDerive(cid){var c=_ctdC(cid);if(!c)return;var d=contractDash(c);d.deriveSplit=!d.deriveSplit;save();renderView();}
+function ctDashDelRow(cid,coll,id){var c=_ctdC(cid);if(!c)return;if(!confirm('Delete this row?'))return;var d=contractDash(c);var arr=_ctdArr(d,coll);if(!arr)return;var i=arr.findIndex(function(x){return x.id===id;});if(i>-1)arr.splice(i,1);save();renderView();}
+function ctDashReset(cid){var c=_ctdC(cid);if(!c)return;if(!confirm('Reset this dashboard to the '+(_ctIsBclm(c)?'BCLM baseline':'empty')+' snapshot? Clears your edits to the dashboard (staffing is untouched).'))return;c.dashboard=_ctIsBclm(c)?structuredClone(CT_DASH_BCLM):_ctDashEmpty();contractDash(c);save();renderView();toast('Dashboard reset.','success');}
+function ctDashEditJSON(cid){
+  var c=_ctdC(cid);if(!c)return;var d=contractDash(c);
+  openFormModal({over:'Portfolio Dashboard',title:'Edit dashboard JSON (power user)',submitLabel:'Save',
+    intro:'The whole dashboard model. Edit carefully — invalid JSON is rejected.',
+    fields:[{key:'json',label:'Dashboard JSON',type:'textarea',rows:18,value:JSON.stringify(d,null,2)}],
+    onSubmit:function(v,f,st){try{var parsed=JSON.parse(v.json);c.dashboard=parsed;contractDash(c);save();renderView();toast('Dashboard saved.','success');}catch(e){st&&st('Invalid JSON: '+e.message);return false;}}});
+}
+function ctDashEditSummary(cid){
+  var c=_ctdC(cid);if(!c)return;var d=contractDash(c);
+  openFormModal({over:'Portfolio Dashboard',title:'Edit dashboard summary',submitLabel:'Save',fields:[
+    {key:'updated',label:'Updated (date label)',type:'text',value:d.meta.updated,placeholder:'2026-06-19'},
+    {key:'classification',label:'Classification marking',type:'text',value:d.meta.classification},
+    {key:'tLabel',label:'Transformation — card label',type:'text',value:d.workstreams.transformation.label},
+    {key:'tHint',label:'Transformation — hint',type:'text',value:d.workstreams.transformation.hint},
+    {key:'tCount',label:'Transformation — task count',type:'number',value:d.workstreams.transformation.count},
+    {key:'sLabel',label:'Support — card label',type:'text',value:d.workstreams.support.label},
+    {key:'sHint',label:'Support — hint',type:'text',value:d.workstreams.support.hint},
+    {key:'sCount',label:'Support — task count',type:'number',value:d.workstreams.support.count},
+    {key:'odTotal',label:'Overdue — total',type:'number',value:d.overdue.total},
+    {key:'odSupport',label:'Overdue — support',type:'number',value:d.overdue.support},
+    {key:'odTrans',label:'Overdue — transformation',type:'number',value:d.overdue.transformation}
+  ],onSubmit:function(v){d.meta.updated=(v.updated||'').trim();d.meta.classification=(v.classification||'').trim()||'Unclassified';
+    d.workstreams.transformation.label=v.tLabel;d.workstreams.transformation.hint=v.tHint;d.workstreams.transformation.count=Number(v.tCount)||0;
+    d.workstreams.support.label=v.sLabel;d.workstreams.support.hint=v.sHint;d.workstreams.support.count=Number(v.sCount)||0;
+    d.overdue.total=Number(v.odTotal)||0;d.overdue.support=Number(v.odSupport)||0;d.overdue.transformation=Number(v.odTrans)||0;
+    save();renderView();toast('Summary saved.','success');}});
+}
+function ctDashEditSphere(cid){
+  var c=_ctdC(cid);if(!c)return;var d=contractDash(c),s=d.sphere,people=ctDashPeople(c);
+  openFormModal({over:'Portfolio Dashboard',title:'Edit SPHERE program status',submitLabel:'Save',fields:[
+    {key:'goLive',label:'Go-live',type:'text',value:s.goLive},
+    {key:'goLiveNote',label:'Go-live note',type:'text',value:s.goLiveNote},
+    {key:'planVersion',label:'Plan version',type:'text',value:s.planVersion},
+    {key:'lead',label:'SPHERE lead',type:'select',value:s.lead,options:_ctPplSelOpts(people,s.lead)},
+    {key:'tTotal',label:'Plan tasks — total',type:'number',value:s.tasks.total},
+    {key:'tDone',label:'Plan tasks — done',type:'number',value:s.tasks.done},
+    {key:'tWip',label:'Plan tasks — WIP',type:'number',value:s.tasks.wip},
+    {key:'tNot',label:'Plan tasks — not started',type:'number',value:s.tasks.notStarted},
+    {key:'tDef',label:'Plan tasks — deferred',type:'number',value:s.tasks.deferred},
+    {key:'mTotal',label:'Milestones — total',type:'number',value:s.milestones.total},
+    {key:'mDone',label:'Milestones — done',type:'number',value:s.milestones.done},
+    {key:'mOn',label:'Milestones — on track',type:'number',value:s.milestones.onTrack},
+    {key:'mRisk',label:'Milestones — at risk',type:'number',value:s.milestones.atRisk},
+    {key:'mNot',label:'Milestones — not started',type:'number',value:s.milestones.notStarted},
+    {key:'risks',label:'High risks open',type:'number',value:s.highRisksOpen}
+  ],onSubmit:function(v){s.goLive=(v.goLive||'').trim();s.goLiveNote=(v.goLiveNote||'').trim();s.planVersion=(v.planVersion||'').trim();s.lead=v.lead||'';
+    s.tasks={total:Number(v.tTotal)||0,done:Number(v.tDone)||0,wip:Number(v.tWip)||0,notStarted:Number(v.tNot)||0,deferred:Number(v.tDef)||0};
+    s.milestones={total:Number(v.mTotal)||0,done:Number(v.mDone)||0,onTrack:Number(v.mOn)||0,atRisk:Number(v.mRisk)||0,notStarted:Number(v.mNot)||0};
+    s.highRisksOpen=Number(v.risks)||0;save();renderView();toast('SPHERE status saved.','success');}});
+}
+function _ctDashEditRow(cid,coll,id,title,fields,apply){
+  var c=_ctdC(cid);if(!c)return;var d=contractDash(c);var arr=_ctdArr(d,coll);if(!Array.isArray(arr))return;
+  var row=id?arr.find(function(x){return x.id===id;}):null;
+  openFormModal({over:'Portfolio Dashboard',title:title,submitLabel:row?'Save':'Add',fields:fields(row||{}),
+    onSubmit:function(v){if(!row){row={id:uid()};arr.push(row);}apply(row,v);save();renderView();toast('Saved.','success');}});
+}
+function ctDashAddFamily(cid){ctDashEditFamily(cid,null);}
+function ctDashEditFamily(cid,id){var people=ctDashPeople(_ctdC(cid)||{});_ctDashEditRow(cid,'transformationFamilies',id,'Capability family',
+  function(r){return [{key:'name',label:'Family name',type:'text',required:true,value:r.name||''},{key:'count',label:'Active count',type:'number',value:(r.count!=null?r.count:'')},{key:'lead',label:'Lead',type:'select',value:r.lead||'',options:_ctPplSelOpts(people,r.lead||'')}];},
+  function(r,v){r.name=(v.name||'').trim();r.count=Number(v.count)||0;r.lead=v.lead||'';});}
+function ctDashAddArea(cid){ctDashEditArea(cid,null);}
+function ctDashEditArea(cid,id){var people=ctDashPeople(_ctdC(cid)||{});_ctDashEditRow(cid,'supportAreas',id,'Support area',
+  function(r){return [{key:'name',label:'Area name',type:'text',required:true,value:r.name||''},{key:'count',label:'Active count',type:'number',value:(r.count!=null?r.count:'')},{key:'lead',label:'Lead',type:'select',value:r.lead||'',options:_ctPplSelOpts(people,r.lead||'')}];},
+  function(r,v){r.name=(v.name||'').trim();r.count=Number(v.count)||0;r.lead=v.lead||'';});}
+function ctDashAddGate(cid){ctDashEditGate(cid,null);}
+function ctDashEditGate(cid,id){var people=ctDashPeople(_ctdC(cid)||{});_ctDashEditRow(cid,'sphere.accessGates',id,'Access gate',
+  function(r){return [{key:'name',label:'Data source',type:'text',required:true,value:r.name||''},{key:'state',label:'State',type:'select',value:r.state||'blocked',options:[{value:'ok',label:'Access granted'},{value:'atrisk',label:'At risk'},{value:'blocked',label:'Blocked / not requested'}]},{key:'stateLabel',label:'State label',type:'text',value:r.stateLabel||''},{key:'desc',label:'Description',type:'textarea',rows:2,value:r.desc||''},{key:'owner',label:'Owner',type:'select',value:r.owner||'',options:_ctPplSelOpts(people,r.owner||'')}];},
+  function(r,v){r.name=(v.name||'').trim();r.state=v.state||'blocked';r.stateLabel=(v.stateLabel||'').trim()||CTD_GATELBL[r.state]||'';r.desc=(v.desc||'').trim();r.owner=v.owner||'';});}
+function ctDashAddStep(cid){ctDashEditStep(cid,null);}
+function ctDashEditStep(cid,id){var people=ctDashPeople(_ctdC(cid)||{});_ctDashEditRow(cid,'sphere.migrationPath',id,'Migration step',
+  function(r){return [{key:'label',label:'Short label',type:'text',required:true,value:r.label||''},{key:'status',label:'Status',type:'select',value:r.status||'ns',options:[{value:'done',label:'Complete'},{value:'atrisk',label:'At risk'},{value:'ns',label:'Not started'}]},{key:'title',label:'Description (tooltip)',type:'text',value:r.title||''},{key:'owner',label:'Owner',type:'select',value:r.owner||'',options:_ctPplSelOpts(people,r.owner||'')}];},
+  function(r,v){r.label=(v.label||'').trim();r.status=v.status||'ns';r.title=(v.title||'').trim();r.owner=v.owner||'';});}
+function ctDashAddWs(cid){ctDashEditWs(cid,null);}
+function ctDashEditWs(cid,id){var people=ctDashPeople(_ctdC(cid)||{});_ctDashEditRow(cid,'sphere.workstreams',id,'SPHERE workstream',
+  function(r){return [{key:'wid',label:'WS id',type:'text',required:true,value:r.wid||'',placeholder:'WS5'},{key:'name',label:'Name',type:'text',required:true,value:r.name||''},{key:'lead',label:'Lead',type:'select',value:r.lead||'',options:_ctPplSelOpts(people,r.lead||'')},{key:'total',label:'Total',type:'number',value:(r.total!=null?r.total:'')},{key:'done',label:'Done',type:'number',value:(r.done!=null?r.done:'')},{key:'wip',label:'WIP',type:'number',value:(r.wip!=null?r.wip:'')},{key:'notStarted',label:'Not started',type:'number',value:(r.notStarted!=null?r.notStarted:'')},{key:'deferred',label:'Deferred',type:'number',value:(r.deferred!=null?r.deferred:'')},{key:'note',label:'Note (e.g. deferred / Support consumption)',type:'text',value:r.note||''}];},
+  function(r,v){r.wid=(v.wid||'').trim();r.name=(v.name||'').trim();r.lead=v.lead||'';r.total=Number(v.total)||0;r.done=Number(v.done)||0;r.wip=Number(v.wip)||0;r.notStarted=Number(v.notStarted)||0;r.deferred=Number(v.deferred)||0;r.note=(v.note||'').trim();});}
+function ctDashAddTask(cid){ctDashEditTask(cid,null);}
+function ctDashEditTask(cid,id){var people=ctDashPeople(_ctdC(cid)||{});_ctDashEditRow(cid,'overdueTasks',id,'Overdue task',
+  function(r){return [{key:'task',label:'Task',type:'text',required:true,value:r.task||''},{key:'area',label:'Area',type:'text',value:r.area||''},{key:'ws',label:'Workstream',type:'select',value:r.ws||'Support',options:[{value:'Support',label:'Support'},{value:'Transformation',label:'Transformation'}]},{key:'priority',label:'Priority',type:'select',value:r.priority||'Medium',options:['Urgent','Important','Medium','Low'].map(function(p){return {value:p,label:p};})},{key:'due',label:'Due (MM/DD)',type:'text',value:r.due||''},{key:'owner',label:'Owner',type:'select',value:r.owner||'',options:_ctPplSelOpts(people,r.owner||'')}];},
+  function(r,v){r.task=(v.task||'').trim();r.area=(v.area||'').trim();r.ws=v.ws||'Support';r.priority=v.priority||'Medium';r.due=(v.due||'').trim();r.owner=v.owner||'';});}
+
 var orgMode='hier';
 var ORG_VIEWS=[{k:'hier',l:'Hierarchical'},{k:'horiz',l:'Flat / Horizontal'},{k:'matrix',l:'Matrix'},{k:'func',l:'Functional'},{k:'div',l:'Division'}];
 var ORG_DESC={hier:'Reporting lines (reports-to), top-down.',horiz:'Same reporting lines, flowing left-to-right.',matrix:'Function (team) × project-assignment grid — the classic matrix org.',func:'Grouped by functional team / department.',div:'Grouped by business line / contract.'};
