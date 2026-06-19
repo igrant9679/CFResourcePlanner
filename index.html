@@ -4003,7 +4003,7 @@ function govStartProposal(id){
   toast('Proposal created from the gov opportunity — upload the solicitation in its Shred tab to build the requirements matrix.','success',7000);
 }
 function oppNextStepChip(p){var ns=p.nextSteps||[];if(!ns.length)return '';var open=ns.filter(function(s){return !s.done;}).length;return '<span class="plan-chip" title="'+esc(ns.filter(function(s){return !s.done;}).map(function(s){return '• '+s.text;}).join('\n')||'all done')+'">&#9745; '+open+'/'+ns.length+' next</span>';}
-function oppCardInner(p){return '<div class="plan-card-prog">'+esc(p.customer||'')+'</div><div class="plan-card-sub">'+esc(p.name)+'</div><div class="plan-meta">'+(p.potential?'<span class="plan-chip" style="border-color:var(--gold);color:var(--gold)">'+fmt(p.potential)+'</span>':'')+oppStatusChip(p.status)+oppOwnerHTML(p)+(p.closeDate?'<span class="plan-chip">&#128197; '+esc(p.closeDate)+'</span>':'')+oppNextStepChip(p)+'</div>';}
+function oppCardInner(p){return '<div class="plan-card-prog">'+esc(p.customer||'')+'</div><div class="plan-card-sub">'+esc(p.name)+'</div><div class="plan-meta">'+(p.potential?'<span class="plan-chip" style="border-color:var(--gold);color:var(--gold)">'+fmt(p.potential)+'</span>':'')+oppStatusChip(p.status)+oppOwnerHTML(p)+(p.closeDate?'<span class="plan-chip">&#128197; '+esc(p.closeDate)+'</span>':'')+oppNextStepChip(p)+oppGoNoGoChip(p)+'</div>';}
 function oppBoardHTML(opps){
   return '<div class="plan-board" style="grid-template-columns:repeat('+OPP_STAGES.length+',minmax(0,1fr))">'+OPP_STAGES.map(function(s){
     var col=opps.filter(function(p){return (p.stage||'Lead Gen')===s.k;}),ed=can('globals');
@@ -4044,9 +4044,60 @@ function oppDragEnd(){oppDrag=null;var els=document.querySelectorAll('.plan-card
 function oppDragOver(e,k){e.preventDefault();var el=document.getElementById('oppcol_'+k.replace(/\s/g,'_'));if(el)el.classList.add('over');}
 function oppDragLeave(k){var el=document.getElementById('oppcol_'+k.replace(/\s/g,'_'));if(el)el.classList.remove('over');}
 function oppDrop(e,k){e.preventDefault();var el=document.getElementById('oppcol_'+k.replace(/\s/g,'_'));if(el)el.classList.remove('over');var id=oppDrag||(e.dataTransfer&&e.dataTransfer.getData('text/plain'));if(!id)return;if(!can('globals')){toast('You don\'t have permission to move opportunities.','error');return;}var p=D.projects.find(function(x){return x.id===id;});if(p){var prev=p.stage;if(prev===k)return;p.stage=k;save();renderView();toastAction('Moved “'+(p.name||'opportunity')+'” to '+k,'Undo',function(){var pp=D.projects.find(function(x){return x.id===id;});if(pp){pp.stage=prev;save();renderView();}});}}
+/* ── AUTOMATIC GO / NO-GO ANALYSIS ──
+   Scores a pursuit 0–100 across six capture factors, all derived from the
+   opportunity's own data + company context, and maps it to a recommendation. */
+function oppGoNoGo(p){
+  var factors=[];
+  var stage=(typeof capOppStage==='function')?capOppStage(p):(p.stage||'');
+  // 1) Win probability (0–25)
+  var pr=(p.probabilityClose!=null&&p.probabilityClose!=='')?Number(p.probabilityClose)/100:((typeof CAP_STAGE_PROB!=='undefined'&&CAP_STAGE_PROB[stage])||0.1);
+  factors.push({label:'Win probability',pts:Math.round(pr*25),max:25,note:Math.round(pr*100)+'%'+(stage?' · '+stage:'')});
+  // 2) Customer relationship (0–20) — known if an active contract or past client matches
+  var cust=(p.customer||'').toLowerCase().trim(),known=false;
+  if(cust){
+    known=(D.projects||[]).some(function(x){return projCat(x)==='project'&&(x.customer||'').toLowerCase().trim()===cust;})
+      ||(D.pastClients||[]).some(function(c){var n=(typeof c==='string'?c:(c&&c.name)||'').toLowerCase().trim();return n&&(n===cust||cust.indexOf(n)>-1||n.indexOf(cust)>-1);});
+  }
+  factors.push({label:'Customer relationship',pts:known?20:6,max:20,note:cust?(known?'existing / known customer':'new customer — cold'):'no customer set'});
+  // 3) Strategic alignment (0–15)
+  var aligned=(p.initiativeIds||[]).length>0;
+  factors.push({label:'Strategic alignment',pts:aligned?15:5,max:15,note:aligned?(p.initiativeIds.length+' linked initiative'+(p.initiativeIds.length===1?'':'s')):'not linked to an initiative'});
+  // 4) Capture readiness (0–15) — owner + next steps + proposal
+  var hasOwner=!!(p.opr||'').trim(),anySteps=(p.nextSteps||[]).length>0,openSteps=(p.nextSteps||[]).filter(function(s){return !s.done;}).length;
+  var hasProp=(D.proposals||[]).some(function(pr){return pr.opportunityId===p.id;});
+  factors.push({label:'Capture readiness',pts:(hasOwner?6:0)+(anySteps?5:0)+(hasProp?4:0),max:15,note:[hasOwner?'owner set':'no owner',anySteps?(openSteps+' open step'+(openSteps===1?'':'s')):'no next steps',hasProp?'proposal started':''].filter(Boolean).join(' · ')});
+  // 5) Value attractiveness (0–15) — linear to $1M/yr
+  var pot=Number(p.potential)||0;
+  factors.push({label:'Value',pts:pot<=0?0:Math.max(3,Math.min(15,Math.round(pot/1000000*15))),max:15,note:pot?fmt(pot)+'/yr':'no potential value set'});
+  // 6) Timing / runway (0–10)
+  var tPts=5,tNote='no close date set';
+  if(p.closeDate){var d=planParseDate(p.closeDate);if(d){var days=Math.round((d-new Date())/86400000);if(days<0){tPts=2;tNote=(-days)+'d overdue';}else if(days<30){tPts=6;tNote=days+'d — tight';}else if(days<=180){tPts=10;tNote=days+'d runway';}else{tPts=8;tNote=days+'d out';}}}
+  factors.push({label:'Timing / runway',pts:tPts,max:10,note:tNote});
+  var score=factors.reduce(function(a,f){return a+f.pts;},0);
+  var verdict,color;
+  if(score>=70){verdict='GO';color='#16A34A';}
+  else if(score>=50){verdict='LEAN GO';color='#65A30D';}
+  else if(score>=32){verdict='REVIEW';color='#D97706';}
+  else {verdict='NO-GO';color='#DC2626';}
+  var ranked=factors.slice().sort(function(a,b){return (b.pts/b.max)-(a.pts/a.max);});
+  return {score:score,verdict:verdict,color:color,factors:factors,strength:ranked[0],gap:ranked[ranked.length-1]};
+}
+function oppGoNoGoChip(p){var g=oppGoNoGo(p);return '<span class="plan-chip" style="border-color:'+g.color+';color:'+g.color+';font-weight:700" title="Go/No-Go '+g.score+'/100 — biggest gap: '+esc(g.gap.label)+'">⚖ '+g.verdict+' '+g.score+'</span>';}
+function _oppGoNoGoHTML(p){
+  var g=oppGoNoGo(p);
+  var bars=g.factors.map(function(f){var pct=Math.round(f.pts/f.max*100);return '<div style="margin:5px 0"><div style="display:flex;justify-content:space-between;gap:8px;font-size:11px"><span>'+esc(f.label)+' <span style="color:var(--text-muted)">'+esc(f.note)+'</span></span><span style="font-weight:700;white-space:nowrap">'+f.pts+'/'+f.max+'</span></div><div style="height:5px;background:var(--page-bg);border-radius:3px;overflow:hidden;margin-top:2px"><div style="height:100%;width:'+pct+'%;background:'+g.color+'"></div></div></div>';}).join('');
+  return '<div class="fld"><label class="fld-l">Go / No-Go recommendation <span style="font-weight:400;color:var(--text-muted);font-size:10px">— auto-computed from this pursuit’s data; updates on save</span></label>'
+    +'<div style="border:1px solid '+g.color+';border-radius:8px;padding:10px 12px;background:'+g.color+'14">'
+    +'<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:8px"><span style="font-size:19px;font-weight:800;color:'+g.color+'">'+g.verdict+'</span><span style="font-size:13px;font-weight:700;color:var(--text-secondary)">'+g.score+'/100</span></div>'
+    +bars
+    +'<div style="font-size:11px;color:var(--text-secondary);margin-top:8px;border-top:1px dashed var(--border);padding-top:6px">Strongest: <b>'+esc(g.strength.label)+'</b>. Biggest gap: <b>'+esc(g.gap.label)+'</b>'+(g.verdict==='NO-GO'||g.verdict==='REVIEW'?' — shore this up before committing bid &amp; proposal resources.':'.')+'</div>'
+    +'</div></div>';
+}
 function oppEditFields(p){
   var stageOpts=OPP_STAGES.map(function(s){return '<option'+((p.stage||'Lead Gen')===s.k?' selected':'')+'>'+s.k+'</option>';}).join('');
-  return '<span class="fld-section-hdr">Pipeline</span>'
+  return _oppGoNoGoHTML(p)
+    +'<span class="fld-section-hdr">Pipeline</span>'
     +'<div class="fld-row2"><div class="fld"><label class="fld-l">Customer</label><input class="fld-i" id="ep_customer" value="'+esc(p.customer||'')+'"></div>'
     +'<div class="fld"><label class="fld-l">Stage</label><select class="fld-sel" id="ep_stage">'+stageOpts+'</select></div></div>'
     +'<div class="fld-row2"><div class="fld"><label class="fld-l">Potential $ (yearly)</label><input class="fld-i" id="ep_potential" type="number" min="0" value="'+(Number(p.potential)||0)+'"></div>'
