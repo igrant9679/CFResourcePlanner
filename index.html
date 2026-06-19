@@ -3225,7 +3225,6 @@ function _contractStaffHTML(c){
   var anyFilter=contractFilter.oy||contractFilter.company||contractFilter.group||contractFilter.status;
   var byWs=contractGroupBy==='workstreamGroup';
   var filters='<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">'
-    +(ud('oy').length?fsel('oy','All option years',ud('oy')):'')
     +fsel('group','All workstreams',ud('workstreamGroup'))
     +fsel('company','All companies',ud('company'))
     +fsel('status','All statuses',['Filled','TBH','TBD','Reserve'])
@@ -3257,7 +3256,8 @@ function _contractStaffHTML(c){
       +rows+'</tbody></table></div></div>';
   }).join('');
   if(!groups.length)tableHTML='<div class="empty-msg">No positions'+(anyFilter?' match the filters':' yet — click + Position or import a workbook')+'.</div>';
-  return kpis+coRollup+filters+groupBar+'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:6px">Positions by '+esc(GLBL.toLowerCase())+'</div>'+tableHTML;
+  var oyBar=ud('oy').length?'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px"><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Option year</span>'+fsel('oy','All option years',ud('oy'))+'</div>':'';
+  return oyBar+kpis+coRollup+filters+groupBar+'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:6px">Positions by '+esc(GLBL.toLowerCase())+'</div>'+tableHTML;
 }
 // Inline edit of a position field. fte/rate recompute annual; annual can be
 // overridden directly. Re-renders so the (read-only) totals refresh.
@@ -4539,8 +4539,9 @@ function _contractDashHTML(c){
     +'<div style="display:flex;align-items:center;background:var(--page-bg);padding:0 10px;color:var(--text-muted);font-size:18px">&rarr;</div>'
     +'<div style="flex:'+sf+';background:'+CTD.support+'1f;padding:14px 16px"><div style="font-size:13px;font-weight:700;color:'+CTD.support+'">Support consumes</div><div style="font-size:12px;color:'+CTD.support+'">taskers · IDM cycles · audit · sunsets · governance decisions</div></div>'
     +'</div>';
-  // SPHERE panel
-  h+='<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:18px">'
+  // SPHERE program + critical path + internal workstreams — captured here, rendered just above the Team panel
+  var sphereBlock='';
+  sphereBlock+='<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;margin-bottom:18px">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">'
     +'<div style="font-size:15px;font-weight:700">SPHERE program — true status <span style="font-weight:400;font-size:12px;color:var(--text-muted)">(largest Transformation effort · '+esc(s.planVersion||'')+')</span></div>'
     +'<div style="display:flex;gap:8px;align-items:center">'+(s.goLive?_ctPill('Go-live '+s.goLive+(s.goLiveNote?' · '+s.goLiveNote:''),CTD.amber):'')+'<button class="btn btn-sec btn-sm" onclick="ctDashEditSphere(\''+cid+'\')">&#9998;</button></div></div>'
@@ -4554,9 +4555,9 @@ function _contractDashHTML(c){
     +'<div style="display:flex;gap:5px;margin:6px 0">'+s.migrationPath.map(function(m){var col=CTD_ST[m.status]||CTD_ST.ns,tx=CTD_STTX[m.status]||'#2c2c2a';return '<div title="'+esc(m.title||'')+(m.owner?' — '+esc(m.owner):'')+'" onclick="ctDashEditStep(\''+cid+'\',\''+m.id+'\')" style="flex:1;height:30px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;background:'+col+';color:'+tx+';cursor:pointer">'+esc(m.label)+'</div>';}).join('')+'</div>'
     +'<div style="display:flex;flex-wrap:wrap;gap:14px;font-size:11px;color:var(--text-muted);margin-top:4px"><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+CTD_ST.done+'"></span> Complete</span><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+CTD_ST.atrisk+'"></span> At risk</span><span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:'+CTD_ST.ns+'"></span> Not started</span></div>'
     +'</div>';
-  // Access gates
-  h+='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><div style="font-size:14px;font-weight:700">Critical path — external data-source access gates</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">These unlock SPHERE’s broader IT-portfolio data. Assign an owner from the roster.</div></div><button class="btn btn-sec btn-sm" onclick="ctDashAddGate(\''+cid+'\')">+ Gate</button></div>';
-  h+=s.accessGates.map(function(g){return '<div style="display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:8px;flex-wrap:wrap">'
+  // Access gates (critical path)
+  sphereBlock+='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><div style="font-size:14px;font-weight:700">Critical path — external data-source access gates</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">These unlock SPHERE’s broader IT-portfolio data. Assign an owner from the roster.</div></div><button class="btn btn-sec btn-sm" onclick="ctDashAddGate(\''+cid+'\')">+ Gate</button></div>';
+  sphereBlock+=s.accessGates.map(function(g){return '<div style="display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:8px;flex-wrap:wrap">'
     +'<span style="font-size:13px;font-weight:700;min-width:74px">'+esc(g.name)+'</span>'
     +_ctPill(g.stateLabel||CTD_GATELBL[g.state]||'',CTD_GATE[g.state]||CTD.gray)
     +'<span style="font-size:12px;color:var(--text-secondary);flex:1;min-width:150px">'+esc(g.desc)+'</span>'
@@ -4564,9 +4565,9 @@ function _contractDashHTML(c){
     +'<button class="btn btn-sec btn-sm" style="font-size:9px;padding:1px 6px" onclick="ctDashEditGate(\''+cid+'\',\''+g.id+'\')">&#9998;</button>'
     +'<button class="btn btn-danger-sm btn-sm" style="font-size:9px;padding:1px 6px" onclick="ctDashDelRow(\''+cid+'\',\'sphere.accessGates\',\''+g.id+'\')">&#10005;</button></div>';}).join('');
   // SPHERE internal workstreams (WS0-WS14)
-  h+='<div style="height:8px"></div><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><div style="font-size:14px;font-weight:700">SPHERE internal workstreams (WS0–WS14)</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Finer-grained plan feeding the panel above. WS13/WS14 are ongoing <b>Support</b> consumption of the platform.</div></div><button class="btn btn-sec btn-sm" onclick="ctDashAddWs(\''+cid+'\')">+ Workstream</button></div>';
+  sphereBlock+='<div style="height:8px"></div><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><div style="font-size:14px;font-weight:700">SPHERE internal workstreams (WS0–WS14)</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Finer-grained plan feeding the panel above. WS13/WS14 are ongoing <b>Support</b> consumption of the platform.</div></div><button class="btn btn-sec btn-sm" onclick="ctDashAddWs(\''+cid+'\')">+ Workstream</button></div>';
   if(s.workstreams.length){
-    h+='<div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin-bottom:18px"><table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:780px"><thead><tr style="text-align:left;color:var(--text-muted);font-size:9px;text-transform:uppercase;letter-spacing:.3px;background:var(--page-bg)"><th style="padding:6px 8px">WS</th><th style="padding:6px 8px">Name</th><th style="padding:6px 8px">Lead</th><th style="padding:6px 8px;text-align:right">Total</th><th style="padding:6px 8px;text-align:right">Done</th><th style="padding:6px 8px;text-align:right">WIP</th><th style="padding:6px 8px;text-align:right">To start</th><th style="padding:6px 8px;text-align:right">Def</th><th style="padding:6px 8px;width:110px">Progress</th><th style="padding:6px 8px"></th></tr></thead><tbody>'
+    sphereBlock+='<div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin-bottom:18px"><table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:780px"><thead><tr style="text-align:left;color:var(--text-muted);font-size:9px;text-transform:uppercase;letter-spacing:.3px;background:var(--page-bg)"><th style="padding:6px 8px">WS</th><th style="padding:6px 8px">Name</th><th style="padding:6px 8px">Lead</th><th style="padding:6px 8px;text-align:right">Total</th><th style="padding:6px 8px;text-align:right">Done</th><th style="padding:6px 8px;text-align:right">WIP</th><th style="padding:6px 8px;text-align:right">To start</th><th style="padding:6px 8px;text-align:right">Def</th><th style="padding:6px 8px;width:110px">Progress</th><th style="padding:6px 8px"></th></tr></thead><tbody>'
       +s.workstreams.map(function(w){var prog=w.total?Math.round(w.done/w.total*100):0;return '<tr style="border-top:1px solid var(--border)">'
         +'<td style="padding:5px 8px;font-weight:800">'+esc(w.wid)+'</td>'
         +'<td style="padding:5px 8px">'+esc(w.name)+(w.note?' <span style="font-size:10px;color:'+CTD.amber+'">· '+esc(w.note)+'</span>':'')+'</td>'
@@ -4575,7 +4576,7 @@ function _contractDashHTML(c){
         +'<td style="padding:5px 8px"><div style="background:var(--page-bg);border-radius:5px;height:14px;overflow:hidden"><div style="width:'+prog+'%;background:'+CTD.transformation+';height:100%"></div></div></td>'
         +'<td style="padding:5px 8px;white-space:nowrap;text-align:right"><button class="btn btn-sec btn-sm" style="font-size:9px;padding:1px 5px" onclick="ctDashEditWs(\''+cid+'\',\''+w.id+'\')">&#9998;</button> <button class="btn btn-danger-sm btn-sm" style="font-size:9px;padding:1px 5px" onclick="ctDashDelRow(\''+cid+'\',\'sphere.workstreams\',\''+w.id+'\')">&#10005;</button></td></tr>';}).join('')
       +'</tbody></table></div>';
-  } else h+='<div class="empty-msg" style="margin-bottom:18px">No SPHERE workstreams yet — click + Workstream.</div>';
+  } else sphereBlock+='<div class="empty-msg" style="margin-bottom:18px">No SPHERE workstreams yet — click + Workstream.</div>';
   // Transformation queue chart
   var fmax=d.transformationFamilies.reduce(function(m,f){return Math.max(m,f.count);},0);
   h+='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><div style="font-size:14px;font-weight:700">Transformation queue by capability family ('+d.workstreams.transformation.count+' active)</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">The supplier side: the capability families being built, and how much work is queued in each.</div></div><button class="btn btn-sec btn-sm" onclick="ctDashAddFamily(\''+cid+'\')">+ Family</button></div>';
@@ -4589,6 +4590,8 @@ function _contractDashHTML(c){
   var gkeys=Object.keys(grp).sort();var gmax=gkeys.reduce(function(m,k){return Math.max(m,grp[k]);},0);
   h+='<div style="height:14px"></div><div style="font-size:14px;font-weight:700">Roster by workstream group <span style="font-weight:400;font-size:12px;color:var(--text-muted)">(positions, derived from the staffing plan)</span></div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Classify each workstream group as Transformation or Support — this drives the derived headcount split.</div>';
   h+=(gkeys.length?gkeys.map(function(g){var cls=ctDashClassOf(c,g);var col=cls==='transformation'?CTD.transformation:(cls==='support'?CTD.support:CTD.gray);var sel='<select class="ct-cell" style="width:auto" onchange="ctDashSetClass(\''+cid+'\',\''+encodeURIComponent(g)+'\',this.value)"><option value="">— auto —</option><option value="transformation"'+(cls==='transformation'?' selected':'')+'>Transformation</option><option value="support"'+(cls==='support'?' selected':'')+'>Support</option></select>';return _ctBar(g,grp[g],gmax,col,sel);}).join(''):'<div class="empty-msg">No positions on this contract yet — add staffing in the Staff Planning tab.</div>');
+  // SPHERE program / critical path / internal workstreams — placed directly above Team
+  h+=sphereBlock;
   // Team panel
   h+='<div style="height:16px"></div><div style="font-size:14px;font-weight:700">Team — workstream & load</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Real people from this contract’s roster + the org. Workstream defaults from their position’s group; override per person. Load = overdue items owned.</div>';
   if(team.length){
@@ -4847,15 +4850,16 @@ function _ctBgRow(cid,t,sw){var done=_ctIsDone(t);
    +'<td style="padding:5px 8px;color:var(--text-muted)">'+esc(t.bucket||'(no group)')+'</td>'
    +'<td style="padding:5px 8px">'+_ctPill(t.priority,CTD_PRIO[t.priority]||CTD.support)+'</td>'
    +'<td style="padding:5px 8px;white-space:nowrap">'+esc(t.progress||'—')+'</td>'
-   +'<td style="padding:5px 8px;white-space:nowrap;color:'+(t.late?CTD.red:'var(--text-muted)')+'">'+esc(done?(t.completedDate||''):(t.due||''))+(done&&t.completedBy?'<br><span style="font-size:10px">by '+esc(t.completedBy)+'</span>':'')+'</td>'
+   +'<td style="padding:5px 8px;white-space:nowrap;color:'+(t.late?CTD.red:'var(--text-muted)')+'">'+esc(done?(t.completedDate||''):(t.due||''))+'</td>'
+   +'<td style="padding:5px 8px;color:var(--text-secondary)">'+(done?esc(t.completedBy||'—'):'<span style="color:var(--text-muted)">—</span>')+'</td>'
    +'<td style="padding:5px 8px;color:var(--text-secondary)">'+esc((t.assignees||[]).join(', ')||'—')+'</td>'
    +'<td style="padding:5px 8px">'+_ctPill(t.ws==='Transformation'?'T':'S',t.ws==='Transformation'?CTD.transformation:CTD.support)+'</td>'
    +'<td style="padding:5px 8px"><select class="ct-cell" style="width:auto" title="Assign SPHERE workstream" onchange="ctDashSetRow(\''+cid+'\',\'tasks\',\''+t.id+'\',\'wsx\',this.value)">'+_ctWsxOpts(sw,t.wsx||'')+'</select></td></tr>';}
 function _ctBgSection(cid,label,color,ts,sw){
-  var rows=ts.length?ts.map(function(t){return _ctBgRow(cid,t,sw);}).join(''):'<tr><td colspan="8" style="padding:8px;font-size:11px;color:var(--text-muted);font-style:italic">No tasks.</td></tr>';
+  var rows=ts.length?ts.map(function(t){return _ctBgRow(cid,t,sw);}).join(''):'<tr><td colspan="9" style="padding:8px;font-size:11px;color:var(--text-muted);font-style:italic">No tasks.</td></tr>';
   return '<div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px">'
    +'<div style="background:'+color+';color:#fff;padding:9px 14px;display:flex;justify-content:space-between;align-items:center"><div style="font-size:14px;font-weight:800">'+esc(label)+'</div><div style="font-size:12px;opacity:.9">'+ts.length+' task'+(ts.length===1?'':'s')+'</div></div>'
-   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:820px"><thead><tr style="text-align:left;color:var(--text-secondary);font-size:9px;text-transform:uppercase;background:var(--page-bg)"><th style="padding:5px 8px">Task</th><th style="padding:5px 8px">Group</th><th style="padding:5px 8px">Priority</th><th style="padding:5px 8px">Status</th><th style="padding:5px 8px">Due / Done</th><th style="padding:5px 8px">Assignees</th><th style="padding:5px 8px">T/S</th><th style="padding:5px 8px">WS</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+   +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:900px"><thead><tr style="text-align:left;color:var(--text-secondary);font-size:9px;text-transform:uppercase;background:var(--page-bg)"><th style="padding:5px 8px">Task</th><th style="padding:5px 8px">Group</th><th style="padding:5px 8px">Priority</th><th style="padding:5px 8px">Status</th><th style="padding:5px 8px">Due / Done</th><th style="padding:5px 8px">Completed by</th><th style="padding:5px 8px">Assignees</th><th style="padding:5px 8px">T/S</th><th style="padding:5px 8px">WS</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
 }
 function _ctDashByGroupHTML(c){
   var d=contractDash(c),cid=c.id,tasks=_ctScopedTasks(d),f=_ctByGroupFilter,mode=_ctByGroupMode;
@@ -5070,7 +5074,10 @@ function ctResDashSel(encN){_ctResDashSel=decodeURIComponent(encN);renderView();
 function _ctResStats(c){
   var d=contractDash(c),tasks=_ctScopedTasks(d),people={};
   (d.resources||[]).forEach(function(r){if(!people[r.name])people[r.name]={name:r.name,kind:r.kind||'',org:r.org||'',ws:r.ws||'',active:0,inprog:0,late:0,done:0,total:0};});
-  tasks.forEach(function(t){(t.assignees||[]).forEach(function(a){if(/^\(/.test(a))return;var p=people[a]||(people[a]={name:a,kind:'',org:'',ws:'',active:0,inprog:0,late:0,done:0,total:0});p.total++;if(_ctIsDone(t)){p.done++;}else{p.active++;if(t.progress==='In progress')p.inprog++;if(t.late)p.late++;}});});
+  function ppl(a){return people[a]||(people[a]={name:a,kind:'',org:'',ws:'',active:0,inprog:0,late:0,done:0,total:0});}
+  tasks.forEach(function(t){var done=_ctIsDone(t);
+    if(!done){(t.assignees||[]).forEach(function(a){if(/^\(/.test(a))return;var p=ppl(a);p.active++;p.total++;if(t.progress==='In progress')p.inprog++;if(t.late)p.late++;});}
+    else{var set={};(t.assignees||[]).forEach(function(a){set[a]=1;});if(t.completedBy)set[t.completedBy]=1;Object.keys(set).forEach(function(a){if(/^\(/.test(a))return;var p=ppl(a);p.done++;p.total++;});}});
   return Object.keys(people).map(function(k){return people[k];}).sort(function(a,b){return b.active-a.active||b.done-a.done||a.name.localeCompare(b.name);});
 }
 function _ctTaskMiniTable(rows,mode){
@@ -5096,8 +5103,8 @@ function _contractResourceDashHTML(c){
       return '<tr style="border-top:1px solid var(--border);cursor:pointer;'+(on?'background:'+CTD.support+'14':'')+'" onclick="ctResDashSel(\''+encodeURIComponent(p.name)+'\')"><td style="padding:6px 8px;font-weight:'+(on?'800':'600')+'"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+col+';margin-right:6px"></span>'+esc(p.name)+(p.kind?' <span style="font-size:9px;color:var(--text-muted)">'+esc(p.kind)+'</span>':'')+'</td><td style="padding:6px 8px">'+(p.ws?_ctPill(p.ws==='Transformation'?'T':'S',col):'<span style="color:var(--text-muted)">—</span>')+'</td><td style="padding:6px 8px;text-align:right;font-weight:700">'+p.active+'</td><td style="padding:6px 8px;text-align:right">'+p.inprog+'</td><td style="padding:6px 8px;text-align:right">'+(p.late?'<b style="color:'+CTD.red+'">'+p.late+'</b>':'0')+'</td><td style="padding:6px 8px;text-align:right;color:'+CTD.transformation+';font-weight:700">'+p.done+'</td><td style="padding:6px 8px;text-align:right;color:var(--text-muted)">'+p.total+'</td></tr>';}).join('')
     +'</tbody></table></div>';
   // Selected resource detail
-  var mine=tasks.filter(function(t){return (t.assignees||[]).indexOf(sel)>-1;});
-  var act=mine.filter(function(t){return !_ctIsDone(t);}),don=mine.filter(_ctIsDone).sort(function(a,b){return (_ctDueTs(b.completedDate)||0)-(_ctDueTs(a.completedDate)||0);});
+  var act=tasks.filter(function(t){return !_ctIsDone(t)&&(t.assignees||[]).indexOf(sel)>-1;});
+  var don=tasks.filter(function(t){return _ctIsDone(t)&&((t.assignees||[]).indexOf(sel)>-1||t.completedBy===sel);}).sort(function(a,b){return (_ctDueTs(b.completedDate)||0)-(_ctDueTs(a.completedDate)||0);});
   var st=stats.filter(function(s){return s.name===sel;})[0]||{};
   var picker='<select class="fld-sel" style="max-width:280px" onchange="ctResDashSel(encodeURIComponent(this.value))">'+names.map(function(n){return '<option'+(n===sel?' selected':'')+'>'+esc(n)+'</option>';}).join('')+'</select>';
   var detail='<div style="border:1px solid var(--border);border-radius:12px;overflow:hidden">'
