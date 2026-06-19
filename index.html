@@ -5078,7 +5078,7 @@ function _ctResStats(c){
   tasks.forEach(function(t){var done=_ctIsDone(t);
     if(!done){(t.assignees||[]).forEach(function(a){if(/^\(/.test(a))return;var p=ppl(a);p.active++;p.total++;if(t.progress==='In progress')p.inprog++;if(t.late)p.late++;});}
     else{var cb=t.completedBy;if(cb&&!/^\(/.test(cb)){var p=ppl(cb);p.done++;p.total++;}}});
-  return Object.keys(people).map(function(k){return people[k];}).sort(function(a,b){return b.active-a.active||b.done-a.done||a.name.localeCompare(b.name);});
+  return Object.keys(people).map(function(k){return people[k];}).sort(function(a,b){return b.done-a.done||b.active-a.active||a.name.localeCompare(b.name);});
 }
 function _ctTaskMiniTable(rows,mode){
   // mode 'active' shows status/due; 'done' shows completed date
