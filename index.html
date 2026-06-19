@@ -5130,7 +5130,7 @@ function _contractPPRHTML(c){
   var nTot=tasks.length,nDone=done.length,nAct=active.length,compPct=nTot?Math.round(nDone/nTot*100):0;
   var late=active.filter(function(t){return t.late;}).length,inprog=active.filter(function(t){return t.progress==='In progress';}).length;
   var doneT=done.filter(function(t){return t.ws==='Transformation';}).length,doneS=nDone-doneT;
-  var contrib={};done.forEach(function(t){(t.assignees||[]).forEach(function(a){if(/^\(/.test(a))return;contrib[a]=(contrib[a]||0)+1;});});
+  var contrib={};done.forEach(function(t){var cb=t.completedBy;if(cb&&!/^\(/.test(cb))contrib[cb]=(contrib[cb]||0)+1;});
   var nEngaged=res.length;
   var h='<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Executive performance review for <b>'+esc(c.name||'this contract')+'</b>'+(c.number?' ('+esc(c.number)+')':'')+(d.meta.updated?' · as of '+esc(d.meta.updated):'')+'. What the contract has accomplished to date, current state, and outlook. <b>Print / PDF</b> for the PMR packet.</div>';
   h+=_ctCompletedScopeBar(cid,d);
@@ -5194,7 +5194,7 @@ function _contractPPRHTML(c){
     +'<div style="font-size:12px;color:var(--text-secondary)">Access gates: <b style="color:'+CTD.transformation+'">'+gateSum.ok+'</b> granted · <b style="color:'+CTD.amber+'">'+gateSum.atrisk+'</b> at risk · <b style="color:'+CTD.red+'">'+gateSum.blocked+'</b> blocked</div></div>';
   // Top contributors
   var ck=Object.keys(contrib).sort(function(a,b){return contrib[b]-contrib[a];}).slice(0,10);var cmax=ck.reduce(function(x,k){return Math.max(x,contrib[k]);},0);
-  h+='<div style="font-size:15px;font-weight:800;margin-bottom:2px">Top contributors <span style="font-weight:400;font-size:12px;color:var(--text-muted)">(by completed tasks)</span></div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Who has delivered the most completed work.</div>';
+  h+='<div style="font-size:15px;font-weight:800;margin-bottom:2px">Top contributors <span style="font-weight:400;font-size:12px;color:var(--text-muted)">(by tasks they completed)</span></div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Ranked by who actually completed (closed) the tasks — Completed By.</div>';
   h+='<div>'+(ck.length?ck.map(function(k){return _ctBar(k,contrib[k],cmax,CTD.transformation,'');}).join(''):'<div class="empty-msg">No completed work attributed yet.</div>')+'</div>';
   return h;
 }
