@@ -5077,7 +5077,7 @@ function _ctResStats(c){
   function ppl(a){return people[a]||(people[a]={name:a,kind:'',org:'',ws:'',active:0,inprog:0,late:0,done:0,total:0});}
   tasks.forEach(function(t){var done=_ctIsDone(t);
     if(!done){(t.assignees||[]).forEach(function(a){if(/^\(/.test(a))return;var p=ppl(a);p.active++;p.total++;if(t.progress==='In progress')p.inprog++;if(t.late)p.late++;});}
-    else{var set={};(t.assignees||[]).forEach(function(a){set[a]=1;});if(t.completedBy)set[t.completedBy]=1;Object.keys(set).forEach(function(a){if(/^\(/.test(a))return;var p=ppl(a);p.done++;p.total++;});}});
+    else{var cb=t.completedBy;if(cb&&!/^\(/.test(cb)){var p=ppl(cb);p.done++;p.total++;}}});
   return Object.keys(people).map(function(k){return people[k];}).sort(function(a,b){return b.active-a.active||b.done-a.done||a.name.localeCompare(b.name);});
 }
 function _ctTaskMiniTable(rows,mode){
@@ -5104,16 +5104,16 @@ function _contractResourceDashHTML(c){
     +'</tbody></table></div>';
   // Selected resource detail
   var act=tasks.filter(function(t){return !_ctIsDone(t)&&(t.assignees||[]).indexOf(sel)>-1;});
-  var don=tasks.filter(function(t){return _ctIsDone(t)&&((t.assignees||[]).indexOf(sel)>-1||t.completedBy===sel);}).sort(function(a,b){return (_ctDueTs(b.completedDate)||0)-(_ctDueTs(a.completedDate)||0);});
+  var don=tasks.filter(function(t){return _ctIsDone(t)&&t.completedBy===sel;}).sort(function(a,b){return (_ctDueTs(b.completedDate)||0)-(_ctDueTs(a.completedDate)||0);});
   var st=stats.filter(function(s){return s.name===sel;})[0]||{};
   var picker='<select class="fld-sel" style="max-width:280px" onchange="ctResDashSel(encodeURIComponent(this.value))">'+names.map(function(n){return '<option'+(n===sel?' selected':'')+'>'+esc(n)+'</option>';}).join('')+'</select>';
   var detail='<div style="border:1px solid var(--border);border-radius:12px;overflow:hidden">'
     +'<div style="background:linear-gradient(135deg,var(--navy),var(--navy-light));color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">'
     +'<div><div style="font-size:16px;font-weight:800">'+esc(sel)+'</div><div style="font-size:11px;opacity:.9">'+esc([st.kind,st.org,st.ws].filter(Boolean).join(' · ')||'resource')+'</div></div>'+picker+'</div>'
     +'<div style="padding:14px 16px">'
-    +'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">'+_ctMini('Active',act.length,'open tasks',false)+_ctMini('In progress',act.filter(function(t){return t.progress==='In progress';}).length,'',false)+_ctMini('Late',act.filter(function(t){return t.late;}).length,'overdue',act.filter(function(t){return t.late;}).length>0)+_ctMini('Completed',don.length,'delivered',false)+'</div>'
+    +'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">'+_ctMini('Active',act.length,'open tasks',false)+_ctMini('In progress',act.filter(function(t){return t.progress==='In progress';}).length,'',false)+_ctMini('Late',act.filter(function(t){return t.late;}).length,'overdue',act.filter(function(t){return t.late;}).length>0)+_ctMini('Completed',don.length,'completed by them',false)+'</div>'
     +'<div style="font-size:13px;font-weight:800;margin-bottom:6px">Performing now ('+act.length+')</div>'+_ctTaskMiniTable(act,'active')
-    +'<div style="font-size:13px;font-weight:800;margin:16px 0 6px">Performed / completed ('+don.length+')</div>'+_ctTaskMiniTable(don,'done')
+    +'<div style="font-size:13px;font-weight:800;margin:16px 0 6px">Completed by '+esc(sel)+' ('+don.length+')</div><div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">All tasks this resource marked complete.</div>'+_ctTaskMiniTable(don,'done')
     +'</div></div>';
   return intro+_ctCompletedScopeBar(cid,d)+tbl+detail;
 }
