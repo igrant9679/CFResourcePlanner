@@ -4474,9 +4474,11 @@ function _contractDashHTML(c){
   h+='<div class="plan-seg" style="margin-bottom:16px">'
     +'<button class="'+(dtab==='overview'?'active':'')+'" onclick="ctDashSetSubtab(\'overview\')">Overview</button>'
     +'<button class="'+(dtab==='workstreams'?'active':'')+'" onclick="ctDashSetSubtab(\'workstreams\')">Workstream Details &amp; Resources</button>'
+    +'<button class="'+(dtab==='bygroup'?'active':'')+'" onclick="ctDashSetSubtab(\'bygroup\')">Tasks by Group</button>'
     +'<button class="'+(dtab==='reports'?'active':'')+'" onclick="ctDashSetSubtab(\'reports\')">Reports</button>'
     +'</div>';
   if(dtab==='reports')return h+_ctDashReportsHTML(c);
+  if(dtab==='bygroup')return h+_ctDashByGroupHTML(c);
   if(dtab==='workstreams')return h+_ctDashWorkstreamsHTML(c,people);
   // Summary cards
   h+='<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Headline counts — work the contract is <b>building</b> (Transformation) vs. <b>running</b> (Support), and what is overdue.</div>';
@@ -4767,6 +4769,54 @@ function _ctWsPanel(cid,ws,tasks,res){
       +'<div style="display:flex;gap:6px;margin-bottom:14px"><button class="btn btn-sec btn-sm" style="font-size:10px" onclick="ctDashAssignResToWs(\''+cid+'\',\''+ws+'\')">+ Assign existing</button><button class="btn btn-outline btn-sm" style="font-size:10px" onclick="ctDashAddResource(\''+cid+'\',\''+ws+'\')">+ New resource</button></div>'
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Tasks ('+shown.length+(shown.length!==wt.length?' of '+wt.length:'')+')</div><button class="btn btn-sec btn-sm" style="font-size:10px" onclick="ctDashAddTaskFull(\''+cid+'\',\''+ws+'\')">+ Task</button></div>'
       +taskHTML+'</div></div>';
+}
+/* ════════════════════════════════════════════════════════════════════════
+   TASKS BY GROUP — separate sub-tab. Filter the tracker by task group, with
+   tasks organized under Transformation / Support. Does NOT alter the
+   "Workstream Details & Resources" view.
+   ════════════════════════════════════════════════════════════════════════ */
+var _ctByGroupFilter={group:'',priority:'',progress:'',late:false,showCompleted:false};
+function ctByGroupSetFilter(k,v){if(k==='late')_ctByGroupFilter.late=!_ctByGroupFilter.late;else if(k==='showCompleted')_ctByGroupFilter.showCompleted=!_ctByGroupFilter.showCompleted;else _ctByGroupFilter[k]=v;renderView();}
+function ctByGroupClear(){_ctByGroupFilter={group:'',priority:'',progress:'',late:false,showCompleted:false};renderView();}
+function _ctDashByGroupHTML(c){
+  var d=contractDash(c),cid=c.id,tasks=_ctScopedTasks(d),f=_ctByGroupFilter;
+  var groups={};tasks.forEach(function(t){var b=t.bucket||'(no group)';groups[b]=(groups[b]||0)+1;});
+  var gkeys=Object.keys(groups).sort();
+  var doneN=tasks.filter(_ctIsDone).length;
+  function match(t){
+    if(_ctIsDone(t)&&!f.showCompleted&&f.progress!=='Completed')return false;
+    if(f.group&&(t.bucket||'(no group)')!==f.group)return false;
+    if(f.priority&&t.priority!==f.priority)return false;
+    if(f.progress&&t.progress!==f.progress)return false;
+    if(f.late&&!t.late)return false;return true;}
+  var shown=tasks.filter(match);
+  var gsel='<select class="fld-sel" style="width:auto;max-width:320px" onchange="ctByGroupSetFilter(\'group\',this.value)"><option value="">All groups ('+tasks.length+')</option>'+gkeys.map(function(g){return '<option value="'+esc(g)+'"'+(f.group===g?' selected':'')+'>'+esc(g)+' ('+groups[g]+')</option>';}).join('')+'</select>';
+  function fsel(key,label,vals){return '<select class="fld-sel" style="width:auto" onchange="ctByGroupSetFilter(\''+key+'\',this.value)"><option value="">'+label+'</option>'+vals.map(function(v){return '<option value="'+esc(v)+'"'+(f[key]===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select>';}
+  var anyF=f.group||f.priority||f.progress||f.late||f.showCompleted;
+  var bar='<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Filter the task tracker by <b>group</b>; tasks are organized under their <b>workstream</b> (Transformation vs Support). Hover a task for details.</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:14px">'
+    +'<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Group</span>'+gsel
+    +fsel('priority','All priorities',['Urgent','Important','Medium','Low'])
+    +fsel('progress','All statuses',['Not started','In progress','Completed'])
+    +'<button class="btn '+(f.late?'btn-navy':'btn-outline')+' btn-sm" onclick="ctByGroupSetFilter(\'late\')">Late only</button>'
+    +'<button class="btn '+(f.showCompleted?'btn-navy':'btn-outline')+' btn-sm" onclick="ctByGroupSetFilter(\'showCompleted\')">'+(f.showCompleted?'Hide':'Show')+' completed ('+doneN+')</button>'
+    +(anyF?'<button class="btn btn-outline btn-sm" onclick="ctByGroupClear()">Clear</button>':'')+'</div>';
+  var body=['Transformation','Support'].map(function(ws){
+    var color=ws==='Transformation'?CTD.transformation:CTD.support;
+    var wt=shown.filter(function(t){return t.ws===ws;});
+    var rows=wt.length?wt.map(function(t){var done=_ctIsDone(t);return '<tr style="border-top:1px solid var(--border)'+(done?';opacity:.62':'')+'">'
+      +'<td style="padding:5px 8px;font-weight:600;cursor:help" title="'+_ctTaskTip(t)+'">'+(done?'<span style="color:'+CTD.transformation+';margin-right:5px">&#10003;</span>':(t.late?'<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+CTD.red+';margin-right:5px"></span>':''))+esc(t.name)+(t.desc?' <span style="color:var(--text-muted);font-size:9px">&#9432;</span>':'')+'</td>'
+      +'<td style="padding:5px 8px;color:var(--text-muted)">'+esc(t.bucket||'(no group)')+'</td>'
+      +'<td style="padding:5px 8px">'+_ctPill(t.priority,CTD_PRIO[t.priority]||CTD.support)+'</td>'
+      +'<td style="padding:5px 8px;white-space:nowrap">'+esc(t.progress||'—')+'</td>'
+      +'<td style="padding:5px 8px;white-space:nowrap;color:'+(t.late?CTD.red:'var(--text-muted)')+'">'+esc(done?(t.completedDate||''):(t.due||''))+'</td>'
+      +'<td style="padding:5px 8px;color:var(--text-secondary)">'+esc((t.assignees||[]).join(', ')||'—')+'</td></tr>';}).join('')
+      :'<tr><td colspan="6" style="padding:8px;font-size:11px;color:var(--text-muted);font-style:italic">No tasks'+(anyF?' match the filter':'')+'.</td></tr>';
+    return '<div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px">'
+      +'<div style="background:'+color+';color:#fff;padding:9px 14px;display:flex;justify-content:space-between;align-items:center"><div style="font-size:15px;font-weight:800">'+ws+'</div><div style="font-size:12px;opacity:.9">'+wt.length+' task'+(wt.length===1?'':'s')+(f.group?' · '+esc(f.group):'')+'</div></div>'
+      +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:680px"><thead><tr style="text-align:left;color:var(--text-secondary);font-size:9px;text-transform:uppercase;background:var(--page-bg)"><th style="padding:5px 8px">Task</th><th style="padding:5px 8px">Group</th><th style="padding:5px 8px">Priority</th><th style="padding:5px 8px">Status</th><th style="padding:5px 8px">Due / Done</th><th style="padding:5px 8px">Assignees</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+  }).join('');
+  return bar+body;
 }
 function _ctDashWorkstreamsHTML(c,people){
   var d=contractDash(c),cid=c.id,tasks=_ctScopedTasks(d),res=d.resources||[];
