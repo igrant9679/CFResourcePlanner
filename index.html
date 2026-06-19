@@ -3794,6 +3794,7 @@ function _contractDashHTML(c){
   if(dtab==='reports')return h+_ctDashReportsHTML(c);
   if(dtab==='workstreams')return h+_ctDashWorkstreamsHTML(c,people);
   // Summary cards
+  h+='<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Headline counts — work the contract is <b>building</b> (Transformation) vs. <b>running</b> (Support), and what is overdue.</div>';
   h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">'
     +'<div style="flex:1;min-width:170px;background:var(--page-bg);border-left:3px solid '+CTD.transformation+';border-radius:8px;padding:14px 16px"><div style="font-size:13px;color:var(--text-secondary)">'+esc(d.workstreams.transformation.label)+'</div><div style="font-size:26px;font-weight:800">'+tBig+'</div><div style="font-size:12px;color:var(--text-muted)">'+esc(d.workstreams.transformation.hint)+' · '+esc(tSub)+'</div></div>'
     +'<div style="flex:1;min-width:170px;background:var(--page-bg);border-left:3px solid '+CTD.support+';border-radius:8px;padding:14px 16px"><div style="font-size:13px;color:var(--text-secondary)">'+esc(d.workstreams.support.label)+'</div><div style="font-size:26px;font-weight:800">'+sBig+'</div><div style="font-size:12px;color:var(--text-muted)">'+esc(d.workstreams.support.hint)+' · '+esc(sSub)+'</div></div>'
@@ -3802,6 +3803,7 @@ function _contractDashHTML(c){
   // Supplier -> customer flow
   var tf=d.deriveSplit?(split.transformation.n||1):(d.workstreams.transformation.count||1);
   var sf=d.deriveSplit?(split.support.n||1):(d.workstreams.support.count||1);
+  h+='<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">The operating model: Transformation builds capabilities that Support consumes to govern the portfolio. Bar widths track the relative volume.</div>';
   h+='<div style="display:flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:18px">'
     +'<div style="flex:'+tf+';background:'+CTD.transformation+'1f;padding:14px 16px"><div style="font-size:13px;font-weight:700;color:'+CTD.transformation+'">Transformation builds</div><div style="font-size:12px;color:'+CTD.transformation+'">SPHERE/ADVANA · automation · EA/EKR · cloud</div></div>'
     +'<div style="display:flex;align-items:center;background:var(--page-bg);padding:0 10px;color:var(--text-muted);font-size:18px">&rarr;</div>'
@@ -3846,7 +3848,7 @@ function _contractDashHTML(c){
   } else h+='<div class="empty-msg" style="margin-bottom:18px">No SPHERE workstreams yet — click + Workstream.</div>';
   // Transformation queue chart
   var fmax=d.transformationFamilies.reduce(function(m,f){return Math.max(m,f.count);},0);
-  h+='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div style="font-size:14px;font-weight:700;margin-bottom:8px">Transformation queue by capability family ('+d.workstreams.transformation.count+' active)</div><button class="btn btn-sec btn-sm" onclick="ctDashAddFamily(\''+cid+'\')">+ Family</button></div>';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div><div style="font-size:14px;font-weight:700">Transformation queue by capability family ('+d.workstreams.transformation.count+' active)</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">The supplier side: the capability families being built, and how much work is queued in each.</div></div><button class="btn btn-sec btn-sm" onclick="ctDashAddFamily(\''+cid+'\')">+ Family</button></div>';
   h+=(d.transformationFamilies.length?d.transformationFamilies.map(function(f){var extra='<span style="font-size:10px;color:var(--text-muted)">Lead</span><select class="ct-cell" style="width:auto" onchange="ctDashSetRow(\''+cid+'\',\'transformationFamilies\',\''+f.id+'\',\'lead\',this.value)">'+_ctPeopleOpts(people,f.lead)+'</select><button class="btn btn-sec btn-sm" style="font-size:9px;padding:1px 5px" onclick="ctDashEditFamily(\''+cid+'\',\''+f.id+'\')">&#9998;</button><button class="btn btn-danger-sm btn-sm" style="font-size:9px;padding:1px 5px" onclick="ctDashDelRow(\''+cid+'\',\'transformationFamilies\',\''+f.id+'\')">&#10005;</button>';return _ctBar(f.name,f.count,fmax,CTD.transformation,extra);}).join(''):'<div class="empty-msg">No families yet.</div>');
   // Support queue chart
   var amax=d.supportAreas.reduce(function(m,a){return Math.max(m,a.count);},0);
@@ -4122,7 +4124,7 @@ function _ctDashReportsHTML(c){
   // Task-group status table
   var groups={};tasks.forEach(function(t){var b=t.bucket||'(no bucket)';var g=groups[b]||(groups[b]={total:0,inprog:0,notst:0,late:0,urgent:0,ws:{}});g.total++;if(t.progress==='In progress')g.inprog++;if(t.progress==='Not started')g.notst++;if(t.late)g.late++;if(t.priority==='Urgent')g.urgent++;g.ws[t.ws]=(g.ws[t.ws]||0)+1;});
   var gk=Object.keys(groups).sort(function(a,b){return groups[b].total-groups[a].total;});
-  h+='<div style="font-size:15px;font-weight:800;margin-bottom:8px">Task groups — status</div>';
+  h+='<div style="font-size:15px;font-weight:800;margin-bottom:2px">Task groups — status</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Where each task group stands: total volume, what is in flight vs. not yet started, and what is late or urgent.</div>';
   h+='<div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin-bottom:22px"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:740px"><thead><tr style="text-align:left;color:var(--text-secondary);font-size:10px;text-transform:uppercase;letter-spacing:.3px;background:var(--page-bg)"><th style="padding:7px 8px">Task group</th><th style="padding:7px 8px">WS</th><th style="padding:7px 8px;text-align:right">Total</th><th style="padding:7px 8px;text-align:right">In progress</th><th style="padding:7px 8px;text-align:right">Not started</th><th style="padding:7px 8px;text-align:right">Late</th><th style="padding:7px 8px;text-align:right">Urgent</th><th style="padding:7px 8px;width:150px">Progress</th></tr></thead><tbody>'
     +gk.map(function(b){var g=groups[b];var wsDom=(g.ws.Transformation||0)>=(g.ws.Support||0)?'Transformation':'Support';var col=wsDom==='Transformation'?CTD.transformation:CTD.support;var pct=g.total?Math.round(g.inprog/g.total*100):0;
       return '<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px;font-weight:600">'+esc(b)+'</td>'
@@ -4135,6 +4137,7 @@ function _ctDashReportsHTML(c){
         +'<td style="padding:6px 8px"><div style="display:flex;height:14px;border-radius:4px;overflow:hidden;background:var(--page-bg)"><div style="width:'+pct+'%;background:'+col+'"></div></div><div style="font-size:9px;color:var(--text-muted);margin-top:2px">'+pct+'% in progress</div></td></tr>';
     }).join('')+'</tbody></table></div>';
   // Workstream rollup cards
+  h+='<div style="font-size:15px;font-weight:800;margin-bottom:2px">Workstream rollup</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Health of each side — supplier (builds) vs. customer (governs): current load, priority mix, and the largest task groups.</div>';
   h+='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:22px">'+['Transformation','Support'].map(function(ws){
     var color=ws==='Transformation'?CTD.transformation:CTD.support;var wt=tasks.filter(function(t){return t.ws===ws;});
     var pc={Urgent:0,Important:0,Medium:0,Low:0};wt.forEach(function(t){pc[t.priority]=(pc[t.priority]||0)+1;});
@@ -4147,24 +4150,24 @@ function _ctDashReportsHTML(c){
   }).join('')+'</div>';
   // Overdue triage
   var lateTasks=tasks.filter(function(t){return t.late;}).sort(function(a,b){return (PR[a.priority]-PR[b.priority])||((_ctDueTs(a.due)||0)-(_ctDueTs(b.due)||0));});
-  h+='<div style="font-size:15px;font-weight:800;margin-bottom:8px">Overdue — needs triage ('+lateTasks.length+')</div>';
+  h+='<div style="font-size:15px;font-weight:800;margin-bottom:2px">Overdue — needs triage ('+lateTasks.length+')</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Past-due tasks, ordered by priority then due date — the near-term action list for leadership.</div>';
   h+='<div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin-bottom:22px"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:720px"><thead><tr style="text-align:left;color:var(--text-secondary);font-size:10px;text-transform:uppercase;background:var(--page-bg)"><th style="padding:7px 8px">Task</th><th style="padding:7px 8px">Group</th><th style="padding:7px 8px">WS</th><th style="padding:7px 8px">Priority</th><th style="padding:7px 8px">Due</th><th style="padding:7px 8px">Owners</th></tr></thead><tbody>'
     +(lateTasks.length?lateTasks.map(function(t){var col=t.ws==='Transformation'?CTD.transformation:CTD.support;return '<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px;box-shadow:inset 3px 0 0 '+CTD.red+';font-weight:600">'+esc(t.name)+'</td><td style="padding:6px 8px;color:var(--text-muted)">'+esc(t.bucket)+'</td><td style="padding:6px 8px">'+_ctPill(t.ws==='Transformation'?'T':'S',col)+'</td><td style="padding:6px 8px">'+_ctPill(t.priority,CTD_PRIO[t.priority]||CTD.support)+'</td><td style="padding:6px 8px;color:'+CTD.red+';white-space:nowrap">'+esc(t.due)+'</td><td style="padding:6px 8px;color:var(--text-secondary)">'+esc((t.assignees||[]).join(', ')||'—')+'</td></tr>';}).join(''):'<tr><td colspan="6" style="padding:10px;color:var(--text-muted)">No late tasks.</td></tr>')+'</tbody></table></div>';
   // Resource workload
   var rl={};tasks.forEach(function(t){(t.assignees||[]).forEach(function(a){var r=rl[a]||(rl[a]={n:0,late:0});r.n++;if(t.late)r.late++;});});
   var rk=Object.keys(rl).sort(function(a,b){return rl[b].n-rl[a].n;}).slice(0,12);
   var rmax=rk.reduce(function(m,k){return Math.max(m,rl[k].n);},0);
-  h+='<div style="font-size:15px;font-weight:800;margin-bottom:8px">Resource workload <span style="font-weight:400;font-size:12px;color:var(--text-muted)">(top '+rk.length+' by active tasks)</span></div>';
+  h+='<div style="font-size:15px;font-weight:800;margin-bottom:2px">Resource workload <span style="font-weight:400;font-size:12px;color:var(--text-muted)">(top '+rk.length+' by active tasks)</span></div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">How active tasks are distributed across people — bar length is task count; “late” flags overdue items they own.</div>';
   h+='<div style="margin-bottom:22px">'+(rk.length?rk.map(function(k){var extra=rl[k].late?'<span style="font-size:10px;color:'+CTD.red+'">'+rl[k].late+' late</span>':'';return _ctBar(k,rl[k].n,rmax,CTD.support,extra);}).join(''):'<div class="empty-msg">No assignments.</div>')+'</div>';
   // Upcoming due dates
   var now=Date.now();var up=tasks.map(function(t){return {t:t,ts:_ctDueTs(t.due)};}).filter(function(x){return x.ts&&x.ts>=now-86400000;}).sort(function(a,b){return a.ts-b.ts;}).slice(0,10);
-  h+='<div style="font-size:15px;font-weight:800;margin-bottom:8px">Upcoming due dates</div>';
+  h+='<div style="font-size:15px;font-weight:800;margin-bottom:2px">Upcoming due dates</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">The next tasks coming due, soonest first — what to watch before it slips.</div>';
   h+='<div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin-bottom:22px"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:560px"><thead><tr style="text-align:left;color:var(--text-secondary);font-size:10px;text-transform:uppercase;background:var(--page-bg)"><th style="padding:7px 8px">Due</th><th style="padding:7px 8px">Task</th><th style="padding:7px 8px">WS</th><th style="padding:7px 8px">Priority</th></tr></thead><tbody>'
     +(up.length?up.map(function(x){var t=x.t;var col=t.ws==='Transformation'?CTD.transformation:CTD.support;return '<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px;white-space:nowrap;font-weight:600">'+esc(t.due)+'</td><td style="padding:6px 8px">'+esc(t.name)+'</td><td style="padding:6px 8px">'+_ctPill(t.ws==='Transformation'?'T':'S',col)+'</td><td style="padding:6px 8px">'+_ctPill(t.priority,CTD_PRIO[t.priority]||CTD.support)+'</td></tr>';}).join(''):'<tr><td colspan="4" style="padding:10px;color:var(--text-muted)">No upcoming dated tasks.</td></tr>')+'</tbody></table></div>';
   // SPHERE program status (compact)
   var s=d.sphere;var pdone=s.tasks.total?Math.round(s.tasks.done/s.tasks.total*100):0;
   var gateSum={ok:0,atrisk:0,blocked:0};(s.accessGates||[]).forEach(function(g){gateSum[g.state]=(gateSum[g.state]||0)+1;});
-  h+='<div style="font-size:15px;font-weight:800;margin-bottom:8px">SPHERE program status</div>';
+  h+='<div style="font-size:15px;font-weight:800;margin-bottom:2px">SPHERE program status</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">The flagship Transformation effort at a glance: go-live, plan completion, milestones, open risks, migration path, and data-access gates.</div>';
   h+='<div style="border:1px solid var(--border);border-radius:12px;padding:14px"><div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px">'
     +_ctMini('Go-live',esc(s.goLive||'—'),s.goLiveNote||'',false)
     +_ctMini('Plan complete',pdone+'%',s.tasks.done+' of '+s.tasks.total+' tasks',false)
