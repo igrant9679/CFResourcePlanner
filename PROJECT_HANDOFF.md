@@ -13,7 +13,150 @@ or a new AI session.
 
 ---
 
-## 0. Latest session state (2026-06-14) — READ FIRST
+## 0. Latest session state (2026-06-19 → 06-20) — READ FIRST
+
+Latest commit on `main`: **`537b388`** (last feature commit `95eb13a`; Railway
+auto-deploys). Everything below is live. **server.js untouched all session** —
+the held GovWin adapter is preserved (see §0a). A committed **`local.md`** holds
+the same module map + change log and is the quickest new-session bootstrap.
+
+### Built: the BCLM **Portfolio Dashboard** (large; frontend-only in `index.html`)
+A self-contained per-contract dashboard (incorporates the standalone
+`bclm-dashboard.html` + the SPHERE project plan). Lives on `c.dashboard`; **no
+links to org members (`allM`), departments, or projects — deliberately separate.**
+
+Contract page tabs (`contractTab`): **Staff Planning · Portfolio Dashboard ·
+Project Performance Summary · Resource Dashboard**.
+- **Portfolio Dashboard** (`_contractDashHTML`) sub-tabs (`contractDashTab`):
+  Overview · Workstream Details & Resources · Tasks by Group · Tasks by Sprint · Reports.
+  - Overview cards / supplier→customer flow / overdue now derive from **live task
+    counts** (active tasks per ws). SPHERE program panel, critical-path access
+    gates, and WS0–WS14 render directly above the Team panel.
+  - **Tasks by Group** (`_ctDashByGroupHTML`): multi-select Group filter; "By SPHERE
+    Workstream (WS0–WS14)" / "By Transformation/Support" toggle; fully inline-editable
+    table (priority, status, T/S, WS, Sprint dropdowns + assign/edit/delete);
+    Source (P/S) badge; Completed-by column.
+  - **Tasks by Sprint** (`_ctDashBySprintHTML`): same table/filters, grouped by sprint.
+  - **Reports** (`_ctDashReportsHTML`): exec rollup; editable + AI-draft task-group objectives.
+- **Project Performance Summary** (`_contractPPRHTML`): accomplishments by category
+  (month picker), delivery throughput, recently delivered, SPHERE status, top
+  contributors (ranked by `completedBy`).
+- **Resource Dashboard** (`_contractResourceDashHTML`): per-person; "Completed by"
+  box = tasks the selected resource completed; ordered by completed count; hover tooltips.
+
+### Task data model (`c.dashboard.tasks[]`)
+`id, taskId, name, bucket, ws (Transformation|Support), wsx (WS0–WS14), priority,
+progress, due, completedDate, completedBy, late, assignees[], labels[], desc,
+source (P|S), sprint`. **935 tasks = 777 Planner (P)** (`SAF-CNBB Task
+Tracker.xlsx`) **+ 158 SPHERE (S)** (`SPHERE_Project_Plan_Updated_v4 updated.xlsx`,
+"Project Overview" sheet). Other dashboard keys: `resources[]`, `groupObjectives{}`,
+`completedFilter{years,buckets,ws}`, `wsClass{}`, `personWs{}`, `sphere{...}`; seed
+flags `_taskSeed/V2/V3`, `_wsxSeeded`, `_groupObjSeeded`. Seed constants
+`CT_BCLM_TASKS` / `CT_BCLM_RESOURCES` / `CT_GROUP_OBJECTIVES` baked into index.html.
+
+### Prod data writes done (via GET→modify→POST + base-stamp guard; backups in `_backups/`)
+- Seeded/merged the BCLM `c.dashboard` to the full **935-task** set + 31 resources + group objectives.
+- Name spelling fixes (Ali Baharmast, Bryan Burks, Donald Vanmeter, Erik Merk, Norman Wilderson) across BCLM positions + an org member.
+- `desc` / `labels` / `completedBy` / `wsx` backfills by `taskId`.
+- Imported **13 Lead-Gen opportunities** into `D.projects` (category `opportunity`) under user **Younus Shah** from the Opportunity Report (Pipeline) xlsx (20 → 33 opps).
+
+### To refresh task data
+Parse the xlsx offline (node + the project's `xlsx` dep via `NODE_PATH`), regenerate
+the seed, swap into index.html, then merge into prod by `taskId`. `wsx` auto-maps by
+keyword (ADVANA→WS1, EKR→WS9, DITIP→WS10, IDM→WS4, …); `sprint` auto-fills for SPHERE
+tasks from their description. Both editable per-task.
+
+### Notes / watch-outs
+- Tasks by Group / by Sprint render every row with several inline `<select>`s; with
+  completed shown (~900 rows) it's heavy (page responsive; screenshot tool times out).
+- SPHERE task assignees live in the task `desc` (team first-names), not `assignees`,
+  to avoid fragmenting the Resource Dashboard.
+- First-pass Transformation/Support classification of completed Planner tasks is
+  heuristic; the 2024–2025 archive skews Support "delivered" — use the Completed-scope filter.
+
+## 0a. Prior session (2026-06-18)
+
+Latest commit at the time: **`96aa1b5`** (Railway auto-deploys). All items below are
+live except GovWin (held — see ⚠️).
+
+### ⚠️ Open / held / hazards
+- **GovWin IQ adapter is built but intentionally HELD (uncommitted).** `server.js`
+  in the working tree contains a complete Deltek GovWin IQ adapter (`govwinIngest`,
+  `govwinToken`, `govwinMap`, `/api/govops/govwin-status`, opt-in wire-up in
+  `govRunIngestion` gated on `profile.sources.govwin===true`). It was NEVER
+  committed (the user has only a web login, not a GovWin **API entitlement** —
+  client id+secret are required, plus `GOVWIN_*` env vars). Every server.js commit
+  this session used a **selective-commit dance** to keep GovWin out: `cp server.js
+  _bak && git checkout -- server.js && <re-apply only the intended hunks> && git
+  add+commit && cp _bak server.js`. If you (re)touch server.js, preserve this — or
+  ask the user whether to finally commit GovWin (it's inert: off by default, skips
+  gracefully with no env vars). `git status` normally shows ` M server.js` =
+  GovWin only.
+- **BCLM contract has 62 positions** (vs a clean 56 = 34 OY3 + 22 OY2). The extra
+  ~6 + 11-without-descriptions are likely manual adds or a stale-tab save. Offered
+  to reconcile to the clean 56; not yet done.
+- **Stale-tab hazard persists** (single-row JSONB). Several prod data writes this
+  session went straight to the DB; always reload before editing. The user hit the
+  "still mixed up / OY2 missing" confusion twice purely from not hard-refreshing.
+
+### Prod data writes done this session (via GET→modify→POST + `_backups/`)
+- **Awards Management Platform** (`p_software`): imported 169 active subscription
+  clients ($588,689 ARR → **$49,057/mo**, replaces the old manual $50,000).
+- **BCLM contract** (`D.contracts`, number FA701423C0029): imported staffing
+  (OY3 34 + OY2 22), fixed an OY2 rate/resource misalignment, and backfilled role
+  descriptions onto positions. Backups in `_backups/atlas-prod-*-{presubclients,
+  preOY2,oy2fix,adddesc}.json`.
+
+### ✅ Shipped this session (all on `main`/Railway)
+- **NEW: Contract Management module** (admin-only `📁 Contract Mgmt` tab, viewMode
+  `contracts`, self-contained in `D.contracts` — no link to members/projects/cash).
+  Staff-planning grid: fully inline-editable positions; KPI strip; filters; **Group
+  by** Workstream / Civilian Lead / **Contractor Lead** / Company / **Person**; add
+  workstreams (`c.workstreamGroups`); Workstream is a dropdown in the position
+  modal; **descriptions** imported from the workbook's "Role Descriptions" sheet;
+  **Person view** = briefing cards per resource showing descriptions; grid shows
+  **Contractor Lead** in place of Role (Role still editable in the modal); one-way
+  **TBH→Recruiting** bridge; Convert-prospect-to-opp. Server: `POST
+  /api/contracts/parse-staffing` (reads OY3 "Resource Assignments" + OY2 "Staffing"
+  sheets, stops at stacked second tables, Role-Descriptions desc lookup).
+- **NEW: Prospects** (BizDev pipeline) — `🎯 Prospects` sub-view under Opportunities,
+  `D.prospects` (accounts + POCs), board/list/**calendar** (by next-action date),
+  BD tasks stored as `kind:'project'` activities tagged `prospectId` (also surface
+  in Project Tasks), one-click **Convert to Opportunity**.
+- **NEW: Subscription-client upload** — `POST /api/subclients/parse`; project edit
+  modal "Active Subscription Clients" section; sum(ARR)/12 drives `project.revenue`
+  (`revenueFromSubs`).
+- **Opportunities**: multiple **Next Steps** per opp (`p.nextSteps[]`, card chip);
+  **automatic Go/No-Go** recommendation (`oppGoNoGo` — 6 factors → GO/LEAN GO/
+  REVIEW/NO-GO, editor panel + card chip).
+- **Proposals**: **Custom AI instructions** per proposal (`p.customPrompt`, woven
+  into `_propSectionPrompt`); per-section **Refine with a prompt** (`pdSectionRefine`
+  — edits one section, no full regen); "Generate All" → **Draft All Sections**,
+  honors the custom prompt.
+- **Projects**: fiscal-year field + filter + **Project detail** sub-tab (KPI strip +
+  navy section cards, matches Contract Mgmt); People-assigned grid = 3 cols.
+- **Strategy**: Win simulator moved above the cost-to-restore recommendations &
+  wired into the Break-even tab + **North Star**; restricted to **Negotiation**-
+  status pursuits, shows close dates; cut simulator/breakdown now show line
+  **Notes** (subscription/overhead) and each resource's **Notes/Transition Plan**;
+  Break-even breakdown gained a **Comments** column.
+- **Gov Discovery**: **keyword filter** (`govPipeline.settings.ingestKeywords`) as a
+  download criteria — ingestion keeps only opps whose title/description match.
+- **Initiative detail**: Executive summary moved to top, full-width.
+
+### New `D` keys & server bits this session
+- `D.prospects[]`, `D.contracts[]` (+ both added to `PROTECTED_ARRAYS` in server.js).
+- Project: `fiscalYear`, `subClients[]`/`subClientsMeta`/`revenueFromSubs`, `nextSteps[]`
+  (opps), `narrative` (used as exec summary on project/initiative detail).
+- Proposal: `customPrompt`.
+- New endpoints: `/api/subclients/parse`, `/api/contracts/parse-staffing` (+ the held
+  `/api/govops/govwin-status`).
+- New top-level fns (index.html): `renderContractsView`/`_contractStaffHTML`/
+  `_ctPersonHTML`/`contract*`, `_prospectsHTML`/`prospect*`, `oppGoNoGo`/
+  `oppGoNoGoChip`, `pdSectionRefine`, `renderProjectsView`/`_projDetailBody`,
+  `renderSubClientsSection`/`subClients*`, `oppAddNextStep`/`renderOppNextSteps`.
+
+## 0b. Prior session (2026-06-14)
 
 ### ⚠️ Open / in-progress
 - **C1FAMS (Leidos) was accidentally deleted from prod — RESTORED 2026-06-14**
