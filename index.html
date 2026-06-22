@@ -11534,6 +11534,19 @@ function _propInitSections(p){
     return {id:s.id,title:s.title,source:s.source||'user-only',pageBudget:s.pageBudget||0,html:'',draftedAt:0,draftedBy:'',draftedWith:{provider:'',model:''},templatePrompt:s.prompt||'',evidence:s.evidence||[]};
   });
 }
+// Per-section inclusion: a section with include===false is skipped by both the
+// "Draft All Sections" AI run and the assembled/printed proposal. Default = included
+// (undefined/true), so all sections are selected unless the user unticks them.
+function _secIncluded(s){return !s||s.include!==false;}
+function pdToggleSectionInclude(propId,secId,checked){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  var s=(p.sections||[]).find(function(x){return x.id===secId;});if(!s)return;
+  s.include=!!checked;save();renderProposalDetail(propId);
+}
+function pdSetAllSectionsInclude(propId,val){
+  var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
+  (p.sections||[]).forEach(function(s){s.include=!!val;});save();renderProposalDetail(propId);
+}
 function _pdSectionsHTML(p,tpl){
   if(!p.sections||!p.sections.length){
     if(!p.templateId){
@@ -11550,9 +11563,11 @@ function _pdSectionsHTML(p,tpl){
     else if(s.draftedAt)dotCls='sec-status-draft';
     else if((s.html||'').trim())dotCls='sec-status-edited';
     var srcCls='sec-source-'+(s.source==='user-only'?'user':s.source);
-    return '<div class="sec-list-row'+(s.id===_pdActiveSection?' active':'')+'" onclick="_pdSetSection(\''+p.id+'\',\''+s.id+'\')">'
+    var incl=_secIncluded(s);
+    return '<div class="sec-list-row'+(s.id===_pdActiveSection?' active':'')+'" style="'+(incl?'':'opacity:.5;')+'" onclick="_pdSetSection(\''+p.id+'\',\''+s.id+'\')">'
+      +'<label style="margin-top:2px;flex-shrink:0;display:flex;cursor:pointer" title="Include this section in AI generation and the assembled proposal" onclick="event.stopPropagation()"><input type="checkbox" '+(incl?'checked':'')+' onchange="event.stopPropagation();pdToggleSectionInclude(\''+p.id+'\',\''+s.id+'\',this.checked)" style="cursor:pointer"></label>'
       +'<div class="sec-list-row-info"><div class="sec-list-row-ttl">'+esc(s.title)+'</div>'
-      +'<div class="sec-list-row-meta"><span class="sec-source-pill '+srcCls+'">'+esc(s.source||'user')+'</span>'+(s.pageBudget?' · '+s.pageBudget+'pg':'')+'</div></div>'
+      +'<div class="sec-list-row-meta"><span class="sec-source-pill '+srcCls+'">'+esc(s.source||'user')+'</span>'+(s.pageBudget?' · '+s.pageBudget+'pg':'')+(incl?'':' · <span style="color:#DC2626;font-weight:700">excluded</span>')+'</div></div>'
       +'<div class="sec-status-dot '+dotCls+'"></div>'
       +'</div>';
   }).join('');
@@ -11588,7 +11603,7 @@ function _pdSectionsHTML(p,tpl){
     gapSummary=' <span style="margin-left:8px;font-size:11px"><span class="gap-status gap-yes">'+addr+' addr</span> <span class="gap-status gap-partial">'+part+' partial</span> <span class="gap-status gap-no">'+miss+' missing</span> <a href="#" onclick="event.preventDefault();_pdShowGapResults(\''+p.id+'\')">view</a></span>';
   }
   return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">'
-    +'<div style="font-size:12px;color:var(--text-muted)">Section-by-section authoring. Pick a section, draft with AI, edit in place, rewrite in CF voice, then run Gap Analysis to verify every RFP requirement is covered.</div>'
+    +'<div style="font-size:12px;color:var(--text-muted)">Section-by-section authoring. <b>Tick a section’s checkbox to include it</b> in AI generation and the assembled proposal — <b>'+p.sections.filter(_secIncluded).length+'</b> of '+p.sections.length+' included. <a href="#" onclick="event.preventDefault();pdSetAllSectionsInclude(\''+p.id+'\',true)">Select all</a> · <a href="#" onclick="event.preventDefault();pdSetAllSectionsInclude(\''+p.id+'\',false)">None</a></div>'
     +'<div style="text-align:right"><button id="pd_gen_btn2" type="button" class="btn btn-gold btn-sm" onclick="pdGenerateFullProposal(\''+p.id+'\')" title="One click: draft every AI section from the BusDev Brief + RFP + Knowledge Bank — and follows your Custom AI instructions">&#10024; Draft All Sections</button> '+gapBtn+gapSummary+(p.customPrompt&&p.customPrompt.trim()?'<div style="font-size:10px;color:var(--text-muted);margin-top:3px">✦ Custom AI instructions will be applied</div>':'')+'<div id="pd_gen_status2" style="font-size:11px;color:#7C3AED;margin-top:4px"></div></div>'
     +'</div>'
     +'<div class="sec-layout">'
@@ -11685,7 +11700,7 @@ function _propSectionPrompt(p,s,kbBlock,partnerBlock){
 function _pdBriefHTML(p){
   var b=p.brief||{};
   var kbCount=(D.knowledgeBank||[]).filter(function(d){return d.summary;}).length;
-  var aiSecs=(p.sections||[]).filter(function(s){return s.source==='ai'||s.source==='hybrid';}).length;
+  var aiSecs=(p.sections||[]).filter(function(s){return (s.source==='ai'||s.source==='hybrid')&&_secIncluded(s);}).length;
   var tplNote=p.templateId?'':'<div style="font-size:11px;color:#92400E;background:#FEF3C7;border:1px solid #FCD34D;padding:7px 10px;border-radius:6px;margin-bottom:10px">No template linked yet — set one in the <b>Settings</b> tab so Atlas knows which sections to generate.</div>';
   var updated=b.updatedAt?'<span style="font-size:10px;color:var(--text-muted)">Last saved '+new Date(b.updatedAt).toLocaleString()+'</span>':'';
   return '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Dump your raw thoughts on what CommunityForce proposes — bullet points, fragments, anything. Atlas develops, enhances, and professionalizes this into full proposal sections using the RFP requirements, the Knowledge Bank (<b>'+kbCount+'</b> source'+(kbCount===1?'':'s')+'), and the CommunityForce brand voice.</div>'
@@ -11763,8 +11778,8 @@ function pdGenerateFullProposal(id){
     if(p.templateId)_propInitSections(p);
     if(!p.sections||!p.sections.length){alert('Link a template in the Settings tab so Atlas knows which sections to generate.');return;}
   }
-  var aiSecs=p.sections.filter(function(s){return s.source==='ai'||s.source==='hybrid';});
-  if(!aiSecs.length){alert('This template has no AI-fillable sections (mark sections as "ai" or "hybrid" in the template).');return;}
+  var aiSecs=p.sections.filter(function(s){return (s.source==='ai'||s.source==='hybrid')&&_secIncluded(s);});
+  if(!aiSecs.length){alert('No sections selected to draft. Tick the checkbox next to the AI/hybrid sections you want generated (in the Sections tab), then try again.');return;}
   var already=aiSecs.filter(function(s){return (s.html||'').trim();}).length;
   if(!confirm('Draft '+aiSecs.length+' section'+(aiSecs.length===1?'':'s')+' with AI from the BusDev brief, the RFP, and the Knowledge Bank?'+((p.customPrompt&&p.customPrompt.trim())?'\n\nYour custom AI instructions will be applied to every section.':'')+(already?'\n\n'+already+' section'+(already===1?'':'s')+' already have content — existing text will be used as a starting point and rewritten.':'')))return;
   var llm=_propLLMOpts(p);
@@ -12921,7 +12936,7 @@ function _buildProposalPrintHTML(p){
   var certs=(D.corporateCertifications||[]).filter(function(c){return ((p.coverSheet&&p.coverSheet.certIds)||[]).indexOf(c.id)>-1&&(!c.expiresAt||new Date(c.expiresAt)>Date.now());});
   var includedCS=(p.coverSheet&&p.coverSheet.includedCaseStudyIds)||[];
   var pickedCases=(cp.caseStudies||[]).filter(function(c){return includedCS.indexOf(c.id)>-1;});
-  var sections=(p.sections||[]).slice();
+  var sections=(p.sections||[]).filter(_secIncluded);
   var isCoverSec=function(s){return s.source==='computed'&&/cover/i.test(s.title);};
   var num=0;
   var sectionsHTML=sections.map(function(s){
