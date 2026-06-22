@@ -5287,13 +5287,32 @@ var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'
 function _ctMlabel(k){var p=k.split('-');return MON[(+p[1])-1]+" '"+p[0].slice(2);}
 var _ctResDashSel='';
 function ctResDashSel(encN){_ctResDashSel=decodeURIComponent(encN);renderView();}
+// first-name → full roster name, only where the first name is unambiguous.
+function _ctFirstNameMap(d){
+  var m={};(d.resources||[]).forEach(function(r){var f=String(r.name||'').trim().split(/\s+/)[0].toLowerCase();if(!f)return;if(!(f in m))m[f]=r.name;else if(m[f]!==r.name)m[f]=null;});return m;
+}
+// Effective assignees for a task: real assignees if present, else SPHERE (source S)
+// names parsed from the "Assigned: …" note in the description, mapped first-name →
+// full roster name where unambiguous. SPHERE assignees live in desc by design, so
+// without this they (and their tasks) never surface on the Resource Dashboard.
+function _ctEffAssignees(t,fm){
+  var a=(t.assignees||[]).filter(function(x){return x&&!/^\(/.test(x);});
+  if(a.length)return a;
+  if(t.source!=='S'||!t.desc)return [];
+  var mm=/Assigned:\s*([^—·\n]+)/i.exec(t.desc);if(!mm)return [];
+  return mm[1].split(/\s*(?:&|,|\/|\band\b)\s*/i).map(function(s){return s.trim();}).filter(Boolean)
+    .map(function(nm){var k=nm.toLowerCase();return (fm&&fm[k])?fm[k]:nm;});
+}
+function _ctWsNorm(v){v=String(v||'').toLowerCase();return v.indexOf('trans')===0?'Transformation':(v.indexOf('supp')===0?'Support':'');}
 function _ctResStats(c){
-  var d=contractDash(c),tasks=_ctScopedTasks(d),people={};
-  (d.resources||[]).forEach(function(r){if(!people[r.name])people[r.name]={name:r.name,kind:r.kind||'',org:r.org||'',ws:r.ws||'',active:0,inprog:0,late:0,done:0,total:0};});
-  function ppl(a){return people[a]||(people[a]={name:a,kind:'',org:'',ws:'',active:0,inprog:0,late:0,done:0,total:0});}
-  tasks.forEach(function(t){var done=_ctIsDone(t);
-    if(!done){(t.assignees||[]).forEach(function(a){if(/^\(/.test(a))return;var p=ppl(a);p.active++;p.total++;if(t.progress==='In progress')p.inprog++;if(t.late)p.late++;});}
-    else{var cb=t.completedBy;if(cb&&!/^\(/.test(cb)){var p=ppl(cb);p.done++;p.total++;}}});
+  var d=contractDash(c),tasks=_ctScopedTasks(d),people={},fm=_ctFirstNameMap(d),pw=d.personWs||{};
+  (d.resources||[]).forEach(function(r){if(!people[r.name])people[r.name]={name:r.name,kind:r.kind||'',org:r.org||'',ws:_ctWsNorm(r.ws),active:0,inprog:0,late:0,done:0,total:0,tC:0,sC:0};});
+  function ppl(a){return people[a]||(people[a]={name:a,kind:'',org:'',ws:'',active:0,inprog:0,late:0,done:0,total:0,tC:0,sC:0});}
+  tasks.forEach(function(t){var done=_ctIsDone(t),tw=t.ws==='Transformation'?'t':(t.ws==='Support'?'s':'');
+    if(!done){_ctEffAssignees(t,fm).forEach(function(a){var p=ppl(a);p.active++;p.total++;if(t.progress==='In progress')p.inprog++;if(t.late)p.late++;if(tw==='t')p.tC++;else if(tw==='s')p.sC++;});}
+    else{var cb=t.completedBy;if(cb&&!/^\(/.test(cb)){var p=ppl(cb);p.done++;p.total++;if(tw==='t')p.tC++;else if(tw==='s')p.sC++;}}});
+  // Resolve each person's workstream: explicit personWs override → seeded resource.ws → majority of their tasks' ws.
+  Object.keys(people).forEach(function(k){var p=people[k],ov=_ctWsNorm(pw[k]);if(ov)p.ws=ov;else if(!p.ws)p.ws=p.tC>p.sC?'Transformation':(p.sC>p.tC?'Support':'');});
   return Object.keys(people).map(function(k){return people[k];}).sort(function(a,b){return b.done-a.done||b.active-a.active||a.name.localeCompare(b.name);});
 }
 function _ctTaskMiniTable(rows,mode){
@@ -5313,13 +5332,20 @@ function _contractResourceDashHTML(c){
   var names=stats.map(function(s){return s.name;});
   var sel=(names.indexOf(_ctResDashSel)>-1)?_ctResDashSel:stats[0].name;
   // Overview table of all resources
-  var tbl='<div style="font-size:14px;font-weight:700;margin-bottom:2px">Resources ('+stats.length+')</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Active load + delivery to date. Click a name to see their tasks.</div>';
+  var tCount=stats.filter(function(s){return s.ws==='Transformation';}).length,sCount=stats.filter(function(s){return s.ws==='Support';}).length;
+  var tbl='<div style="font-size:14px;font-weight:700;margin-bottom:2px">Resources ('+stats.length+') <span style="font-size:11px;font-weight:600;color:var(--text-muted)">· '+tCount+' Transformation · '+sCount+' Support</span></div><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Active load + delivery to date, grouped by workstream. Click a name to see their tasks.</div>';
+  function _resRow(p){var col=p.ws==='Transformation'?CTD.transformation:(p.ws==='Support'?CTD.support:CTD.gray);var on=p.name===sel;
+    return '<tr style="border-top:1px solid var(--border);cursor:pointer;'+(on?'background:'+CTD.support+'14':'')+'" onclick="ctResDashSel(\''+encodeURIComponent(p.name)+'\')"><td style="padding:6px 8px;font-weight:'+(on?'800':'600')+'"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+col+';margin-right:6px"></span>'+esc(p.name)+(p.kind?' <span style="font-size:9px;color:var(--text-muted)">'+esc(p.kind)+'</span>':'')+'</td><td style="padding:6px 8px">'+(p.ws?_ctPill(p.ws==='Transformation'?'T':'S',col):'<span style="color:var(--text-muted)">—</span>')+'</td><td style="padding:6px 8px;text-align:right;font-weight:700">'+p.active+'</td><td style="padding:6px 8px;text-align:right">'+p.inprog+'</td><td style="padding:6px 8px;text-align:right">'+(p.late?'<b style="color:'+CTD.red+'">'+p.late+'</b>':'0')+'</td><td style="padding:6px 8px;text-align:right;color:'+CTD.transformation+';font-weight:700">'+p.done+'</td><td style="padding:6px 8px;text-align:right;color:var(--text-muted)">'+p.total+'</td></tr>';}
+  var _grp=[['Transformation',CTD.transformation],['Support',CTD.support],['',CTD.gray]];
+  var _body=_grp.map(function(g){var sub=stats.filter(function(s){return (s.ws||'')===g[0];});if(!sub.length)return '';
+    var lbl=g[0]||'Unclassified';
+    return '<tr style="background:'+g[1]+'14"><td colspan="7" style="padding:7px 8px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:'+g[1]+'">'+esc(lbl)+' <span style="opacity:.7">('+sub.length+')</span></td></tr>'+sub.map(_resRow).join('');}).join('');
   tbl+='<div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin-bottom:20px"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:680px"><thead><tr style="text-align:left;color:var(--text-secondary);font-size:10px;text-transform:uppercase;background:var(--page-bg)"><th style="padding:7px 8px">Resource</th><th style="padding:7px 8px">WS</th><th style="padding:7px 8px;text-align:right">Active</th><th style="padding:7px 8px;text-align:right">In progress</th><th style="padding:7px 8px;text-align:right">Late</th><th style="padding:7px 8px;text-align:right">Completed</th><th style="padding:7px 8px;text-align:right">Total</th></tr></thead><tbody>'
-    +stats.map(function(p){var col=p.ws==='Transformation'?CTD.transformation:(p.ws==='Support'?CTD.support:CTD.gray);var on=p.name===sel;
-      return '<tr style="border-top:1px solid var(--border);cursor:pointer;'+(on?'background:'+CTD.support+'14':'')+'" onclick="ctResDashSel(\''+encodeURIComponent(p.name)+'\')"><td style="padding:6px 8px;font-weight:'+(on?'800':'600')+'"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+col+';margin-right:6px"></span>'+esc(p.name)+(p.kind?' <span style="font-size:9px;color:var(--text-muted)">'+esc(p.kind)+'</span>':'')+'</td><td style="padding:6px 8px">'+(p.ws?_ctPill(p.ws==='Transformation'?'T':'S',col):'<span style="color:var(--text-muted)">—</span>')+'</td><td style="padding:6px 8px;text-align:right;font-weight:700">'+p.active+'</td><td style="padding:6px 8px;text-align:right">'+p.inprog+'</td><td style="padding:6px 8px;text-align:right">'+(p.late?'<b style="color:'+CTD.red+'">'+p.late+'</b>':'0')+'</td><td style="padding:6px 8px;text-align:right;color:'+CTD.transformation+';font-weight:700">'+p.done+'</td><td style="padding:6px 8px;text-align:right;color:var(--text-muted)">'+p.total+'</td></tr>';}).join('')
+    +_body
     +'</tbody></table></div>';
   // Selected resource detail
-  var act=tasks.filter(function(t){return !_ctIsDone(t)&&(t.assignees||[]).indexOf(sel)>-1;});
+  var _fm=_ctFirstNameMap(d);
+  var act=tasks.filter(function(t){return !_ctIsDone(t)&&_ctEffAssignees(t,_fm).indexOf(sel)>-1;});
   var don=tasks.filter(function(t){return _ctIsDone(t)&&t.completedBy===sel;}).sort(function(a,b){return (_ctDueTs(b.completedDate)||0)-(_ctDueTs(a.completedDate)||0);});
   var st=stats.filter(function(s){return s.name===sel;})[0]||{};
   var picker='<select class="fld-sel" style="max-width:280px" onchange="ctResDashSel(encodeURIComponent(this.value))">'+names.map(function(n){return '<option'+(n===sel?' selected':'')+'>'+esc(n)+'</option>';}).join('')+'</select>';
@@ -7355,7 +7381,13 @@ function renderStrategyView(q){
     // the cash trajectory / ETA / guardrail at the top of the page, not just break-even.
     var _winSel=Object.keys(_stratWins).filter(function(k){return _stratWins[k];});
     var nsModel=_winSel.length?_stratCashWith(null,_stratWins):model;
-    html+=_stratNorthStarHTML(nsModel);html+=_stratBreakEvenHTML(model);html+=_stratSlipHTML(model);html+=_stratTriggersHTML(model);html+=_stratDefendHTML(model);
+    // Cut simulator overlays the whole Overview too: cuts selected in Break-even
+    // recompute every panel's cash trajectory / ETA / guardrail, not just that tab.
+    var _cutN=Object.keys(_stratCutSel).filter(function(k){return _stratCutSel[k];}).length;
+    var ovModel=_cutN?_stratCashCut(model):model;
+    var ns=_cutN?_stratCashCut(nsModel):nsModel;
+    if(_cutN)html+=_stratCutOverviewBanner(_cutN);
+    html+=_stratNorthStarHTML(ns);html+=_stratBreakEvenHTML(ovModel);html+=_stratSlipHTML(ovModel);html+=_stratTriggersHTML(ovModel);html+=_stratDefendHTML(ovModel);
   }
   else if(stratTab==='breakeven'){html+=_stratBreakdownHTML(model);}
   else if(stratTab==='projections'){html+=_stratProjectionsHTML(model);}
@@ -7819,6 +7851,30 @@ function _stratSimRows(model){
     if(anySel)_stratLadderTiers(r,roster).forEach(function(t){(t.items||[]).forEach(function(it){if(_stratCutSel[t.key+'|'+it.name])sav+=it.amount;});});
     return {y:r.y,m:r.m,profit:r.profit+sav,savings:sav};
   })};
+}
+// Full cut-applied model: same shape as _stratCash but with the selected cuts'
+// monthly savings applied and the cash trajectory (trough / gate ETA / regress)
+// recomputed, so the whole Overview reflects the simulated cuts — not just the
+// Break-even tab. Row fields (rev, overhead, otherPayroll…) are preserved; only
+// cost/profit/netCash/cashBal change. Pure overlay; nothing is persisted.
+function _stratCashCut(model){
+  if(!Object.keys(_stratCutSel).some(function(k){return _stratCutSel[k];}))return model;
+  var roster=capBuildRoster(),burden=model.burden,opening=model.opening,gate=model.gate;
+  var cash=opening,gateMet=null,trough=null,firstRegress=null;
+  var rows=(model.rows||[]).map(function(r,i){
+    var sav=0;_stratLadderTiers(r,roster).forEach(function(t){(t.items||[]).forEach(function(it){if(_stratCutSel[t.key+'|'+it.name])sav+=it.amount;});});
+    var nr={};for(var k in r)nr[k]=r[k];
+    nr.savings=sav;nr.profit=r.profit+sav;if(typeof r.cost==='number')nr.cost=r.cost-sav;
+    nr.netCash=nr.profit-burden;cash+=nr.netCash;nr.cashBal=cash;
+    if(gateMet===null&&cash>=gate)gateMet=nr;
+    if(!trough||nr.cashBal<trough.cashBal)trough=nr;
+    if(firstRegress===null&&i>0&&nr.netCash<0)firstRegress=nr;
+    return nr;
+  });
+  return {rows:rows,opening:opening,gate:gate,burden:burden,gateMet:gateMet,trough:trough,firstRegress:firstRegress,modeled:model.modeled,noDate:model.noDate};
+}
+function _stratCutOverviewBanner(n){
+  return '<div style="border:1px solid #16A34A;border-radius:8px;padding:8px 12px;margin:10px 0;background:rgba(22,163,74,0.06);font-size:12px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><div><b>Simulating '+n+' cut'+(n===1?'':'s')+'</b> — every metric and chart below reflects the selected cuts (overlay only; nothing is changed). Pick cuts in <a href="#" onclick="event.preventDefault();stratSetTab(\'breakeven\')" style="font-weight:700">Break-even</a>.</div><button class="btn btn-outline btn-sm" onclick="stratClearCuts()">Clear cuts</button></div>';
 }
 function _stratCutSimHTML(model){
   var levers=_stratCutLevers(model);
