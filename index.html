@@ -11547,6 +11547,45 @@ function pdSetAllSectionsInclude(propId,val){
   var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
   (p.sections||[]).forEach(function(s){s.include=!!val;});save();renderProposalDetail(propId);
 }
+// Parse section references out of the custom prompt — numbers like "1.2"/"1.4",
+// "Section 3", or a section title verbatim — and return the matching section ids.
+// Numbers match against the section number embedded in the title (e.g. an
+// outline-applied "Volume I · 1.2 Technical Approach").
+function _propSectionsMatchingPrompt(p,prompt){
+  var out={ids:[],titles:[]};var txt=String(prompt||'');if(!txt.trim())return out;
+  var refs={};
+  (txt.match(/\b\d+\.\d+(?:\.\d+)*\b/g)||[]).forEach(function(n){refs[n]=1;});
+  var m,re=/\bsections?\s+(\d+(?:\.\d+)*)/gi;while((m=re.exec(txt)))refs[m[1]]=1;
+  var wanted=Object.keys(refs),low=txt.toLowerCase();
+  (p.sections||[]).forEach(function(s){
+    var t=String(s.title||''),hit=false;
+    var core=t.replace(/^.*?·\s*/,'');                       // strip a "Volume … · " prefix
+    var nm=core.match(/^\s*(\d+(?:\.\d+)*)\b/);var secNum=nm?nm[1]:'';
+    wanted.forEach(function(n){
+      if(secNum&&(secNum===n||secNum.indexOf(n+'.')===0)){hit=true;return;}
+      if(n.indexOf('.')>-1&&new RegExp('(^|\\D)'+n.replace(/\./g,'\\.')+'(\\D|$)').test(t))hit=true;
+    });
+    if(!hit){var bare=core.replace(/^\s*\d+(?:\.\d+)*\s*/,'').trim().toLowerCase();if(bare.length>=5&&low.indexOf(bare)>-1)hit=true;}
+    if(hit){out.ids.push(s.id);out.titles.push(t);}
+  });
+  return out;
+}
+function pdSaveCustomPrompt(id){
+  var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
+  var el=document.getElementById('pd_custom_prompt');if(el)p.customPrompt=el.value;
+  save();var m=document.getElementById('pd_custom_msg');if(m){m.textContent='Saved ✓';setTimeout(function(){if(m)m.textContent='';},1600);}
+}
+function pdScopeSectionsFromPrompt(id){
+  var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
+  var el=document.getElementById('pd_custom_prompt');if(el)p.customPrompt=el.value;
+  if(!(p.customPrompt&&p.customPrompt.trim())){toast('Enter your instructions first — e.g. “Generate Sections 1.2 and 1.4 only”.','warn');return;}
+  var match=_propSectionsMatchingPrompt(p,p.customPrompt);
+  if(!match.ids.length){save();toast('No section numbers or titles in your instructions matched this proposal’s sections. Tick sections manually below, or reference them like “Section 1.2”.','warn');return;}
+  (p.sections||[]).forEach(function(s){s.include=match.ids.indexOf(s.id)>-1;});
+  p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'sections.scopedFromPrompt',payload:{count:match.ids.length,titles:match.titles}});
+  save();renderProposalDetail(id);
+  toast('Scoped to '+match.ids.length+' section'+(match.ids.length===1?'':'s')+': '+match.titles.join(' · '),'success');
+}
 function _pdSectionsHTML(p,tpl){
   if(!p.sections||!p.sections.length){
     if(!p.templateId){
@@ -11606,6 +11645,14 @@ function _pdSectionsHTML(p,tpl){
     +'<div style="font-size:12px;color:var(--text-muted)">Section-by-section authoring. <b>Tick a section’s checkbox to include it</b> in AI generation and the assembled proposal — <b>'+p.sections.filter(_secIncluded).length+'</b> of '+p.sections.length+' included. <a href="#" onclick="event.preventDefault();pdSetAllSectionsInclude(\''+p.id+'\',true)">Select all</a> · <a href="#" onclick="event.preventDefault();pdSetAllSectionsInclude(\''+p.id+'\',false)">None</a></div>'
     +'<div style="text-align:right"><button id="pd_gen_btn2" type="button" class="btn btn-gold btn-sm" onclick="pdGenerateFullProposal(\''+p.id+'\')" title="One click: draft every AI section from the BusDev Brief + RFP + Knowledge Bank — and follows your Custom AI instructions">&#10024; Draft All Sections</button> '+gapBtn+gapSummary+(p.customPrompt&&p.customPrompt.trim()?'<div style="font-size:10px;color:var(--text-muted);margin-top:3px">✦ Custom AI instructions will be applied</div>':'')+'<div id="pd_gen_status2" style="font-size:11px;color:#7C3AED;margin-top:4px"></div></div>'
     +'</div>'
+    +'<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;background:var(--page-bg)">'
+    +'<label class="fld-l" style="display:flex;justify-content:space-between;align-items:center;margin:0 0 4px;flex-wrap:wrap;gap:6px">&#10022; Custom AI instructions <span style="font-weight:400;color:var(--text-muted);font-size:10px">applied to every drafted section — and you can scope which sections to draft, e.g. &ldquo;Generate Sections 1.2 and 1.4 only&rdquo;</span></label>'
+    +'<textarea class="fld-i" id="pd_custom_prompt" rows="2" placeholder="e.g. Generate Sections 1.2 and 1.4 only; emphasize low-risk transition and cite DTMO past performance.">'+esc(p.customPrompt||'')+'</textarea>'
+    +'<div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap">'
+    +'<button type="button" class="btn btn-navy btn-sm" onclick="pdSaveCustomPrompt(\''+p.id+'\')">&#128190; Save instructions</button>'
+    +'<button type="button" class="btn btn-outline btn-sm" onclick="pdScopeSectionsFromPrompt(\''+p.id+'\')" title="Tick only the sections your instructions reference (by number or title); the rest are excluded from generation and the assembled proposal">&#8627; Select sections from prompt</button>'
+    +'<span id="pd_custom_msg" style="font-size:11px;color:var(--green)"></span>'
+    +'</div></div>'
     +'<div class="sec-layout">'
     +'<div class="sec-list">'+sidebar+'</div>'
     +editor
