@@ -5919,7 +5919,7 @@ function _govCardHTML(o){
     +(nb?'<span class="plan-chip" style="border-color:#DC2626;color:#DC2626;font-weight:700" title="'+esc(o.no_bid_reason||'Marked No Bid')+'">🚫 No Bid</span>':'')
     +'<span class="plan-chip">'+esc(o.source||'')+'</span></div>'+_govBidPanel(o)+'</div>'
     +'<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">'
-    +'<select class="fld-sel" style="font-size:10px;padding:3px;width:110px" onchange="govSetStage(\''+o.id+'\',this.value)">'+GOV_STAGES.map(function(s){return '<option'+(o.stage===s?' selected':'')+'>'+s+'</option>';}).join('')+'</select>'
+    +'<select class="fld-sel" style="font-size:10px;padding:3px;width:110px" onchange="govStageChange(\''+o.id+'\',this.value)">'+GOV_STAGES.map(function(s){return '<option'+(o.stage===s?' selected':'')+'>'+s+'</option>';}).join('')+'</select>'
     +'<button class="btn btn-outline btn-sm" style="font-size:10px" onclick="govToCrm(\''+o.id+'\')" title="Create a CRM opportunity from this record">→ CRM Opp</button>'
     +'<button class="btn btn-gold btn-sm" style="font-size:10px" onclick="govStartProposal(\''+o.id+'\')" title="One click: CRM opportunity + proposal pre-populated with customer, solicitation number, due date, source link">→ Start Proposal</button>'
     +(o.doc_count?'<button class="btn btn-outline btn-sm" style="font-size:10px" onclick="govShowDocs(\''+gid+'\')" title="Read the ingested RFP/RFI document text">📎 Docs ('+o.doc_count+')</button>':'')
@@ -6064,6 +6064,22 @@ function govSetNoBid(id,val){
     }).catch(function(e){toast('No-Bid update failed: '+(e.message||''),'error');});
 }
 function govSetStage(id,stage){fetch('/api/govops/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({stage:stage})}).then(function(){var o=_govState.list.find(function(x){return x.id===id;});if(o)o.stage=stage;}).catch(function(){toast('Stage update failed.','error');});}
+// Stage dropdown handler: advancing to Qualified offers to create the CRM
+// opportunity; advancing to Proposal offers to start a "To Be Drafted" proposal.
+// Both confirm first and skip if the opp was already promoted (no duplicates).
+// Decline the prompt and it just records the stage label.
+function govStageChange(id,stage){
+  var o=_govState.list.find(function(x){return x.id===id;});if(!o){govSetStage(id,stage);return;}
+  var nm=(o.title||'this opportunity').slice(0,60);
+  var hasCrm=(D.projects||[]).some(function(p){return p.govOppId===id;});
+  var hasProp=(D.proposals||[]).some(function(pr){return (pr.events||[]).some(function(e){return e.payload&&e.payload.govOppId===id;});});
+  if(stage==='qualified'&&!hasCrm){
+    if(confirm('Advance to “Qualified” and create a CRM opportunity (Lead Gen) for:\n\n'+nm+'?')){govToCrm(id);return;}
+  } else if(stage==='proposal'&&!hasProp){
+    if(confirm('Advance to “Proposal” and start a proposal — status “To Be Drafted” — for:\n\n'+nm+'?\n\nThis creates a CRM opportunity + a proposal pre-filled from this RFP.')){govStartProposal(id);return;}
+  }
+  govSetStage(id,stage);
+}
 function govArchive(id){fetch('/api/govops/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({archived:true})}).then(function(){_govState.list=_govState.list.filter(function(x){return x.id!==id;});renderView();}).catch(function(){toast('Archive failed.','error');});}
 function govSaveSearch(){
   var name=prompt('Name this saved search (the daily ingestion digest reports new matches per saved search):');
@@ -6172,7 +6188,7 @@ function govToCrm(id){
 function govStartProposal(id){
   var o=_govState.list.find(function(x){return x.id===id;});if(!o)return;
   var opp=_govMakeCrmOpp(o);
-  var prop={id:uid(),title:(o.agency?o.agency+' — ':'')+(o.title||'').slice(0,110),status:'draft',opportunityId:opp.id,templateId:'',
+  var prop={id:uid(),title:(o.agency?o.agency+' — ':'')+(o.title||'').slice(0,110),status:'to-be-drafted',opportunityId:opp.id,templateId:'',
     rfp:{customer:o.agency||'',summary:(o.description||'').slice(0,400),scope:o.description||'',pop:'',dueDate:(o.est_solicitation_date||'').slice(0,10),potentialValue:Number(o.value_high||o.value_low)||0,contractVehicle:'',setAsideType:o.set_aside||'',requirements:[],requiredCerts:[],requiredClearances:[],requiredRoles:[],deliverables:[],evaluationCriteria:[],keyDates:[],solicitationNumber:o.solnum||'',sourceUrl:o.source_url||''},
     sections:[],pastPerformance:{matches:[],generatedAt:0},
     coverSheet:{certIds:(D.corporateCertifications||[]).filter(function(c){return !c.expiresAt||new Date(c.expiresAt)>Date.now();}).map(function(c){return c.id;}),generatedAt:Date.now()},
@@ -9437,6 +9453,7 @@ function candHire(id){
 
 /* ── PROPOSALS MODULE (Phase A: foundation) ── */
 var PROP_STATUSES=[
+  {k:'to-be-drafted',l:'To Be Drafted',c:'#0D9488'},
   {k:'draft',l:'Draft',c:'#64748B'},
   {k:'in-review',l:'In Review',c:'#0EA5E9'},
   {k:'red-team',l:'Red Team',c:'#D97706'},
