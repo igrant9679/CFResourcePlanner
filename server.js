@@ -96,6 +96,14 @@ async function initDb() {
   await pool.query(`ALTER TABLE gov_opportunities ADD COLUMN IF NOT EXISTS no_bid BOOLEAN DEFAULT false`);
   await pool.query(`ALTER TABLE gov_opportunities ADD COLUMN IF NOT EXISTS no_bid_reason TEXT`);
   await pool.query(`ALTER TABLE gov_opportunities ADD COLUMN IF NOT EXISTS no_bid_at TIMESTAMPTZ`);
+  // AI Bid/No-Bid assessment (Phase 2) — composite, band, rationale, per-dimension.
+  await pool.query(`ALTER TABLE gov_opportunities ADD COLUMN IF NOT EXISTS bid_score NUMERIC`);
+  await pool.query(`ALTER TABLE gov_opportunities ADD COLUMN IF NOT EXISTS bid_band TEXT`);
+  await pool.query(`ALTER TABLE gov_opportunities ADD COLUMN IF NOT EXISTS bid_rationale TEXT`);
+  await pool.query(`ALTER TABLE gov_opportunities ADD COLUMN IF NOT EXISTS bid_dims JSONB`);
+  await pool.query(`ALTER TABLE gov_opportunities ADD COLUMN IF NOT EXISTS bid_risks JSONB`);
+  await pool.query(`ALTER TABLE gov_opportunities ADD COLUMN IF NOT EXISTS bid_scored_at TIMESTAMPTZ`);
+  await pool.query(`ALTER TABLE gov_opportunities ADD COLUMN IF NOT EXISTS bid_model TEXT`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS ingestion_runs (
       id BIGSERIAL PRIMARY KEY,
@@ -926,14 +934,16 @@ app.get('/api/govops', async (req, res) => {
     const r = await pool.query(
       `SELECT id, solnum, title, agency, sub_agency, naics, psc, set_aside, value_low, value_high, est_solicitation_date, est_award_date,
               place, poc_name, poc_email, source, source_url, notice_type, lifecycle, stage, no_bid, no_bid_reason, score, score_parts, recompete, timeline,
+              bid_score, bid_band, bid_rationale, bid_dims, bid_risks, bid_scored_at,
               left(coalesce(description,''), 600) AS description, first_seen, last_updated
        FROM gov_opportunities
        WHERE archived = ($1='1') AND ($2='' OR title ILIKE '%'||$2||'%' OR description ILIKE '%'||$2||'%' OR solnum ILIKE '%'||$2||'%')
          AND ($3='' OR agency ILIKE '%'||$3||'%') AND ($4='' OR naics LIKE $4||'%') AND ($5='' OR set_aside ILIKE '%'||$5||'%')
          AND ($6='' OR lifecycle=$6) AND ($7='' OR stage=$7) AND ($8='' OR recompete IS NOT NULL)
          AND ($11='' OR ($11='only' AND no_bid=true) OR ($11='hide' AND coalesce(no_bid,false)=false))
+         AND ($12='' OR bid_band=$12)
        ORDER BY score DESC, last_updated DESC LIMIT $9 OFFSET $10`,
-      [q.archived || '', q.q || '', q.agency || '', q.naics || '', q.setAside || '', q.lifecycle || '', q.stage || '', q.recompete || '', Math.min(Number(q.limit) || 100, 300), Number(q.offset) || 0, q.noBid || '']
+      [q.archived || '', q.q || '', q.agency || '', q.naics || '', q.setAside || '', q.lifecycle || '', q.stage || '', q.recompete || '', Math.min(Number(q.limit) || 100, 300), Number(q.offset) || 0, q.noBid || '', q.bidBand || '']
     );
     res.json(r.rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1002,6 +1012,80 @@ app.get('/api/govwin/:govwinId/docs', async (req, res) => {
     const r = await pool.query('SELECT name, kind, chars, created_at FROM gov_opp_docs WHERE govwin_id=$1 ORDER BY name', [String(req.params.govwinId || '')]);
     res.json(r.rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GovWin Bid/No-Bid AI scoring (Phase 2) ─────────────────────────────────
+// Weighted 9-dimension rubric → composite 0–100 → band. The model returns a
+// 0–5 score + justification per dimension; the composite is computed here so it
+// stays explainable and isn't subject to model arithmetic drift.
+const BID_WEIGHTS = { capabilityFit: 20, winProbability: 14, pastPerformance: 12, strategicAlignment: 12, customerRelationship: 10, eligibility: 10, teamingFit: 8, valueVsCapacity: 8, effortVsDeadline: 6 };
+const BID_DIMS = Object.keys(BID_WEIGHTS);
+function bidBand(score) { return score >= 70 ? 'Bid' : score >= 55 ? 'Likely Bid' : score >= 40 ? 'Review' : 'No-Bid'; }
+function bidKnowledgeCtx(d) {
+  const cp = (d && d.companyProfile) || {}, id = cp.identity || {}; const parts = [];
+  parts.push('COMPANY: ' + (id.legalName || 'CommunityForce') + (id.naics && id.naics.length ? ' · NAICS ' + id.naics.join(', ') : '') + (id.ownershipType ? ' · ' + id.ownershipType : ''));
+  const svc = (cp.services || []).map((s) => s.name + ((s.differentiators || []).length ? ' (' + s.differentiators.slice(0, 3).join('; ') + ')' : '')).filter(Boolean);
+  if (svc.length) parts.push('SERVICES: ' + svc.join(' | ').slice(0, 1400));
+  const diff = (cp.differentiators || []).filter(Boolean); if (diff.length) parts.push('DIFFERENTIATORS: ' + diff.join('; ').slice(0, 800));
+  const wt = (cp.winThemes || []).map((w) => typeof w === 'string' ? w : (w && w.theme)).filter(Boolean); if (wt.length) parts.push('WIN THEMES: ' + wt.join('; ').slice(0, 600));
+  const cs = (cp.caseStudies || []).slice(0, 12).map((c) => '- ' + (c.title || c.customer || '?') + (c.customer ? ' (' + c.customer + ')' : '') + (c.value ? ' $' + c.value : '') + (c.scope ? ': ' + String(c.scope).slice(0, 180) : '')); if (cs.length) parts.push('PAST PERFORMANCE / CASE STUDIES:\n' + cs.join('\n'));
+  const partners = ((d && d.partnerBank) || []).slice(0, 15).map((p) => '- ' + (p.partnerName || 'Partner') + (p.summary ? ': ' + String(p.summary).slice(0, 160) : '')); if (partners.length) parts.push('TEAMING PARTNERS (available to fill gaps):\n' + partners.join('\n'));
+  return parts.join('\n\n') || '(Company Profile is sparse — score with low confidence and flag the gaps.)';
+}
+async function bidDocExcerpt(gid, cap) {
+  const r = await pool.query("SELECT name, kind, extracted_text FROM gov_opp_docs WHERE govwin_id=$1 ORDER BY (kind='solicitation') DESC, length(coalesce(extracted_text,'')) DESC", [gid]);
+  let out = '', used = 0;
+  for (const row of r.rows) {
+    const t = String(row.extracted_text || '').trim(); if (!t || used >= cap) continue;
+    const take = t.slice(0, Math.max(0, cap - used));
+    out += '\n\n=== ' + (row.name || 'doc') + ' (' + (row.kind || '') + ') ===\n' + take; used += take.length;
+  }
+  return { text: out.trim(), docCount: r.rows.length, usedChars: used };
+}
+function bidParseJSON(text) {
+  let s = String(text || '').trim().replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```$/, '').trim();
+  const a = s.indexOf('{'), b = s.lastIndexOf('}'); if (a > -1 && b > a) s = s.slice(a, b + 1);
+  return JSON.parse(s);
+}
+app.post('/api/govwin/:id/score', async (req, res) => {
+  try {
+    const oppId = String(req.params.id || '');
+    const rr = await pool.query('SELECT * FROM gov_opportunities WHERE id=$1', [oppId]);
+    if (!rr.rows.length) return res.status(404).json({ error: 'opportunity not found' });
+    const opp = rr.rows[0];
+    const gid = (opp.raw && opp.raw.govwinId) || oppId.replace(/^govwin_/, '');
+    const prov = ((req.body && req.body.provider) || 'anthropic').toLowerCase();
+    if (!LLM_PROVIDERS[prov]) return res.status(400).json({ error: 'Unknown provider: ' + prov });
+    const apiKey = await resolveApiKey(prov, req.body && req.body.accountId);
+    if (!apiKey) return res.status(400).json({ error: `No ${LLM_PROVIDERS[prov].label} API key configured. Set ${LLM_PROVIDERS[prov].envVar} or a personal key in Admin → Integrations.` });
+    const stateR = await pool.query('SELECT data FROM app_state WHERE id=1');
+    const d = (stateR.rows[0] && stateR.rows[0].data) || {};
+    const knowledge = bidKnowledgeCtx(d);
+    const ex = await bidDocExcerpt(gid, 45000);
+    const oppBlock = 'OPPORTUNITY:\nTitle: ' + (opp.title || '') + '\nAgency: ' + (opp.agency || '') + (opp.sub_agency ? ' / ' + opp.sub_agency : '') + '\nNAICS: ' + (opp.naics || '?') + '\nSet-aside: ' + (opp.set_aside || '(none / full & open)') + '\nLifecycle: ' + (opp.lifecycle || '?') + '\nEst. value: ' + (opp.value_high ? ('$' + Number(opp.value_high).toLocaleString()) : '?') + '\nSolicitation date: ' + (opp.est_solicitation_date || '?') + '\nLink: ' + (opp.source_url || '');
+    const docBlock = ex.text ? ('RFP/RFI DOCUMENT EXCERPTS (' + ex.docCount + ' doc(s), ' + Math.round(ex.usedChars / 1000) + 'K chars):\n' + ex.text) : 'RFP/RFI DOCUMENTS: none ingested — score on metadata only and lower the confidence accordingly.';
+    const dimList = BID_DIMS.map((k) => '  "' + k + '": {"score": <0-5 integer>, "note": "<one concise sentence>"}').join(',\n');
+    const sys = "You are a senior federal capture manager performing a Bid/No-Bid assessment for CommunityForce, a government IT/software services contractor. Judge how well THIS opportunity fits CommunityForce's capabilities, past performance, eligibility, and strategy. Be specific and skeptical — do not inflate scores. Use ONLY the provided materials; never invent past performance, certifications, or customer relationships. Respond with ONLY a JSON object — no prose, no code fences.";
+    const instruction = 'Score the opportunity on each dimension 0–5 (0 = no fit / major risk, 5 = excellent fit) with a one-sentence justification grounded in the materials, then an overall rationale (2–4 sentences) and the top risks/unknowns.\n\nReturn EXACTLY this JSON shape:\n{\n"dimensions": {\n' + dimList + '\n},\n"rationale": "<2-4 sentences>",\n"risks": ["<risk>", "..."]\n}\n\nDimension meanings: capabilityFit=match to our services/NAICS/scope; pastPerformance=relevant prior work we can cite; eligibility=set-aside/clearance/qualification fit; customerRelationship=incumbency or prior work with this agency; winProbability=realistic chance vs competition/incumbent; valueVsCapacity=contract size right-sized for us; teamingFit=can a listed partner fill capability gaps; effortVsDeadline=proposal effort vs time available; strategicAlignment=fit to our growth strategy.\n\n=== CFORCE KNOWLEDGE ===\n' + knowledge + '\n\n=== ' + oppBlock + '\n\n' + docBlock;
+    const params = { apiKey, model: req.body && req.body.model, system: sys, messages: [{ role: 'user', content: instruction }], max_tokens: 1500 };
+    let json;
+    if (prov === 'openai') json = await callOpenAI(params);
+    else if (prov === 'google') json = await callGoogle(params);
+    else json = await callAnthropic(params);
+    const txt = (json.content && json.content[0] && json.content[0].text) || '';
+    let parsed; try { parsed = bidParseJSON(txt); } catch (e) { return res.status(502).json({ error: 'Could not parse AI response as JSON: ' + e.message, raw: txt.slice(0, 400) }); }
+    const dims = parsed.dimensions || {};
+    let composite = 0; const cleanDims = {};
+    for (const k of BID_DIMS) { const ds = dims[k] || {}; const sc = Math.max(0, Math.min(5, Number(ds.score) || 0)); cleanDims[k] = { score: sc, note: String(ds.note || '').slice(0, 300) }; composite += (sc / 5) * BID_WEIGHTS[k]; }
+    composite = Math.round(composite);
+    const band = bidBand(composite);
+    const risks = Array.isArray(parsed.risks) ? parsed.risks.map((r) => String(r).slice(0, 300)).slice(0, 8) : [];
+    const rationale = String(parsed.rationale || '').slice(0, 2000);
+    const usedModel = json.model || (req.body && req.body.model) || LLM_PROVIDERS[prov].defaultModel;
+    await pool.query('UPDATE gov_opportunities SET bid_score=$2, bid_band=$3, bid_rationale=$4, bid_dims=$5, bid_risks=$6, bid_model=$7, bid_scored_at=now(), last_updated=now() WHERE id=$1',
+      [oppId, composite, band, rationale, JSON.stringify(cleanDims), JSON.stringify(risks), String(usedModel)]);
+    res.json({ id: oppId, bid_score: composite, bid_band: band, bid_dims: cleanDims, bid_rationale: rationale, bid_risks: risks, bid_model: usedModel, docCount: ex.docCount, usedChars: ex.usedChars });
+  } catch (e) { console.error('bid score failed:', e.message); res.status(e.status || 500).json(e.body || { error: e.message }); }
 });
 // One-off pull of a single URL source (used by the Sources manager "Test now").
 app.post('/api/govops/ingest-url', async (req, res) => {

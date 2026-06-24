@@ -5798,7 +5798,7 @@ function prospectConvert(id){
 /* ── GOV DISCOVERY (Module 1 client) — SAM.gov + forecast imports + recompete
    flags, scored against the Company Profile, feeding the CRM pipeline and the
    proposal workflow. Records live server-side in gov_opportunities. ── */
-var _govState={list:[],loaded:false,busy:false,runs:[],showRuns:false,filters:{q:'',agency:'',naics:'',setAside:'',lifecycle:'',stage:'',recompete:'',noBid:''}};
+var _govState={list:[],loaded:false,busy:false,runs:[],showRuns:false,filters:{q:'',agency:'',naics:'',setAside:'',lifecycle:'',stage:'',recompete:'',noBid:'',bidBand:''}};
 var GOV_STAGES=['identified','qualified','capture','proposal','submitted','won','lost'];
 function _govPipe(){D.govPipeline=D.govPipeline||{searches:[],settings:{}};return D.govPipeline;}
 function _govLoad(){
@@ -5821,6 +5821,7 @@ function _govDiscoveryHTML(){
     +'<button class="btn btn-gold btn-sm" id="gov_ingest_btn" onclick="govIngestNow()">⟳ Run ingestion now</button>'
     +'<button class="btn btn-outline btn-sm" onclick="govImportModal()">⬆ Import forecast CSV/XLSX</button>'
     +'<button class="btn btn-outline btn-sm" onclick="govImportGovwinCsv()" title="Upload the GovWin index.csv manifest as a quick top-up. The scheduled local sync handles documents + full automation.">📋 Import GovWin index.csv</button>'
+    +'<button class="btn btn-gold btn-sm" onclick="govScoreAllUnscored()" title="AI Bid/No-Bid assessment for every not-yet-scored opportunity in the current list — one LLM call each, against the RFP docs + Company Profile">⚖ Score unscored</button>'
     +'<button class="btn btn-outline btn-sm" onclick="govSourcesModal()">⚙ Sources</button>'
     +'<button class="btn btn-outline btn-sm" onclick="_govState.showRuns=!_govState.showRuns;renderView()">'+(_govState.showRuns?'Hide':'Show')+' ingestion log</button>'
     +'</div></div>'
@@ -5844,6 +5845,7 @@ function _govDiscoveryHTML(){
     +'<select class="fld-sel" style="width:auto" onchange="_govState.filters.stage=this.value;_govLoad()"><option value="">Any stage</option>'+GOV_STAGES.map(function(s){return '<option'+(f.stage===s?' selected':'')+'>'+s+'</option>';}).join('')+'</select>'
     +'<label style="font-size:11px;display:inline-flex;gap:4px;align-items:center"><input type="checkbox" '+(f.recompete?'checked':'')+' onchange="_govState.filters.recompete=this.checked?\'1\':\'\';_govLoad()"> recompetes</label>'
     +'<select class="fld-sel" style="width:auto" onchange="_govState.filters.noBid=this.value;_govLoad()" title="Show, hide, or isolate opportunities marked No Bid"><option value="">No Bid: show all</option><option value="hide"'+(f.noBid==='hide'?' selected':'')+'>Hide No Bid</option><option value="only"'+(f.noBid==='only'?' selected':'')+'>Only No Bid</option></select>'
+    +'<select class="fld-sel" style="width:auto" onchange="_govState.filters.bidBand=this.value;_govLoad()" title="Filter by AI Bid/No-Bid band"><option value="">Bid band: any</option>'+['Bid','Likely Bid','Review','No-Bid'].map(function(b){return '<option'+(f.bidBand===b?' selected':'')+'>'+b+'</option>';}).join('')+'</select>'
     +'<button class="btn btn-outline btn-sm" onclick="govSaveSearch()">★ Save search</button>'
     +(gp.searches||[]).map(function(s){return '<span class="plan-chip" style="cursor:pointer" onclick="govApplySearch(\''+s.id+'\')" title="Apply saved search — daily ingestion reports new matches per saved search">'+esc(s.name)+' <span onclick="event.stopPropagation();govDelSearch(\''+s.id+'\')" style="color:var(--red);font-weight:800">&times;</span></span>';}).join('')
     +'</div>';
@@ -5852,9 +5854,20 @@ function _govDiscoveryHTML(){
   else html+=list.map(_govCardHTML).join('');
   return html+'</div>';
 }
+function _govBidColor(b){return {'Bid':'#16A34A','Likely Bid':'#2563EB','Review':'#D97706','No-Bid':'#DC2626'}[b]||'#64748b';}
+function _govBidPanel(o){
+  if(!o.bid_band)return '';
+  var c=_govBidColor(o.bid_band),dims=o.bid_dims||{};
+  var dimRow=Object.keys(dims).map(function(k){var s=dims[k]&&dims[k].score||0;return '<span title="'+esc(dims[k]&&dims[k].note||'')+'" style="display:inline-block;font-size:9px;color:var(--text-muted);margin:0 8px 2px 0">'+esc(k)+' <b style="color:'+(s>=4?'#16A34A':s>=2.5?'#D97706':'#DC2626')+'">'+s+'/5</b></span>';}).join('');
+  var risks=(o.bid_risks||[]).length?'<div style="font-size:10px;color:#B91C1C;margin-top:3px">⚠ '+(o.bid_risks||[]).map(esc).join(' · ')+'</div>':'';
+  return '<div style="margin-top:6px;border-left:3px solid '+c+';background:'+c+'14;padding:6px 9px;border-radius:0 6px 6px 0">'
+    +'<div style="font-size:11px"><b style="color:'+c+'">⚖ '+esc(o.bid_band)+' · '+Math.round(o.bid_score||0)+'/100</b>'+(o.bid_rationale?' <span style="color:var(--text-secondary)">— '+esc(o.bid_rationale)+'</span>':'')+'</div>'
+    +(dimRow?'<div style="margin-top:4px">'+dimRow+'</div>':'')+risks+'</div>';
+}
 function _govCardHTML(o){
   var sc=Math.round(o.score||0);
   var nb=!!o.no_bid;
+  var bb=o.bid_band;
   var scC=sc>=70?'var(--green)':sc>=40?'#D97706':'var(--text-muted)';
   var lc={'forecast':'#64748b','sources-sought':'#0EA5E9','presolicitation':'#7C3AED','solicitation':'#C5A55A','special':'#64748b'}[o.lifecycle]||'#64748b';
   var rec=o.recompete?'<span class="plan-chip" style="border-color:var(--red);color:var(--red)" title="Incumbent contract expiring — '+esc(o.recompete.incumbent||'')+' · ends '+esc(o.recompete.endDate||'')+'">↻ recompete: '+esc((o.recompete.incumbent||'').slice(0,24))+'</span>':'';
@@ -5868,12 +5881,14 @@ function _govCardHTML(o){
     +'<div class="plan-meta" style="margin-top:6px"><span class="plan-chip" style="border-color:'+lc+';color:'+lc+'">'+esc(o.lifecycle||'?')+'</span>'+val+rec+tl
     +(o.est_solicitation_date?'<span class="plan-chip">📅 '+esc(String(o.est_solicitation_date).slice(0,10))+'</span>':'')
     +'<span class="plan-chip" title="'+esc(JSON.stringify(o.score_parts||{}))+'" style="border-color:'+scC+';color:'+scC+';font-weight:700">fit '+sc+'</span>'
+    +(bb?'<span class="plan-chip" style="border-color:'+_govBidColor(bb)+';color:'+_govBidColor(bb)+';font-weight:700" title="'+esc(o.bid_rationale||'')+'">⚖ '+esc(bb)+' '+Math.round(o.bid_score||0)+'</span>':'')
     +(nb?'<span class="plan-chip" style="border-color:#DC2626;color:#DC2626;font-weight:700" title="'+esc(o.no_bid_reason||'Marked No Bid')+'">🚫 No Bid</span>':'')
-    +'<span class="plan-chip">'+esc(o.source||'')+'</span></div></div>'
+    +'<span class="plan-chip">'+esc(o.source||'')+'</span></div>'+_govBidPanel(o)+'</div>'
     +'<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">'
     +'<select class="fld-sel" style="font-size:10px;padding:3px;width:110px" onchange="govSetStage(\''+o.id+'\',this.value)">'+GOV_STAGES.map(function(s){return '<option'+(o.stage===s?' selected':'')+'>'+s+'</option>';}).join('')+'</select>'
     +'<button class="btn btn-outline btn-sm" style="font-size:10px" onclick="govToCrm(\''+o.id+'\')" title="Create a CRM opportunity from this record">→ CRM Opp</button>'
     +'<button class="btn btn-gold btn-sm" style="font-size:10px" onclick="govStartProposal(\''+o.id+'\')" title="One click: CRM opportunity + proposal pre-populated with customer, solicitation number, due date, source link">→ Start Proposal</button>'
+    +'<button class="btn btn-outline btn-sm" style="font-size:10px" onclick="govScoreBid(\''+o.id+'\')" title="AI Bid/No-Bid assessment from the RFP docs + Company Profile">⚖ '+(bb?'Re-score':'Score')+'</button>'
     +'<button class="btn btn-sm" style="font-size:10px;'+(nb?'background:#16A34A;color:#fff;border-color:#16A34A;':'background:#FEE2E2;color:#B91C1C;border-color:#FCA5A5;')+'" onclick="govSetNoBid(\''+o.id+'\','+(nb?'false':'true')+')" title="'+(nb?'Click to undo No-Bid':'Mark as No Bid — we will not pursue this')+'">'+(nb?'↩ Un-No-Bid':'🚫 No Bid')+'</button>'
     +'<button class="btn btn-sec btn-sm" style="font-size:10px" onclick="govArchive(\''+o.id+'\')">Archive</button>'
     +'</div></div></div>';
@@ -5956,6 +5971,48 @@ function _govParseCSV(text){
     else cur+=c;}
   if(cur.length||row.length){row.push(cur);rows.push(row);}
   return rows.filter(function(r){return r.length&&r.some(function(x){return x!=='';});});
+}
+// AI Bid/No-Bid scoring (Phase 2). Server assembles the opp + its ingested RFP
+// text + Company Profile/partner knowledge, runs the 9-dimension rubric via the
+// LLM, and persists the band/score/rationale. _govScoreOne updates local state;
+// callers re-render.
+function _govScoreOne(id){
+  return fetch('/api/govwin/'+id+'/score',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})})
+    .then(function(r){return r.json();}).then(function(j){
+      if(j&&j.error)throw new Error(j.error);
+      var o=_govState.list.find(function(x){return x.id===id;});
+      if(o){o.bid_band=j.bid_band;o.bid_score=j.bid_score;o.bid_dims=j.bid_dims;o.bid_rationale=j.bid_rationale;o.bid_risks=j.bid_risks;}
+      return j;
+    });
+}
+function govScoreBid(id){
+  var st=document.getElementById('gov_status');if(st)st.textContent='Scoring with AI…';
+  _govScoreOne(id).then(function(j){renderView();if(st)st.textContent='Scored: '+j.bid_band+' ('+Math.round(j.bid_score)+'/100).';})
+    .catch(function(e){if(st)st.textContent='';toast('Scoring failed: '+(e.message||''),'error');});
+}
+function govScoreAllUnscored(){
+  var todo=_govState.list.filter(function(o){return !o.bid_band && /^govwin_/.test(o.id);});
+  if(!todo.length){toast('Every opportunity in the current view is already scored.','success');return;}
+  if(!confirm('AI-score '+todo.length+' unscored opportunit'+(todo.length===1?'y':'ies')+'?\n\nThis calls the LLM once per opportunity (cost + a few minutes). Already-scored items are skipped, and each result is saved as it completes — you can navigate away and the scores persist.'))return;
+  var st=document.getElementById('gov_status');
+  var i=0,done=0,fail=0,conc=3,running=0,finished=false;
+  function tick(){
+    if(done+fail>=todo.length){
+      if(finished)return;finished=true;renderView();
+      toast('Bid scoring complete: '+done+' scored'+(fail?', '+fail+' failed':'')+'.',fail?'warn':'success');
+      if(st)st.textContent='Scored '+done+'/'+todo.length+(fail?(' · '+fail+' failed'):'')+'.';
+    } else {
+      if(st)st.textContent='Scoring… '+(done+fail)+'/'+todo.length+(fail?(' · '+fail+' failed'):'');
+      if((done+fail)%5===0)renderView();
+    }
+  }
+  function pump(){
+    while(running<conc&&i<todo.length){
+      var o=todo[i++];running++;
+      _govScoreOne(o.id).then(function(){done++;},function(){fail++;}).then(function(){running--;tick();pump();});
+    }
+  }
+  pump();
 }
 // Mark / unmark a Gov Discovery opportunity as "No Bid" (we will not pursue it).
 function govSetNoBid(id,val){
