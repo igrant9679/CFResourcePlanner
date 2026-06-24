@@ -3201,6 +3201,8 @@ function renderContractsView(q){
 }
 function _contractStaffHTML(c){
   var pos=c.positions||[];
+  _ctOyDeltaMap=_ctBuildOyDelta(c);
+  var _ctHasBothOy=pos.some(function(p){return p.oy==='OY2';})&&pos.some(function(p){return p.oy==='OY3';});
   // Default the option-year filter to the latest OY when a contract spans multiple
   // years, so KPIs reflect a single year (not OY2 + OY3 summed simultaneously).
   var oys=[];pos.forEach(function(p){if(p.oy&&oys.indexOf(p.oy)===-1)oys.push(p.oy);});oys.sort();
@@ -3257,7 +3259,7 @@ function _contractStaffHTML(c){
   }).join('');
   if(!groups.length)tableHTML='<div class="empty-msg">No positions'+(anyFilter?' match the filters':' yet — click + Position or import a workbook')+'.</div>';
   var oyBar=ud('oy').length?'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px"><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Option year</span>'+fsel('oy','All option years',ud('oy'))+'</div>':'';
-  return oyBar+kpis+coRollup+filters+groupBar+'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:6px">Positions by '+esc(GLBL.toLowerCase())+'</div>'+tableHTML;
+  return oyBar+kpis+coRollup+filters+groupBar+'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:6px">Positions by '+esc(GLBL.toLowerCase())+'</div>'+(_ctHasBothOy?'<div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;display:flex;gap:14px;flex-wrap:wrap;align-items:center"><b style="text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary)">OY2→OY3 changes</b><span style="border-left:3px solid #16A34A;padding-left:5px">NEW in OY3</span><span style="border-left:3px solid #D97706;padding-left:5px">FTE / company changed</span><span style="border-left:3px solid #DC2626;padding-left:5px">removed in OY3</span></div>':'')+tableHTML;
 }
 // Inline edit of a position field. fte/rate recompute annual; annual can be
 // overridden directly. Re-renders so the (read-only) totals refresh.
@@ -3291,13 +3293,45 @@ function _ctPersonHTML(c,fpos){
       +'<div style="padding:4px 14px 10px">'+body+'</div></div>';
   }).join('');
 }
+// OY2→OY3 delta highlighting (computed live, no data write). Compares the two
+// option years by resource and flags NEW / FTE-or-company-changed / removed.
+// Company designation suffixes (Prime/Sub/1099/Employees) are normalized out so
+// label-only relabels don't read as real moves. Empty unless BOTH years exist.
+var _ctOyDeltaMap={};
+function _ctNormName(s){return String(s||'').trim().toLowerCase().replace(/\s+/g,' ');}
+function _ctNormCo(s){return String(s||'').toLowerCase().replace(/\([^)]*\)/g,'').replace(/employees|1099|subcontractor|contractor|prime/g,'').replace(/forwardedge/g,'forward edge').replace(/\s+/g,' ').trim();}
+function _ctBuildOyDelta(c){
+  var a={},b={};
+  (c.positions||[]).forEach(function(p){
+    var oy=p.oy||'';if(oy!=='OY2'&&oy!=='OY3')return;
+    var k=_ctNormName(p.resource);if(!k)return;
+    var m=(oy==='OY2')?a:b;if(!m[k])m[k]={fte:0,co:''};
+    m[k].fte+=Number(p.fte)||0;if(p.company)m[k].co=_ctNormCo(p.company);
+  });
+  if(!Object.keys(a).length||!Object.keys(b).length)return {};
+  var map={};
+  Object.keys(b).forEach(function(k){
+    if(!a[k]){map[k]={t:'new',label:'NEW in OY3'};return;}
+    var parts=[];
+    if(a[k].fte!==b[k].fte)parts.push('FTE '+a[k].fte+'→'+b[k].fte);
+    if(a[k].co&&b[k].co&&a[k].co!==b[k].co)parts.push(a[k].co+'→'+b[k].co);
+    if(parts.length)map[k]={t:'chg',label:'vs OY2: '+parts.join(' · ')};
+  });
+  Object.keys(a).forEach(function(k){if(!b[k])map[k]={t:'rem',label:'removed in OY3 (OY2-only)'};});
+  return map;
+}
 function _ctPosRow(c,p,i){
   var bg=(i%2)?'background:var(--page-bg);':'';
+  var _dz=_ctOyDeltaMap[_ctNormName(p.resource)],_acc='',_dnote='';
+  if(_dz){
+    if(p.oy==='OY3'&&(_dz.t==='new'||_dz.t==='chg')){_acc=(_dz.t==='new')?'#16A34A':'#D97706';_dnote=_dz.label;}
+    else if(p.oy==='OY2'&&_dz.t==='rem'){_acc='#DC2626';_dnote=_dz.label;}
+  }
   function cin(field,type){var v=p[field]==null?'':p[field];return '<input class="ct-cell'+(type==='number'?' num':'')+'" type="'+(type||'text')+'"'+(type==='number'?' step="any"':'')+' value="'+esc(String(v))+'" onchange="contractUpdatePos(\''+c.id+'\',\''+p.id+'\',\''+field+'\',this.value)">';}
   var stSel='<select class="ct-cell" onchange="contractUpdatePos(\''+c.id+'\',\''+p.id+'\',\'status\',this.value)">'+['Filled','TBH','TBD','Reserve'].map(function(s){return '<option'+((p.status||'Filled')===s?' selected':'')+'>'+s+'</option>';}).join('')+'</select>';
   var bridge=(p.status==='TBH'||p.status==='TBD')?'<button class="btn btn-outline btn-sm" style="font-size:9px;padding:1px 6px" onclick="contractPosToRecruiting(\''+c.id+'\',\''+p.id+'\')" title="Create a Recruiting requisition from this open position (one-way)">&rarr; Req</button> ':'';
   return '<tr style="border-top:1px solid var(--border);'+bg+'">'
-    +'<td style="padding:2px 4px;min-width:140px">'+cin('resource')+'</td>'
+    +'<td style="padding:2px 4px;min-width:140px'+(_acc?';border-left:3px solid '+_acc:'')+'">'+cin('resource')+(_dnote?'<div style="font-size:9px;font-weight:700;color:'+_acc+';margin-top:1px" title="Option-year change">'+esc(_dnote)+'</div>':'')+'</td>'
     +'<td style="padding:2px 4px;min-width:130px">'+cin('contractorLead')+'</td>'
     +'<td style="padding:2px 4px;min-width:120px">'+cin('lcat')+'</td>'
     +'<td style="padding:2px 4px;min-width:130px">'+cin('company')+'</td>'
