@@ -3327,6 +3327,9 @@ function _ctPosRow(c,p,i){
     if(p.oy==='OY3'&&(_dz.t==='new'||_dz.t==='chg')){_acc=(_dz.t==='new')?'#16A34A':'#D97706';_dnote=_dz.label;}
     else if(p.oy==='OY2'&&_dz.t==='rem'){_acc='#DC2626';_dnote=_dz.label;}
   }
+  // Explicit review markup (e.g. reconciliation vs the latest org chart) takes
+  // priority over the computed OY2→OY3 delta. add=green, change=amber, review/remove=red.
+  if(p.review&&p.review.note){_acc=({add:'#16A34A',change:'#D97706',review:'#DC2626',remove:'#DC2626'}[p.review.flag])||'#DC2626';_dnote='⚑ '+p.review.note;}
   function cin(field,type){var v=p[field]==null?'':p[field];return '<input class="ct-cell'+(type==='number'?' num':'')+'" type="'+(type||'text')+'"'+(type==='number'?' step="any"':'')+' value="'+esc(String(v))+'" onchange="contractUpdatePos(\''+c.id+'\',\''+p.id+'\',\''+field+'\',this.value)">';}
   var stSel='<select class="ct-cell" onchange="contractUpdatePos(\''+c.id+'\',\''+p.id+'\',\'status\',this.value)">'+['Filled','TBH','TBD','Reserve'].map(function(s){return '<option'+((p.status||'Filled')===s?' selected':'')+'>'+s+'</option>';}).join('')+'</select>';
   var bridge=(p.status==='TBH'||p.status==='TBD')?'<button class="btn btn-outline btn-sm" style="font-size:9px;padding:1px 6px" onclick="contractPosToRecruiting(\''+c.id+'\',\''+p.id+'\')" title="Create a Recruiting requisition from this open position (one-way)">&rarr; Req</button> ':'';
