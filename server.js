@@ -1045,7 +1045,7 @@ async function bidDocExcerpt(gid, cap) {
 function bidParseJSON(text) {
   let s = String(text || '').trim().replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```$/, '').trim();
   const a = s.indexOf('{'), b = s.lastIndexOf('}'); if (a > -1 && b > a) s = s.slice(a, b + 1);
-  return JSON.parse(s);
+  try { return JSON.parse(s); } catch (e) { return JSON.parse(s.replace(/,\s*([}\]])/g, '$1')); }  // tolerate trailing commas
 }
 app.post('/api/govwin/:id/score', async (req, res) => {
   try {
@@ -1066,14 +1066,14 @@ app.post('/api/govwin/:id/score', async (req, res) => {
     const docBlock = ex.text ? ('RFP/RFI DOCUMENT EXCERPTS (' + ex.docCount + ' doc(s), ' + Math.round(ex.usedChars / 1000) + 'K chars):\n' + ex.text) : 'RFP/RFI DOCUMENTS: none ingested — score on metadata only and lower the confidence accordingly.';
     const dimList = BID_DIMS.map((k) => '  "' + k + '": {"score": <0-5 integer>, "note": "<one concise sentence>"}').join(',\n');
     const sys = "You are a senior federal capture manager performing a Bid/No-Bid assessment for CommunityForce, a government IT/software services contractor. Judge how well THIS opportunity fits CommunityForce's capabilities, past performance, eligibility, and strategy. Be specific and skeptical — do not inflate scores. Use ONLY the provided materials; never invent past performance, certifications, or customer relationships. Respond with ONLY a JSON object — no prose, no code fences.";
-    const instruction = 'Score the opportunity on each dimension 0–5 (0 = no fit / major risk, 5 = excellent fit) with a one-sentence justification grounded in the materials, then an overall rationale (2–4 sentences) and the top risks/unknowns.\n\nReturn EXACTLY this JSON shape:\n{\n"dimensions": {\n' + dimList + '\n},\n"rationale": "<2-4 sentences>",\n"risks": ["<risk>", "..."]\n}\n\nDimension meanings: capabilityFit=match to our services/NAICS/scope; pastPerformance=relevant prior work we can cite; eligibility=set-aside/clearance/qualification fit; customerRelationship=incumbency or prior work with this agency; winProbability=realistic chance vs competition/incumbent; valueVsCapacity=contract size right-sized for us; teamingFit=can a listed partner fill capability gaps; effortVsDeadline=proposal effort vs time available; strategicAlignment=fit to our growth strategy.\n\n=== CFORCE KNOWLEDGE ===\n' + knowledge + '\n\n=== ' + oppBlock + '\n\n' + docBlock;
-    const params = { apiKey, model: req.body && req.body.model, system: sys, messages: [{ role: 'user', content: instruction }], max_tokens: 1500 };
+    const instruction = 'Score the opportunity on each dimension 0–5 (0 = no fit / major risk, 5 = excellent fit) with a one-sentence justification grounded in the materials, then an overall rationale (2–4 sentences) and the top risks/unknowns.\n\nReturn EXACTLY this JSON shape:\n{\n"dimensions": {\n' + dimList + '\n},\n"rationale": "<2-4 sentences>",\n"risks": ["<risk>", "..."]\n}\n\nKeep each note under 18 words. Output ONLY the JSON object (minified is fine); never put unescaped double-quotes or line breaks inside string values.\n\nDimension meanings: capabilityFit=match to our services/NAICS/scope; pastPerformance=relevant prior work we can cite; eligibility=set-aside/clearance/qualification fit; customerRelationship=incumbency or prior work with this agency; winProbability=realistic chance vs competition/incumbent; valueVsCapacity=contract size right-sized for us; teamingFit=can a listed partner fill capability gaps; effortVsDeadline=proposal effort vs time available; strategicAlignment=fit to our growth strategy.\n\n=== CFORCE KNOWLEDGE ===\n' + knowledge + '\n\n=== ' + oppBlock + '\n\n' + docBlock;
+    const params = { apiKey, model: req.body && req.body.model, system: sys, messages: [{ role: 'user', content: instruction }], max_tokens: 3000 };
     let json;
     if (prov === 'openai') json = await callOpenAI(params);
     else if (prov === 'google') json = await callGoogle(params);
     else json = await callAnthropic(params);
     const txt = (json.content && json.content[0] && json.content[0].text) || '';
-    let parsed; try { parsed = bidParseJSON(txt); } catch (e) { return res.status(502).json({ error: 'Could not parse AI response as JSON: ' + e.message, raw: txt.slice(0, 400) }); }
+    let parsed; try { parsed = bidParseJSON(txt); } catch (e) { return res.status(502).json({ error: 'Could not parse AI response as JSON: ' + e.message, raw: txt.slice(0, 1500) }); }
     const dims = parsed.dimensions || {};
     let composite = 0; const cleanDims = {};
     for (const k of BID_DIMS) { const ds = dims[k] || {}; const sc = Math.max(0, Math.min(5, Number(ds.score) || 0)); cleanDims[k] = { score: sc, note: String(ds.note || '').slice(0, 300) }; composite += (sc / 5) * BID_WEIGHTS[k]; }
