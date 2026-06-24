@@ -5798,7 +5798,7 @@ function prospectConvert(id){
 /* ── GOV DISCOVERY (Module 1 client) — SAM.gov + forecast imports + recompete
    flags, scored against the Company Profile, feeding the CRM pipeline and the
    proposal workflow. Records live server-side in gov_opportunities. ── */
-var _govState={list:[],loaded:false,busy:false,runs:[],showRuns:false,filters:{q:'',agency:'',naics:'',setAside:'',lifecycle:'',stage:'',recompete:''}};
+var _govState={list:[],loaded:false,busy:false,runs:[],showRuns:false,filters:{q:'',agency:'',naics:'',setAside:'',lifecycle:'',stage:'',recompete:'',noBid:''}};
 var GOV_STAGES=['identified','qualified','capture','proposal','submitted','won','lost'];
 function _govPipe(){D.govPipeline=D.govPipeline||{searches:[],settings:{}};return D.govPipeline;}
 function _govLoad(){
@@ -5843,6 +5843,7 @@ function _govDiscoveryHTML(){
     +'<select class="fld-sel" style="width:auto" onchange="_govState.filters.lifecycle=this.value;_govLoad()"><option value="">Any lifecycle</option>'+['forecast','sources-sought','presolicitation','solicitation','special'].map(function(l){return '<option'+(f.lifecycle===l?' selected':'')+'>'+l+'</option>';}).join('')+'</select>'
     +'<select class="fld-sel" style="width:auto" onchange="_govState.filters.stage=this.value;_govLoad()"><option value="">Any stage</option>'+GOV_STAGES.map(function(s){return '<option'+(f.stage===s?' selected':'')+'>'+s+'</option>';}).join('')+'</select>'
     +'<label style="font-size:11px;display:inline-flex;gap:4px;align-items:center"><input type="checkbox" '+(f.recompete?'checked':'')+' onchange="_govState.filters.recompete=this.checked?\'1\':\'\';_govLoad()"> recompetes</label>'
+    +'<select class="fld-sel" style="width:auto" onchange="_govState.filters.noBid=this.value;_govLoad()" title="Show, hide, or isolate opportunities marked No Bid"><option value="">No Bid: show all</option><option value="hide"'+(f.noBid==='hide'?' selected':'')+'>Hide No Bid</option><option value="only"'+(f.noBid==='only'?' selected':'')+'>Only No Bid</option></select>'
     +'<button class="btn btn-outline btn-sm" onclick="govSaveSearch()">★ Save search</button>'
     +(gp.searches||[]).map(function(s){return '<span class="plan-chip" style="cursor:pointer" onclick="govApplySearch(\''+s.id+'\')" title="Apply saved search — daily ingestion reports new matches per saved search">'+esc(s.name)+' <span onclick="event.stopPropagation();govDelSearch(\''+s.id+'\')" style="color:var(--red);font-weight:800">&times;</span></span>';}).join('')
     +'</div>';
@@ -5853,12 +5854,13 @@ function _govDiscoveryHTML(){
 }
 function _govCardHTML(o){
   var sc=Math.round(o.score||0);
+  var nb=!!o.no_bid;
   var scC=sc>=70?'var(--green)':sc>=40?'#D97706':'var(--text-muted)';
   var lc={'forecast':'#64748b','sources-sought':'#0EA5E9','presolicitation':'#7C3AED','solicitation':'#C5A55A','special':'#64748b'}[o.lifecycle]||'#64748b';
   var rec=o.recompete?'<span class="plan-chip" style="border-color:var(--red);color:var(--red)" title="Incumbent contract expiring — '+esc(o.recompete.incumbent||'')+' · ends '+esc(o.recompete.endDate||'')+'">↻ recompete: '+esc((o.recompete.incumbent||'').slice(0,24))+'</span>':'';
   var val=(o.value_low||o.value_high)?'<span class="plan-chip" style="border-color:var(--gold);color:var(--gold)">'+(o.value_low?fmt(Number(o.value_low)):'?')+(o.value_high&&o.value_high!==o.value_low?' – '+fmt(Number(o.value_high)):'')+'</span>':'';
   var tl=(o.timeline||[]).length>1?'<span class="plan-chip" title="'+esc((o.timeline||[]).map(function(t){return t.notice_type+' ('+String(t.at).slice(0,10)+')';}).join(' → '))+'">'+(o.timeline.length)+' lifecycle events</span>':'';
-  return '<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:#fff">'
+  return '<div style="border:1px solid '+(nb?'#FCA5A5':'var(--border)')+';border-radius:8px;padding:10px 12px;margin-bottom:8px;background:'+(nb?'#FEF2F2':'#fff')+(nb?';opacity:.9':'')+'">'
     +'<div style="display:flex;gap:8px;align-items:flex-start"><div style="flex:1">'
     +'<div style="font-size:13px;font-weight:700">'+(o.source_url?'<a href="'+esc(o.source_url)+'" target="_blank" style="color:var(--navy);text-decoration:none">'+esc(o.title)+' ↗</a>':esc(o.title))+'</div>'
     +'<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+esc(o.agency||'')+(o.sub_agency?' · '+esc(o.sub_agency):'')+(o.solnum?' · '+esc(o.solnum):'')+(o.naics?' · NAICS '+esc(o.naics):'')+(o.set_aside?' · '+esc(o.set_aside):'')+(o.poc_name?' · POC: '+esc(o.poc_name)+(o.poc_email?' ('+esc(o.poc_email)+')':''):'')+'</div>'
@@ -5866,11 +5868,13 @@ function _govCardHTML(o){
     +'<div class="plan-meta" style="margin-top:6px"><span class="plan-chip" style="border-color:'+lc+';color:'+lc+'">'+esc(o.lifecycle||'?')+'</span>'+val+rec+tl
     +(o.est_solicitation_date?'<span class="plan-chip">📅 '+esc(String(o.est_solicitation_date).slice(0,10))+'</span>':'')
     +'<span class="plan-chip" title="'+esc(JSON.stringify(o.score_parts||{}))+'" style="border-color:'+scC+';color:'+scC+';font-weight:700">fit '+sc+'</span>'
+    +(nb?'<span class="plan-chip" style="border-color:#DC2626;color:#DC2626;font-weight:700" title="'+esc(o.no_bid_reason||'Marked No Bid')+'">🚫 No Bid</span>':'')
     +'<span class="plan-chip">'+esc(o.source||'')+'</span></div></div>'
     +'<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">'
     +'<select class="fld-sel" style="font-size:10px;padding:3px;width:110px" onchange="govSetStage(\''+o.id+'\',this.value)">'+GOV_STAGES.map(function(s){return '<option'+(o.stage===s?' selected':'')+'>'+s+'</option>';}).join('')+'</select>'
     +'<button class="btn btn-outline btn-sm" style="font-size:10px" onclick="govToCrm(\''+o.id+'\')" title="Create a CRM opportunity from this record">→ CRM Opp</button>'
     +'<button class="btn btn-gold btn-sm" style="font-size:10px" onclick="govStartProposal(\''+o.id+'\')" title="One click: CRM opportunity + proposal pre-populated with customer, solicitation number, due date, source link">→ Start Proposal</button>'
+    +'<button class="btn btn-sm" style="font-size:10px;'+(nb?'background:#16A34A;color:#fff;border-color:#16A34A;':'background:#FEE2E2;color:#B91C1C;border-color:#FCA5A5;')+'" onclick="govSetNoBid(\''+o.id+'\','+(nb?'false':'true')+')" title="'+(nb?'Click to undo No-Bid':'Mark as No Bid — we will not pursue this')+'">'+(nb?'↩ Un-No-Bid':'🚫 No Bid')+'</button>'
     +'<button class="btn btn-sec btn-sm" style="font-size:10px" onclick="govArchive(\''+o.id+'\')">Archive</button>'
     +'</div></div></div>';
 }
@@ -5952,6 +5956,20 @@ function _govParseCSV(text){
     else cur+=c;}
   if(cur.length||row.length){row.push(cur);rows.push(row);}
   return rows.filter(function(r){return r.length&&r.some(function(x){return x!=='';});});
+}
+// Mark / unmark a Gov Discovery opportunity as "No Bid" (we will not pursue it).
+function govSetNoBid(id,val){
+  var reason='';
+  if(val){reason=window.prompt('No-Bid reason (optional) — why are we not bidding on this?','')||'';}
+  fetch('/api/govops/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({no_bid:val,no_bid_reason:reason})})
+    .then(function(r){return r.json();}).then(function(j){
+      if(j&&j.error)throw new Error(j.error);
+      var o=_govState.list.find(function(x){return x.id===id;});
+      if(o){o.no_bid=val;o.no_bid_reason=reason;}
+      // Respect an active Hide/Only-No-Bid filter by reloading when one is set.
+      if(_govState.filters.noBid)_govLoad();else renderView();
+      toast(val?'Marked No Bid.':'No-Bid cleared.','success');
+    }).catch(function(e){toast('No-Bid update failed: '+(e.message||''),'error');});
 }
 function govSetStage(id,stage){fetch('/api/govops/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({stage:stage})}).then(function(){var o=_govState.list.find(function(x){return x.id===id;});if(o)o.stage=stage;}).catch(function(){toast('Stage update failed.','error');});}
 function govArchive(id){fetch('/api/govops/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({archived:true})}).then(function(){_govState.list=_govState.list.filter(function(x){return x.id!==id;});renderView();}).catch(function(){toast('Archive failed.','error');});}

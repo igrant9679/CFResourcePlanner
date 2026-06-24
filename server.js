@@ -92,6 +92,10 @@ async function initDb() {
     )
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS gov_opp_docs_gid ON gov_opp_docs (govwin_id)`);
+  // No-Bid disposition on gov opportunities (Bid/No-Bid workflow).
+  await pool.query(`ALTER TABLE gov_opportunities ADD COLUMN IF NOT EXISTS no_bid BOOLEAN DEFAULT false`);
+  await pool.query(`ALTER TABLE gov_opportunities ADD COLUMN IF NOT EXISTS no_bid_reason TEXT`);
+  await pool.query(`ALTER TABLE gov_opportunities ADD COLUMN IF NOT EXISTS no_bid_at TIMESTAMPTZ`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS ingestion_runs (
       id BIGSERIAL PRIMARY KEY,
@@ -921,14 +925,15 @@ app.get('/api/govops', async (req, res) => {
     const q = req.query;
     const r = await pool.query(
       `SELECT id, solnum, title, agency, sub_agency, naics, psc, set_aside, value_low, value_high, est_solicitation_date, est_award_date,
-              place, poc_name, poc_email, source, source_url, notice_type, lifecycle, stage, score, score_parts, recompete, timeline,
+              place, poc_name, poc_email, source, source_url, notice_type, lifecycle, stage, no_bid, no_bid_reason, score, score_parts, recompete, timeline,
               left(coalesce(description,''), 600) AS description, first_seen, last_updated
        FROM gov_opportunities
        WHERE archived = ($1='1') AND ($2='' OR title ILIKE '%'||$2||'%' OR description ILIKE '%'||$2||'%' OR solnum ILIKE '%'||$2||'%')
          AND ($3='' OR agency ILIKE '%'||$3||'%') AND ($4='' OR naics LIKE $4||'%') AND ($5='' OR set_aside ILIKE '%'||$5||'%')
          AND ($6='' OR lifecycle=$6) AND ($7='' OR stage=$7) AND ($8='' OR recompete IS NOT NULL)
+         AND ($11='' OR ($11='only' AND no_bid=true) OR ($11='hide' AND coalesce(no_bid,false)=false))
        ORDER BY score DESC, last_updated DESC LIMIT $9 OFFSET $10`,
-      [q.archived || '', q.q || '', q.agency || '', q.naics || '', q.setAside || '', q.lifecycle || '', q.stage || '', q.recompete || '', Math.min(Number(q.limit) || 100, 300), Number(q.offset) || 0]
+      [q.archived || '', q.q || '', q.agency || '', q.naics || '', q.setAside || '', q.lifecycle || '', q.stage || '', q.recompete || '', Math.min(Number(q.limit) || 100, 300), Number(q.offset) || 0, q.noBid || '']
     );
     res.json(r.rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -939,6 +944,8 @@ app.patch('/api/govops/:id', async (req, res) => {
     const sets = []; const vals = [req.params.id]; let i = 1;
     if (b.stage !== undefined) { sets.push('stage=$' + (++i)); vals.push(String(b.stage)); }
     if (b.archived !== undefined) { sets.push('archived=$' + (++i)); vals.push(!!b.archived); }
+    if (b.no_bid !== undefined) { sets.push('no_bid=$' + (++i)); vals.push(!!b.no_bid); sets.push('no_bid_at=now()'); }
+    if (b.no_bid_reason !== undefined) { sets.push('no_bid_reason=$' + (++i)); vals.push(String(b.no_bid_reason || '')); }
     if (!sets.length) return res.status(400).json({ error: 'nothing to update' });
     await pool.query('UPDATE gov_opportunities SET ' + sets.join(',') + ', last_updated=now() WHERE id=$1', vals);
     res.json({ ok: true });
@@ -982,7 +989,7 @@ app.post('/api/govwin/:govwinId/docs', async (req, res) => {
         `INSERT INTO gov_opp_docs (id, govwin_id, name, kind, mime, sha, chars, extracted_text)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
          ON CONFLICT (govwin_id, name) DO UPDATE SET kind=$4, mime=$5, sha=$6, chars=$7, extracted_text=$8`,
-        [id, gid, name, d.kind || '', d.mime || '', d.sha || '', Number(d.chars) || 0, String(d.text || '')]
+        [id, gid, name, d.kind || '', d.mime || '', d.sha || '', Number(d.chars) || 0, String(d.text || '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')]
       );
       stored++;
     }

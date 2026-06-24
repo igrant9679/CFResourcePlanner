@@ -115,17 +115,20 @@ async function docsFromFile(absPath, displayName, kind, sink) {
     for (const entryName of Object.keys(zip.files)) {
       const entry = zip.files[entryName]; if (entry.dir) continue;
       const ebuf = await entry.async('nodebuffer');
-      const text = await extractText(ebuf, entryName);
+      const text = clean(await extractText(ebuf, entryName));
       const full = displayName + '/' + entryName;
       sink.push({ name: full, kind, sha: sha1(ebuf), chars: text.length, text: text.slice(0, MAX_DOC_CHARS) });
     }
     return;
   }
-  const text = await extractText(buf, displayName);
+  const text = clean(await extractText(buf, displayName));
   sink.push({ name: displayName, kind, sha: sha1(buf), chars: text.length, text: text.slice(0, MAX_DOC_CHARS) });
 }
 
 function sha1(buf) { return crypto.createHash('sha1').update(buf).digest('hex'); }
+// Postgres TEXT rejects NUL (0x00), which PDF extraction sometimes emits. Strip
+// NULs and other C0 control chars (keep tab/newline/CR) before pushing.
+function clean(t) { return String(t || '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, ''); }
 function hashObj(o) { return crypto.createHash('sha1').update(JSON.stringify(o)).digest('hex'); }
 
 // ---- minimal CSV parser (handles quoted fields with commas) ----
@@ -238,14 +241,19 @@ async function main() {
       log('    "' + s.text.slice(0, 220).replace(/\s+/g, ' ') + '…"\n');
     }
     if (changed.length && !DRY) {
-      let storedN = 0;
-      for (const batch of chunkBySize(changed, 8000000)) {
-        const r = await post('/api/govwin/' + encodeURIComponent(o.govwinId) + '/docs', { docs: batch });
-        storedN += (r.stored || 0);
+      try {
+        let storedN = 0;
+        for (const batch of chunkBySize(changed, 8000000)) {
+          const r = await post('/api/govwin/' + encodeURIComponent(o.govwinId) + '/docs', { docs: batch });
+          storedN += (r.stored || 0);
+        }
+        log('  [' + o.govwinId + '] ' + o.Title.slice(0, 50) + ' → ' + storedN + ' doc(s)');
+        state.docs[o.govwinId] = seen;
+        changed.forEach((d) => { state.docs[o.govwinId][d.name] = d.sha; });
+        saveState(state);                       // persist progress per opp
+      } catch (e) {
+        log('  ! [' + o.govwinId + '] docs push failed: ' + e.message + ' — skipping, will retry next run');
       }
-      log('  [' + o.govwinId + '] ' + o.Title.slice(0, 50) + ' → ' + storedN + ' doc(s)');
-      state.docs[o.govwinId] = seen;
-      changed.forEach((d) => { state.docs[o.govwinId][d.name] = d.sha; });
     }
   }
 
