@@ -3145,7 +3145,7 @@ function _projDetailBody(p){
    Data lives ONLY in D.contracts; nothing links to departments/projects/members
    or the cash model. Optional one-way bridges (TBH position → Recruiting req) are
    explicit and opt-in. Phase 1: import + staff-planning grid + rollups. ── */
-var _contractSel='',contractFilter={oy:'',company:'',group:'',status:''},contractGroupBy='workstreamGroup',_ctGroupList=[];
+var _contractSel='',contractFilter={oy:'',company:'',group:'',status:'',hideTBD:false},contractGroupBy='workstreamGroup',_ctGroupList=[];
 var CT_GROUPBY=[{k:'workstreamGroup',l:'Workstream'},{k:'civilianLead',l:'Civilian Lead'},{k:'contractorLead',l:'Contractor Lead'},{k:'company',l:'Company'},{k:'resource',l:'Person'}];
 function contractSetGroupBy(k){contractGroupBy=k;renderView();}
 function contractsMigrate(){
@@ -3170,6 +3170,7 @@ function _ctFilteredPos(c){
     if(contractFilter.company&&(p.company||'')!==contractFilter.company)return false;
     if(contractFilter.group&&(p.workstreamGroup||'')!==contractFilter.group)return false;
     if(contractFilter.status&&(p.status||'Filled')!==contractFilter.status)return false;
+    if(contractFilter.hideTBD&&(p.status||'')==='TBD')return false;
     return true;
   });
 }
@@ -3224,15 +3225,16 @@ function _contractStaffHTML(c){
     +'</div>';
   var ud=function(key){var s={};pos.forEach(function(p){var v=p[key]||'';if(v)s[v]=1;});return Object.keys(s).sort();};
   function fsel(key,label,vals){return '<select class="fld-sel" style="width:auto" onchange="contractSetFilter(\''+key+'\',this.value)"><option value="">'+label+'</option>'+vals.map(function(v){return '<option value="'+esc(v)+'"'+(contractFilter[key]===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select>';}
-  var anyFilter=contractFilter.oy||contractFilter.company||contractFilter.group||contractFilter.status;
+  var anyFilter=contractFilter.oy||contractFilter.company||contractFilter.group||contractFilter.status||contractFilter.hideTBD;
   var byWs=contractGroupBy==='workstreamGroup';
   var filters='<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">'
     +fsel('group','All workstreams',ud('workstreamGroup'))
     +fsel('company','All companies',ud('company'))
     +fsel('status','All statuses',['Filled','TBH','TBD','Reserve'])
+    +'<label style="font-size:11px;display:inline-flex;gap:4px;align-items:center;white-space:nowrap" title="Exclude positions with status TBD"><input type="checkbox" '+(contractFilter.hideTBD?'checked':'')+' onchange="contractSetFilter(\'hideTBD\',this.checked)"> Hide TBD</label>'
     +'<button class="btn btn-navy btn-sm" onclick="contractAddPos(\''+c.id+'\')">+ Position</button>'
     +(byWs?'<button class="btn btn-sec btn-sm" onclick="contractAddWorkstream(\''+c.id+'\')">+ Workstream</button>':'')
-    +(anyFilter?'<button class="btn btn-outline btn-sm" onclick="contractFilter={oy:\'\',company:\'\',group:\'\',status:\'\'};renderView()">Clear</button>':'')
+    +(anyFilter?'<button class="btn btn-outline btn-sm" onclick="contractFilter={oy:\'\',company:\'\',group:\'\',status:\'\',hideTBD:false};renderView()">Clear</button>':'')
     +'</div>';
   // Group-by toggle: Workstream / Civilian Lead / Company.
   var groupBar='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px"><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Group by</span><div class="plan-seg">'+CT_GROUPBY.map(function(g){return '<button class="'+(contractGroupBy===g.k?'active':'')+'" onclick="contractSetGroupBy(\''+g.k+'\')">'+g.l+'</button>';}).join('')+'</div></div>';
