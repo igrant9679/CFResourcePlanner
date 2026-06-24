@@ -935,6 +935,7 @@ app.get('/api/govops', async (req, res) => {
       `SELECT id, solnum, title, agency, sub_agency, naics, psc, set_aside, value_low, value_high, est_solicitation_date, est_award_date,
               place, poc_name, poc_email, source, source_url, notice_type, lifecycle, stage, no_bid, no_bid_reason, score, score_parts, recompete, timeline,
               bid_score, bid_band, bid_rationale, bid_dims, bid_risks, bid_scored_at,
+              (SELECT count(*)::int FROM gov_opp_docs gd WHERE gd.govwin_id = regexp_replace(gov_opportunities.id,'^govwin_','')) AS doc_count,
               left(coalesce(description,''), 600) AS description, first_seen, last_updated
        FROM gov_opportunities
        WHERE archived = ($1='1') AND ($2='' OR title ILIKE '%'||$2||'%' OR description ILIKE '%'||$2||'%' OR solnum ILIKE '%'||$2||'%')
@@ -1011,6 +1012,14 @@ app.get('/api/govwin/:govwinId/docs', async (req, res) => {
   try {
     const r = await pool.query('SELECT name, kind, chars, created_at FROM gov_opp_docs WHERE govwin_id=$1 ORDER BY name', [String(req.params.govwinId || '')]);
     res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Full extracted text of one document (for the in-app document viewer).
+app.get('/api/govwin/:govwinId/doctext', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT name, kind, mime, chars, extracted_text FROM gov_opp_docs WHERE govwin_id=$1 AND name=$2', [String(req.params.govwinId || ''), String(req.query.name || '')]);
+    if (!r.rows.length) return res.status(404).json({ error: 'document not found' });
+    res.json(r.rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

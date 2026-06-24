@@ -5854,6 +5854,39 @@ function _govDiscoveryHTML(){
   else html+=list.map(_govCardHTML).join('');
   return html+'</div>';
 }
+// In-app document viewer: lists an opportunity's ingested docs and shows the
+// extracted text on demand (the original binaries stay on the local machine).
+var _govDocs={gid:'',rows:[]};
+function govCloseDocs(){var e=document.getElementById('govdocs_ov');if(e)e.remove();}
+function govShowDocs(gid){
+  _govDocs={gid:gid,rows:[]};
+  var opp=_govState.list.find(function(x){return x.id==='govwin_'+gid;});
+  var title=opp?opp.title:gid;
+  var ov=document.createElement('div');ov.id='govdocs_ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:3000;display:flex;align-items:center;justify-content:center';
+  ov.innerHTML='<div style="background:var(--card-bg);width:min(1100px,94vw);height:88vh;border-radius:10px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3)">'
+    +'<div style="background:var(--navy);color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px"><div style="font-weight:700;font-size:13px">📎 Documents — '+esc(title)+'</div><button class="btn btn-sm" onclick="govCloseDocs()">Close ✕</button></div>'
+    +'<div style="flex:1;display:flex;min-height:0">'
+    +'<div id="govdocs_list" style="width:320px;flex-shrink:0;border-right:1px solid var(--border);overflow:auto;padding:6px;font-size:12px">Loading…</div>'
+    +'<div id="govdocs_text" style="flex:1;overflow:auto;padding:14px 18px;font-size:12px;white-space:pre-wrap;color:var(--text-secondary);font-family:ui-monospace,Menlo,Consolas,monospace">Select a document to read its extracted text.</div>'
+    +'</div></div>';
+  ov.onclick=function(e){if(e.target===ov)govCloseDocs();};
+  document.body.appendChild(ov);
+  fetch('/api/govwin/'+encodeURIComponent(gid)+'/docs').then(function(r){return r.json();}).then(function(rows){
+    _govDocs.rows=Array.isArray(rows)?rows:[];
+    var el=document.getElementById('govdocs_list');if(!el)return;
+    el.innerHTML=_govDocs.rows.length?_govDocs.rows.map(function(d,i){return '<div onclick="govPickDoc('+i+')" style="padding:7px 8px;border-radius:6px;cursor:pointer;border:1px solid var(--border);margin-bottom:5px"><div style="font-weight:600;word-break:break-word">'+esc(d.name)+'</div><div style="color:var(--text-muted);font-size:10px">'+esc(d.kind||'')+' · '+(d.chars||0).toLocaleString()+' chars</div></div>';}).join(''):'<div style="color:var(--text-muted)">No documents ingested for this opportunity.</div>';
+  }).catch(function(){var el=document.getElementById('govdocs_list');if(el)el.innerHTML='<div style="color:var(--red)">Failed to load documents.</div>';});
+}
+function govPickDoc(i){
+  var d=_govDocs.rows[i];if(!d)return;
+  var tx=document.getElementById('govdocs_text');if(tx)tx.textContent='Loading '+d.name+'…';
+  fetch('/api/govwin/'+encodeURIComponent(_govDocs.gid)+'/doctext?name='+encodeURIComponent(d.name)).then(function(r){return r.json();}).then(function(j){
+    if(!tx)return;
+    if(j&&j.error){tx.textContent='Error: '+j.error;return;}
+    tx.textContent=j.extracted_text||'(No extracted text — this file may be a scanned image or an unsupported type. The original is in your local Govwin folder / on GovWin.)';
+  }).catch(function(e){if(tx)tx.textContent='Failed to load: '+(e.message||'');});
+}
 function _govBidColor(b){return {'Bid':'#16A34A','Likely Bid':'#2563EB','Review':'#D97706','No-Bid':'#DC2626'}[b]||'#64748b';}
 function _govBidPanel(o){
   if(!o.bid_band)return '';
@@ -5868,6 +5901,7 @@ function _govCardHTML(o){
   var sc=Math.round(o.score||0);
   var nb=!!o.no_bid;
   var bb=o.bid_band;
+  var gid=String(o.id||'').replace(/^govwin_/,'');
   var scC=sc>=70?'var(--green)':sc>=40?'#D97706':'var(--text-muted)';
   var lc={'forecast':'#64748b','sources-sought':'#0EA5E9','presolicitation':'#7C3AED','solicitation':'#C5A55A','special':'#64748b'}[o.lifecycle]||'#64748b';
   var rec=o.recompete?'<span class="plan-chip" style="border-color:var(--red);color:var(--red)" title="Incumbent contract expiring — '+esc(o.recompete.incumbent||'')+' · ends '+esc(o.recompete.endDate||'')+'">↻ recompete: '+esc((o.recompete.incumbent||'').slice(0,24))+'</span>':'';
@@ -5888,6 +5922,7 @@ function _govCardHTML(o){
     +'<select class="fld-sel" style="font-size:10px;padding:3px;width:110px" onchange="govSetStage(\''+o.id+'\',this.value)">'+GOV_STAGES.map(function(s){return '<option'+(o.stage===s?' selected':'')+'>'+s+'</option>';}).join('')+'</select>'
     +'<button class="btn btn-outline btn-sm" style="font-size:10px" onclick="govToCrm(\''+o.id+'\')" title="Create a CRM opportunity from this record">→ CRM Opp</button>'
     +'<button class="btn btn-gold btn-sm" style="font-size:10px" onclick="govStartProposal(\''+o.id+'\')" title="One click: CRM opportunity + proposal pre-populated with customer, solicitation number, due date, source link">→ Start Proposal</button>'
+    +(o.doc_count?'<button class="btn btn-outline btn-sm" style="font-size:10px" onclick="govShowDocs(\''+gid+'\')" title="Read the ingested RFP/RFI document text">📎 Docs ('+o.doc_count+')</button>':'')
     +'<button class="btn btn-outline btn-sm" style="font-size:10px" onclick="govScoreBid(\''+o.id+'\')" title="AI Bid/No-Bid assessment from the RFP docs + Company Profile">⚖ '+(bb?'Re-score':'Score')+'</button>'
     +'<button class="btn btn-sm" style="font-size:10px;'+(nb?'background:#16A34A;color:#fff;border-color:#16A34A;':'background:#FEE2E2;color:#B91C1C;border-color:#FCA5A5;')+'" onclick="govSetNoBid(\''+o.id+'\','+(nb?'false':'true')+')" title="'+(nb?'Click to undo No-Bid':'Mark as No Bid — we will not pursue this')+'">'+(nb?'↩ Un-No-Bid':'🚫 No Bid')+'</button>'
     +'<button class="btn btn-sec btn-sm" style="font-size:10px" onclick="govArchive(\''+o.id+'\')">Archive</button>'
