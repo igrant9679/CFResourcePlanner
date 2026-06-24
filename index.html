@@ -5820,6 +5820,7 @@ function _govDiscoveryHTML(){
     +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
     +'<button class="btn btn-gold btn-sm" id="gov_ingest_btn" onclick="govIngestNow()">⟳ Run ingestion now</button>'
     +'<button class="btn btn-outline btn-sm" onclick="govImportModal()">⬆ Import forecast CSV/XLSX</button>'
+    +'<button class="btn btn-outline btn-sm" onclick="govImportGovwinCsv()" title="Upload the GovWin index.csv manifest as a quick top-up. The scheduled local sync handles documents + full automation.">📋 Import GovWin index.csv</button>'
     +'<button class="btn btn-outline btn-sm" onclick="govSourcesModal()">⚙ Sources</button>'
     +'<button class="btn btn-outline btn-sm" onclick="_govState.showRuns=!_govState.showRuns;renderView()">'+(_govState.showRuns?'Hide':'Show')+' ingestion log</button>'
     +'</div></div>'
@@ -5906,6 +5907,51 @@ function govImportModal(){
       }).catch(function(e){setStatus('Failed: '+(e&&e.message||e));});
       return false;
     }});
+}
+// Manual top-up: upload the GovWin index.csv and upsert the opportunities by
+// GovWin id (same endpoint the scheduled local sync uses). Documents are NOT
+// uploaded here — the local sync pushes extracted RFP/RFI text.
+function govImportGovwinCsv(){
+  var inp=document.createElement('input');inp.type='file';inp.accept='.csv,text/csv';
+  inp.onchange=function(){
+    var file=inp.files&&inp.files[0];if(!file)return;
+    var st=document.getElementById('gov_status');if(st)st.textContent='Reading '+file.name+'…';
+    var rd=new FileReader();
+    rd.onload=function(){
+      try{
+        var rows=_govParseCSV(String(rd.result||''));
+        var header=(rows.shift()||[]).map(function(h){return h.trim();});
+        var ci=function(n){return header.indexOf(n);};
+        var c={gid:ci('GovWinID'),ag:ci('Agency'),ti:ci('Title'),li:ci('List'),stt:ci('Status'),sd:ci('SolicitationDate'),ev:ci('EstValue'),fo:ci('Folder'),ln:ci('Link')};
+        if(c.gid<0){toast('That CSV has no GovWinID column — is it the GovWin index.csv?','error');if(st)st.textContent='';return;}
+        var opps=rows.map(function(r){return {govwinId:(r[c.gid]||'').trim(),Agency:r[c.ag]||'',Title:r[c.ti]||'',List:r[c.li]||'',Status:r[c.stt]||'',SolicitationDate:r[c.sd]||'',EstValue:r[c.ev]||'',Folder:r[c.fo]||'',Link:r[c.ln]||''};}).filter(function(o){return o.govwinId;});
+        if(!opps.length){toast('No rows with a GovWinID found.','warn');if(st)st.textContent='';return;}
+        _govPostGovwin(opps,0,{added:0,updated:0,skipped:0},st);
+      }catch(e){toast('Could not parse CSV: '+e.message,'error');if(st)st.textContent='';}
+    };
+    rd.readAsText(file);
+  };
+  inp.click();
+}
+function _govPostGovwin(opps,i,acc,st){
+  if(i>=opps.length){if(st)st.textContent='Imported '+opps.length+' opportunities · '+acc.added+' new, '+acc.updated+' updated. Refreshing…';_govLoad();toast('GovWin import done: '+acc.added+' new, '+acc.updated+' updated.','success');return;}
+  var batch=opps.slice(i,i+200);
+  if(st)st.textContent='Importing '+Math.min(i+batch.length,opps.length)+'/'+opps.length+'…';
+  fetch('/api/govwin/ingest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({opportunities:batch})})
+    .then(function(r){return r.json();}).then(function(j){if(j&&!j.error){acc.added+=j.added||0;acc.updated+=j.updated||0;acc.skipped+=j.skipped||0;}else if(j&&j.error){throw new Error(j.error);}_govPostGovwin(opps,i+200,acc,st);})
+    .catch(function(e){toast('Import failed: '+e.message,'error');if(st)st.textContent='';});
+}
+function _govParseCSV(text){
+  var rows=[],row=[],cur='',q=false;
+  for(var i=0;i<text.length;i++){var c=text[i];
+    if(q){if(c==='"'&&text[i+1]==='"'){cur+='"';i++;}else if(c==='"'){q=false;}else cur+=c;}
+    else if(c==='"'){q=true;}
+    else if(c===','){row.push(cur);cur='';}
+    else if(c==='\n'){row.push(cur);rows.push(row);row=[];cur='';}
+    else if(c==='\r'){}
+    else cur+=c;}
+  if(cur.length||row.length){row.push(cur);rows.push(row);}
+  return rows.filter(function(r){return r.length&&r.some(function(x){return x!=='';});});
 }
 function govSetStage(id,stage){fetch('/api/govops/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({stage:stage})}).then(function(){var o=_govState.list.find(function(x){return x.id===id;});if(o)o.stage=stage;}).catch(function(){toast('Stage update failed.','error');});}
 function govArchive(id){fetch('/api/govops/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({archived:true})}).then(function(){_govState.list=_govState.list.filter(function(x){return x.id!==id;});renderView();}).catch(function(){toast('Archive failed.','error');});}

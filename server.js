@@ -74,6 +74,24 @@ async function initDb() {
       last_updated TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `);
+  // GovWin RFP/RFI documents (folder/CSV ingest): extracted text per file,
+  // keyed by GovWin opportunity id. Text only — the original binaries stay on
+  // the user's machine; this stays OUT of the app_state JSONB blob.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS gov_opp_docs (
+      id TEXT PRIMARY KEY,
+      govwin_id TEXT NOT NULL,
+      name TEXT,
+      kind TEXT,
+      mime TEXT,
+      sha TEXT,
+      chars INTEGER,
+      extracted_text TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (govwin_id, name)
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS gov_opp_docs_gid ON gov_opp_docs (govwin_id)`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS ingestion_runs (
       id BIGSERIAL PRIMARY KEY,
@@ -714,6 +732,142 @@ async function urlSourceIngest(src, profile, stats, errors) {
     }
   } catch (e) { errors.push({ source: src.name || src.url, error: e.message }); }
 }
+// ── Deltek GovWin IQ — official IQ API (neo-ws), OAuth2 "password" grant. ──
+// Requires a GovWin API entitlement: a client id + secret from Deltek, PLUS a
+// username + password. A normal web login alone cannot call the API. All four
+// are read from environment variables so nothing sensitive lives in the app
+// data blob or the repo. Opt-in: off until enabled in Gov Discovery → Sources.
+const GOVWIN_BASE = process.env.GOVWIN_BASE || 'https://services.govwin.com/neo-ws';
+function govwinConfigured() {
+  return ['GOVWIN_CLIENT_ID', 'GOVWIN_CLIENT_SECRET', 'GOVWIN_USERNAME', 'GOVWIN_PASSWORD'].filter((k) => !process.env[k]);
+}
+async function govwinToken() {
+  const basic = Buffer.from(process.env.GOVWIN_CLIENT_ID + ':' + process.env.GOVWIN_CLIENT_SECRET).toString('base64');
+  const body = 'grant_type=password&username=' + encodeURIComponent(process.env.GOVWIN_USERNAME)
+    + '&password=' + encodeURIComponent(process.env.GOVWIN_PASSWORD) + '&scope=read';
+  const res = await govFetch(GOVWIN_BASE + '/oauth/token', {
+    method: 'POST',
+    headers: { Authorization: 'Basic ' + basic, 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+    body,
+  }, 2);
+  if (!res.ok) throw new Error('token HTTP ' + res.status + ' (verify API entitlement + credentials)');
+  const j = await res.json();
+  if (!j.access_token) throw new Error('no access_token in token response');
+  return j.access_token;
+}
+function govwinLifecycle(o) {
+  const s = String(o.oppStatus || o.status || o.statusName || '').toLowerCase();
+  if (/award/.test(s)) return 'special';
+  if (/source|rfi|pre-?rfp|pre-?solicit/.test(s)) return 'sources-sought';
+  if (/solicit|rfp|rfq|active|open/.test(s)) return 'solicitation';
+  return 'forecast';
+}
+function govwinMap(o) {
+  const id = o.id || o.iqOppId || o.opportunityId || '';
+  const ge = o.govEntity || o.organization || {};
+  const naics = (o.primaryNAICS && (o.primaryNAICS.id || o.primaryNAICS.code)) || o.naicsCode
+    || (Array.isArray(o.naics) && o.naics[0] && (o.naics[0].id || o.naics[0].code)) || '';
+  const val = Number(o.contractValue || o.estimatedValue || o.value || 0) || null;
+  const poc = (Array.isArray(o.contacts) && o.contacts[0]) || o.primaryContact || {};
+  return {
+    solnum: o.solicitationNumber || o.referenceNumber || '',
+    title: o.title || o.name || '(GovWin opportunity)',
+    agency: (ge && (ge.name || ge.title)) || o.organizationName || o.agency || '',
+    sub_agency: (o.subOrganization && o.subOrganization.name) || '',
+    description: String(o.description || o.summary || o.scope || '').slice(0, 4000),
+    naics: String(naics || ''), psc: o.pscCode || '', set_aside: o.setAside || o.competitionType || '',
+    value_low: val, value_high: val,
+    est_solicitation_date: o.solicitationDate || o.expectedSolicitationDate || o.rfpDate || '',
+    est_award_date: o.awardDate || o.expectedAwardDate || '',
+    place: (o.placeOfPerformance && (o.placeOfPerformance.state || o.placeOfPerformance.location)) || '',
+    poc_name: poc.name || poc.fullName || '', poc_email: poc.email || '',
+    source: 'govwin', source_url: o.govWinUrl || o.detailUrl || (id ? 'https://iq.govwin.com/neo/opportunity/view/' + id : ''),
+    notice_type: 'govwin', lifecycle: govwinLifecycle(o), raw: o,
+  };
+}
+async function govwinIngest(profile, stats, errors) {
+  const missing = govwinConfigured();
+  if (missing.length) { errors.push({ source: 'govwin', error: 'GovWin not configured — missing env var(s): ' + missing.join(', ') + '. Requires a Deltek GovWin IQ API entitlement (client id + secret), not just a web login.' }); return; }
+  let token;
+  try { token = await govwinToken(); } catch (e) { errors.push({ source: 'govwin', error: 'Auth failed: ' + e.message }); return; }
+  const headers = { Authorization: 'Bearer ' + token, Accept: 'application/json' };
+  const naicsList = (profile.naics || []).slice(0, 6);
+  const updatedAfter = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+  const queries = naicsList.length
+    ? naicsList.map((n) => ({ key: 'primaryNAICSCode', val: n }))
+    : [{ key: 'q', val: (profile.keywords || []).slice(0, 3).join(' ') || 'IT services' }];
+  for (const q of queries) {
+    for (let offset = 0; offset < 300; offset += 100) {
+      const url = GOVWIN_BASE + '/opportunities?max=100&offset=' + offset
+        + '&' + q.key + '=' + encodeURIComponent(q.val) + '&updatedAfter=' + encodeURIComponent(updatedAfter);
+      try {
+        const res = await govFetch(url, { headers }, 2);
+        if (res.status === 401) { errors.push({ source: 'govwin', error: 'Unauthorized (401) — token rejected or API scope missing.' }); return; }
+        if (!res.ok) { errors.push({ source: 'govwin', error: 'HTTP ' + res.status }); break; }
+        const j = await res.json();
+        const list = Array.isArray(j) ? j : (j.opportunities || j.results || j.items || j.data || []);
+        stats.fetched += list.length;
+        for (const o of list) { try { await govUpsert(govwinMap(o), profile, stats); } catch (e) { errors.push({ source: 'govwin', error: e.message }); } }
+        if (list.length < 100) break;
+        await new Promise((r) => setTimeout(r, 1200));
+      } catch (e) { errors.push({ source: 'govwin', error: e.message }); break; }
+    }
+  }
+}
+// ── GovWin folder/CSV ingest (Hybrid Phase 1) ──────────────────────────────
+// Map an index.csv-style row (GovWinID, Agency, Title, List, Status,
+// SolicitationDate, EstValue, Folder, Link) to the unified gov_opportunities
+// shape. EstValue like "$48,480 (USD-$K)" is read as thousands.
+function govwinCsvMap(row) {
+  const naics = (String(row.naics || row.List || row.list || '').match(/\d{4,6}/) || [''])[0];
+  let val = null;
+  const mv = String(row.estValue || row.EstValue || '').replace(/,/g, '').match(/([\d.]+)/);
+  if (mv) val = Math.round(parseFloat(mv[1]) * 1000);
+  const status = row.status || row.Status || '';
+  const gid = String(row.govwinId || row.GovWinID || '').trim();
+  return {
+    solnum: '', title: row.title || row.Title || '(GovWin opportunity)',
+    agency: row.agency || row.Agency || '', sub_agency: '',
+    description: '', naics: naics, psc: '', set_aside: '',
+    value_low: val, value_high: val,
+    est_solicitation_date: row.solicitationDate || row.SolicitationDate || '', est_award_date: '',
+    place: '', poc_name: '', poc_email: '',
+    source: 'govwin', source_url: row.link || row.Link || (gid ? 'https://iq.govwin.com/neo/opportunity/view/' + gid : ''),
+    notice_type: 'govwin', lifecycle: govwinLifecycle({ status: status }),
+    raw: { govwinId: gid, status: status, list: row.List || row.list || row.naics || '', folder: row.folder || row.Folder || '' },
+  };
+}
+// Deterministic upsert keyed by GovWin opportunity id (id = 'govwin_<gid>') so
+// re-syncs update in place — no fuzzy matching, true idempotency. Reuses govScore.
+async function govwinUpsertById(govwinId, unified, profile, stats) {
+  const id = 'govwin_' + String(govwinId);
+  const sc = govScore(unified, profile, profile.weights);
+  const tlEntry = { source: 'govwin-folder', notice_type: unified.notice_type, url: unified.source_url || '', at: new Date().toISOString(), title: unified.title };
+  const r = await pool.query('SELECT id FROM gov_opportunities WHERE id=$1', [id]);
+  if (r.rows.length) {
+    await pool.query(
+      `UPDATE gov_opportunities SET title=coalesce(nullif($2,''),title), agency=coalesce(nullif($3,''),agency),
+        naics=coalesce(nullif($4,''),naics), value_low=coalesce($5,value_low), value_high=coalesce($6,value_high),
+        est_solicitation_date=coalesce(nullif($7,''),est_solicitation_date), source_url=coalesce(nullif($8,''),source_url),
+        lifecycle=$9, score=$10, score_parts=$11, raw=$12, last_updated=now() WHERE id=$1`,
+      [id, unified.title || '', unified.agency || '', String(unified.naics || ''), unified.value_low, unified.value_high, unified.est_solicitation_date || '', unified.source_url || '', unified.lifecycle || 'forecast', sc.score, JSON.stringify(sc.parts), JSON.stringify(unified.raw || {})]
+    );
+    if (stats) stats.updated++;
+  } else {
+    await pool.query(
+      `INSERT INTO gov_opportunities (id, solnum, title, agency, sub_agency, description, naics, psc, set_aside, value_low, value_high,
+        est_solicitation_date, est_award_date, place, poc_name, poc_email, source, source_url, notice_type, lifecycle, score, score_parts, timeline, raw)
+       VALUES ($1,'',$2,$3,'','',$4,'','',$5,$6,$7,'','','','','govwin',$8,'govwin',$9,$10,$11,$12,$13)`,
+      [id, unified.title, unified.agency || '', String(unified.naics || ''), unified.value_low, unified.value_high, unified.est_solicitation_date || '', unified.source_url || '', unified.lifecycle || 'forecast', sc.score, JSON.stringify(sc.parts), JSON.stringify([tlEntry]), JSON.stringify(unified.raw || {})]
+    );
+    if (stats) stats.added++;
+  }
+}
+function govwinIngestAuthed(req) {
+  const need = process.env.GOVWIN_INGEST_TOKEN || '';
+  if (!need) return true;                       // open if no token configured
+  return (req.get('X-Govwin-Token') || (req.body && req.body.token) || '') === need;
+}
 async function govRunIngestion(triggerKind) {
   const run = await pool.query('INSERT INTO ingestion_runs (source, trigger_kind) VALUES ($1,$2) RETURNING id', ['daily', triggerKind]);
   const runId = run.rows[0].id;
@@ -723,6 +877,7 @@ async function govRunIngestion(triggerKind) {
     const profile = await govProfile();
     const on = (k) => profile.sources[k] !== false;   // every source defaults ON
     if (on('sam')) await samIngest(profile, stats, errors);
+    if (profile.sources.govwin === true) await govwinIngest(profile, stats, errors);   // opt-in: needs API creds
     if (on('apfs')) await apfsIngest(profile, stats, errors);
     if (on('fpds')) await fpdsRecompete(profile, stats, errors);
     if (on('usaspending')) await usaspendingRecompete(profile, stats, errors);
@@ -792,6 +947,54 @@ app.patch('/api/govops/:id', async (req, res) => {
 app.post('/api/govops/ingest', async (req, res) => {
   try { res.json(await govRunIngestion('manual')); }
   catch (e) { res.status(500).json({ error: e.message }); }
+});
+// GovWin folder/CSV ingest — both the local sync script and the in-app
+// index.csv upload POST opportunities here. Idempotent by GovWin id.
+app.post('/api/govwin/ingest', async (req, res) => {
+  try {
+    if (!govwinIngestAuthed(req)) return res.status(401).json({ error: 'bad or missing ingest token' });
+    const opps = (req.body && req.body.opportunities) || [];
+    if (!Array.isArray(opps) || !opps.length) return res.status(400).json({ error: 'no opportunities provided' });
+    const profile = await govProfile();
+    const stats = { added: 0, updated: 0, skipped: 0 };
+    for (const row of opps) {
+      const gid = String(row.govwinId || row.GovWinID || '').trim();
+      if (!gid) { stats.skipped++; continue; }
+      await govwinUpsertById(gid, govwinCsvMap(row), profile, stats);
+    }
+    res.json(stats);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Per-opportunity extracted document text (from the local sync script).
+app.post('/api/govwin/:govwinId/docs', async (req, res) => {
+  try {
+    if (!govwinIngestAuthed(req)) return res.status(401).json({ error: 'bad or missing ingest token' });
+    const gid = String(req.params.govwinId || '').trim();
+    if (!gid) return res.status(400).json({ error: 'missing govwinId' });
+    const docs = (req.body && req.body.docs) || [];
+    const crypto = require('crypto');
+    let stored = 0;
+    for (const d of docs) {
+      const name = String(d.name || '').slice(0, 500);
+      if (!name) continue;
+      const id = 'gd_' + gid + '_' + crypto.createHash('sha1').update(name).digest('hex').slice(0, 12);
+      await pool.query(
+        `INSERT INTO gov_opp_docs (id, govwin_id, name, kind, mime, sha, chars, extracted_text)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         ON CONFLICT (govwin_id, name) DO UPDATE SET kind=$4, mime=$5, sha=$6, chars=$7, extracted_text=$8`,
+        [id, gid, name, d.kind || '', d.mime || '', d.sha || '', Number(d.chars) || 0, String(d.text || '')]
+      );
+      stored++;
+    }
+    res.json({ stored });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Doc index for one opportunity (UI / Bid-No-Bid scoring later).
+app.get('/api/govwin/:govwinId/docs', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT name, kind, chars, created_at FROM gov_opp_docs WHERE govwin_id=$1 ORDER BY name', [String(req.params.govwinId || '')]);
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 // One-off pull of a single URL source (used by the Sources manager "Test now").
 app.post('/api/govops/ingest-url', async (req, res) => {
@@ -1051,6 +1254,11 @@ app.post('/api/contracts/parse-staffing', upload.single('file'), async (req, res
       totalAnnual: positions.reduce((a, p) => a + (Number(p.annualCost) || 0), 0),
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// Whether GovWin env vars are present (booleans only — never returns the values).
+app.get('/api/govops/govwin-status', (req, res) => {
+  const missing = govwinConfigured();
+  res.json({ configured: missing.length === 0, missing });
 });
 app.get('/api/govops/runs', async (req, res) => {
   try {
