@@ -4946,9 +4946,9 @@ function ctDashManageResources(cid){contractDashTab='workstreams';renderView();}
 function _ctDoneYear(t){var m=/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(t.completedDate||'');if(!m)return '(no date)';var y=+m[3];if(y<100)y+=2000;return String(y);}
 function _ctYM(t){var m=/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(t.completedDate||'');if(!m)return '';var y=+m[3];if(y<100)y+=2000;return y+'-'+('0'+m[1]).slice(-2);}
 // Composed hover-detail string for a task (description + key fields). Used as a title= tooltip.
-function _ctSrc(t){return (t&&(t.source||'P').toUpperCase()==='S')?'S':'P';}
-function _ctSrcLabel(t){return _ctSrc(t)==='S'?'Spreadsheet':'Planner';}
-function _ctSrcBadge(t){var s=_ctSrc(t),col=s==='S'?CTD.amber:CTD.support;return '<span style="font-size:8px;font-weight:800;padding:0 4px;border-radius:6px;background:'+col+'24;color:'+col+';vertical-align:middle" title="Source: '+_ctSrcLabel(t)+'">'+s+'</span>';}
+function _ctSrc(t){var s=(t&&(t.source||'P')).toString().toUpperCase();return s==='S'?'S':(s==='MSR'?'MSR':'P');}
+function _ctSrcLabel(t){var s=_ctSrc(t);return s==='S'?'Spreadsheet':(s==='MSR'?'Monthly Status Report':'Planner');}
+function _ctSrcBadge(t){var s=_ctSrc(t),col=s==='S'?CTD.amber:(s==='MSR'?'#7C3AED':CTD.support);return '<span style="font-size:8px;font-weight:800;padding:0 4px;border-radius:6px;background:'+col+'24;color:'+col+';vertical-align:middle" title="Source: '+_ctSrcLabel(t)+'">'+s+'</span>';}
 function _ctTaskTip(t){
   var meta=[t.bucket,t.ws,t.priority,t.progress,(t.completedDate?'completed '+t.completedDate:(t.due?'due '+t.due:'')),(t.completedBy?'completed by '+t.completedBy:''),((t.assignees||[]).length?'Assigned: '+t.assignees.join(', '):''),'Source: '+_ctSrcLabel(t)].filter(Boolean).join(' · ');
   var parts=[];if(t.desc)parts.push(t.desc);parts.push(meta);if(t.labels&&t.labels.length)parts.push('Labels: '+t.labels.join(', '));if(t.taskId)parts.push('['+t.taskId+']');
@@ -5213,14 +5213,14 @@ function _ctTaskFields(t,people,presetWs){t=t||{};return [
   {key:'ws',label:'Workstream',type:'select',value:t.ws||presetWs||'Support',options:[{value:'Transformation',label:'Transformation'},{value:'Support',label:'Support'}]},
   {key:'priority',label:'Priority',type:'select',value:t.priority||'Medium',options:['Urgent','Important','Medium','Low'].map(function(p){return {value:p,label:p};})},
   {key:'progress',label:'Status',type:'select',value:t.progress||'Not started',options:['Not started','In progress','Completed'].map(function(p){return {value:p,label:p};})},
-  {key:'source',label:'Source',type:'select',value:_ctSrc(t),options:[{value:'P',label:'P — Planner'},{value:'S',label:'S — Spreadsheet'}]},
+  {key:'source',label:'Source',type:'select',value:_ctSrc(t),options:[{value:'P',label:'P — Planner'},{value:'S',label:'S — Spreadsheet'},{value:'MSR',label:'MSR — Monthly Status Report'}]},
   {key:'due',label:'Due date',type:'text',value:t.due||''},
   {key:'late',label:'Late?',type:'select',value:t.late?'Yes':'No',options:[{value:'No',label:'No'},{value:'Yes',label:'Yes'}]},
   {key:'who',label:'Assigned resources',type:'checkboxes',value:(t.assignees||[]),options:people.map(function(n){return {value:n,label:n};})},
   {key:'sprint',label:'Sprint tag',type:'text',value:t.sprint||'',placeholder:'e.g. Sprint 3'},
   {key:'labels',label:'Labels (comma-separated)',type:'text',value:(t.labels||[]).join(', ')},
   {key:'desc',label:'Description',type:'textarea',rows:3,value:t.desc||''}];}
-function _ctApplyTask(t,v){t.name=(v.name||'').trim();t.bucket=(v.bucket||'').trim();t.ws=v.ws||'Support';t.priority=v.priority||'Medium';t.progress=(v.progress||'').trim();t.source=v.source==='S'?'S':'P';t.sprint=(v.sprint||'').trim();t.due=(v.due||'').trim();t.late=v.late==='Yes';t.assignees=Array.isArray(v.who)?v.who:[];t.labels=(v.labels||'').split(',').map(function(s){return s.trim();}).filter(Boolean);t.desc=(v.desc||'').trim();}
+function _ctApplyTask(t,v){t.name=(v.name||'').trim();t.bucket=(v.bucket||'').trim();t.ws=v.ws||'Support';t.priority=v.priority||'Medium';t.progress=(v.progress||'').trim();t.source=(v.source==='S'||v.source==='MSR')?v.source:'P';t.sprint=(v.sprint||'').trim();t.due=(v.due||'').trim();t.late=v.late==='Yes';t.assignees=Array.isArray(v.who)?v.who:[];t.labels=(v.labels||'').split(',').map(function(s){return s.trim();}).filter(Boolean);t.desc=(v.desc||'').trim();}
 function ctDashAddTaskFull(cid,presetWs){var c=_ctdC(cid);if(!c)return;var people=ctDashPeople(c);_ctDashEditRow(cid,'tasks',null,'New task',function(t){return _ctTaskFields(t,people,presetWs);},_ctApplyTask);}
 function ctDashEditTaskFull(cid,tid){var c=_ctdC(cid);if(!c)return;var d=contractDash(c);var t=(d.tasks||[]).find(function(x){return x.id===tid;})||{};var people=ctDashPeople(c);(t.assignees||[]).forEach(function(a){if(people.indexOf(a)<0)people.push(a);});people.sort();_ctDashEditRow(cid,'tasks',tid,'Edit task',function(r){return _ctTaskFields(r,people,'');},_ctApplyTask);}
 function ctDashEditAssignees(cid,tid){
