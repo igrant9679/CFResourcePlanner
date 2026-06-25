@@ -5405,6 +5405,8 @@ function _contractResourceDashHTML(c){
    ════════════════════════════════════════════════════════════════════════ */
 var _ctPPRMonth='';
 function ctPPRSetMonth(v){_ctPPRMonth=v;renderView();}
+var _ctPPRCat='';
+function ctPPRSetCat(v){_ctPPRCat=v;renderView();}
 function _contractPPRHTML(c){
   var d=contractDash(c),cid=c.id,tasks=_ctScopedTasks(d),res=d.resources||[],s=d.sphere;
   var done=tasks.filter(_ctIsDone),active=tasks.filter(function(t){return !_ctIsDone(t);});
@@ -5445,12 +5447,16 @@ function _contractPPRHTML(c){
   var monthDone=selM?done.filter(function(t){return _ctYM(t)===selM;}):done;
   var byCat={};monthDone.forEach(function(t){var b=t.bucket||'(no category)';(byCat[b]=byCat[b]||[]).push(t);});
   var catKeys=Object.keys(byCat).sort(function(a,b){return byCat[b].length-byCat[a].length;});
+  var selCat=(_ctPPRCat&&byCat[_ctPPRCat])?_ctPPRCat:'';
+  var catShown=selCat?[selCat]:catKeys;
+  var shownN=selCat?byCat[selCat].length:monthDone.length;
   var dd='<select class="fld-sel" style="width:auto" onchange="ctPPRSetMonth(this.value)"><option value="">All months ('+done.length+')</option>'+monthOpts.map(function(k){return '<option value="'+k+'"'+(selM===k?' selected':'')+'>'+_ctMlabel(k)+' ('+months[k]+')</option>';}).join('')+'</select>';
-  h+='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:2px"><div style="font-size:15px;font-weight:800">Accomplishments by category</div>'+dd+'</div>';
-  h+='<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Completed work '+(selM?'in <b>'+_ctMlabel(selM)+'</b>':'across all months')+', grouped by category ('+monthDone.length+' tasks)'+(selM?'':' — pick a month to see the individual tasks')+'.</div>';
+  var catDD='<select class="fld-sel" style="width:auto" onchange="ctPPRSetCat(this.value)"><option value="">All categories ('+catKeys.length+')</option>'+catKeys.map(function(b){return '<option value="'+esc(b).replace(/"/g,'&quot;')+'"'+(selCat===b?' selected':'')+'>'+esc(b)+' ('+byCat[b].length+')</option>';}).join('')+'</select>';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:2px"><div style="font-size:15px;font-weight:800">Accomplishments by category</div><div style="display:flex;gap:8px;flex-wrap:wrap">'+dd+catDD+'</div></div>';
+  h+='<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Completed work '+(selM?'in <b>'+_ctMlabel(selM)+'</b>':'across all months')+(selCat?', in category <b>'+esc(selCat)+'</b>':'')+', grouped by category ('+shownN+' task'+(shownN===1?'':'s')+')'+(selM?'':' — pick a month to see the individual tasks')+'.</div>';
   if(!catKeys.length)h+='<div class="empty-msg" style="margin-bottom:20px">No completed tasks'+(selM?' in '+_ctMlabel(selM):'')+'.</div>';
-  else if(!selM){var cmax=catKeys.reduce(function(m,b){return Math.max(m,byCat[b].length);},0);h+='<div style="margin-bottom:20px">'+catKeys.map(function(b){var ts=byCat[b];var tN=ts.filter(function(t){return t.ws==='Transformation';}).length;var col=tN>=ts.length-tN?CTD.transformation:CTD.support;return _ctBar(b,ts.length,cmax,col,'');}).join('')+'</div>';}
-  else h+='<div style="margin-bottom:20px">'+catKeys.map(function(b){var ts=byCat[b].slice().sort(function(a,b2){return (_ctDueTs(b2.completedDate)||0)-(_ctDueTs(a.completedDate)||0);});var tN=ts.filter(function(t){return t.ws==='Transformation';}).length;var hc=tN>=ts.length-tN?CTD.transformation:CTD.support;
+  else if(!selM){var cmax=catShown.reduce(function(m,b){return Math.max(m,byCat[b].length);},0);h+='<div style="margin-bottom:20px">'+catShown.map(function(b){var ts=byCat[b];var tN=ts.filter(function(t){return t.ws==='Transformation';}).length;var col=tN>=ts.length-tN?CTD.transformation:CTD.support;return _ctBar(b,ts.length,cmax,col,'');}).join('')+'</div>';}
+  else h+='<div style="margin-bottom:20px">'+catShown.map(function(b){var ts=byCat[b].slice().sort(function(a,b2){return (_ctDueTs(b2.completedDate)||0)-(_ctDueTs(a.completedDate)||0);});var tN=ts.filter(function(t){return t.ws==='Transformation';}).length;var hc=tN>=ts.length-tN?CTD.transformation:CTD.support;
     return '<div style="border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden"><div style="background:'+hc+'1f;border-left:3px solid '+hc+';padding:7px 12px;font-size:12px;font-weight:800;display:flex;justify-content:space-between"><span>'+esc(b)+'</span><span style="color:var(--text-muted)">'+ts.length+'</span></div><div style="padding:4px 12px">'
       +ts.map(function(t){var col=t.ws==='Transformation'?CTD.transformation:CTD.support;return '<div style="display:flex;justify-content:space-between;gap:8px;padding:3px 0;font-size:12px;border-top:1px solid var(--border);cursor:help" title="'+_ctTaskTip(t)+'"><span><span style="color:'+CTD.transformation+';margin-right:4px">&#10003;</span>'+_ctPill(t.ws==='Transformation'?'T':'S',col)+' '+esc(t.name)+' '+_ctSrcBadge(t)+(t.desc?' <span style="color:var(--text-muted);font-size:9px">&#9432;</span>':'')+'</span><span style="color:var(--text-muted);white-space:nowrap">'+esc(t.completedDate||'')+(t.completedBy?' · by '+esc(t.completedBy):'')+'</span></div>';}).join('')
       +'</div></div>';}).join('')+'</div>';
