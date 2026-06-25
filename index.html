@@ -5839,6 +5839,8 @@ function prospectConvert(id){
    proposal workflow. Records live server-side in gov_opportunities. ── */
 var _govState={list:[],loaded:false,busy:false,runs:[],showRuns:false,filters:{q:'',agency:'',naics:'',setAside:'',lifecycle:'',stage:'',recompete:'',noBid:'',bidBand:''}};
 var GOV_STAGES=['identified','qualified','capture','proposal','submitted','won','lost'];
+var _govView='list';   // 'list' | 'board' (kanban grouped by stage)
+var GOV_STAGE_C={identified:'#64748b',qualified:'#546478',capture:'#0EA5E9',proposal:'#C5A55A',submitted:'#7C3AED',won:'#16A34A',lost:'#DC2626'};
 function _govPipe(){D.govPipeline=D.govPipeline||{searches:[],settings:{}};return D.govPipeline;}
 function _govLoad(){
   var f=_govState.filters;
@@ -5861,6 +5863,7 @@ function _govDiscoveryHTML(){
     +'<button class="btn btn-outline btn-sm" onclick="govImportModal()">⬆ Import forecast CSV/XLSX</button>'
     +'<button class="btn btn-outline btn-sm" onclick="govImportGovwinCsv()" title="Upload the GovWin index.csv manifest as a quick top-up. The scheduled local sync handles documents + full automation.">📋 Import GovWin index.csv</button>'
     +'<button class="btn btn-gold btn-sm" onclick="govScoreAllUnscored()" title="AI Bid/No-Bid assessment for every not-yet-scored opportunity in the current list — one LLM call each, against the RFP docs + Company Profile">⚖ Score unscored</button>'
+    +'<button class="btn btn-outline btn-sm" onclick="_govView=(_govView===\'board\'?\'list\':\'board\');renderView()" title="Switch between list and a stage pipeline board">'+(_govView==='board'?'☰ List view':'▦ Board view')+'</button>'
     +'<button class="btn btn-outline btn-sm" onclick="govSourcesModal()">⚙ Sources</button>'
     +'<button class="btn btn-outline btn-sm" onclick="_govState.showRuns=!_govState.showRuns;renderView()">'+(_govState.showRuns?'Hide':'Show')+' ingestion log</button>'
     +'</div></div>'
@@ -5890,7 +5893,7 @@ function _govDiscoveryHTML(){
     +'</div>';
   if(_govState.busy)html+='<div class="empty-msg">Loading…</div>';
   else if(!list.length)html+='<div class="empty-msg">No opportunities yet. Add your SAM.gov API key in <b>Admin → Integrations → Data Sources</b>, then click <b>Run ingestion now</b> — or <b>Import forecast CSV</b> from the GSA Acquisition Gateway / DHS APFS / EPA forecast exports (no key needed).</div>';
-  else html+=list.map(_govCardHTML).join('');
+  else html+=(_govView==='board')?_govBoardHTML(list):list.map(_govCardHTML).join('');
   return html+'</div>';
 }
 // In-app document viewer: lists an opportunity's ingested docs and shows the
@@ -6102,7 +6105,34 @@ function govSetNoBid(id,val){
       toast(val?'Marked No Bid.':'No-Bid cleared.','success');
     }).catch(function(e){toast('No-Bid update failed: '+(e.message||''),'error');});
 }
-function govSetStage(id,stage){fetch('/api/govops/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({stage:stage})}).then(function(){var o=_govState.list.find(function(x){return x.id===id;});if(o)o.stage=stage;}).catch(function(){toast('Stage update failed.','error');});}
+// ── Gov Discovery pipeline board (kanban grouped by stage) ──
+function _govBoardHTML(list){
+  return '<div class="plan-board" style="grid-template-columns:repeat('+GOV_STAGES.length+',minmax(0,1fr))">'+GOV_STAGES.map(function(s){
+    var col=list.filter(function(o){return (o.stage||'identified')===s;}),cc=GOV_STAGE_C[s]||'#64748b';
+    return '<div class="plan-col" id="govcol_'+s+'" ondragover="govDragOver(event,\''+s+'\')" ondragleave="govDragLeave(\''+s+'\')" ondrop="govDrop(event,\''+s+'\')">'
+      +'<div class="plan-col-hdr"><span><span class="plan-col-dot" style="background:'+cc+'"></span>'+s+'</span><span style="color:var(--text-muted)">'+col.length+'</span></div>'
+      +col.map(function(o){return _govBoardCard(o,cc);}).join('')
+      +'</div>';
+  }).join('')+'</div>';
+}
+function _govBoardCard(o,cc){
+  var sc=Math.round(o.score||0),bb=o.bid_band,fitC=sc>=70?'var(--green)':sc>=40?'#D97706':'var(--text-muted)';
+  return '<div class="plan-card" style="border-left-color:'+cc+'" draggable="true" ondragstart="govDragStart(event,\''+o.id+'\')" ondragend="govDragEnd()">'
+    +'<div class="plan-card-sub" style="font-weight:700;font-size:12px">'+(o.source_url?'<a href="'+esc(o.source_url)+'" target="_blank" style="color:var(--navy);text-decoration:none">'+esc((o.title||'').slice(0,90))+' ↗</a>':esc((o.title||'').slice(0,90)))+'</div>'
+    +'<div class="plan-meta" style="margin-top:4px">'+(o.agency?'<span class="plan-chip">'+esc(o.agency)+'</span>':'')+(o.naics?'<span class="plan-chip">NAICS '+esc(o.naics)+'</span>':'')
+    +'<span class="plan-chip" style="border-color:'+fitC+'">fit '+sc+'</span>'
+    +(bb?'<span class="plan-chip" style="border-color:'+_govBidColor(bb)+';color:'+_govBidColor(bb)+';font-weight:700">⚖ '+esc(bb)+'</span>':'')
+    +(o.no_bid?'<span class="plan-chip" style="border-color:#DC2626;color:#DC2626;font-weight:700">🚫 No Bid</span>':'')
+    +'</div></div>';
+}
+var govDrag=null;
+function govDragStart(e,id){govDrag=id;if(e.dataTransfer){e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',id);}catch(_){}}if(e.target&&e.target.classList)e.target.classList.add('drag');}
+function govDragEnd(){govDrag=null;var els=document.querySelectorAll('.plan-card.drag');for(var i=0;i<els.length;i++)els[i].classList.remove('drag');}
+function govDragOver(e,k){e.preventDefault();var el=document.getElementById('govcol_'+k);if(el)el.classList.add('over');}
+function govDragLeave(k){var el=document.getElementById('govcol_'+k);if(el)el.classList.remove('over');}
+function govDrop(e,k){e.preventDefault();var el=document.getElementById('govcol_'+k);if(el)el.classList.remove('over');var id=govDrag||(e.dataTransfer&&e.dataTransfer.getData('text/plain'));if(!id)return;var o=_govState.list.find(function(x){return x.id===id;});if(!o||(o.stage||'')===k)return;govStageChange(id,k);}
+// Optimistic stage update (board card moves / list refreshes immediately), then persists.
+function govSetStage(id,stage){var o=_govState.list.find(function(x){return x.id===id;});if(o)o.stage=stage;renderView();fetch('/api/govops/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({stage:stage})}).catch(function(){toast('Stage update failed.','error');});}
 // Stage dropdown handler: advancing to Qualified offers to create the CRM
 // opportunity; advancing to Proposal offers to start a "To Be Drafted" proposal.
 // Both confirm first and skip if the opp was already promoted (no duplicates).
