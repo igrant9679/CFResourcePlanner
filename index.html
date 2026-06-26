@@ -7817,6 +7817,8 @@ function renderStrategyView(q){
 var VAL_SEGS=[{k:'awards',l:'Awards Management',type:'SaaS'},{k:'educian',l:'Educian',type:'SaaS'},{k:'gov',l:'Government',type:'Services'},{k:'proIT',l:'Professional IT',type:'Services'}];
 function _valSegLabel(k){var s=VAL_SEGS.find(function(x){return x.k===k;});return s?s.l:k;}
 function _valFmt(n){n=Math.round(Number(n)||0);var neg=n<0;n=Math.abs(n);var s;if(n>=1e6)s='$'+(n/1e6).toFixed(2)+'M';else if(n>=1e3)s='$'+Math.round(n/1e3)+'K';else s='$'+n;return neg?'−'+s:s;}
+// Inline guidance note (gold left-rule). Used throughout the Valuation page.
+function _valNote(txt){return '<div style="font-size:11px;color:var(--text-muted);background:rgba(197,165,90,0.06);border-left:3px solid var(--gold);border-radius:0 6px 6px 0;padding:8px 11px;margin:8px 0;line-height:1.55">'+txt+'</div>';}
 function _valEnsure(){
   D.proforma=D.proforma||{};
   var V=D.proforma.valuation=D.proforma.valuation||{};
@@ -7958,14 +7960,17 @@ function _valSummaryHTML(model){
     +'<div style="font-size:26px;font-weight:800;margin-top:4px">'+_valFmt(eq)+'</div>'
     +'<div style="font-size:10px;color:var(--text-muted);margin-top:3px">equity value</div>'
     +'<div style="font-size:10px;color:var(--text-muted);margin-top:6px">EV '+_valFmt(b[s].blend)+' · SOTP '+_valFmt(b[s].sotp)+' · DCF '+_valFmt(b[s].dcf)+'</div></div>';}
+  var intro=_valNote('This page values CommunityForce as the <b>sum of its parts</b> — each business segment carries its own multiple — and cross-checks that against a <b>discounted-cash-flow (DCF)</b> model, then nets out debt to reach <b>equity value</b>. Three scenarios bracket the range: <b>Worst</b> = stress case, <b>Conservative</b> = the most-likely / planning case (the headline number), <b>Best</b> = credible upside. Every input lives on the <b>Assumptions</b> tab and the whole page recomputes live.');
   var cards='<div style="display:flex;gap:12px;flex-wrap:wrap;margin:10px 0">'+card('worst','Worst case','#DC2626')+card('base','Conservative (most likely)','#2563EB')+card('best','Best case','#16A34A')+'</div>';
-  var ff='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:12px 0"><div style="font-size:13px;font-weight:800;margin-bottom:6px">Equity value range by method</div>'+_valFootballSVG(model)+'</div>';
+  var ff='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:12px 0"><div style="font-size:13px;font-weight:800;margin-bottom:6px">Equity value range by method</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Each bar spans the worst→best equity value for that method; the dot marks the Conservative case. The dashed line is $0. Where the multiple-based and DCF ranges disagree, the gap itself is worth a conversation.</div>'
+    +_valFootballSVG(model)+'</div>';
   var notes='<div style="font-size:11px;color:var(--text-muted);border-top:1px dashed var(--border);padding-top:8px;margin-top:10px">'
     +'<b>How to read this:</b> Equity = blended EV − net debt of '+_valFmt(V.netDebt)+'. '
     +'Educian revenue is net of the 50% Expentor share and is a related-party diligence item. '
     +'Professional IT has no live contracted revenue yet — it only contributes via pipeline/overrides. '
     +'FCF margin &amp; growth are forward assumptions (today\'s blended margin is thinner). Tune everything on the Assumptions tab.</div>';
-  return cards+ff+_valBridgeHTML(model)+_valRaiseHTML(model)+notes;
+  return intro+cards+ff+_valBridgeHTML(model)+_valRaiseHTML(model)+notes;
 }
 function _valBridgeHTML(model){
   var V=_valEnsure(),rows=['worst','base','best'],lbl={worst:'Worst',base:'Conservative',best:'Best'};
@@ -7975,6 +7980,7 @@ function _valBridgeHTML(model){
     +'<td style="text-align:right;font-weight:700">'+_valFmt(x.blend)+'</td><td style="text-align:right;color:#DC2626">('+_valFmt(V.netDebt)+')</td>'
     +'<td style="text-align:right;font-weight:800">'+_valFmt(x.equity)+'</td></tr>';}).join('');
   return '<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:12px 0"><div style="font-size:13px;font-weight:800;margin-bottom:6px">Enterprise value → equity bridge</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Enterprise value (EV) is the worth of the whole operating business. Subtracting <b>net debt</b> (what the company owes, net of cash) leaves <b>equity value</b> — what the shareholders own, and the number a raise or sale is struck on.</div>'
     +'<table style="width:100%;font-size:12px;border-collapse:collapse"><thead>'+hdr+'</thead><tbody>'+body+'</tbody></table></div>';
 }
 function _valRaiseHTML(model){
@@ -7982,6 +7988,7 @@ function _valRaiseHTML(model){
   return '<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:12px 0">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div style="font-size:13px;font-weight:800">Fundraise / sale lens (Conservative case)</div>'
     +'<div class="fld" style="margin:0"><label class="fld-l">New capital raised</label><input class="fld-i" style="width:130px" type="number" value="'+cap+'" onchange="valSetNum(\'newCapital\',this.value)"></div></div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-top:6px">Pre-money = the company\'s current equity value (Conservative case). Enter the new capital you\'d raise to see the post-money value and the ownership % an investor would take for that check.</div>'
     +'<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px">'
     +'<div style="flex:1;min-width:140px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Pre-money</div><div style="font-size:18px;font-weight:800">'+_valFmt(pre)+'</div></div>'
     +'<div style="flex:1;min-width:140px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Post-money</div><div style="font-size:18px;font-weight:800">'+_valFmt(post)+'</div></div>'
@@ -8014,42 +8021,63 @@ function _valSegmentsHTML(model){
   var projTbl='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:10px 0"><div style="font-size:13px;font-weight:800;margin-bottom:4px">Project → segment mapping</div>'
     +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Auto-classified by name; re-assign any project to correct its segment. Changes persist.</div>'
     +'<table style="width:100%;font-size:12px;border-collapse:collapse"><thead>'+phdr+'</thead><tbody>'+pbody+'</tbody></table></div>';
-  return segTbl+projTbl;
+  var intro=_valNote('Atlas has no built-in product-line tagging, so the model classifies each project into one of four segments and sums its <b>forward-12-month (NTM) revenue</b> from the live projection engine — the same source as Capacity &amp; Strategy. Segment-level matters because a SaaS dollar and a services dollar earn very different multiples. Use <b>Override</b> to pin a figure when NTM understates reality (e.g. a SaaS line whose contract renews mid-year, or true ARR). <b>Educian</b> is shown net of the 50% Expentor split; <b>Professional IT</b> has no contracted revenue yet, so it only adds value once given pipeline or an override.');
+  return intro+segTbl+projTbl;
 }
 function _valAssumptionsHTML(model){
-  var V=_valEnsure();
+  var V=_valEnsure(),b=model.byScn,seg=model.segRev;
+  var totalRev=Object.keys(seg).reduce(function(a,k){return a+seg[k];},0);
   function num(val,fn,w){return '<input class="fld-i" style="width:'+(w||64)+'px;text-align:right" type="number" step="0.1" value="'+val+'" onchange="'+fn+'">';}
-  var mhdr='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)"><td style="padding:4px 0">Segment</td><td style="text-align:right">Worst</td><td style="text-align:right">Conservative</td><td style="text-align:right">Best</td><td style="font-size:10px">Metric</td></tr>';
-  var mbody=VAL_SEGS.map(function(sg){return '<tr><td style="padding:5px 0;font-weight:700">'+sg.l+'</td>'
-    +'<td style="text-align:right">'+num(V.mult[sg.k].worst,'valSetMult(\''+sg.k+'\',\'worst\',this.value)')+'</td>'
-    +'<td style="text-align:right">'+num(V.mult[sg.k].base,'valSetMult(\''+sg.k+'\',\'base\',this.value)')+'</td>'
-    +'<td style="text-align:right">'+num(V.mult[sg.k].best,'valSetMult(\''+sg.k+'\',\'best\',this.value)')+'</td>'
-    +'<td style="font-size:11px;color:var(--text-muted)">× '+(sg.type==='SaaS'?'ARR':'revenue')+'</td></tr>';}).join('');
+  function ev(n){return '<div style="font-size:9px;color:var(--text-muted);margin-top:2px">= '+_valFmt(n)+'</div>';}
+  // ── multiples (with resulting $ EV under each input) ──
+  var mhdr='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)"><td style="padding:4px 0">Segment</td><td style="text-align:right">Revenue basis</td><td style="text-align:right">Worst</td><td style="text-align:right">Conservative</td><td style="text-align:right">Best</td><td style="font-size:10px">Metric</td></tr>';
+  var mbody=VAL_SEGS.map(function(sg){return '<tr><td style="padding:5px 0;font-weight:700;vertical-align:top">'+sg.l+'</td>'
+    +'<td style="text-align:right;color:var(--text-muted);vertical-align:top">'+_valFmt(seg[sg.k]||0)+'</td>'
+    +'<td style="text-align:right;vertical-align:top">'+num(V.mult[sg.k].worst,'valSetMult(\''+sg.k+'\',\'worst\',this.value)')+ev(b.worst.segEV[sg.k])+'</td>'
+    +'<td style="text-align:right;vertical-align:top">'+num(V.mult[sg.k].base,'valSetMult(\''+sg.k+'\',\'base\',this.value)')+ev(b.base.segEV[sg.k])+'</td>'
+    +'<td style="text-align:right;vertical-align:top">'+num(V.mult[sg.k].best,'valSetMult(\''+sg.k+'\',\'best\',this.value)')+ev(b.best.segEV[sg.k])+'</td>'
+    +'<td style="font-size:11px;color:var(--text-muted);vertical-align:top">× '+(sg.type==='SaaS'?'ARR':'revenue')+'</td></tr>';}).join('');
+  var mtot='<tr style="border-top:2px solid var(--border)"><td style="padding:7px 0 0;font-weight:800">Sum-of-the-parts EV</td>'
+    +'<td style="text-align:right;padding-top:7px;color:var(--text-muted)">'+_valFmt(totalRev)+'</td>'
+    +'<td style="text-align:right;padding-top:7px;font-weight:800">'+_valFmt(b.worst.sotp)+'</td>'
+    +'<td style="text-align:right;padding-top:7px;font-weight:800">'+_valFmt(b.base.sotp)+'</td>'
+    +'<td style="text-align:right;padding-top:7px;font-weight:800">'+_valFmt(b.best.sotp)+'</td><td></td></tr>';
   var mult='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:10px 0"><div style="font-size:13px;font-weight:800;margin-bottom:4px">Valuation multiples by segment</div>'
-    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">SaaS segments valued on ARR; services on forward revenue. Defaults reflect mid-2026 benchmarks (private SaaS ~4–5.5× ARR + AI premium; gov/IT services ~1–1.3× revenue).</div>'
-    +'<table style="width:100%;font-size:12px;border-collapse:collapse"><thead>'+mhdr+'</thead><tbody>'+mbody+'</tbody></table></div>';
-  function drow(lbl,grp){return '<tr><td style="padding:5px 0;font-weight:700">'+lbl+'</td>'
-    +'<td style="text-align:right">'+num(V[grp].worst,'valSetScn(\''+grp+'\',\'worst\',this.value)')+'</td>'
-    +'<td style="text-align:right">'+num(V[grp].base,'valSetScn(\''+grp+'\',\'base\',this.value)')+'</td>'
-    +'<td style="text-align:right">'+num(V[grp].best,'valSetScn(\''+grp+'\',\'best\',this.value)')+'</td></tr>';}
+    +_valNote('Each segment\'s revenue is multiplied by the chosen multiple to give its enterprise value — shown in grey as <b>= $</b> under each input, and totalled as <b>Sum-of-the-parts EV</b> at the bottom. SaaS lines (Awards, Educian) are valued on <b>ARR</b>; services (Government, Professional IT) on <b>forward revenue</b>. Defaults reflect mid-2026 benchmarks — private SaaS ~4–5.5× ARR (plus an AI premium for Awards), gov/IT services ~1–1.3× revenue. Raise SaaS multiples if you can evidence durable growth + retention; lower services multiples for customer concentration or recompete risk.')
+    +'<table style="width:100%;font-size:12px;border-collapse:collapse"><thead>'+mhdr+'</thead><tbody>'+mbody+mtot+'</tbody></table></div>';
+  // ── DCF drivers (with resulting DCF EV) ──
+  function drow(lbl,grp,hint){return '<tr><td style="padding:5px 0;font-weight:700;vertical-align:top">'+lbl+'<div style="font-size:9px;font-weight:400;color:var(--text-muted)">'+hint+'</div></td>'
+    +'<td style="text-align:right;vertical-align:top">'+num(V[grp].worst,'valSetScn(\''+grp+'\',\'worst\',this.value)')+'</td>'
+    +'<td style="text-align:right;vertical-align:top">'+num(V[grp].base,'valSetScn(\''+grp+'\',\'base\',this.value)')+'</td>'
+    +'<td style="text-align:right;vertical-align:top">'+num(V[grp].best,'valSetScn(\''+grp+'\',\'best\',this.value)')+'</td></tr>';}
   var dhdr='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)"><td style="padding:4px 0">Driver (%)</td><td style="text-align:right">Worst</td><td style="text-align:right">Conservative</td><td style="text-align:right">Best</td></tr>';
-  var drivers='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:10px 0"><div style="font-size:13px;font-weight:800;margin-bottom:8px">DCF scenario drivers</div>'
+  var dtot='<tr style="border-top:2px solid var(--border)"><td style="padding:7px 0 0;font-weight:800">→ DCF enterprise value</td>'
+    +'<td style="text-align:right;padding-top:7px;font-weight:800">'+_valFmt(b.worst.dcf)+'</td>'
+    +'<td style="text-align:right;padding-top:7px;font-weight:800">'+_valFmt(b.base.dcf)+'</td>'
+    +'<td style="text-align:right;padding-top:7px;font-weight:800">'+_valFmt(b.best.dcf)+'</td></tr>';
+  var drivers='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:10px 0"><div style="font-size:13px;font-weight:800;margin-bottom:6px">DCF scenario drivers</div>'
+    +_valNote('The DCF cross-check projects free cash flow over the horizon and discounts it back to today. <b>WACC</b> is the annual discount rate (required return / risk) — <i>higher WACC → lower value</i>. <b>Revenue growth</b> compounds each year after year 1. <b>Terminal growth</b> is the perpetual rate beyond the horizon — keep it below WACC and near long-run GDP (~2–3%). The resulting enterprise value per scenario is shown at the bottom.')
     +'<table style="width:100%;font-size:12px;border-collapse:collapse"><thead>'+dhdr+'</thead><tbody>'
-    +drow('WACC / discount rate','wacc')+drow('Revenue growth','growth')+drow('Terminal growth','termGrowth')
-    +'</tbody></table></div>';
-  var glob='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:10px 0"><div style="font-size:13px;font-weight:800;margin-bottom:8px">Global assumptions</div>'
+    +drow('WACC / discount rate','wacc','required return; higher = lower value')+drow('Revenue growth','growth','annual, compounds after yr 1')+drow('Terminal growth','termGrowth','perpetual; must stay below WACC')
+    +dtot+'</tbody></table></div>';
+  // ── global (with $ readouts) ──
+  var yr1fcf=Math.round(totalRev*(V.fcfMargin/100));
+  var glob='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:10px 0"><div style="font-size:13px;font-weight:800;margin-bottom:6px">Global assumptions</div>'
+    +_valNote('<b>FCF margin</b> is the share of revenue that becomes free cash flow in the DCF (a forward target — today\'s blended margin is thinner). <b>DCF horizon</b> is the explicit forecast length. <b>Blend weight</b> sets how much the headline leans on sum-of-the-parts vs DCF. <b>Net debt</b> (total corporate debt − cash) is subtracted from enterprise value to reach equity.')
     +'<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">'
-    +'<div class="fld" style="margin:0"><label class="fld-l">FCF margin %</label>'+num(V.fcfMargin,'valSetNum(\'fcfMargin\',this.value)',70)+'</div>'
+    +'<div class="fld" style="margin:0"><label class="fld-l">FCF margin %</label>'+num(V.fcfMargin,'valSetNum(\'fcfMargin\',this.value)',70)+'<div style="font-size:9px;color:var(--text-muted);margin-top:2px">≈ '+_valFmt(yr1fcf)+' yr-1 FCF</div></div>'
     +'<div class="fld" style="margin:0"><label class="fld-l">DCF horizon (yrs)</label>'+num(V.dcfYears,'valSetNum(\'dcfYears\',this.value)',70)+'</div>'
-    +'<div class="fld" style="margin:0"><label class="fld-l">Blend weight: SOTP %</label>'+num(V.blendSotpPct,'valSetNum(\'blendSotpPct\',this.value)',70)+'</div>'
+    +'<div class="fld" style="margin:0"><label class="fld-l">Blend weight: SOTP %</label>'+num(V.blendSotpPct,'valSetNum(\'blendSotpPct\',this.value)',70)+'<div style="font-size:9px;color:var(--text-muted);margin-top:2px">DCF gets '+(100-Number(V.blendSotpPct))+'%</div></div>'
     +'<div class="fld" style="margin:0"><label class="fld-l">Net debt ($)</label>'+num(V.netDebt,'valSetNum(\'netDebt\',this.value)',130)+'</div>'
-    +'</div><div style="font-size:10px;color:var(--text-muted);margin-top:8px">Blend = SOTP×weight + DCF×(1−weight). Net debt default = total corporate debt − cash; edit if the capital structure changes.</div></div>';
-  return mult+drivers+glob;
+    +'</div></div>';
+  // ── conservative dollar build-up ──
+  var walk=_valNote('<b>Conservative build-up:</b> SOTP '+_valFmt(b.base.sotp)+' × '+V.blendSotpPct+'% + DCF '+_valFmt(b.base.dcf)+' × '+(100-Number(V.blendSotpPct))+'% = blended EV <b>'+_valFmt(b.base.blend)+'</b> − net debt '+_valFmt(V.netDebt)+' = equity <b>'+_valFmt(b.base.equity)+'</b>.&nbsp; (Worst '+_valFmt(b.worst.equity)+' · Best '+_valFmt(b.best.equity)+'.)');
+  return mult+drivers+glob+walk;
 }
 function _valSensitivityHTML(model){
   var s=_valSensitivity();
   return '<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:10px 0"><div style="font-size:13px;font-weight:800;margin-bottom:4px">Sensitivity — what moves equity value most</div>'
-    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Each bar swings one driver from its Worst to its Best while holding everything else at Conservative. Base equity: <b>'+_valFmt(s.baseEq)+'</b>.</div>'
+    +_valNote('Each bar swings <b>one</b> driver from its Worst to its Best while holding every other input at the Conservative case — so the bar length is how much that single assumption alone changes equity value (the <b>±</b> figure is half the swing). The longest bars at the top are where the valuation is most fragile: the assumptions to defend hardest in diligence and negotiate first in a deal. Conservative (base) equity: <b>'+_valFmt(s.baseEq)+'</b>.')
     +_valTornadoSVG(s)+'</div>';
 }
 /* ── DEBT-FREE PLAN: multi-year revenue model (FY26→FY29) at a configurable
