@@ -7832,6 +7832,7 @@ function _valEnsure(){
   if(V.educianRetainPct==null)V.educianRetainPct=50;
   if(!V.revOverride)V.revOverride={};
   if(!V.segByProj)V.segByProj={};
+  if(!V.term)V.term={};
   if(V.netDebt==null){var debt=(D.proforma.debt&&D.proforma.debt.total)||4091319;var cash=Math.round((typeof capOpeningCash==='function'?capOpeningCash():1100000)||1100000);V.netDebt=debt-cash;}
   if(V.newCapital==null)V.newCapital=0;
   return V;
@@ -7851,6 +7852,18 @@ function _valProjNTM(p){
   months.forEach(function(mo){if(capInWindow(p,mo.y,mo.m))r+=capProjRevAt(p,mo.y,mo.m);});
   return r;
 }
+// ── Contract term: editable Start/End per project → months remaining → backlog ──
+// Valuation-scoped dates (D.proforma.valuation.term), seeded from the project's
+// own startDate/endDate so the 19-month operational projection is left untouched.
+function _valTermOf(p){var V=_valEnsure();var t=(V.term&&V.term[p.id])||{};return {start:(t.start!=null&&t.start!=='')?t.start:(p.startDate||''),end:(t.end!=null&&t.end!=='')?t.end:(p.endDate||'')};}
+function _valMonthsLeft(endStr){if(!endStr)return null;var pr=String(endStr).split('-');var ey=+pr[0],em=(+pr[1]||1)-1;if(!ey)return null;var now=new Date();var ni=now.getFullYear()*12+now.getMonth(),ei=ey*12+em;return Math.max(0,ei-ni+1);}
+function _valProjMonthlyRR(p){return Number(p.revenue)||0;}   // headline monthly run-rate
+function _valProjBacklog(p){var ml=_valMonthsLeft(_valTermOf(p).end);return ml==null?null:_valProjMonthlyRR(p)*ml;}
+// Contracted backlog (remaining committed revenue) summed per segment; Educian net of Expentor.
+function _valSegBacklog(){var V=_valEnsure(),out={awards:0,educian:0,gov:0,proIT:0},any={awards:false,educian:false,gov:false,proIT:false};
+  (D.projects||[]).filter(function(p){return projCat(p)==='project';}).forEach(function(p){var seg=_valSegOf(p);if(!out.hasOwnProperty(seg))return;var b=_valProjBacklog(p);if(b!=null){out[seg]+=b;any[seg]=true;}});
+  out.educian=Math.round(out.educian*(V.educianRetainPct!=null?V.educianRetainPct:50)/100);return {backlog:out,any:any};}
+function valSetTerm(pid,field,val){var V=_valEnsure();V.term=V.term||{};V.term[pid]=V.term[pid]||{};if(val==='')delete V.term[pid][field];else V.term[pid][field]=val;save();renderView();}
 function _valSegRevenue(){
   var V=_valEnsure();
   var net={awards:0,educian:0,gov:0,proIT:0},raw={awards:0,educian:0,gov:0,proIT:0};
@@ -8016,32 +8029,42 @@ function _valRaiseHTML(model){
 }
 function _valSegmentsHTML(model){
   var V=_valEnsure(),net=model.segRev,raw=model.segRaw;
-  var hdr='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)"><td style="padding:4px 0">Segment</td><td>Type</td><td style="text-align:right">Auto NTM rev</td><td style="text-align:right">Override</td><td style="text-align:right">Used (annual)</td></tr>';
+  var blk=_valSegBacklog();
+  var hdr='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)"><td style="padding:4px 0">Segment</td><td>Type</td><td style="text-align:right">Auto NTM rev</td><td style="text-align:right">Override</td><td style="text-align:right">Used (annual)</td><td style="text-align:right">Contracted backlog</td></tr>';
   var body=VAL_SEGS.map(function(sg){
     var auto=raw[sg.k]||0,ov=(V.revOverride&&V.revOverride[sg.k]!=null&&V.revOverride[sg.k]!=='')?V.revOverride[sg.k]:'',used=net[sg.k]||0;
     var note=sg.k==='educian'?' <span style="font-size:10px;color:#D97706">net '+V.educianRetainPct+'% after Expentor</span>':(sg.k==='proIT'&&!auto?' <span style="font-size:10px;color:#D97706">no live revenue</span>':'');
+    var blv=blk.any[sg.k]?_valFmt(blk.backlog[sg.k]||0):'—';
     return '<tr><td style="padding:5px 0;font-weight:700">'+sg.l+note+'</td><td style="font-size:11px;color:var(--text-muted)">'+sg.type+'</td>'
       +'<td style="text-align:right">'+_valFmt(auto)+'</td>'
-      +'<td style="text-align:right"><input class="fld-i" style="width:118px;text-align:right" type="number" placeholder="auto" value="'+ov+'" onchange="valSetRev(\''+sg.k+'\',this.value)"></td>'
-      +'<td style="text-align:right;font-weight:800">'+_valFmt(used)+'</td></tr>';
+      +'<td style="text-align:right"><input class="fld-i" style="width:108px;text-align:right" type="number" placeholder="auto" value="'+ov+'" onchange="valSetRev(\''+sg.k+'\',this.value)"></td>'
+      +'<td style="text-align:right;font-weight:800">'+_valFmt(used)+'</td>'
+      +'<td style="text-align:right;color:var(--text-muted)">'+blv+'</td></tr>';
   }).join('');
-  var segTbl='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:10px 0"><div style="font-size:13px;font-weight:800;margin-bottom:4px">Segment revenue (forward 12-month, from the projection)</div>'
-    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Auto-summed from tagged projects. Leave Override blank to use the live figure; set it to pin a number (e.g. true SaaS ARR where a contract rolls off mid-year).</div>'
+  var segTbl='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:10px 0"><div style="font-size:13px;font-weight:800;margin-bottom:4px">Segment revenue &amp; contracted backlog</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Annual revenue (forward 12-month) is what the multiple is applied to. <b>Contracted backlog</b> = remaining committed revenue from the contract terms below — the de-risked floor. Leave Override blank to use the live figure; set it to pin a number (e.g. true SaaS ARR).</div>'
     +'<table style="width:100%;font-size:12px;border-collapse:collapse"><thead>'+hdr+'</thead><tbody>'+body+'</tbody></table>'
     +'<div style="margin-top:10px;display:flex;align-items:center;gap:8px"><label class="fld-l" style="margin:0">Educian revenue retained by CF (% after Expentor split)</label><input class="fld-i" style="width:70px" type="number" value="'+V.educianRetainPct+'" onchange="valSetNum(\'educianRetainPct\',this.value)"></div></div>';
   var projs=(D.projects||[]).filter(function(p){return projCat(p)==='project';});
-  var phdr='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)"><td style="padding:4px 0">Project</td><td style="text-align:right">NTM revenue</td><td style="text-align:right">Segment</td></tr>';
+  var phdr='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)"><td style="padding:4px 0">Project</td><td style="text-align:right">Monthly</td><td>Start</td><td>End</td><td style="text-align:right">Months left</td><td style="text-align:right">Backlog</td><td style="text-align:right">Segment</td></tr>';
   var pbody=projs.map(function(p){
-    var seg=_valSegOf(p),r=_valProjNTM(p);
+    var seg=_valSegOf(p),t=_valTermOf(p),ml=_valMonthsLeft(t.end),mo=_valProjMonthlyRR(p),blp=_valProjBacklog(p);
+    function dateInp(field,val){return '<input class="fld-i" style="width:118px" type="month" value="'+(val||'')+'" onchange="valSetTerm(\''+p.id+'\',\''+field+'\',this.value)">';}
     var opts=VAL_SEGS.map(function(sg){return '<option value="'+sg.k+'"'+(seg===sg.k?' selected':'')+'>'+sg.l+'</option>';}).join('');
-    return '<tr><td style="padding:5px 0">'+esc(p.name||p.id)+'</td><td style="text-align:right">'+_valFmt(r)+'</td>'
-      +'<td style="text-align:right"><select class="fld-i" style="width:170px" onchange="valSetSeg(\''+p.id+'\',this.value)">'+opts+'</select></td></tr>';
+    return '<tr><td style="padding:5px 0">'+esc(p.name||p.id)+'</td>'
+      +'<td style="text-align:right">'+_valFmt(mo)+'</td>'
+      +'<td>'+dateInp('start',t.start)+'</td>'
+      +'<td>'+dateInp('end',t.end)+'</td>'
+      +'<td style="text-align:right;font-weight:700">'+(ml==null?'—':ml+' mo')+'</td>'
+      +'<td style="text-align:right;color:var(--text-muted)">'+(blp==null?'—':_valFmt(blp))+'</td>'
+      +'<td style="text-align:right"><select class="fld-i" style="width:150px" onchange="valSetSeg(\''+p.id+'\',this.value)">'+opts+'</select></td></tr>';
   }).join('');
-  var projTbl='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:10px 0"><div style="font-size:13px;font-weight:800;margin-bottom:4px">Project → segment mapping</div>'
-    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Auto-classified by name; re-assign any project to correct its segment. Changes persist.</div>'
+  var projTbl='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:10px 0"><div style="font-size:13px;font-weight:800;margin-bottom:4px">Contract terms &amp; segment mapping</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Enter each project\'s <b>Start</b> and <b>End</b> (YYYY-MM). <b>Months left</b> counts from today; <b>Backlog</b> = monthly × months left. Dates here are valuation-only and seed from the project\'s own dates — editing them won\'t disturb Capacity/Strategy. Re-assign Segment if auto-classification is wrong.</div>'
     +'<table style="width:100%;font-size:12px;border-collapse:collapse"><thead>'+phdr+'</thead><tbody>'+pbody+'</tbody></table></div>';
-  var intro=_valNote('Atlas has no built-in product-line tagging, so the model classifies each project into one of four segments and sums its <b>forward-12-month (NTM) revenue</b> from the live projection engine — the same source as Capacity &amp; Strategy. Segment-level matters because a SaaS dollar and a services dollar earn very different multiples. Use <b>Override</b> to pin a figure when NTM understates reality (e.g. a SaaS line whose contract renews mid-year, or true ARR). <b>Educian</b> is shown net of the 50% Expentor split; <b>Professional IT</b> has no contracted revenue yet, so it only adds value once given pipeline or an override.');
-  return intro+segTbl+projTbl;
+  var intro=_valNote('Atlas has no built-in product-line tagging, so the model classifies each project into one of four segments. Segment-level matters because a SaaS dollar and a services dollar earn very different multiples.');
+  var termNote=_valNote('<b>Contract term → backlog → the right multiple.</b> Enter Start/End dates below and the model computes <b>months remaining</b> and <b>contracted backlog</b> (monthly × months left) — your committed, de-risked revenue floor. Backlog is <i>not</i> multiplied into enterprise value (a 5-year book isn\'t worth 5× its annual run-rate), but it tells you how secure each segment is: <b>long, locked terms justify pushing that segment\'s multiple toward the high end</b>; short or expiring terms toward the low end. The multiple you set is then applied to annual revenue across all three scenarios. Educian / Professional IT caveats: Educian backlog is net of the 50% Expentor split; Professional IT shows nothing until it has contracted revenue.');
+  return intro+segTbl+termNote+projTbl;
 }
 function _valAssumptionsHTML(model){
   var V=_valEnsure(),b=model.byScn,seg=model.segRev;
