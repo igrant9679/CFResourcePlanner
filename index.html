@@ -3241,7 +3241,7 @@ function _ctFilteredPos(c){
   });
 }
 function renderContractsView(q){
-  if(!canProforma())return '<div class="empty-msg">No access. Contract Management is restricted to Admin.</div>';
+  if(!canSee('contracts'))return '<div class="empty-msg">You don\'t have access to the Contract Management module.</div>';
   var cs=D.contracts||[];
   var html='<div style="max-width:1300px;margin:0 auto">'
     +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:10px">'
@@ -15710,7 +15710,16 @@ function authMigrate(){
   D.accounts.forEach(function(a){if(!('active' in a))a.active=true;if(!a.programIds)a.programIds=[];if(!a.role)a.role='viewer';});
   if(!D.sectionVis)D.sectionVis={};['owner','editor','viewer'].forEach(function(r){if(!D.sectionVis[r])D.sectionVis[r]={};});
 }
-function canSee(k){if(!ME)return false;if(k==='proforma'||k==='strat')return canProforma();if(ME.role==='admin')return true;if(k==='recruit')return canRecruit();if(k==='prop')return canProposal();var rv=D.sectionVis&&D.sectionVis[ME.role];return rv?rv[k]!==false:true;}
+function canSee(k){if(!ME)return false;if(k==='proforma'||k==='strat')return canProforma();if(ME.role==='admin')return true;
+  // Section Visibility is authoritative for tab/section visibility. An explicit
+  // grant or revoke in D.sectionVis[role] always wins. For the capability-gated
+  // modules (Proposals, Recruiting) an UNSET cell falls back to the module
+  // capability so prior defaults are preserved; setting the cell (tick/untick)
+  // overrides it — which is why the matrix toggle previously did nothing.
+  var rv=D.sectionVis&&D.sectionVis[ME.role];var has=rv&&Object.prototype.hasOwnProperty.call(rv,k);
+  if(k==='recruit')return has?rv[k]!==false:canRecruit();
+  if(k==='prop')return has?rv[k]!==false:canProposal();
+  return has?rv[k]!==false:true;}
 function canRecruit(){
   if(!ME)return false;
   if(ME.role==='admin'||ME.role==='editor')return true;
