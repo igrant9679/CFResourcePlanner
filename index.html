@@ -6213,45 +6213,83 @@ function _govBoardCard(o,cc){
     +(o.no_bid?'<span class="plan-chip" style="border-color:#DC2626;color:#DC2626;font-weight:700">🚫 No Bid</span>':'')
     +'</div></div>';
 }
-// ── Gov Discovery reports (pipeline analytics over the current list) ──
+// ── Gov Discovery reports (configurable pipeline analytics over the current list) ──
+var _govRpt={metric:'count',dim:'agency'};
+function govRptSet(k,v){_govRpt[k]=v;renderView();}
+// Breakdown dimensions — each maps an opp to a bucket; `cats` (when present) fixes the order.
+var GOV_RPT_DIMS=[
+  {k:'stage',l:'Stage',cats:GOV_STAGES,of:function(o){return o.stage||'identified';}},
+  {k:'agency',l:'Agency',of:function(o){return o.agency||'(unspecified)';}},
+  {k:'sub_agency',l:'Sub-agency',of:function(o){return o.sub_agency||'(none)';}},
+  {k:'naics',l:'NAICS',of:function(o){return o.naics||'(none)';}},
+  {k:'set_aside',l:'Set-aside',of:function(o){return o.set_aside||'(none)';}},
+  {k:'lifecycle',l:'Lifecycle',cats:['forecast','sources-sought','presolicitation','solicitation','special'],of:function(o){return o.lifecycle||'(none)';}},
+  {k:'bid_band',l:'Bid / No-Bid band',cats:['Bid','Likely Bid','Review','No-Bid'],of:function(o){return o.bid_band||'(unscored)';}},
+  {k:'fit',l:'Fit band',cats:['0–39','40–69','70–100'],of:function(o){var s=Number(o.score)||0;return s>=70?'70–100':(s>=40?'40–69':'0–39');}},
+  {k:'value',l:'Value band',cats:['<$100K','$100K–$1M','$1M–$10M','$10M+','(no value)'],of:function(o){var v=Number(o.value_high||o.value_low)||0;return v<=0?'(no value)':(v<1e5?'<$100K':(v<1e6?'$100K–$1M':(v<1e7?'$1M–$10M':'$10M+')));}},
+  {k:'recompete',l:'New vs recompete',cats:['Recompete','New'],of:function(o){return o.recompete?'Recompete':'New';}},
+  {k:'noBid',l:'No-Bid status',cats:['No Bid','Active'],of:function(o){return o.no_bid?'No Bid':'Active';}}
+];
+function _govRptVal(o){return Number(o.value_high||o.value_low)||0;}
+function _govRptSeries(list,dimKey,metric){
+  var def=GOV_RPT_DIMS[0];for(var i=0;i<GOV_RPT_DIMS.length;i++){if(GOV_RPT_DIMS[i].k===dimKey){def=GOV_RPT_DIMS[i];break;}}
+  var agg={};list.forEach(function(o){var k=def.of(o),add=(metric==='value')?_govRptVal(o):1;agg[k]=(agg[k]||0)+add;});
+  var cats;
+  if(def.cats){cats=def.cats.slice();Object.keys(agg).forEach(function(k){if(cats.indexOf(k)<0)cats.push(k);});cats=cats.filter(function(c){return agg[c]!=null;});}
+  else cats=Object.keys(agg).sort(function(a,b){return agg[b]-agg[a];}).slice(0,15);
+  return {cats:cats,values:cats.map(function(c){return agg[c]||0;}),def:def};
+}
 function _govReportsHTML(list){
   var n=list.length,fmtN=function(x){return Number(x||0).toLocaleString('en-US');};
-  var totalVal=0,scored=0,noBid=0,recompete=0,fitSum=0,fitN=0;
-  list.forEach(function(o){
-    totalVal+=Number(o.value_high||o.value_low)||0;
-    if(o.bid_band)scored++;
-    if(o.no_bid)noBid++;
-    if(o.recompete)recompete++;
+  if(!n)return '<div class="empty-msg">No opportunities to report on.</div>';
+  var vals=[],totalVal=0,scored=0,noBid=0,recompete=0,fitSum=0,fitN=0,won=0,lost=0,agc={};
+  list.forEach(function(o){var v=_govRptVal(o);totalVal+=v;if(v>0)vals.push(v);
+    if(o.bid_band)scored++;if(o.no_bid)noBid++;if(o.recompete)recompete++;
     var sc=Number(o.score);if(o.score!=null&&!isNaN(sc)){fitSum+=sc;fitN++;}
-  });
-  var avgFit=fitN?Math.round(fitSum/fitN):0;
-  var byStage=GOV_STAGES.map(function(s){return list.filter(function(o){return (o.stage||'identified')===s;}).length;});
-  var valByStage=GOV_STAGES.map(function(s){return list.filter(function(o){return (o.stage||'identified')===s;}).reduce(function(t,o){return t+(Number(o.value_high||o.value_low)||0);},0);});
-  var BANDS=['Bid','Likely Bid','Review','No-Bid'],byBand=BANDS.map(function(b){return list.filter(function(o){return o.bid_band===b;}).length;});
-  var LCS=['forecast','sources-sought','presolicitation','solicitation','special'],byLc=LCS.map(function(l){return list.filter(function(o){return o.lifecycle===l;}).length;});
-  var agc={};list.forEach(function(o){var a=o.agency||'(unspecified)';agc[a]=(agc[a]||0)+1;});
-  var topAg=Object.keys(agc).sort(function(a,b){return agc[b]-agc[a];}).slice(0,10);
-  function card(lbl,val,sub,color){return '<div style="flex:1;min-width:130px;border:1px solid var(--border);border-radius:10px;padding:12px 14px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">'+lbl+'</div><div style="font-size:20px;font-weight:800;'+(color?'color:'+color:'')+'">'+val+'</div>'+(sub?'<div style="font-size:10px;color:var(--text-muted)">'+sub+'</div>':'')+'</div>';}
-  function box(title,svg){return '<div style="flex:1;min-width:300px;border:1px solid var(--border);border-radius:10px;padding:12px 14px"><div style="font-size:12px;font-weight:800;margin-bottom:6px">'+title+'</div><div style="overflow-x:auto">'+svg+'</div></div>';}
-  var h='<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Pipeline analytics over the <b>'+n+'</b> opportunit'+(n===1?'y':'ies')+' in the current view — reflects the active filters above.</div>';
+    var st=o.stage||'identified';if(st==='won')won++;else if(st==='lost')lost++;
+    agc[o.agency||'(unspecified)']=1;});
+  vals.sort(function(a,b){return a-b;});
+  var avgVal=vals.length?Math.round(totalVal/vals.length):0;
+  var medVal=vals.length?(vals.length%2?vals[(vals.length-1)/2]:Math.round((vals[vals.length/2-1]+vals[vals.length/2])/2)):0;
+  var avgFit=fitN?Math.round(fitSum/fitN):0,nAg=Object.keys(agc).length;
+  var metric=_govRpt.metric,dim=_govRpt.dim,metricLbl=(metric==='value')?'Pipeline value':'Opportunities',metricFmt=(metric==='value')?'money':'int',metricCol=(metric==='value')?'#16A34A':'#546478';
+  function card(lbl,val,sub,color){return '<div style="flex:1;min-width:120px;border:1px solid var(--border);border-radius:10px;padding:12px 14px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">'+lbl+'</div><div style="font-size:19px;font-weight:800;'+(color?'color:'+color:'')+'">'+val+'</div>'+(sub?'<div style="font-size:10px;color:var(--text-muted)">'+sub+'</div>':'')+'</div>';}
+  function box(title,svg,extra){return '<div style="flex:1;min-width:300px;border:1px solid var(--border);border-radius:10px;padding:12px 14px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px"><div style="font-size:12px;font-weight:800">'+title+'</div>'+(extra||'')+'</div><div style="overflow-x:auto">'+svg+'</div></div>';}
+  var metricToggle=['count','value'].map(function(m){return '<button class="btn '+(metric===m?'btn-navy':'btn-outline')+' btn-sm" onclick="govRptSet(\'metric\',\''+m+'\')">'+(m==='count'?'# Count':'$ Value')+'</button>';}).join('');
+  var dimSel='<select class="fld-sel" style="width:auto" onchange="govRptSet(\'dim\',this.value)">'+GOV_RPT_DIMS.map(function(d){return '<option value="'+d.k+'"'+(dim===d.k?' selected':'')+'>'+esc(d.l)+'</option>';}).join('')+'</select>';
+  var h='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px"><div style="font-size:12px;color:var(--text-muted)">Pipeline analytics over the <b>'+n+'</b> opportunit'+(n===1?'y':'ies')+' in view — reflects the active filters above.</div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Metric</span>'+metricToggle+'</div></div>';
   h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">'
-    +card('Opportunities',fmtN(n),'in view','')
+    +card('Opportunities',fmtN(n),nAg+' agencies','')
     +card('Pipeline value',fmt(Math.round(totalVal)),'sum of est. value','')
-    +card('Scored',fmtN(scored)+' / '+fmtN(n),'AI Bid/No-Bid done','')
-    +card('Avg fit',avgFit,'fit score (0–100)','')
-    +card('No Bid',fmtN(noBid),'marked No Bid',noBid?'#DC2626':'')
+    +card('Avg / median',fmt(avgVal),'median '+fmt(medVal),'')
+    +card('Scored',(Math.round(scored/n*100))+'%',fmtN(scored)+' of '+fmtN(n),'')
+    +card('Avg fit',avgFit,'0–100','')
+    +card('No-Bid',(Math.round(noBid/n*100))+'%',fmtN(noBid)+' marked',noBid?'#DC2626':'')
     +card('Recompetes',fmtN(recompete),'incumbent expiring','')
+    +card('Won / lost',won+' / '+lost,'closed outcomes','')
+    +'</div>';
+  var ser=_govRptSeries(list,dim,metric);
+  h+=box(metricLbl+' by '+ser.def.l,svgBarChart({categories:ser.cats,groups:[{name:metricLbl,values:ser.values,color:metricCol}]},{fmt:metricFmt,legend:false,rotate:true,h:300,w:900}),'<div style="display:flex;gap:6px;align-items:center"><span style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Break down by</span>'+dimSel+'</div>');
+  var fitBands=['0–19','20–39','40–59','60–79','80–100'];
+  var fitDist=fitBands.map(function(b,i){var lo=i*20,hi=(i===4)?100:lo+19;return list.filter(function(o){var s=Number(o.score)||0;return s>=lo&&s<=hi;}).length;});
+  var vbSer=_govRptSeries(list,'value',metric),stSer=_govRptSeries(list,'stage',metric),bbSer=_govRptSeries(list,'bid_band',metric);
+  h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">'
+    +box('Fit-score distribution',svgBarChart({categories:fitBands,groups:[{name:'Opportunities',values:fitDist,color:'#0EA5E9'}]},{fmt:'int',legend:false,rotate:false,h:240}))
+    +box(metricLbl+' by value band',svgBarChart({categories:vbSer.cats,groups:[{name:metricLbl,values:vbSer.values,color:'#C5A55A'}]},{fmt:metricFmt,legend:false,rotate:true,h:240}))
     +'</div>';
   h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">'
-    +box('By stage',svgBarChart({categories:GOV_STAGES,groups:[{name:'Opportunities',values:byStage,color:'#546478'}]},{fmt:'int',legend:false,rotate:true,h:230}))
-    +box('By Bid / No-Bid band',svgBarChart({categories:BANDS,groups:[{name:'Opportunities',values:byBand,color:'#C5A55A'}]},{fmt:'int',legend:false,rotate:true,h:230}))
+    +box(metricLbl+' by stage',svgBarChart({categories:stSer.cats,groups:[{name:metricLbl,values:stSer.values,color:metricCol}]},{fmt:metricFmt,legend:false,rotate:true,h:240}))
+    +box(metricLbl+' by Bid / No-Bid band',svgBarChart({categories:bbSer.cats,groups:[{name:metricLbl,values:bbSer.values,color:'#7C3AED'}]},{fmt:metricFmt,legend:false,rotate:true,h:240}))
     +'</div>';
-  h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">'
-    +box('By lifecycle',svgBarChart({categories:LCS,groups:[{name:'Opportunities',values:byLc,color:'#0EA5E9'}]},{fmt:'int',legend:false,rotate:true,h:230}))
-    +box('Pipeline value by stage',svgBarChart({categories:GOV_STAGES,groups:[{name:'Value',values:valByStage,color:'#16A34A'}]},{fmt:'money',legend:false,rotate:true,h:230}))
-    +'</div>';
-  h+='<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px"><div style="font-size:12px;font-weight:800;margin-bottom:6px">Top agencies (by opportunity count)</div><div style="overflow-x:auto">'
-    +svgBarChart({categories:topAg,groups:[{name:'Opportunities',values:topAg.map(function(a){return agc[a];}),color:'#7C3AED'}]},{fmt:'int',legend:false,rotate:true,h:260,w:900})+'</div></div>';
+  var top=list.slice().sort(function(a,b){return _govRptVal(b)-_govRptVal(a);}).slice(0,12);
+  var rows=top.map(function(o){var bb=o.bid_band;return '<tr style="border-top:1px solid var(--border)">'
+    +'<td style="padding:5px 8px;font-weight:600">'+esc((o.title||'(untitled)').slice(0,80))+'</td>'
+    +'<td style="padding:5px 8px;color:var(--text-muted)">'+esc(o.agency||'—')+'</td>'
+    +'<td style="padding:5px 8px">'+esc(o.stage||'identified')+'</td>'
+    +'<td style="padding:5px 8px;text-align:right">'+Math.round(Number(o.score)||0)+'</td>'
+    +'<td style="padding:5px 8px">'+(bb?esc(bb):'—')+'</td>'
+    +'<td style="padding:5px 8px;text-align:right;white-space:nowrap">'+(_govRptVal(o)?fmt(_govRptVal(o)):'—')+'</td></tr>';}).join('');
+  h+='<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px"><div style="font-size:12px;font-weight:800;margin-bottom:6px">Top opportunities by value</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:600px"><thead><tr style="text-align:left;color:var(--text-muted);font-size:9px;text-transform:uppercase;letter-spacing:.3px"><th style="padding:5px 8px">Title</th><th style="padding:5px 8px">Agency</th><th style="padding:5px 8px">Stage</th><th style="padding:5px 8px;text-align:right">Fit</th><th style="padding:5px 8px">Bid band</th><th style="padding:5px 8px;text-align:right">Value</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
   return h;
 }
 var govDrag=null;
