@@ -7953,6 +7953,21 @@ function renderValuationView(q){
   else if(valTab==='sensitivity')html+=_valSensitivityHTML(model);
   return html+'</div>';
 }
+// Plain-language explainer of the two methods + EV/equity, with live Conservative figures.
+function _valMethodsHTML(model){
+  var V=_valEnsure(),x=model.byScn.base,w=Number(V.blendSotpPct);
+  function row(term,desc,amt,amtLbl,first){return '<div style="display:flex;gap:14px;align-items:baseline;padding:10px 0'+(first?'':';border-top:1px solid var(--border)')+'">'
+    +'<div style="flex:1;line-height:1.55"><b>'+term+'</b> — '+desc+'</div>'
+    +'<div style="min-width:118px;text-align:right"><div style="font-weight:800;font-size:14px">'+_valFmt(amt)+'</div><div style="font-size:9px;color:var(--text-muted)">'+amtLbl+'</div></div></div>';}
+  return '<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:12px 0">'
+    +'<div style="font-size:13px;font-weight:800;margin-bottom:2px">The two methods, and how they combine</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Every card above shows all three figures — here\'s what each one means, with the Conservative-case number alongside.</div>'
+    +row('Sum-of-the-parts (SOTP)','<b>Method 1.</b> Value each business segment on its <b>own</b> multiple (SaaS on ARR, services on revenue), then add them up. This captures that a SaaS dollar is worth far more than a services dollar — which is why we never apply one blanket company multiple.',x.sotp,'Conservative',true)
+    +row('Discounted cash flow (DCF)','<b>Method 2.</b> Project the company\'s free cash flow over '+V.dcfYears+' years, discount it back to today\'s dollars at the WACC, and add a terminal value for the years beyond. Values the business on the <b>cash it will actually generate</b>, independent of market comparables.',x.dcf,'Conservative')
+    +row('Enterprise value (EV)','The worth of the <b>whole operating business</b>. We blend the two methods ('+w+'% SOTP / '+(100-w)+'% DCF) so the headline isn\'t hostage to either one alone. A wide gap between SOTP and DCF is itself a signal worth digging into.',x.blend,'Blended EV')
+    +row('Equity value','EV minus <b>net debt</b> ('+_valFmt(V.netDebt)+' owed, net of cash) = what shareholders actually own. This is the headline number on the cards above, and the figure a raise or sale is struck on.',x.equity,'← the headline')
+    +'</div>';
+}
 function _valSummaryHTML(model){
   var V=_valEnsure(),b=model.byScn;
   function card(s,lbl,color){var eq=b[s].equity;return '<div style="flex:1;min-width:180px;border:1px solid '+color+';border-radius:10px;padding:14px 16px;background:linear-gradient(180deg,'+color+'14,transparent)">'
@@ -7970,7 +7985,7 @@ function _valSummaryHTML(model){
     +'Educian revenue is net of the 50% Expentor share and is a related-party diligence item. '
     +'Professional IT has no live contracted revenue yet — it only contributes via pipeline/overrides. '
     +'FCF margin &amp; growth are forward assumptions (today\'s blended margin is thinner). Tune everything on the Assumptions tab.</div>';
-  return intro+cards+ff+_valBridgeHTML(model)+_valRaiseHTML(model)+notes;
+  return intro+cards+_valMethodsHTML(model)+ff+_valBridgeHTML(model)+_valRaiseHTML(model)+notes;
 }
 function _valBridgeHTML(model){
   var V=_valEnsure(),rows=['worst','base','best'],lbl={worst:'Worst',base:'Conservative',best:'Best'};
