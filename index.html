@@ -5921,7 +5921,7 @@ function prospectConvert(id){
 /* ── GOV DISCOVERY (Module 1 client) — SAM.gov + forecast imports + recompete
    flags, scored against the Company Profile, feeding the CRM pipeline and the
    proposal workflow. Records live server-side in gov_opportunities. ── */
-var _govState={list:[],loaded:false,busy:false,runs:[],showRuns:false,filters:{q:'',agency:'',naics:'',setAside:'',lifecycle:'',stage:'',recompete:'',noBid:'',bidBand:''}};
+var _govState={list:[],loaded:false,busy:false,runs:[],agencies:[],showRuns:false,filters:{q:'',agency:'',naics:'',setAside:'',lifecycle:'',stage:'',recompete:'',noBid:'',bidBand:''}};
 var GOV_STAGES=['identified','qualified','capture','proposal','submitted','won','lost'];
 var _govView='list';   // 'list' | 'board' (kanban grouped by stage)
 var GOV_STAGE_C={identified:'#64748b',qualified:'#546478',capture:'#0EA5E9',proposal:'#C5A55A',submitted:'#7C3AED',won:'#16A34A',lost:'#DC2626'};
@@ -5932,6 +5932,8 @@ function _govLoad(){
   _govState.busy=true;
   fetch('/api/govops?'+qs,{cache:'no-store'}).then(function(r){return r.json();}).then(function(rows){
     _govState.list=Array.isArray(rows)?rows:[];_govState.loaded=true;_govState.busy=false;
+    // Capture the full agency set when not agency-filtered, so the Agency dropdown keeps all options.
+    if(!f.agency){var _ag={};_govState.list.forEach(function(o){if(o.agency)_ag[o.agency]=1;});_govState.agencies=Object.keys(_ag).sort();}
     if(viewMode==='opp'&&oppView==='gov')renderView();
   }).catch(function(){_govState.busy=false;_govState.loaded=true;renderView();});
   fetch('/api/govops/runs',{cache:'no-store'}).then(function(r){return r.json();}).then(function(rows){_govState.runs=Array.isArray(rows)?rows:[];}).catch(function(){});
@@ -5947,7 +5949,9 @@ function _govDiscoveryHTML(){
     +'<button class="btn btn-outline btn-sm" onclick="govImportModal()">⬆ Import forecast CSV/XLSX</button>'
     +'<button class="btn btn-outline btn-sm" onclick="govImportGovwinCsv()" title="Upload the GovWin index.csv manifest as a quick top-up. The scheduled local sync handles documents + full automation.">📋 Import GovWin index.csv</button>'
     +'<button class="btn btn-gold btn-sm" onclick="govScoreAllUnscored()" title="AI Bid/No-Bid assessment for every not-yet-scored opportunity in the current list — one LLM call each, against the RFP docs + Company Profile">⚖ Score unscored</button>'
-    +'<button class="btn btn-outline btn-sm" onclick="_govView=(_govView===\'board\'?\'list\':\'board\');renderView()" title="Switch between list and a stage pipeline board">'+(_govView==='board'?'☰ List view':'▦ Board view')+'</button>'
+    +'<button class="btn '+(_govView==='list'?'btn-navy':'btn-outline')+' btn-sm" onclick="_govView=\'list\';renderView()" title="Card list">☰ List</button>'
+    +'<button class="btn '+(_govView==='board'?'btn-navy':'btn-outline')+' btn-sm" onclick="_govView=\'board\';renderView()" title="Stage pipeline board">▦ Board</button>'
+    +'<button class="btn '+(_govView==='reports'?'btn-navy':'btn-outline')+' btn-sm" onclick="_govView=\'reports\';renderView()" title="Pipeline analytics over the current list">📊 Reports</button>'
     +'<button class="btn btn-outline btn-sm" onclick="govSourcesModal()">⚙ Sources</button>'
     +'<button class="btn btn-outline btn-sm" onclick="_govState.showRuns=!_govState.showRuns;renderView()">'+(_govState.showRuns?'Hide':'Show')+' ingestion log</button>'
     +'</div></div>'
@@ -5964,7 +5968,7 @@ function _govDiscoveryHTML(){
   var gp=_govPipe();
   html+='<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'
     +'<input class="fld-i" style="width:170px" placeholder="Keyword…" value="'+esc(f.q)+'" onchange="_govState.filters.q=this.value;_govLoad()">'
-    +'<input class="fld-i" style="width:140px" placeholder="Agency…" value="'+esc(f.agency)+'" onchange="_govState.filters.agency=this.value;_govLoad()">'
+    +(function(){var ag={};(_govState.agencies||[]).forEach(function(a){ag[a]=1;});(list||[]).forEach(function(o){if(o.agency)ag[o.agency]=1;});if(f.agency)ag[f.agency]=1;var opts=Object.keys(ag).sort();return '<select class="fld-sel" style="width:auto;max-width:220px" onchange="_govState.filters.agency=this.value;_govLoad()" title="Filter by agency"><option value="">All agencies</option>'+opts.map(function(a){return '<option value="'+esc(a).replace(/"/g,'&quot;')+'"'+(f.agency===a?' selected':'')+'>'+esc(a)+'</option>';}).join('')+'</select>';})()
     +'<input class="fld-i" style="width:90px" placeholder="NAICS…" value="'+esc(f.naics)+'" onchange="_govState.filters.naics=this.value;_govLoad()">'
     +'<input class="fld-i" style="width:110px" placeholder="Set-aside…" value="'+esc(f.setAside)+'" onchange="_govState.filters.setAside=this.value;_govLoad()">'
     +'<select class="fld-sel" style="width:auto" onchange="_govState.filters.lifecycle=this.value;_govLoad()"><option value="">Any lifecycle</option>'+['forecast','sources-sought','presolicitation','solicitation','special'].map(function(l){return '<option'+(f.lifecycle===l?' selected':'')+'>'+l+'</option>';}).join('')+'</select>'
@@ -5977,7 +5981,7 @@ function _govDiscoveryHTML(){
     +'</div>';
   if(_govState.busy)html+='<div class="empty-msg">Loading…</div>';
   else if(!list.length)html+='<div class="empty-msg">No opportunities yet. Add your SAM.gov API key in <b>Admin → Integrations → Data Sources</b>, then click <b>Run ingestion now</b> — or <b>Import forecast CSV</b> from the GSA Acquisition Gateway / DHS APFS / EPA forecast exports (no key needed).</div>';
-  else html+=(_govView==='board')?_govBoardHTML(list):list.map(_govCardHTML).join('');
+  else html+=(_govView==='reports')?_govReportsHTML(list):(_govView==='board')?_govBoardHTML(list):list.map(_govCardHTML).join('');
   return html+'</div>';
 }
 // In-app document viewer: lists an opportunity's ingested docs and shows the
@@ -6208,6 +6212,47 @@ function _govBoardCard(o,cc){
     +(bb?'<span class="plan-chip" style="border-color:'+_govBidColor(bb)+';color:'+_govBidColor(bb)+';font-weight:700">⚖ '+esc(bb)+'</span>':'')
     +(o.no_bid?'<span class="plan-chip" style="border-color:#DC2626;color:#DC2626;font-weight:700">🚫 No Bid</span>':'')
     +'</div></div>';
+}
+// ── Gov Discovery reports (pipeline analytics over the current list) ──
+function _govReportsHTML(list){
+  var n=list.length,fmtN=function(x){return Number(x||0).toLocaleString('en-US');};
+  var totalVal=0,scored=0,noBid=0,recompete=0,fitSum=0,fitN=0;
+  list.forEach(function(o){
+    totalVal+=Number(o.value_high||o.value_low)||0;
+    if(o.bid_band)scored++;
+    if(o.no_bid)noBid++;
+    if(o.recompete)recompete++;
+    var sc=Number(o.score);if(o.score!=null&&!isNaN(sc)){fitSum+=sc;fitN++;}
+  });
+  var avgFit=fitN?Math.round(fitSum/fitN):0;
+  var byStage=GOV_STAGES.map(function(s){return list.filter(function(o){return (o.stage||'identified')===s;}).length;});
+  var valByStage=GOV_STAGES.map(function(s){return list.filter(function(o){return (o.stage||'identified')===s;}).reduce(function(t,o){return t+(Number(o.value_high||o.value_low)||0);},0);});
+  var BANDS=['Bid','Likely Bid','Review','No-Bid'],byBand=BANDS.map(function(b){return list.filter(function(o){return o.bid_band===b;}).length;});
+  var LCS=['forecast','sources-sought','presolicitation','solicitation','special'],byLc=LCS.map(function(l){return list.filter(function(o){return o.lifecycle===l;}).length;});
+  var agc={};list.forEach(function(o){var a=o.agency||'(unspecified)';agc[a]=(agc[a]||0)+1;});
+  var topAg=Object.keys(agc).sort(function(a,b){return agc[b]-agc[a];}).slice(0,10);
+  function card(lbl,val,sub,color){return '<div style="flex:1;min-width:130px;border:1px solid var(--border);border-radius:10px;padding:12px 14px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">'+lbl+'</div><div style="font-size:20px;font-weight:800;'+(color?'color:'+color:'')+'">'+val+'</div>'+(sub?'<div style="font-size:10px;color:var(--text-muted)">'+sub+'</div>':'')+'</div>';}
+  function box(title,svg){return '<div style="flex:1;min-width:300px;border:1px solid var(--border);border-radius:10px;padding:12px 14px"><div style="font-size:12px;font-weight:800;margin-bottom:6px">'+title+'</div><div style="overflow-x:auto">'+svg+'</div></div>';}
+  var h='<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Pipeline analytics over the <b>'+n+'</b> opportunit'+(n===1?'y':'ies')+' in the current view — reflects the active filters above.</div>';
+  h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">'
+    +card('Opportunities',fmtN(n),'in view','')
+    +card('Pipeline value',fmt(Math.round(totalVal)),'sum of est. value','')
+    +card('Scored',fmtN(scored)+' / '+fmtN(n),'AI Bid/No-Bid done','')
+    +card('Avg fit',avgFit,'fit score (0–100)','')
+    +card('No Bid',fmtN(noBid),'marked No Bid',noBid?'#DC2626':'')
+    +card('Recompetes',fmtN(recompete),'incumbent expiring','')
+    +'</div>';
+  h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">'
+    +box('By stage',svgBarChart({categories:GOV_STAGES,groups:[{name:'Opportunities',values:byStage,color:'#546478'}]},{fmt:'int',legend:false,rotate:true,h:230}))
+    +box('By Bid / No-Bid band',svgBarChart({categories:BANDS,groups:[{name:'Opportunities',values:byBand,color:'#C5A55A'}]},{fmt:'int',legend:false,rotate:true,h:230}))
+    +'</div>';
+  h+='<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">'
+    +box('By lifecycle',svgBarChart({categories:LCS,groups:[{name:'Opportunities',values:byLc,color:'#0EA5E9'}]},{fmt:'int',legend:false,rotate:true,h:230}))
+    +box('Pipeline value by stage',svgBarChart({categories:GOV_STAGES,groups:[{name:'Value',values:valByStage,color:'#16A34A'}]},{fmt:'money',legend:false,rotate:true,h:230}))
+    +'</div>';
+  h+='<div style="border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px"><div style="font-size:12px;font-weight:800;margin-bottom:6px">Top agencies (by opportunity count)</div><div style="overflow-x:auto">'
+    +svgBarChart({categories:topAg,groups:[{name:'Opportunities',values:topAg.map(function(a){return agc[a];}),color:'#7C3AED'}]},{fmt:'int',legend:false,rotate:true,h:260,w:900})+'</div></div>';
+  return h;
 }
 var govDrag=null;
 function govDragStart(e,id){govDrag=id;if(e.dataTransfer){e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',id);}catch(_){}}if(e.target&&e.target.classList)e.target.classList.add('drag');}
