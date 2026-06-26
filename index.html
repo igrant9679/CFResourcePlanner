@@ -7971,6 +7971,32 @@ function renderValuationView(q){
   else if(valTab==='sensitivity')html+=_valSensitivityHTML(model);
   return html+'</div>';
 }
+// Forward revenue (FY26–FY29) pulled live from Strategy & Performance (Debt-Free
+// Plan), plus the Initiatives growth plays — shown as forward metrics/upside.
+function _valForwardHTML(model){
+  var fwd=null;try{if(typeof _stratProjModel==='function'){var P=_stratProjModel();fwd=(P&&P.rows)?P.rows:null;}}catch(e){fwd=null;}
+  var inits=(D.projects||[]).filter(function(p){return projCat(p)==='initiative';}).map(function(p){return {name:p.name||p.id,seg:_valSegLabel(_valSegOf(p)),annual:(Number(p.targetRevenue)||0)*12};});
+  var initTotal=inits.reduce(function(a,x){return a+x.annual;},0);
+  var html='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:12px 0">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div style="font-size:13px;font-weight:800">Projected revenue (FY26–FY29) &amp; initiatives</div>'
+    +'<button class="btn btn-outline btn-sm" onclick="switchTab(\'strat\')">Open Strategy &amp; Performance →</button></div>';
+  if(fwd&&fwd.length){
+    html+=_valNote('Revenue &amp; net income below are pulled <b>live from Strategy &amp; Performance → Debt-Free Plan</b> (FY26–FY29), so the valuation and the operating plan stay in sync. This is the forward view behind the DCF — set the DCF growth &amp; FCF margin on the Assumptions tab to match it.');
+    var cols=fwd.map(function(r){return '<td style="text-align:right">FY'+String(r.y).slice(2)+'</td>';}).join('');
+    var rev='<tr><td style="padding:5px 0;font-weight:700">Revenue</td>'+fwd.map(function(r){return '<td style="text-align:right">'+_valFmt(r.rev)+'</td>';}).join('')+'</tr>';
+    var ni='<tr><td style="padding:5px 0;font-weight:700">Net income</td>'+fwd.map(function(r){return '<td style="text-align:right">'+_valFmt(r.ni)+'</td>';}).join('')+'</tr>';
+    html+='<table style="width:100%;font-size:12px;border-collapse:collapse"><thead><tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)"><td style="padding:4px 0">Year</td>'+cols+'</tr></thead><tbody>'+rev+ni+'</tbody></table>';
+  } else { html+=_valNote('Strategy projection unavailable — open Strategy &amp; Performance and set the Debt-Free Plan assumptions, then it will appear here.'); }
+  html+='<div style="font-size:12px;font-weight:800;margin:14px 0 4px">Initiatives (growth plays)</div>';
+  if(inits.length){
+    var ihdr='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)"><td style="padding:4px 0">Initiative</td><td style="text-align:right">Segment</td><td style="text-align:right">Projected annual rev</td></tr>';
+    var ibody=inits.map(function(x){return '<tr><td style="padding:4px 0">'+esc(x.name)+'</td><td style="text-align:right;color:var(--text-muted)">'+esc(x.seg)+'</td><td style="text-align:right'+(x.annual<0?';color:#DC2626':'')+'">'+_valFmt(x.annual)+'</td></tr>';}).join('');
+    var itot='<tr style="border-top:1px solid var(--border)"><td style="padding:6px 0 0;font-weight:800">Total initiatives</td><td></td><td style="text-align:right;padding-top:6px;font-weight:800">'+_valFmt(initTotal)+'</td></tr>';
+    html+='<table style="width:100%;font-size:12px;border-collapse:collapse"><thead>'+ihdr+'</thead><tbody>'+ibody+itot+'</tbody></table>';
+    html+=_valNote('Initiatives are future growth plays. Their <b>projected</b> annual revenue (Expected Monthly × 12, set on each initiative) is shown here as upside — it is <b>not</b> in current segment revenue or the SOTP. The FY26–FY29 plan above is a top-down growth model; initiatives are where that growth is expected to come from, so populate each one\'s expected revenue to make the upside explicit.');
+  } else { html+=_valNote('No initiatives defined yet — add them under the Initiatives tab and set each one\'s Expected Monthly Revenue.'); }
+  return html+'</div>';
+}
 // Plain-language explainer of the two methods + EV/equity, with live Conservative figures.
 function _valMethodsHTML(model){
   var V=_valEnsure(),x=model.byScn.base,w=Number(V.blendSotpPct);
@@ -8007,7 +8033,7 @@ function _valSummaryHTML(model){
     +'Educian revenue is net of the 50% Expentor share and is a related-party diligence item. '
     +'Professional IT has no live contracted revenue yet — it only contributes via pipeline/overrides. '
     +'FCF margin &amp; growth are forward assumptions (today\'s blended margin is thinner). Tune everything on the Assumptions tab.</div>';
-  return intro+cards+_valMethodsHTML(model)+ff+_valBridgeHTML(model)+_valRaiseHTML(model)+notes;
+  return intro+cards+_valMethodsHTML(model)+ff+_valBridgeHTML(model)+_valForwardHTML(model)+_valRaiseHTML(model)+notes;
 }
 function _valBridgeHTML(model){
   var V=_valEnsure(),rows=['worst','base','best'],lbl={worst:'Worst',base:'Conservative',best:'Best'};
