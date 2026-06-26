@@ -7832,7 +7832,6 @@ function _valEnsure(){
   if(V.educianRetainPct==null)V.educianRetainPct=50;
   if(!V.revOverride)V.revOverride={};
   if(!V.segByProj)V.segByProj={};
-  if(!V.term)V.term={};
   if(V.netDebt==null){var debt=(D.proforma.debt&&D.proforma.debt.total)||4091319;var cash=Math.round((typeof capOpeningCash==='function'?capOpeningCash():1100000)||1100000);V.netDebt=debt-cash;}
   if(V.newCapital==null)V.newCapital=0;
   return V;
@@ -7855,7 +7854,10 @@ function _valProjNTM(p){
 // ── Contract term: editable Start/End per project → months remaining → backlog ──
 // Valuation-scoped dates (D.proforma.valuation.term), seeded from the project's
 // own startDate/endDate so the 19-month operational projection is left untouched.
-function _valTermOf(p){var V=_valEnsure();var t=(V.term&&V.term[p.id])||{};return {start:(t.start!=null&&t.start!=='')?t.start:(p.startDate||''),end:(t.end!=null&&t.end!=='')?t.end:(p.endDate||'')};}
+// Contract term reads dedicated project fields (contractStart/contractEnd), set
+// in the project Add/Edit modal or the Valuation table; falls back to the
+// project's operational startDate/endDate so nothing is blank by default.
+function _valTermOf(p){return {start:(p.contractStart!=null&&p.contractStart!=='')?p.contractStart:(p.startDate||''),end:(p.contractEnd!=null&&p.contractEnd!=='')?p.contractEnd:(p.endDate||'')};}
 function _valMonthsLeft(endStr){if(!endStr)return null;var pr=String(endStr).split('-');var ey=+pr[0],em=(+pr[1]||1)-1;if(!ey)return null;var now=new Date();var ni=now.getFullYear()*12+now.getMonth(),ei=ey*12+em;return Math.max(0,ei-ni+1);}
 function _valProjMonthlyRR(p){return Number(p.revenue)||0;}   // headline monthly run-rate
 function _valProjBacklog(p){var ml=_valMonthsLeft(_valTermOf(p).end);return ml==null?null:_valProjMonthlyRR(p)*ml;}
@@ -7863,7 +7865,7 @@ function _valProjBacklog(p){var ml=_valMonthsLeft(_valTermOf(p).end);return ml==
 function _valSegBacklog(){var V=_valEnsure(),out={awards:0,educian:0,gov:0,proIT:0},any={awards:false,educian:false,gov:false,proIT:false};
   (D.projects||[]).filter(function(p){return projCat(p)==='project';}).forEach(function(p){var seg=_valSegOf(p);if(!out.hasOwnProperty(seg))return;var b=_valProjBacklog(p);if(b!=null){out[seg]+=b;any[seg]=true;}});
   out.educian=Math.round(out.educian*(V.educianRetainPct!=null?V.educianRetainPct:50)/100);return {backlog:out,any:any};}
-function valSetTerm(pid,field,val){var V=_valEnsure();V.term=V.term||{};V.term[pid]=V.term[pid]||{};if(val==='')delete V.term[pid][field];else V.term[pid][field]=val;save();renderView();}
+function valSetTerm(pid,field,val){var p=(D.projects||[]).find(function(x){return x.id===pid;});if(!p)return;var f=(field==='start')?'contractStart':'contractEnd';if(val==='')delete p[f];else p[f]=val;save();renderView();}
 function _valSegRevenue(){
   var V=_valEnsure();
   var net={awards:0,educian:0,gov:0,proIT:0},raw={awards:0,educian:0,gov:0,proIT:0};
@@ -14945,6 +14947,7 @@ document.getElementById('mdlProj').innerHTML=
 +'<div style="border-top:1px solid var(--border);margin-top:14px;padding-top:14px">'
 +'<div style="font-size:10px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:var(--text-secondary);margin-bottom:8px">Add New '+m.noun+'</div>'
 +fT('p_name',m.noun+' Name','')+(m.revLbl?fN('p_rev',m.revLbl,0):'')+fT('p_rnote','Note / Context','')
++(category==='project'?'<div class="fld-row2"><div class="fld"><label class="fld-l" for="p_cstart">Contract start (optional)</label><input class="fld-i" type="month" id="p_cstart"></div><div class="fld"><label class="fld-l" for="p_cend">Contract end / period of performance</label><input class="fld-i" type="month" id="p_cend"></div></div><div style="font-size:9px;color:var(--text-muted);margin:-4px 0 8px">Used by Company Valuation for months-remaining &amp; backlog (full term — all option years, or the subscription length).</div>':'')
 +'<div class="fld"><label class="fld-l">Description</label>'+richEditor('p_desc','',{placeholder:'What is this and why does it matter?'})+'</div>'
 +'<div class="fld"><label class="fld-l" for="p_parent">Parent (optional)</label><select class="fld-sel" id="p_parent"><option value="">None (top-level)</option>'+projOptHTML(null,0,category)+'</select></div>'
 +'<button class="btn btn-navy btn-full" onclick="saveAddProj(\''+category+'\')" style="margin-top:4px">Add '+m.noun+'</button>'
@@ -14977,8 +14980,9 @@ return renderLevel(null,0)||'<div style="padding:12px 0;text-align:center;font-s
 function saveAddProj(category){var name=gv('p_name').trim();if(!name)return;
 var obj={id:uid(),name:name,category:category,revenue:0,targetRevenue:0,revenueNote:gv('p_rnote'),description:rtGet('p_desc'),attachments:[],parentId:gv('p_parent')||null};
 if(category==='project')obj.revenue=Number(gv('p_rev'))||0;else if(isPipelineCat(category))obj.targetRevenue=Number(gv('p_rev'))||0;
+if(category==='project'){var _cs=document.getElementById('p_cstart'),_ce=document.getElementById('p_cend');if(_cs&&_cs.value)obj.contractStart=_cs.value;if(_ce&&_ce.value)obj.contractEnd=_ce.value;}
 D.projects.push(obj);
-save();document.getElementById('p_name').value='';var rv=document.getElementById('p_rev');if(rv)rv.value=0;document.getElementById('p_rnote').value='';var dv=document.getElementById('p_desc');if(dv)dv.innerHTML='';
+save();document.getElementById('p_name').value='';var rv=document.getElementById('p_rev');if(rv)rv.value=0;document.getElementById('p_rnote').value='';var dv=document.getElementById('p_desc');if(dv)dv.innerHTML='';var _csi=document.getElementById('p_cstart');if(_csi)_csi.value='';var _cei=document.getElementById('p_cend');if(_cei)_cei.value='';
 document.getElementById('projList').innerHTML=renderProjList(category);renderView();}
 
 /* ── CLINs (Contract Line Items) ── */
@@ -15186,6 +15190,7 @@ document.getElementById('mdlDeptEdit').innerHTML=
 +revField
 +(cat==='project'?'<div class="fld"><label class="fld-l" for="ep_fy">Fiscal year</label><select class="fld-sel" id="ep_fy">'+_fyOpts(p.fiscalYear||'')+'</select></div>':'')
 +(cat!=='opportunity'?('<div class="fld-row2"><div class="fld"><label class="fld-l" for="ep_start">Start month (optional)</label><input class="fld-i" type="month" id="ep_start" value="'+esc(p.startDate||'')+'"></div><div class="fld"><label class="fld-l" for="ep_end">End month (optional)</label><input class="fld-i" type="month" id="ep_end" value="'+esc(p.endDate||'')+'"></div></div><div style="font-size:9px;color:var(--text-muted);margin:-4px 0 8px">Revenue counts in Capacity / Strategic Planning only within this window. Blank = active across the whole horizon.</div>'):'')
++(cat==='project'?'<div class="fld-row2"><div class="fld"><label class="fld-l" for="ep_cstart">Contract start</label><input class="fld-i" type="month" id="ep_cstart" value="'+esc(p.contractStart||'')+'"></div><div class="fld"><label class="fld-l" for="ep_cend">Contract end / period of performance</label><input class="fld-i" type="month" id="ep_cend" value="'+esc(p.contractEnd||'')+'"></div></div><div style="font-size:9px;color:var(--text-muted);margin:-4px 0 8px">Full contract term used by <b>Company Valuation</b> for months-remaining &amp; backlog. Set to the true end — all option years, or the subscription term. Independent of the Capacity window above; blank = uses the Capacity end date.</div>':'')
 +((cat==='project'||cat==='initiative')?'<div id="ep_sched_wrap">'+_projSchedEditorHTML(p)+'</div>':'')
 +(cat==='project'?renderSubClientsSection(pid):'')
 +(cat==='project'?renderClinsSection(pid):'')
@@ -15248,6 +15253,8 @@ if(newCat==='opportunity'){var sEl=document.getElementById('ep_stage');if(sEl)p.
 p.revenueNote=gv('ep_note');p.description=rtGet('ep_desc');p.parentId=catChanged?null:(gv('ep_parent')||null);
 var stEl=document.getElementById('ep_start');if(stEl)p.startDate=stEl.value||'';
 var enEl=document.getElementById('ep_end');if(enEl)p.endDate=enEl.value||'';
+var csEl=document.getElementById('ep_cstart');if(csEl)p.contractStart=csEl.value||'';
+var ceEl=document.getElementById('ep_cend');if(ceEl)p.contractEnd=ceEl.value||'';
 var fyEl=document.getElementById('ep_fy');if(fyEl)p.fiscalYear=fyEl.value||'';
 closeModal('ovDeptEdit');save();
 var el=document.getElementById('projList');if(el)el.innerHTML=renderProjList(p.category);
