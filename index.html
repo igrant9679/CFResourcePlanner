@@ -7871,13 +7871,23 @@ function _valSegBacklog(){var V=_valEnsure(),out={awards:0,educian:0,gov:0,proIT
   out.educian=Math.round(out.educian*(V.educianRetainPct!=null?V.educianRetainPct:50)/100);return out;}
 function valSetTerm(pid,field,val){var p=(D.projects||[]).find(function(x){return x.id===pid;});if(!p)return;var f=(field==='start')?'contractStart':'contractEnd';if(val==='')delete p[f];else p[f]=val;save();renderView();}
 function valSetInit(on){var V=_valEnsure();V.includeInitiatives=!!on;save();renderView();}
+// Initiative revenue = the per-initiative ANNUAL targets shown on Strategy →
+// Revenue (D.strategy goals, metric 'initiative-revenue', `target` field, linked
+// to the initiative project via linkedInitiativeIds). Same source as that tab —
+// NOT the project's own targetRevenue field.
+function _valInitRevList(){
+  return ((D.strategy||{}).goals||[]).filter(function(g){return g.metric==='initiative-revenue'&&(Number(g.target)||0)>0;}).map(function(g){
+    var pid=(g.linkedInitiativeIds||[])[0];var p=pid?(D.projects||[]).find(function(z){return z.id===pid;}):null;
+    return {name:(p?p.name:(g.label||'Initiative')),segKey:(p?_valSegOf(p):'gov'),annual:Number(g.target)||0};
+  });
+}
 function _valSegRevenue(){
   var V=_valEnsure();
   var proj={awards:0,educian:0,gov:0,proIT:0},init={awards:0,educian:0,gov:0,proIT:0};
   // Contracted/recurring projects → forward-12-month revenue per segment.
   (D.projects||[]).filter(function(p){return projCat(p)==='project';}).forEach(function(p){var s=_valSegOf(p);if(proj.hasOwnProperty(s))proj[s]+=_valProjNTM(p);});
-  // Initiatives → their target revenue (Expected Monthly × 12), if included.
-  if(V.includeInitiatives!==false)(D.projects||[]).filter(function(p){return projCat(p)==='initiative';}).forEach(function(p){var s=_valSegOf(p);if(init.hasOwnProperty(s))init[s]+=(Number(p.targetRevenue)||0)*12;});
+  // Initiatives → annual target revenue from Strategy → Revenue (initiative-revenue goals), if included.
+  if(V.includeInitiatives!==false)_valInitRevList().forEach(function(x){if(init.hasOwnProperty(x.segKey))init[x.segKey]+=x.annual;});
   var net={},raw={};
   Object.keys(proj).forEach(function(k){
     var pj=(k==='educian')?Math.round(proj[k]*(V.educianRetainPct!=null?V.educianRetainPct:50)/100):proj[k];  // Educian net of Expentor split (contracted only)
@@ -7982,7 +7992,7 @@ function renderValuationView(q){
 function _valForwardHTML(model){
   var V=_valEnsure();
   var fwd=null;try{if(typeof _stratProjModel==='function'){var P=_stratProjModel();fwd=(P&&P.rows)?P.rows:null;}}catch(e){fwd=null;}
-  var inits=(D.projects||[]).filter(function(p){return projCat(p)==='initiative';}).map(function(p){return {name:p.name||p.id,seg:_valSegLabel(_valSegOf(p)),annual:(Number(p.targetRevenue)||0)*12};});
+  var inits=_valInitRevList().map(function(x){return {name:x.name,seg:_valSegLabel(x.segKey),annual:x.annual};});
   var initTotal=inits.reduce(function(a,x){return a+x.annual;},0);
   var html='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:12px 0">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div style="font-size:13px;font-weight:800">Projected revenue (FY26–FY29) &amp; initiatives</div>'
@@ -8001,7 +8011,7 @@ function _valForwardHTML(model){
     var itot='<tr style="border-top:1px solid var(--border)"><td style="padding:6px 0 0;font-weight:800">Total initiatives</td><td></td><td style="text-align:right;padding-top:6px;font-weight:800">'+_valFmt(initTotal)+'</td></tr>';
     html+='<table style="width:100%;font-size:12px;border-collapse:collapse"><thead>'+ihdr+'</thead><tbody>'+ibody+itot+'</tbody></table>';
     html+=_valNote((V.includeInitiatives!==false)
-      ? 'Each initiative\'s <b>target revenue</b> (Expected Monthly × 12) is <b>included in its segment\'s revenue</b> and multiplied into the SOTP/EV (toggle on the Segments tab). Most read $0 until you set their Expected Monthly Revenue; Phoenix 2 currently carries a negative (cost) figure that nets against its segment. Populate the targets to drive the upside.'
+      ? 'Each initiative\'s <b>annual target revenue</b> — pulled live from <b>Strategy → Revenue</b> (initiative-revenue goals) — is <b>included in its segment\'s revenue</b> and multiplied into the SOTP/EV (toggle on the Segments tab). Edit a target on the Strategy Revenue tab and it flows straight through here.'
       : 'Initiatives are shown here as upside but are <b>not</b> counted in the SOTP/EV — inclusion is toggled off on the Segments tab. The FY26–FY29 plan above captures growth top-down instead.');
   } else { html+=_valNote('No initiatives defined yet — add them under the Initiatives tab and set each one\'s Expected Monthly Revenue.'); }
   return html+'</div>';
@@ -8085,7 +8095,7 @@ function _valSegmentsHTML(model){
     +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Annual revenue (forward 12-month) is what the multiple is applied to. <b>Contracted backlog</b> = remaining committed revenue from the contract terms below — the de-risked floor. Leave Override blank to use the live figure; set it to pin a number (e.g. true SaaS ARR).</div>'
     +'<table style="width:100%;font-size:12px;border-collapse:collapse"><thead>'+hdr+'</thead><tbody>'+body+'</tbody></table>'
     +'<div style="margin-top:10px;display:flex;align-items:center;gap:8px"><label class="fld-l" style="margin:0">Educian revenue retained by CF (% after Expentor split)</label><input class="fld-i" style="width:70px" type="number" value="'+V.educianRetainPct+'" onchange="valSetNum(\'educianRetainPct\',this.value)"></div>'
-    +'<div style="margin-top:8px;font-size:11px"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" '+(V.includeInitiatives!==false?'checked':'')+' onchange="valSetInit(this.checked)"> Include initiative <b>target revenue</b> (Expected Monthly × 12) in each segment\'s value — multiplied into SOTP/EV</label></div></div>';
+    +'<div style="margin-top:8px;font-size:11px"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" '+(V.includeInitiatives!==false?'checked':'')+' onchange="valSetInit(this.checked)"> Include initiative <b>target revenue</b> (from Strategy → Revenue) in each segment\'s value — multiplied into SOTP/EV</label></div></div>';
   var projs=(D.projects||[]).filter(function(p){return projCat(p)==='project';});
   var phdr='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)"><td style="padding:4px 0">Project</td><td style="text-align:right">Monthly</td><td>Start</td><td>End</td><td style="text-align:right">Months left</td><td style="text-align:right">Backlog</td><td style="text-align:right">Segment</td></tr>';
   var pbody=projs.map(function(p){
