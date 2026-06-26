@@ -7834,6 +7834,7 @@ function _valEnsure(){
   if(!V.segByProj)V.segByProj={};
   if(V.netDebt==null){var debt=(D.proforma.debt&&D.proforma.debt.total)||4091319;var cash=Math.round((typeof capOpeningCash==='function'?capOpeningCash():1100000)||1100000);V.netDebt=debt-cash;}
   if(V.newCapital==null)V.newCapital=0;
+  if(V.defaultTermMonths==null)V.defaultTermMonths=36;
   return V;
 }
 function _valSegOf(p){
@@ -7851,20 +7852,22 @@ function _valProjNTM(p){
   months.forEach(function(mo){if(capInWindow(p,mo.y,mo.m))r+=capProjRevAt(p,mo.y,mo.m);});
   return r;
 }
-// ── Contract term: editable Start/End per project → months remaining → backlog ──
-// Valuation-scoped dates (D.proforma.valuation.term), seeded from the project's
-// own startDate/endDate so the 19-month operational projection is left untouched.
-// Contract term reads dedicated project fields (contractStart/contractEnd), set
-// in the project Add/Edit modal or the Valuation table; falls back to the
-// project's operational startDate/endDate so nothing is blank by default.
+// ── Contract term → months remaining → backlog ──
+// Contract dates are dedicated project fields (contractStart/contractEnd), set in
+// the project Add/Edit modal or the Valuation table; they fall back to the
+// project's operational startDate/endDate, and finally to the editable
+// default-term assumption (V.defaultTermMonths, 36) when no dates exist at all.
 function _valTermOf(p){return {start:(p.contractStart!=null&&p.contractStart!=='')?p.contractStart:(p.startDate||''),end:(p.contractEnd!=null&&p.contractEnd!=='')?p.contractEnd:(p.endDate||'')};}
 function _valMonthsLeft(endStr){if(!endStr)return null;var pr=String(endStr).split('-');var ey=+pr[0],em=(+pr[1]||1)-1;if(!ey)return null;var now=new Date();var ni=now.getFullYear()*12+now.getMonth(),ei=ey*12+em;return Math.max(0,ei-ni+1);}
+// Months remaining for a project: from its contract end if set, else the editable
+// default-term assumption when no Start/End is entered. Returns {months,assumed}.
+function _valProjMonthsLeft(p){var ml=_valMonthsLeft(_valTermOf(p).end);if(ml!=null)return {months:ml,assumed:false};var V=_valEnsure();return {months:Number(V.defaultTermMonths)||36,assumed:true};}
 function _valProjMonthlyRR(p){return Number(p.revenue)||0;}   // headline monthly run-rate
-function _valProjBacklog(p){var ml=_valMonthsLeft(_valTermOf(p).end);return ml==null?null:_valProjMonthlyRR(p)*ml;}
+function _valProjBacklog(p){return _valProjMonthlyRR(p)*_valProjMonthsLeft(p).months;}
 // Contracted backlog (remaining committed revenue) summed per segment; Educian net of Expentor.
-function _valSegBacklog(){var V=_valEnsure(),out={awards:0,educian:0,gov:0,proIT:0},any={awards:false,educian:false,gov:false,proIT:false};
-  (D.projects||[]).filter(function(p){return projCat(p)==='project';}).forEach(function(p){var seg=_valSegOf(p);if(!out.hasOwnProperty(seg))return;var b=_valProjBacklog(p);if(b!=null){out[seg]+=b;any[seg]=true;}});
-  out.educian=Math.round(out.educian*(V.educianRetainPct!=null?V.educianRetainPct:50)/100);return {backlog:out,any:any};}
+function _valSegBacklog(){var V=_valEnsure(),out={awards:0,educian:0,gov:0,proIT:0};
+  (D.projects||[]).filter(function(p){return projCat(p)==='project';}).forEach(function(p){var seg=_valSegOf(p);if(out.hasOwnProperty(seg))out[seg]+=_valProjBacklog(p);});
+  out.educian=Math.round(out.educian*(V.educianRetainPct!=null?V.educianRetainPct:50)/100);return out;}
 function valSetTerm(pid,field,val){var p=(D.projects||[]).find(function(x){return x.id===pid;});if(!p)return;var f=(field==='start')?'contractStart':'contractEnd';if(val==='')delete p[f];else p[f]=val;save();renderView();}
 function _valSegRevenue(){
   var V=_valEnsure();
@@ -8036,7 +8039,7 @@ function _valSegmentsHTML(model){
   var body=VAL_SEGS.map(function(sg){
     var auto=raw[sg.k]||0,ov=(V.revOverride&&V.revOverride[sg.k]!=null&&V.revOverride[sg.k]!=='')?V.revOverride[sg.k]:'',used=net[sg.k]||0;
     var note=sg.k==='educian'?' <span style="font-size:10px;color:#D97706">net '+V.educianRetainPct+'% after Expentor</span>':(sg.k==='proIT'&&!auto?' <span style="font-size:10px;color:#D97706">no live revenue</span>':'');
-    var blv=blk.any[sg.k]?_valFmt(blk.backlog[sg.k]||0):'—';
+    var blv=_valFmt(blk[sg.k]||0);
     return '<tr><td style="padding:5px 0;font-weight:700">'+sg.l+note+'</td><td style="font-size:11px;color:var(--text-muted)">'+sg.type+'</td>'
       +'<td style="text-align:right">'+_valFmt(auto)+'</td>'
       +'<td style="text-align:right"><input class="fld-i" style="width:108px;text-align:right" type="number" placeholder="auto" value="'+ov+'" onchange="valSetRev(\''+sg.k+'\',this.value)"></td>'
@@ -8050,19 +8053,19 @@ function _valSegmentsHTML(model){
   var projs=(D.projects||[]).filter(function(p){return projCat(p)==='project';});
   var phdr='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)"><td style="padding:4px 0">Project</td><td style="text-align:right">Monthly</td><td>Start</td><td>End</td><td style="text-align:right">Months left</td><td style="text-align:right">Backlog</td><td style="text-align:right">Segment</td></tr>';
   var pbody=projs.map(function(p){
-    var seg=_valSegOf(p),t=_valTermOf(p),ml=_valMonthsLeft(t.end),mo=_valProjMonthlyRR(p),blp=_valProjBacklog(p);
+    var seg=_valSegOf(p),t=_valTermOf(p),mlo=_valProjMonthsLeft(p),mo=_valProjMonthlyRR(p),blp=_valProjBacklog(p);
     function dateInp(field,val){return '<input class="fld-i" style="width:118px" type="month" value="'+(val||'')+'" onchange="valSetTerm(\''+p.id+'\',\''+field+'\',this.value)">';}
     var opts=VAL_SEGS.map(function(sg){return '<option value="'+sg.k+'"'+(seg===sg.k?' selected':'')+'>'+sg.l+'</option>';}).join('');
     return '<tr><td style="padding:5px 0">'+esc(p.name||p.id)+'</td>'
       +'<td style="text-align:right">'+_valFmt(mo)+'</td>'
       +'<td>'+dateInp('start',t.start)+'</td>'
       +'<td>'+dateInp('end',t.end)+'</td>'
-      +'<td style="text-align:right;font-weight:700">'+(ml==null?'—':ml+' mo')+'</td>'
-      +'<td style="text-align:right;color:var(--text-muted)">'+(blp==null?'—':_valFmt(blp))+'</td>'
+      +'<td style="text-align:right;font-weight:700">'+mlo.months+' mo'+(mlo.assumed?' <span style="color:#D97706;font-weight:400;font-size:9px">assumed</span>':'')+'</td>'
+      +'<td style="text-align:right;color:var(--text-muted)">'+_valFmt(blp)+'</td>'
       +'<td style="text-align:right"><select class="fld-i" style="width:150px" onchange="valSetSeg(\''+p.id+'\',this.value)">'+opts+'</select></td></tr>';
   }).join('');
   var projTbl='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:10px 0"><div style="font-size:13px;font-weight:800;margin-bottom:4px">Contract terms &amp; segment mapping</div>'
-    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Enter each project\'s <b>Start</b> and <b>End</b> (YYYY-MM). <b>Months left</b> counts from today; <b>Backlog</b> = monthly × months left. Dates here are valuation-only and seed from the project\'s own dates — editing them won\'t disturb Capacity/Strategy. Re-assign Segment if auto-classification is wrong.</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Enter each project\'s <b>Start</b> and <b>End</b> (YYYY-MM). <b>Months left</b> counts from today; <b>Backlog</b> = monthly × months left. When no Start/End is entered, the model assumes a <b>default term of '+(Number(V.defaultTermMonths)||36)+' months</b> (editable on the Assumptions tab) and tags it <span style="color:#D97706">assumed</span>. These dates write to the project\'s contract fields and won\'t disturb Capacity/Strategy. Re-assign Segment if auto-classification is wrong.</div>'
     +'<table style="width:100%;font-size:12px;border-collapse:collapse"><thead>'+phdr+'</thead><tbody>'+pbody+'</tbody></table></div>';
   var intro=_valNote('Atlas has no built-in product-line tagging, so the model classifies each project into one of four segments. Segment-level matters because a SaaS dollar and a services dollar earn very different multiples.');
   var termNote=_valNote('<b>Contract term → backlog → the right multiple.</b> Enter Start/End dates below and the model computes <b>months remaining</b> and <b>contracted backlog</b> (monthly × months left) — your committed, de-risked revenue floor. Backlog is <i>not</i> multiplied into enterprise value (a 5-year book isn\'t worth 5× its annual run-rate), but it tells you how secure each segment is: <b>long, locked terms justify pushing that segment\'s multiple toward the high end</b>; short or expiring terms toward the low end. The multiple you set is then applied to annual revenue across all three scenarios. Educian / Professional IT caveats: Educian backlog is net of the 50% Expentor split; Professional IT shows nothing until it has contracted revenue.');
@@ -8113,6 +8116,7 @@ function _valAssumptionsHTML(model){
     +'<div class="fld" style="margin:0"><label class="fld-l">DCF horizon (yrs)</label>'+num(V.dcfYears,'valSetNum(\'dcfYears\',this.value)',70)+'</div>'
     +'<div class="fld" style="margin:0"><label class="fld-l">Blend weight: SOTP %</label>'+num(V.blendSotpPct,'valSetNum(\'blendSotpPct\',this.value)',70)+'<div style="font-size:9px;color:var(--text-muted);margin-top:2px">DCF gets '+(100-Number(V.blendSotpPct))+'%</div></div>'
     +'<div class="fld" style="margin:0"><label class="fld-l">Net debt ($)</label>'+num(V.netDebt,'valSetNum(\'netDebt\',this.value)',130)+'</div>'
+    +'<div class="fld" style="margin:0"><label class="fld-l">Default term (mo)</label>'+num(V.defaultTermMonths,'valSetNum(\'defaultTermMonths\',this.value)',70)+'<div style="font-size:9px;color:var(--text-muted);margin-top:2px">when no contract dates</div></div>'
     +'</div></div>';
   // ── conservative dollar build-up ──
   var walk=_valNote('<b>Conservative build-up:</b> SOTP '+_valFmt(b.base.sotp)+' × '+V.blendSotpPct+'% + DCF '+_valFmt(b.base.dcf)+' × '+(100-Number(V.blendSotpPct))+'% = blended EV <b>'+_valFmt(b.base.blend)+'</b> − net debt '+_valFmt(V.netDebt)+' = equity <b>'+_valFmt(b.base.equity)+'</b>.&nbsp; (Worst '+_valFmt(b.worst.equity)+' · Best '+_valFmt(b.best.equity)+'.)');
