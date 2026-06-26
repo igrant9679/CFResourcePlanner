@@ -1011,6 +1011,7 @@ select.ct-cell{cursor:pointer;-webkit-appearance:none;appearance:none;}
     <div class="tab-bar">
       <button class="tab tab-confidential" id="tabProforma" onclick="switchTab('proforma')">&#128274; Proforma</button>
       <button class="tab tab-confidential" id="tabStrat" onclick="switchTab('strat')">&#127919; Strategy</button>
+      <button class="tab tab-confidential" id="tabValuation" onclick="switchTab('valuation')">&#128142; Valuation</button>
       <button class="tab" id="tabCap" onclick="switchTab('cap')">Capacity Planning</button>
       <button class="tab" id="tabPPlan" onclick="switchTab('pplan')">Resource Planning</button>
       <button class="tab" id="tabProj" onclick="switchTab('proj')">Projects</button>
@@ -2741,7 +2742,7 @@ function openUnallocatedModal(){
   openModal('ovForm');
 }
 
-function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',contracts:'tabContracts',recruit:'tabRecruit',init:'tabInit',opp:'tabOpp',prop:'tabProp',over:'tabOver',orgchart:'tabChart',res:'tabRes',cap:'tabCap',class:'tabClass',plan:'tabPlan',ptask:'tabPTask',pplan:'tabPPlan',reports:'tabReports',strat:'tabStrat',proforma:'tabProforma'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
+function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',contracts:'tabContracts',recruit:'tabRecruit',init:'tabInit',opp:'tabOpp',prop:'tabProp',over:'tabOver',orgchart:'tabChart',res:'tabRes',cap:'tabCap',class:'tabClass',plan:'tabPlan',ptask:'tabPTask',pplan:'tabPPlan',reports:'tabReports',strat:'tabStrat',valuation:'tabValuation',proforma:'tabProforma'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
 
 function cardHTML(m,did){
 var dept=D.departments.find(function(d){return d.id===did;});
@@ -6678,6 +6679,7 @@ function renderView(){
   else if(viewMode==='reports')html=renderReportsView(q);
   else if(viewMode==='proforma')html=renderProformaView(q);
   else if(viewMode==='strat')html=renderStrategyView(q);
+  else if(viewMode==='valuation')html=renderValuationView(q);
   else html=renderResourcesView(q);
   document.getElementById('mainContent').innerHTML=html;
 }
@@ -7804,6 +7806,251 @@ function renderStrategyView(q){
   else if(stratTab==='initiatives'){html+=_stratInitiativesHTML(model);}
   else if(stratTab==='team'){html+=_stratTeamHTML(model);}
   return html+'</div>';
+}
+/* ════════════════════════════════════════════════════════════════════
+   COMPANY VALUATION — Admin only. Sum-of-the-parts (per-segment revenue
+   multiples) + a 5-yr DCF cross-check, blended, then bridged to equity
+   value across Worst / Conservative / Best scenarios. Segment revenue is
+   pulled live from the projection engine (same source as Capacity &
+   Strategy). All multiples & assumptions are editable and persisted in
+   D.proforma.valuation. ════════════════════════════════════════════════ */
+var VAL_SEGS=[{k:'awards',l:'Awards Management',type:'SaaS'},{k:'educian',l:'Educian',type:'SaaS'},{k:'gov',l:'Government',type:'Services'},{k:'proIT',l:'Professional IT',type:'Services'}];
+function _valSegLabel(k){var s=VAL_SEGS.find(function(x){return x.k===k;});return s?s.l:k;}
+function _valFmt(n){n=Math.round(Number(n)||0);var neg=n<0;n=Math.abs(n);var s;if(n>=1e6)s='$'+(n/1e6).toFixed(2)+'M';else if(n>=1e3)s='$'+Math.round(n/1e3)+'K';else s='$'+n;return neg?'−'+s:s;}
+function _valEnsure(){
+  D.proforma=D.proforma||{};
+  var V=D.proforma.valuation=D.proforma.valuation||{};
+  if(!V.mult)V.mult={awards:{worst:4.0,base:5.5,best:7.5},educian:{worst:2.5,base:3.5,best:5.0},gov:{worst:0.8,base:1.2,best:1.6},proIT:{worst:1.0,base:1.3,best:1.8}};
+  if(!V.wacc)V.wacc={worst:24,base:18,best:14};
+  if(!V.termGrowth)V.termGrowth={worst:2,base:3,best:4};
+  if(!V.growth)V.growth={worst:0,base:12,best:25};
+  if(V.fcfMargin==null)V.fcfMargin=12;
+  if(V.dcfYears==null)V.dcfYears=5;
+  if(V.blendSotpPct==null)V.blendSotpPct=60;
+  if(V.educianRetainPct==null)V.educianRetainPct=50;
+  if(!V.revOverride)V.revOverride={};
+  if(!V.segByProj)V.segByProj={};
+  if(V.netDebt==null){var debt=(D.proforma.debt&&D.proforma.debt.total)||4091319;var cash=Math.round((typeof capOpeningCash==='function'?capOpeningCash():1100000)||1100000);V.netDebt=debt-cash;}
+  if(V.newCapital==null)V.newCapital=0;
+  return V;
+}
+function _valSegOf(p){
+  var V=_valEnsure();
+  if(V.segByProj&&V.segByProj[p.id])return V.segByProj[p.id];
+  var n=(p.name||'').toLowerCase();
+  if(/educian/.test(n))return 'educian';
+  if(p.revenueFromSubs||/award|scholarship|grant|software platform/.test(n))return 'awards';
+  if(/salesforce|tableau|agentforce|revenue cloud|professional|it services/.test(n))return 'proIT';
+  return 'gov';
+}
+// Forward-12-month revenue per project, from the live projection engine.
+function _valProjNTM(p){
+  var months=(typeof capProjMonths==='function'?capProjMonths():[]).slice(0,12),r=0;
+  months.forEach(function(mo){if(capInWindow(p,mo.y,mo.m))r+=capProjRevAt(p,mo.y,mo.m);});
+  return r;
+}
+function _valSegRevenue(){
+  var V=_valEnsure();
+  var net={awards:0,educian:0,gov:0,proIT:0},raw={awards:0,educian:0,gov:0,proIT:0};
+  (D.projects||[]).filter(function(p){return projCat(p)==='project';}).forEach(function(p){
+    var seg=_valSegOf(p);if(!raw.hasOwnProperty(seg))return;
+    var r=_valProjNTM(p);raw[seg]+=r;net[seg]+=r;
+  });
+  // Educian: CF keeps only its retained share (Expentor revenue split).
+  net.educian=Math.round(net.educian*(V.educianRetainPct!=null?V.educianRetainPct:50)/100);
+  Object.keys(net).forEach(function(k){if(V.revOverride&&V.revOverride[k]!=null&&V.revOverride[k]!=='')net[k]=Number(V.revOverride[k]);});
+  return {net:net,raw:raw};
+}
+function _valCompute(p){
+  var sotp=0,segEV={};
+  Object.keys(p.segRev).forEach(function(k){var ev=p.segRev[k]*(p.mult[k]||0);segEV[k]=ev;sotp+=ev;});
+  var baseRev=Object.keys(p.segRev).reduce(function(a,k){return a+p.segRev[k];},0);
+  var w=p.wacc/100,g=p.growth/100,tg=p.termGrowth/100,m=p.fcfMargin/100;
+  var dcf=0,rev=baseRev,fcf=baseRev*m;
+  for(var t=1;t<=p.dcfYears;t++){if(t>1)rev*=(1+g);fcf=rev*m;dcf+=fcf/Math.pow(1+w,t);}
+  dcf+=(w>tg?(fcf*(1+tg))/(w-tg):0)/Math.pow(1+w,p.dcfYears);
+  var blend=(p.blendSotpPct/100)*sotp+(1-p.blendSotpPct/100)*dcf;
+  return {sotp:sotp,segEV:segEV,dcf:dcf,blend:blend,equity:blend-p.netDebt,baseRev:baseRev};
+}
+function _valParams(s,segRev){
+  var V=_valEnsure(),mult={};
+  Object.keys(segRev).forEach(function(k){mult[k]=V.mult[k]?V.mult[k][s]:0;});
+  return {segRev:segRev,mult:mult,wacc:V.wacc[s],growth:V.growth[s],termGrowth:V.termGrowth[s],fcfMargin:V.fcfMargin,dcfYears:V.dcfYears,blendSotpPct:V.blendSotpPct,netDebt:V.netDebt};
+}
+function _valModel(){
+  var sr=_valSegRevenue(),out={segRev:sr.net,segRaw:sr.raw,byScn:{}};
+  ['worst','base','best'].forEach(function(s){out.byScn[s]=_valCompute(_valParams(s,sr.net));});
+  return out;
+}
+function _valSensitivity(){
+  var V=_valEnsure(),sr=_valSegRevenue().net,base=_valParams('base',sr),baseEq=_valCompute(base).equity,drivers=[];
+  function clone(o){return JSON.parse(JSON.stringify(o));}
+  function add(label,lo,hi){var a=_valCompute(lo).equity,b=_valCompute(hi).equity;drivers.push({label:label,lo:Math.min(a,b),hi:Math.max(a,b),span:Math.abs(b-a)});}
+  ['awards','educian','gov','proIT'].forEach(function(k){var l=clone(base);l.mult[k]=V.mult[k].worst;var h=clone(base);h.mult[k]=V.mult[k].best;add(_valSegLabel(k)+' multiple',l,h);});
+  var lw=clone(base);lw.wacc=V.wacc.worst;var hw=clone(base);hw.wacc=V.wacc.best;add('WACC',lw,hw);
+  var lg=clone(base);lg.growth=V.growth.worst;var hg=clone(base);hg.growth=V.growth.best;add('Revenue growth',lg,hg);
+  drivers.sort(function(a,b){return b.span-a.span;});
+  return {baseEq:baseEq,drivers:drivers};
+}
+// ── setters ──
+function valSetMult(seg,scn,v){var V=_valEnsure();V.mult[seg]=V.mult[seg]||{};V.mult[seg][scn]=Number(v)||0;save();renderView();}
+function valSetScn(grp,scn,v){var V=_valEnsure();V[grp]=V[grp]||{};V[grp][scn]=Number(v)||0;save();renderView();}
+function valSetNum(k,v){var V=_valEnsure();V[k]=(v===''?0:(Number(v)||0));save();renderView();}
+function valSetSeg(pid,seg){var V=_valEnsure();V.segByProj=V.segByProj||{};if(seg)V.segByProj[pid]=seg;else delete V.segByProj[pid];save();renderView();}
+function valSetRev(seg,v){var V=_valEnsure();V.revOverride=V.revOverride||{};if(v===''||v==null)delete V.revOverride[seg];else V.revOverride[seg]=Number(v)||0;save();renderView();}
+var valTab='summary';
+function valSetTab(t){valTab=t;renderView();}
+// ── SVGs ──
+function _valFootballSVG(model){
+  var V=_valEnsure(),nd=V.netDebt;
+  var methods=[{l:'Sum-of-the-parts',f:function(x){return x.sotp-nd;}},{l:'DCF (5-yr)',f:function(x){return x.dcf-nd;}},{l:'Blended equity',f:function(x){return x.blend-nd;}}];
+  var all=[];methods.forEach(function(mm){['worst','base','best'].forEach(function(sc){all.push(mm.f(model.byScn[sc]));});});
+  var min=Math.min.apply(null,all),max=Math.max.apply(null,all);if(min>0)min=0;if(max===min)max=min+1;
+  var W=640,padL=118,padR=132,rowH=44,H=methods.length*rowH+8;
+  var x=function(v){return padL+(v-min)/(max-min)*(W-padL-padR);};
+  var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:'+H+'px;display:block">';
+  svg+='<line x1="'+x(0).toFixed(1)+'" y1="0" x2="'+x(0).toFixed(1)+'" y2="'+(H-2)+'" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3"></line>';
+  methods.forEach(function(mm,i){
+    var y=i*rowH+rowH/2,lo=mm.f(model.byScn.worst),mid=mm.f(model.byScn.base),hi=mm.f(model.byScn.best);
+    var xa=Math.min(lo,hi),xb=Math.max(lo,hi);
+    svg+='<text x="0" y="'+(y+4)+'" font-size="11" font-weight="700" fill="var(--text)">'+mm.l+'</text>';
+    svg+='<rect x="'+x(xa).toFixed(1)+'" y="'+(y-9)+'" width="'+Math.max(1,x(xb)-x(xa)).toFixed(1)+'" height="18" rx="4" fill="rgba(37,99,235,0.18)" stroke="#2563EB" stroke-width="1"></rect>';
+    svg+='<circle cx="'+x(mid).toFixed(1)+'" cy="'+y+'" r="4" fill="#1B2A4A"></circle>';
+    svg+='<text x="'+(x(xb)+6).toFixed(1)+'" y="'+(y+4)+'" font-size="10" fill="var(--text-muted)">'+_valFmt(xa)+'–'+_valFmt(xb)+'</text>';
+  });
+  return svg+'</svg>';
+}
+function _valTornadoSVG(s){
+  var ds=s.drivers,base=s.baseEq;if(!ds.length)return '<div style="font-size:11px;color:var(--text-muted)">No variation under current assumptions.</div>';
+  var all=[base];ds.forEach(function(d){all.push(d.lo,d.hi);});
+  var min=Math.min.apply(null,all),max=Math.max.apply(null,all);if(max===min)max=min+1;
+  var W=640,padL=150,padR=86,rowH=30,H=ds.length*rowH+22;
+  var x=function(v){return padL+(v-min)/(max-min)*(W-padL-padR);};
+  var svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:'+H+'px;display:block">';
+  svg+='<line x1="'+x(base).toFixed(1)+'" y1="0" x2="'+x(base).toFixed(1)+'" y2="'+(H-16)+'" stroke="#1B2A4A" stroke-width="1.2" stroke-dasharray="4 3"></line>';
+  svg+='<text x="'+x(base).toFixed(1)+'" y="'+(H-4)+'" text-anchor="middle" font-size="9" fill="var(--text-muted)">base '+_valFmt(base)+'</text>';
+  ds.forEach(function(d,i){var y=i*rowH+rowH/2;
+    svg+='<text x="0" y="'+(y+4)+'" font-size="11" fill="var(--text)">'+esc(d.label)+'</text>';
+    svg+='<rect x="'+x(d.lo).toFixed(1)+'" y="'+(y-8)+'" width="'+Math.max(1,x(d.hi)-x(d.lo)).toFixed(1)+'" height="16" rx="3" fill="rgba(197,165,90,0.25)" stroke="#C5A55A" stroke-width="1"></rect>';
+    svg+='<text x="'+(x(d.hi)+6).toFixed(1)+'" y="'+(y+4)+'" font-size="9" fill="var(--text-muted)">±'+_valFmt(d.span/2)+'</text>';
+  });
+  return svg+'</svg>';
+}
+// ── views ──
+function renderValuationView(q){
+  if(!canProforma())return '<div class="empty-msg">No access. Company Valuation is restricted to Admin.</div>';
+  _valEnsure();var model=_valModel();
+  var html='<div style="max-width:1240px;margin:0 auto">';
+  html+='<div style="margin-bottom:8px"><div style="font-size:18px;font-weight:800">Company Valuation</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-top:2px">Sum-of-the-parts (per-segment revenue multiples) plus a 5-yr DCF cross-check, blended and bridged to equity value across three scenarios. Segment revenue is pulled live from the projection engine. Every multiple &amp; assumption is editable.</div></div>';
+  var tabs=[['summary','Valuation'],['segments','Segments &amp; revenue'],['assumptions','Assumptions'],['sensitivity','Sensitivity']];
+  html+='<div class="pf-subtabs">'+tabs.map(function(t){return '<button class="pf-subtab'+(valTab===t[0]?' active':'')+'" onclick="valSetTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
+  if(valTab==='summary')html+=_valSummaryHTML(model);
+  else if(valTab==='segments')html+=_valSegmentsHTML(model);
+  else if(valTab==='assumptions')html+=_valAssumptionsHTML(model);
+  else if(valTab==='sensitivity')html+=_valSensitivityHTML(model);
+  return html+'</div>';
+}
+function _valSummaryHTML(model){
+  var V=_valEnsure(),b=model.byScn;
+  function card(s,lbl,color){var eq=b[s].equity;return '<div style="flex:1;min-width:180px;border:1px solid '+color+';border-radius:10px;padding:14px 16px;background:linear-gradient(180deg,'+color+'14,transparent)">'
+    +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:'+color+'">'+lbl+'</div>'
+    +'<div style="font-size:26px;font-weight:800;margin-top:4px">'+_valFmt(eq)+'</div>'
+    +'<div style="font-size:10px;color:var(--text-muted);margin-top:3px">equity value</div>'
+    +'<div style="font-size:10px;color:var(--text-muted);margin-top:6px">EV '+_valFmt(b[s].blend)+' · SOTP '+_valFmt(b[s].sotp)+' · DCF '+_valFmt(b[s].dcf)+'</div></div>';}
+  var cards='<div style="display:flex;gap:12px;flex-wrap:wrap;margin:10px 0">'+card('worst','Worst case','#DC2626')+card('base','Conservative (most likely)','#2563EB')+card('best','Best case','#16A34A')+'</div>';
+  var ff='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:12px 0"><div style="font-size:13px;font-weight:800;margin-bottom:6px">Equity value range by method</div>'+_valFootballSVG(model)+'</div>';
+  var notes='<div style="font-size:11px;color:var(--text-muted);border-top:1px dashed var(--border);padding-top:8px;margin-top:10px">'
+    +'<b>How to read this:</b> Equity = blended EV − net debt of '+_valFmt(V.netDebt)+'. '
+    +'Educian revenue is net of the 50% Expentor share and is a related-party diligence item. '
+    +'Professional IT has no live contracted revenue yet — it only contributes via pipeline/overrides. '
+    +'FCF margin &amp; growth are forward assumptions (today\'s blended margin is thinner). Tune everything on the Assumptions tab.</div>';
+  return cards+ff+_valBridgeHTML(model)+_valRaiseHTML(model)+notes;
+}
+function _valBridgeHTML(model){
+  var V=_valEnsure(),rows=['worst','base','best'],lbl={worst:'Worst',base:'Conservative',best:'Best'};
+  var hdr='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)"><td style="padding:4px 0">Scenario</td><td style="text-align:right">SOTP EV</td><td style="text-align:right">DCF EV</td><td style="text-align:right">Blended EV</td><td style="text-align:right">− Net debt</td><td style="text-align:right">Equity value</td></tr>';
+  var body=rows.map(function(s){var x=model.byScn[s];return '<tr><td style="padding:5px 0;font-weight:700">'+lbl[s]+'</td>'
+    +'<td style="text-align:right">'+_valFmt(x.sotp)+'</td><td style="text-align:right">'+_valFmt(x.dcf)+'</td>'
+    +'<td style="text-align:right;font-weight:700">'+_valFmt(x.blend)+'</td><td style="text-align:right;color:#DC2626">('+_valFmt(V.netDebt)+')</td>'
+    +'<td style="text-align:right;font-weight:800">'+_valFmt(x.equity)+'</td></tr>';}).join('');
+  return '<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:12px 0"><div style="font-size:13px;font-weight:800;margin-bottom:6px">Enterprise value → equity bridge</div>'
+    +'<table style="width:100%;font-size:12px;border-collapse:collapse"><thead>'+hdr+'</thead><tbody>'+body+'</tbody></table></div>';
+}
+function _valRaiseHTML(model){
+  var V=_valEnsure(),pre=model.byScn.base.equity,cap=Number(V.newCapital)||0,post=pre+cap,own=post>0?(cap/post*100):0;
+  return '<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:12px 0">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><div style="font-size:13px;font-weight:800">Fundraise / sale lens (Conservative case)</div>'
+    +'<div class="fld" style="margin:0"><label class="fld-l">New capital raised</label><input class="fld-i" style="width:130px" type="number" value="'+cap+'" onchange="valSetNum(\'newCapital\',this.value)"></div></div>'
+    +'<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px">'
+    +'<div style="flex:1;min-width:140px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Pre-money</div><div style="font-size:18px;font-weight:800">'+_valFmt(pre)+'</div></div>'
+    +'<div style="flex:1;min-width:140px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Post-money</div><div style="font-size:18px;font-weight:800">'+_valFmt(post)+'</div></div>'
+    +'<div style="flex:1;min-width:140px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text-muted)">Investor ownership</div><div style="font-size:18px;font-weight:800">'+(cap>0?own.toFixed(1)+'%':'—')+'</div></div>'
+    +'</div></div>';
+}
+function _valSegmentsHTML(model){
+  var V=_valEnsure(),net=model.segRev,raw=model.segRaw;
+  var hdr='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)"><td style="padding:4px 0">Segment</td><td>Type</td><td style="text-align:right">Auto NTM rev</td><td style="text-align:right">Override</td><td style="text-align:right">Used (annual)</td></tr>';
+  var body=VAL_SEGS.map(function(sg){
+    var auto=raw[sg.k]||0,ov=(V.revOverride&&V.revOverride[sg.k]!=null&&V.revOverride[sg.k]!=='')?V.revOverride[sg.k]:'',used=net[sg.k]||0;
+    var note=sg.k==='educian'?' <span style="font-size:10px;color:#D97706">net '+V.educianRetainPct+'% after Expentor</span>':(sg.k==='proIT'&&!auto?' <span style="font-size:10px;color:#D97706">no live revenue</span>':'');
+    return '<tr><td style="padding:5px 0;font-weight:700">'+sg.l+note+'</td><td style="font-size:11px;color:var(--text-muted)">'+sg.type+'</td>'
+      +'<td style="text-align:right">'+_valFmt(auto)+'</td>'
+      +'<td style="text-align:right"><input class="fld-i" style="width:118px;text-align:right" type="number" placeholder="auto" value="'+ov+'" onchange="valSetRev(\''+sg.k+'\',this.value)"></td>'
+      +'<td style="text-align:right;font-weight:800">'+_valFmt(used)+'</td></tr>';
+  }).join('');
+  var segTbl='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:10px 0"><div style="font-size:13px;font-weight:800;margin-bottom:4px">Segment revenue (forward 12-month, from the projection)</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Auto-summed from tagged projects. Leave Override blank to use the live figure; set it to pin a number (e.g. true SaaS ARR where a contract rolls off mid-year).</div>'
+    +'<table style="width:100%;font-size:12px;border-collapse:collapse"><thead>'+hdr+'</thead><tbody>'+body+'</tbody></table>'
+    +'<div style="margin-top:10px;display:flex;align-items:center;gap:8px"><label class="fld-l" style="margin:0">Educian revenue retained by CF (% after Expentor split)</label><input class="fld-i" style="width:70px" type="number" value="'+V.educianRetainPct+'" onchange="valSetNum(\'educianRetainPct\',this.value)"></div></div>';
+  var projs=(D.projects||[]).filter(function(p){return projCat(p)==='project';});
+  var phdr='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)"><td style="padding:4px 0">Project</td><td style="text-align:right">NTM revenue</td><td style="text-align:right">Segment</td></tr>';
+  var pbody=projs.map(function(p){
+    var seg=_valSegOf(p),r=_valProjNTM(p);
+    var opts=VAL_SEGS.map(function(sg){return '<option value="'+sg.k+'"'+(seg===sg.k?' selected':'')+'>'+sg.l+'</option>';}).join('');
+    return '<tr><td style="padding:5px 0">'+esc(p.name||p.id)+'</td><td style="text-align:right">'+_valFmt(r)+'</td>'
+      +'<td style="text-align:right"><select class="fld-i" style="width:170px" onchange="valSetSeg(\''+p.id+'\',this.value)">'+opts+'</select></td></tr>';
+  }).join('');
+  var projTbl='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:10px 0"><div style="font-size:13px;font-weight:800;margin-bottom:4px">Project → segment mapping</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Auto-classified by name; re-assign any project to correct its segment. Changes persist.</div>'
+    +'<table style="width:100%;font-size:12px;border-collapse:collapse"><thead>'+phdr+'</thead><tbody>'+pbody+'</tbody></table></div>';
+  return segTbl+projTbl;
+}
+function _valAssumptionsHTML(model){
+  var V=_valEnsure();
+  function num(val,fn,w){return '<input class="fld-i" style="width:'+(w||64)+'px;text-align:right" type="number" step="0.1" value="'+val+'" onchange="'+fn+'">';}
+  var mhdr='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)"><td style="padding:4px 0">Segment</td><td style="text-align:right">Worst</td><td style="text-align:right">Conservative</td><td style="text-align:right">Best</td><td style="font-size:10px">Metric</td></tr>';
+  var mbody=VAL_SEGS.map(function(sg){return '<tr><td style="padding:5px 0;font-weight:700">'+sg.l+'</td>'
+    +'<td style="text-align:right">'+num(V.mult[sg.k].worst,'valSetMult(\''+sg.k+'\',\'worst\',this.value)')+'</td>'
+    +'<td style="text-align:right">'+num(V.mult[sg.k].base,'valSetMult(\''+sg.k+'\',\'base\',this.value)')+'</td>'
+    +'<td style="text-align:right">'+num(V.mult[sg.k].best,'valSetMult(\''+sg.k+'\',\'best\',this.value)')+'</td>'
+    +'<td style="font-size:11px;color:var(--text-muted)">× '+(sg.type==='SaaS'?'ARR':'revenue')+'</td></tr>';}).join('');
+  var mult='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:10px 0"><div style="font-size:13px;font-weight:800;margin-bottom:4px">Valuation multiples by segment</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">SaaS segments valued on ARR; services on forward revenue. Defaults reflect mid-2026 benchmarks (private SaaS ~4–5.5× ARR + AI premium; gov/IT services ~1–1.3× revenue).</div>'
+    +'<table style="width:100%;font-size:12px;border-collapse:collapse"><thead>'+mhdr+'</thead><tbody>'+mbody+'</tbody></table></div>';
+  function drow(lbl,grp){return '<tr><td style="padding:5px 0;font-weight:700">'+lbl+'</td>'
+    +'<td style="text-align:right">'+num(V[grp].worst,'valSetScn(\''+grp+'\',\'worst\',this.value)')+'</td>'
+    +'<td style="text-align:right">'+num(V[grp].base,'valSetScn(\''+grp+'\',\'base\',this.value)')+'</td>'
+    +'<td style="text-align:right">'+num(V[grp].best,'valSetScn(\''+grp+'\',\'best\',this.value)')+'</td></tr>';}
+  var dhdr='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)"><td style="padding:4px 0">Driver (%)</td><td style="text-align:right">Worst</td><td style="text-align:right">Conservative</td><td style="text-align:right">Best</td></tr>';
+  var drivers='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:10px 0"><div style="font-size:13px;font-weight:800;margin-bottom:8px">DCF scenario drivers</div>'
+    +'<table style="width:100%;font-size:12px;border-collapse:collapse"><thead>'+dhdr+'</thead><tbody>'
+    +drow('WACC / discount rate','wacc')+drow('Revenue growth','growth')+drow('Terminal growth','termGrowth')
+    +'</tbody></table></div>';
+  var glob='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:10px 0"><div style="font-size:13px;font-weight:800;margin-bottom:8px">Global assumptions</div>'
+    +'<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">'
+    +'<div class="fld" style="margin:0"><label class="fld-l">FCF margin %</label>'+num(V.fcfMargin,'valSetNum(\'fcfMargin\',this.value)',70)+'</div>'
+    +'<div class="fld" style="margin:0"><label class="fld-l">DCF horizon (yrs)</label>'+num(V.dcfYears,'valSetNum(\'dcfYears\',this.value)',70)+'</div>'
+    +'<div class="fld" style="margin:0"><label class="fld-l">Blend weight: SOTP %</label>'+num(V.blendSotpPct,'valSetNum(\'blendSotpPct\',this.value)',70)+'</div>'
+    +'<div class="fld" style="margin:0"><label class="fld-l">Net debt ($)</label>'+num(V.netDebt,'valSetNum(\'netDebt\',this.value)',130)+'</div>'
+    +'</div><div style="font-size:10px;color:var(--text-muted);margin-top:8px">Blend = SOTP×weight + DCF×(1−weight). Net debt default = total corporate debt − cash; edit if the capital structure changes.</div></div>';
+  return mult+drivers+glob;
+}
+function _valSensitivityHTML(model){
+  var s=_valSensitivity();
+  return '<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:10px 0"><div style="font-size:13px;font-weight:800;margin-bottom:4px">Sensitivity — what moves equity value most</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Each bar swings one driver from its Worst to its Best while holding everything else at Conservative. Base equity: <b>'+_valFmt(s.baseEq)+'</b>.</div>'
+    +_valTornadoSVG(s)+'</div>';
 }
 /* ── DEBT-FREE PLAN: multi-year revenue model (FY26→FY29) at a configurable
    annual growth rate + net margin, tracking cumulative net income against the
@@ -15786,7 +16033,7 @@ function rptCsvBuiltin(key){var f=RPT_CSV[key],b=rptBuiltin(key);if(!f||(b&&b.fi
 /* ── AUTH & PERMISSIONS (client-side roles only — not API security) ── */
 var AUTH_USER='khaja@communityforce.com',AUTH_PASS='Namtra_CF27',DEFAULT_PW='CommunityForce2026';
 var ME=null;
-var SECTIONS=[{k:'proforma',tab:'tabProforma',l:'Proforma'},{k:'strat',tab:'tabStrat',l:'Strategy'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'pplan',tab:'tabPPlan',l:'Resource Planning'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'contracts',tab:'tabContracts',l:'Contract Mgmt'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources'},{k:'reports',tab:'tabReports',l:'Reports'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'plan',tab:'tabPlan',l:'COE Tasks'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'orgchart',tab:'tabChart',l:'Org Chart'}];
+var SECTIONS=[{k:'proforma',tab:'tabProforma',l:'Proforma'},{k:'strat',tab:'tabStrat',l:'Strategy'},{k:'valuation',tab:'tabValuation',l:'Valuation'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'pplan',tab:'tabPPlan',l:'Resource Planning'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'contracts',tab:'tabContracts',l:'Contract Mgmt'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources'},{k:'reports',tab:'tabReports',l:'Reports'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'plan',tab:'tabPlan',l:'COE Tasks'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'orgchart',tab:'tabChart',l:'Org Chart'}];
 function emailFromName(name){var clean=(name||'').replace(/\(.*?\)/g,'').replace(/[^A-Za-z .\-]/g,'').trim();var parts=clean.split(/\s+/).filter(Boolean);var local=parts.length>=2?(parts[0]+'.'+parts[parts.length-1]):(parts[0]||'user');return local.toLowerCase().replace(/[^a-z0-9.]/g,'')+'@communityforce.com';}
 function authMigrate(){
   if(!D.accounts)D.accounts=[];
@@ -15805,7 +16052,7 @@ function authMigrate(){
   D.accounts.forEach(function(a){if(!('active' in a))a.active=true;if(!a.programIds)a.programIds=[];if(!a.role)a.role='viewer';});
   if(!D.sectionVis)D.sectionVis={};['owner','editor','viewer'].forEach(function(r){if(!D.sectionVis[r])D.sectionVis[r]={};});
 }
-function canSee(k){if(!ME)return false;if(k==='proforma'||k==='strat')return canProforma();if(ME.role==='admin')return true;
+function canSee(k){if(!ME)return false;if(k==='proforma'||k==='strat'||k==='valuation')return canProforma();if(ME.role==='admin')return true;
   // Section Visibility is authoritative for tab/section visibility. An explicit
   // grant or revoke in D.sectionVis[role] always wins. For the capability-gated
   // modules (Proposals, Recruiting) an UNSET cell falls back to the module
