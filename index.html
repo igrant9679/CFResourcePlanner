@@ -1783,6 +1783,13 @@ function proposalsMigrate(){
     if(!D.proposalTemplates.some(function(t){return t.id==='tpl_cf_technical';}))D.proposalTemplates.push(_cfTechnicalTemplate());
     D.cfTemplateSeeded=true;
   }
+  // SBIR/STTR proposal templates (Phase I + Phase II/D2P2), agency-agnostic. Idempotent.
+  if(!D.sbirTemplatesSeeded){
+    D.proposalTemplates=D.proposalTemplates||[];
+    if(!D.proposalTemplates.some(function(t){return t.id==='tpl_sbir_phase1';}))D.proposalTemplates.push(_sbirPhase1Template());
+    if(!D.proposalTemplates.some(function(t){return t.id==='tpl_sbir_phase2';}))D.proposalTemplates.push(_sbirPhase2Template());
+    D.sbirTemplatesSeeded=true;
+  }
 }
 // The CommunityForce house format, modeled on the DTMO PEIS technical proposal:
 // fielded DoD cover, ToC, and the standard 10-section body. Stable ids so it
@@ -1810,6 +1817,65 @@ function _cfTechnicalTemplate(){
       {id:'cfsec_conclusion',title:'Conclusion',order:11,required:true,source:'ai',pageBudget:1,prompt:'Write a confident closing: restate the mission stakes, the readiness and qualifications of the proposed team, and CommunityForce\'s commitment to secure, reliable delivery. Invite further discussion.',evidence:[]},
       {id:'cfsec_certs',title:'Corporate Capabilities & Certifications',order:12,required:false,source:'computed',pageBudget:1,prompt:'',evidence:[]},
       {id:'cfsec_resumes',title:'Key Personnel Resumes (Appendix)',order:13,required:false,source:'computed',pageBudget:0,prompt:'',evidence:[]}
+    ]
+  };
+}
+// SBIR/STTR — Phase I feasibility proposal (agency-agnostic; adapts to the loaded
+// topic/solicitation context at AI-gen time). Stable id so it upgrades in place.
+function _sbirPhase1Template(){
+  return {
+    id:'tpl_sbir_phase1',
+    name:'SBIR/STTR — Phase I Proposal',
+    serviceLine:'Federal R&D (SBIR/STTR)',
+    complianceFramework:'SBIR/STTR Program Solicitation',
+    pageLimit:0,
+    version:1,createdAt:Date.now(),createdBy:'system',
+    sections:[
+      {id:'sb1_cover',title:'Cover Sheet',order:0,required:true,source:'computed',pageBudget:1,prompt:'',evidence:[]},
+      {id:'sb1_signif',title:'Identification and Significance of the Problem or Opportunity',order:1,required:true,source:'ai',pageBudget:2,prompt:'Open the Phase I technical volume by identifying the specific problem or opportunity in the solicitation topic (cite the exact topic number, title, and sponsoring agency/program office from the loaded topic context). Explain why it matters to the agency mission, the current state of the art and its limitations, and the innovation our proposed approach introduces. State the central technical hypothesis Phase I will test. Be specific to the topic\'s objective and description; do not pad.',evidence:['topic objective coverage']},
+      {id:'sb1_objectives',title:'Phase I Technical Objectives',order:2,required:true,source:'ai',pageBudget:2,prompt:'List the Phase I technical objectives as a numbered set. Each objective must be specific, measurable, and feasibility-oriented (Phase I establishes technical merit and feasibility, not a finished product). For each, state what will be demonstrated and the quantitative success criterion. Tie every objective back to the topic requirements.',evidence:[]},
+      {id:'sb1_workplan',title:'Phase I Work Plan',order:3,required:true,source:'ai',pageBudget:4,prompt:'Draft the Phase I work plan as an ordered set of tasks that achieve the objectives within the Phase I period of performance and budget (use the topic\'s stated Phase I duration and dollar ceiling if given). Use an <h3> per task with: approach/method, who performs it, inputs/outputs, and the milestone or deliverable that closes it. Include an HTML <table> schedule (Task | Months | Milestone | Deliverable). Keep the scope realistic for a Phase I feasibility effort.',evidence:['topic scope coverage']},
+      {id:'sb1_related',title:'Related Work',order:4,required:true,source:'ai',pageBudget:2,prompt:'Describe directly related R&D the team or others have performed that informs this effort — prior internal R&D, publications, and relevant company products/experience from the Knowledge Bank and Company Profile. Demonstrate awareness of the state of the art and how prior work de-risks the proposed approach. Use ONLY real, documented work; never invent results, customers, or citations.',evidence:['>=1 prior effort']},
+      {id:'sb1_future',title:'Relationship with Future R&D (Phase II / Phase III)',order:5,required:true,source:'ai',pageBudget:1,prompt:'Explain how a successful Phase I sets up Phase II development and the eventual Phase III transition to an operational or commercial capability. Sketch the anticipated Phase II goals and the path to a deployed product, without overcommitting beyond what Phase I will prove.',evidence:[]},
+      {id:'sb1_keypers',title:'Key Personnel and Qualifications',order:6,required:true,source:'ai',pageBudget:2,prompt:'Identify the Principal Investigator and key personnel, with the specific qualifications that match the topic\'s technical demands. Use a short fielded block per person (name, role, relevant expertise, level of effort). For STTR, identify the partnering research institution and the division of work between the small business and the institution. Use ONLY real people and credentials from the provided materials.',evidence:['>=1 key personnel bio']},
+      {id:'sb1_commercial',title:'Commercialization Strategy',order:7,required:true,source:'ai',pageBudget:2,prompt:'Describe the commercialization potential and strategy: the target customers (government and commercial), the market need, the value proposition, the transition path beyond Phase I/II, and any committed or prospective follow-on funding or end users. Keep claims grounded; reference real pipeline or customers where available.',evidence:[]},
+      {id:'sb1_facilities',title:'Facilities and Equipment',order:8,required:false,source:'ai',pageBudget:1,prompt:'Describe the facilities, equipment, computing/cloud environments, and any specialized resources required and available to perform Phase I. Note required security environments (e.g., classified/unclassified, impact levels) only if the topic calls for them.',evidence:[]},
+      {id:'sb1_foreign',title:'Subcontractors, Consultants, and Foreign Nationals Disclosure',order:9,required:true,source:'ai',pageBudget:1,prompt:'List any subcontractors or consultants and the work allocated to each. If the topic carries ITAR/EAR or foreign-national restrictions, include the required disclosure: each proposed foreign national, country of origin, visa or work-permit type, and the SOW tasks they would perform. If none are proposed, state that explicitly. Do not fabricate personnel.',evidence:['foreign-national disclosure if applicable']},
+      {id:'sb1_cost',title:'Cost / Budget Narrative',order:10,required:true,source:'hybrid',pageBudget:1,prompt:'Write the basis-of-estimate narrative explaining the Phase I budget (labor by category and hours, materials, travel, subcontracts, indirect rates) and how it maps to the work-plan tasks. Dollar figures stay user-entered in the Pricing tab; this section explains the rationale and keeps within the topic\'s Phase I funding ceiling.',evidence:[]},
+      {id:'sb1_prior',title:'Prior, Current, or Pending SBIR/STTR Support',order:11,required:false,source:'ai',pageBudget:1,prompt:'Disclose any prior, current, or pending SBIR/STTR awards or other federal support related to this work (agency, topic, award number, period, amount, outcome) and confirm there is no essentially equivalent work funded elsewhere. Use ONLY real award records; if none, state none.',evidence:[]},
+      {id:'sb1_conclusion',title:'Conclusion',order:12,required:false,source:'ai',pageBudget:1,prompt:'Close with a concise statement of the innovation, the team readiness to execute Phase I, and the expected impact and transition path. Confident and specific.',evidence:[]},
+      {id:'sb1_certs',title:'Corporate Capabilities & Certifications',order:13,required:false,source:'computed',pageBudget:1,prompt:'',evidence:[]},
+      {id:'sb1_resumes',title:'Key Personnel Resumes (Appendix)',order:14,required:false,source:'computed',pageBudget:0,prompt:'',evidence:[]}
+    ]
+  };
+}
+// SBIR/STTR — Phase II / Direct-to-Phase-II proposal (agency-agnostic). Modeled on
+// the standard Phase II technical volume; carries the D2P2 feasibility justification.
+function _sbirPhase2Template(){
+  return {
+    id:'tpl_sbir_phase2',
+    name:'SBIR/STTR — Phase II / Direct-to-Phase-II Proposal',
+    serviceLine:'Federal R&D (SBIR/STTR)',
+    complianceFramework:'SBIR/STTR Program Solicitation',
+    pageLimit:0,
+    version:1,createdAt:Date.now(),createdBy:'system',
+    sections:[
+      {id:'sb2_cover',title:'Cover Sheet',order:0,required:true,source:'computed',pageBudget:1,prompt:'',evidence:[]},
+      {id:'sb2_exec',title:'Executive Summary and Phase II / D2P2 Justification',order:1,required:true,source:'ai',pageBudget:2,prompt:'Open by presenting the proposed Phase II effort against the named topic (cite topic number, title, and sponsoring program from the loaded context). Summarize the innovation, the technical approach, and the outcome Phase II will deliver. For a Direct-to-Phase-II, include an explicit feasibility justification: the prior work (a Phase I award or equivalent internal R&D) that already established technical merit, with concrete evidence. State the proposed period of performance and total value.',evidence:['D2P2 feasibility justification']},
+      {id:'sb2_problem',title:'Problem Statement and Customer Requirements',order:2,required:true,source:'ai',pageBudget:2,prompt:'Define the operational problem and the customer/end-user requirements drawn from the topic description. Identify the specific stakeholders and mission context, the current gap, and the measurable capability needed. Mirror the topic\'s own terminology and objectives.',evidence:['topic objective coverage']},
+      {id:'sb2_technical',title:'Technical Approach and Innovation',order:3,required:true,source:'ai',pageBudget:6,prompt:'Draft the technical approach. Use one <h3> per major capability or component of the solution; for each, give the concrete approach, the methods/technologies applied, how it meets the requirement, and what makes it innovative relative to the state of the art. Reference real accelerators, prior builds, and proof points from the Knowledge Bank, adapted to this topic.',evidence:['>=2 proof points','topic scope coverage']},
+      {id:'sb2_objectives',title:'Phase II Technical Objectives',order:4,required:true,source:'ai',pageBudget:2,prompt:'Enumerate the Phase II technical objectives as a numbered set. Each must be specific and measurable, with a quantitative success criterion and the maturity target (e.g., TRL progression) it advances. Tie each objective to the customer requirements and to the tasks in the Statement of Work.',evidence:[]},
+      {id:'sb2_sow',title:'Phase II Statement of Work',order:5,required:true,source:'hybrid',pageBudget:4,prompt:'Draft the Phase II Statement of Work over the proposed period of performance (use the topic\'s Phase II duration and dollar ceiling). Use an <h3> per task with detailed activities, responsible roles, inputs/outputs, and the milestone or deliverable that closes it. Include an HTML <table> (Task | Months | Milestone | Deliverable). Tie tasks to the objectives and keep effort consistent with the budget.',evidence:['objective coverage']},
+      {id:'sb2_related',title:'Related Work and Phase I Foundation',order:6,required:true,source:'ai',pageBudget:3,prompt:'Document the foundation this Phase II builds on: any prior SBIR/STTR Phase I award (agency, topic, award number, period, results), internal R&D investment, and relevant company products and contract experience. For a D2P2, this section carries the feasibility evidence — be concrete about what was already demonstrated. Use ONLY real awards, numbers, and results; never invent.',evidence:['prior award / feasibility evidence']},
+      {id:'sb2_keypers',title:'Key Personnel',order:7,required:true,source:'ai',pageBudget:2,prompt:'Present the Principal Investigator and technical team with the qualifications that match the topic. Use a fielded block per person (name, role, relevant expertise, level of effort). For STTR, identify the research-institution partner and the work split. Use ONLY real people and credentials from the provided materials.',evidence:['>=1 key personnel bio']},
+      {id:'sb2_commercial',title:'Commercialization and Phase III Transition',order:8,required:true,source:'ai',pageBudget:3,prompt:'Lay out the commercialization plan and Phase III transition. Segment the target markets (the primary government/sponsor market, adjacent commercial markets, and any partner or international markets), with the value proposition and adoption path for each. Describe the Phase III nexus: how the operational/commercial product derives from, extends, and completes this SBIR/STTR work, and name any committed transition partners or follow-on funding. Keep market claims grounded in real pipeline where available.',evidence:[]},
+      {id:'sb2_facilities',title:'Facilities and Equipment',order:9,required:false,source:'ai',pageBudget:1,prompt:'Describe the facilities, equipment, and computing/cloud environments required and available for Phase II, including any required security environments or accreditation levels named in the topic.',evidence:[]},
+      {id:'sb2_foreign',title:'Foreign Nationals, ITAR/EAR, and Subcontractors',order:10,required:true,source:'ai',pageBudget:1,prompt:'List subcontractors and consultants and their allocated work. If the topic carries ITAR/EAR or foreign-national restrictions, provide the required disclosure for each proposed foreign national: country of origin, visa or work-permit type, and the SOW tasks they would perform. If none, state that explicitly. Address any foreign-ownership or affiliation disclosure obligations where applicable. Do not fabricate personnel.',evidence:['foreign-national disclosure if applicable']},
+      {id:'sb2_cost',title:'Cost and Resource Plan',order:11,required:true,source:'hybrid',pageBudget:2,prompt:'Write the cost/resource narrative and basis of estimate for Phase II (labor by category and hours, materials, travel, subcontracts, indirect rates), mapped to the SOW tasks and within the topic\'s Phase II funding ceiling. Include an HTML <table> budget summary by category. Dollar figures stay user-entered in the Pricing tab; this section explains the rationale and resource loading.',evidence:[]},
+      {id:'sb2_risk',title:'Risk Management and Success Metrics',order:12,required:true,source:'ai',pageBudget:2,prompt:'Identify the principal technical and programmatic risks, each with likelihood/impact and a concrete mitigation. Then state the program success metrics — the quantitative thresholds that define a successful Phase II — tied to the objectives. Use an HTML <table> for the risk register (Risk | Impact | Mitigation).',evidence:[]},
+      {id:'sb2_conclusion',title:'Conclusion',order:13,required:false,source:'ai',pageBudget:1,prompt:'Close with the innovation, the team readiness and feasibility evidence, the Phase II outcome, and the transition impact. Confident and specific.',evidence:[]},
+      {id:'sb2_certs',title:'Corporate Capabilities & Certifications',order:14,required:false,source:'computed',pageBudget:1,prompt:'',evidence:[]},
+      {id:'sb2_resumes',title:'Key Personnel Resumes (Appendix)',order:15,required:false,source:'computed',pageBudget:0,prompt:'',evidence:[]}
     ]
   };
 }
