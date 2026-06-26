@@ -7970,11 +7970,15 @@ function _valMethodsHTML(model){
 }
 function _valSummaryHTML(model){
   var V=_valEnsure(),b=model.byScn;
-  function card(s,lbl,color){var eq=b[s].equity;return '<div style="flex:1;min-width:180px;border:1px solid '+color+';border-radius:10px;padding:14px 16px;background:linear-gradient(180deg,'+color+'14,transparent)">'
+  function card(s,lbl,color){var x=b[s];return '<div style="flex:1;min-width:188px;border:1px solid '+color+';border-radius:10px;padding:14px 16px;background:linear-gradient(180deg,'+color+'14,transparent)">'
     +'<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:'+color+'">'+lbl+'</div>'
-    +'<div style="font-size:26px;font-weight:800;margin-top:4px">'+_valFmt(eq)+'</div>'
-    +'<div style="font-size:10px;color:var(--text-muted);margin-top:3px">equity value</div>'
-    +'<div style="font-size:10px;color:var(--text-muted);margin-top:6px">EV '+_valFmt(b[s].blend)+' · SOTP '+_valFmt(b[s].sotp)+' · DCF '+_valFmt(b[s].dcf)+'</div></div>';}
+    +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:8px">'
+      +'<span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)">Blended EV</span>'
+      +'<span style="font-size:18px;font-weight:800">'+_valFmt(x.blend)+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:6px">'
+      +'<span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:'+color+'">Equity value</span>'
+      +'<span style="font-size:26px;font-weight:800;color:'+color+'">'+_valFmt(x.equity)+'</span></div>'
+    +'<div style="font-size:10px;color:var(--text-muted);margin-top:8px;padding-top:7px;border-top:1px solid '+color+'33">EV − net debt '+_valFmt(V.netDebt)+' = equity · <span style="white-space:nowrap">SOTP '+_valFmt(x.sotp)+' · DCF '+_valFmt(x.dcf)+'</span></div></div>';}
   var intro=_valNote('This page values CommunityForce as the <b>sum of its parts</b> — each business segment carries its own multiple — and cross-checks that against a <b>discounted-cash-flow (DCF)</b> model, then nets out debt to reach <b>equity value</b>. Three scenarios bracket the range: <b>Worst</b> = stress case, <b>Conservative</b> = the most-likely / planning case (the headline number), <b>Best</b> = credible upside. Every input lives on the <b>Assumptions</b> tab and the whole page recomputes live.');
   var cards='<div style="display:flex;gap:12px;flex-wrap:wrap;margin:10px 0">'+card('worst','Worst case','#DC2626')+card('base','Conservative (most likely)','#2563EB')+card('best','Best case','#16A34A')+'</div>';
   var ff='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:12px 0"><div style="font-size:13px;font-weight:800;margin-bottom:6px">Equity value range by method</div>'
