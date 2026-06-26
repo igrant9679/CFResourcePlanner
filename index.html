@@ -7835,6 +7835,7 @@ function _valEnsure(){
   if(V.netDebt==null){var debt=(D.proforma.debt&&D.proforma.debt.total)||4091319;var cash=Math.round((typeof capOpeningCash==='function'?capOpeningCash():1100000)||1100000);V.netDebt=debt-cash;}
   if(V.newCapital==null)V.newCapital=0;
   if(V.defaultTermMonths==null)V.defaultTermMonths=36;
+  if(V.includeInitiatives==null)V.includeInitiatives=true;
   return V;
 }
 function _valSegOf(p){
@@ -7869,17 +7870,22 @@ function _valSegBacklog(){var V=_valEnsure(),out={awards:0,educian:0,gov:0,proIT
   (D.projects||[]).filter(function(p){return projCat(p)==='project';}).forEach(function(p){var seg=_valSegOf(p);if(out.hasOwnProperty(seg))out[seg]+=_valProjBacklog(p);});
   out.educian=Math.round(out.educian*(V.educianRetainPct!=null?V.educianRetainPct:50)/100);return out;}
 function valSetTerm(pid,field,val){var p=(D.projects||[]).find(function(x){return x.id===pid;});if(!p)return;var f=(field==='start')?'contractStart':'contractEnd';if(val==='')delete p[f];else p[f]=val;save();renderView();}
+function valSetInit(on){var V=_valEnsure();V.includeInitiatives=!!on;save();renderView();}
 function _valSegRevenue(){
   var V=_valEnsure();
-  var net={awards:0,educian:0,gov:0,proIT:0},raw={awards:0,educian:0,gov:0,proIT:0};
-  (D.projects||[]).filter(function(p){return projCat(p)==='project';}).forEach(function(p){
-    var seg=_valSegOf(p);if(!raw.hasOwnProperty(seg))return;
-    var r=_valProjNTM(p);raw[seg]+=r;net[seg]+=r;
+  var proj={awards:0,educian:0,gov:0,proIT:0},init={awards:0,educian:0,gov:0,proIT:0};
+  // Contracted/recurring projects → forward-12-month revenue per segment.
+  (D.projects||[]).filter(function(p){return projCat(p)==='project';}).forEach(function(p){var s=_valSegOf(p);if(proj.hasOwnProperty(s))proj[s]+=_valProjNTM(p);});
+  // Initiatives → their target revenue (Expected Monthly × 12), if included.
+  if(V.includeInitiatives!==false)(D.projects||[]).filter(function(p){return projCat(p)==='initiative';}).forEach(function(p){var s=_valSegOf(p);if(init.hasOwnProperty(s))init[s]+=(Number(p.targetRevenue)||0)*12;});
+  var net={},raw={};
+  Object.keys(proj).forEach(function(k){
+    var pj=(k==='educian')?Math.round(proj[k]*(V.educianRetainPct!=null?V.educianRetainPct:50)/100):proj[k];  // Educian net of Expentor split (contracted only)
+    raw[k]=proj[k];          // gross projects only → "Auto NTM rev" column
+    net[k]=pj+init[k];       // revenue the multiple is applied to = contracted + initiative targets
+    if(V.revOverride&&V.revOverride[k]!=null&&V.revOverride[k]!=='')net[k]=Number(V.revOverride[k]);
   });
-  // Educian: CF keeps only its retained share (Expentor revenue split).
-  net.educian=Math.round(net.educian*(V.educianRetainPct!=null?V.educianRetainPct:50)/100);
-  Object.keys(net).forEach(function(k){if(V.revOverride&&V.revOverride[k]!=null&&V.revOverride[k]!=='')net[k]=Number(V.revOverride[k]);});
-  return {net:net,raw:raw};
+  return {net:net,raw:raw,init:init};
 }
 function _valCompute(p){
   var sotp=0,segEV={};
@@ -7898,7 +7904,7 @@ function _valParams(s,segRev){
   return {segRev:segRev,mult:mult,wacc:V.wacc[s],growth:V.growth[s],termGrowth:V.termGrowth[s],fcfMargin:V.fcfMargin,dcfYears:V.dcfYears,blendSotpPct:V.blendSotpPct,netDebt:V.netDebt};
 }
 function _valModel(){
-  var sr=_valSegRevenue(),out={segRev:sr.net,segRaw:sr.raw,byScn:{}};
+  var sr=_valSegRevenue(),out={segRev:sr.net,segRaw:sr.raw,segInit:sr.init,byScn:{}};
   ['worst','base','best'].forEach(function(s){out.byScn[s]=_valCompute(_valParams(s,sr.net));});
   return out;
 }
@@ -7974,6 +7980,7 @@ function renderValuationView(q){
 // Forward revenue (FY26–FY29) pulled live from Strategy & Performance (Debt-Free
 // Plan), plus the Initiatives growth plays — shown as forward metrics/upside.
 function _valForwardHTML(model){
+  var V=_valEnsure();
   var fwd=null;try{if(typeof _stratProjModel==='function'){var P=_stratProjModel();fwd=(P&&P.rows)?P.rows:null;}}catch(e){fwd=null;}
   var inits=(D.projects||[]).filter(function(p){return projCat(p)==='initiative';}).map(function(p){return {name:p.name||p.id,seg:_valSegLabel(_valSegOf(p)),annual:(Number(p.targetRevenue)||0)*12};});
   var initTotal=inits.reduce(function(a,x){return a+x.annual;},0);
@@ -7993,7 +8000,9 @@ function _valForwardHTML(model){
     var ibody=inits.map(function(x){return '<tr><td style="padding:4px 0">'+esc(x.name)+'</td><td style="text-align:right;color:var(--text-muted)">'+esc(x.seg)+'</td><td style="text-align:right'+(x.annual<0?';color:#DC2626':'')+'">'+_valFmt(x.annual)+'</td></tr>';}).join('');
     var itot='<tr style="border-top:1px solid var(--border)"><td style="padding:6px 0 0;font-weight:800">Total initiatives</td><td></td><td style="text-align:right;padding-top:6px;font-weight:800">'+_valFmt(initTotal)+'</td></tr>';
     html+='<table style="width:100%;font-size:12px;border-collapse:collapse"><thead>'+ihdr+'</thead><tbody>'+ibody+itot+'</tbody></table>';
-    html+=_valNote('Initiatives are future growth plays. Their <b>projected</b> annual revenue (Expected Monthly × 12, set on each initiative) is shown here as upside — it is <b>not</b> in current segment revenue or the SOTP. The FY26–FY29 plan above is a top-down growth model; initiatives are where that growth is expected to come from, so populate each one\'s expected revenue to make the upside explicit.');
+    html+=_valNote((V.includeInitiatives!==false)
+      ? 'Each initiative\'s <b>target revenue</b> (Expected Monthly × 12) is <b>included in its segment\'s revenue</b> and multiplied into the SOTP/EV (toggle on the Segments tab). Most read $0 until you set their Expected Monthly Revenue; Phoenix 2 currently carries a negative (cost) figure that nets against its segment. Populate the targets to drive the upside.'
+      : 'Initiatives are shown here as upside but are <b>not</b> counted in the SOTP/EV — inclusion is toggled off on the Segments tab. The FY26–FY29 plan above captures growth top-down instead.');
   } else { html+=_valNote('No initiatives defined yet — add them under the Initiatives tab and set each one\'s Expected Monthly Revenue.'); }
   return html+'</div>';
 }
@@ -8059,23 +8068,24 @@ function _valRaiseHTML(model){
     +'</div></div>';
 }
 function _valSegmentsHTML(model){
-  var V=_valEnsure(),net=model.segRev,raw=model.segRaw;
+  var V=_valEnsure(),net=model.segRev,raw=model.segRaw,initSeg=model.segInit||{};
   var blk=_valSegBacklog();
   var hdr='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)"><td style="padding:4px 0">Segment</td><td>Type</td><td style="text-align:right">Auto NTM rev</td><td style="text-align:right">Override</td><td style="text-align:right">Used (annual)</td><td style="text-align:right">Contracted backlog</td></tr>';
   var body=VAL_SEGS.map(function(sg){
-    var auto=raw[sg.k]||0,ov=(V.revOverride&&V.revOverride[sg.k]!=null&&V.revOverride[sg.k]!=='')?V.revOverride[sg.k]:'',used=net[sg.k]||0;
+    var auto=raw[sg.k]||0,ov=(V.revOverride&&V.revOverride[sg.k]!=null&&V.revOverride[sg.k]!=='')?V.revOverride[sg.k]:'',used=net[sg.k]||0,iv=initSeg[sg.k]||0;
     var note=sg.k==='educian'?' <span style="font-size:10px;color:#D97706">net '+V.educianRetainPct+'% after Expentor</span>':(sg.k==='proIT'&&!auto?' <span style="font-size:10px;color:#D97706">no live revenue</span>':'');
     var blv=_valFmt(blk[sg.k]||0);
     return '<tr><td style="padding:5px 0;font-weight:700">'+sg.l+note+'</td><td style="font-size:11px;color:var(--text-muted)">'+sg.type+'</td>'
       +'<td style="text-align:right">'+_valFmt(auto)+'</td>'
       +'<td style="text-align:right"><input class="fld-i" style="width:108px;text-align:right" type="number" placeholder="auto" value="'+ov+'" onchange="valSetRev(\''+sg.k+'\',this.value)"></td>'
-      +'<td style="text-align:right;font-weight:800">'+_valFmt(used)+'</td>'
+      +'<td style="text-align:right;font-weight:800">'+_valFmt(used)+((iv&&ov==='')?'<div style="font-size:9px;font-weight:400;color:'+(iv<0?'#DC2626':'#0a8a5f')+'">incl. '+_valFmt(iv)+' initiatives</div>':'')+'</td>'
       +'<td style="text-align:right;color:var(--text-muted)">'+blv+'</td></tr>';
   }).join('');
   var segTbl='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:10px 0"><div style="font-size:13px;font-weight:800;margin-bottom:4px">Segment revenue &amp; contracted backlog</div>'
     +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Annual revenue (forward 12-month) is what the multiple is applied to. <b>Contracted backlog</b> = remaining committed revenue from the contract terms below — the de-risked floor. Leave Override blank to use the live figure; set it to pin a number (e.g. true SaaS ARR).</div>'
     +'<table style="width:100%;font-size:12px;border-collapse:collapse"><thead>'+hdr+'</thead><tbody>'+body+'</tbody></table>'
-    +'<div style="margin-top:10px;display:flex;align-items:center;gap:8px"><label class="fld-l" style="margin:0">Educian revenue retained by CF (% after Expentor split)</label><input class="fld-i" style="width:70px" type="number" value="'+V.educianRetainPct+'" onchange="valSetNum(\'educianRetainPct\',this.value)"></div></div>';
+    +'<div style="margin-top:10px;display:flex;align-items:center;gap:8px"><label class="fld-l" style="margin:0">Educian revenue retained by CF (% after Expentor split)</label><input class="fld-i" style="width:70px" type="number" value="'+V.educianRetainPct+'" onchange="valSetNum(\'educianRetainPct\',this.value)"></div>'
+    +'<div style="margin-top:8px;font-size:11px"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" '+(V.includeInitiatives!==false?'checked':'')+' onchange="valSetInit(this.checked)"> Include initiative <b>target revenue</b> (Expected Monthly × 12) in each segment\'s value — multiplied into SOTP/EV</label></div></div>';
   var projs=(D.projects||[]).filter(function(p){return projCat(p)==='project';});
   var phdr='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)"><td style="padding:4px 0">Project</td><td style="text-align:right">Monthly</td><td>Start</td><td>End</td><td style="text-align:right">Months left</td><td style="text-align:right">Backlog</td><td style="text-align:right">Segment</td></tr>';
   var pbody=projs.map(function(p){
