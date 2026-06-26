@@ -3288,6 +3288,7 @@ function _contractStaffHTML(c){
     +kpi('Prime / Sub',(totAnnual?Math.round(primeCost/totAnnual*100):0)+'% / '+(totAnnual?Math.round(subCost/totAnnual*100):0)+'%','prime vs subcontract','')
     +kpi('TBH / open',String(tbh.length),tbh.length?'positions to fill':'fully staffed',tbh.length?'var(--amber)':'var(--green)')
     +(floor?kpi('Contract floor',fmt(floor),target?'target '+fmt(target):'','var(--text-secondary)'):'')
+    +(floor?kpi('Funding gap',fmt(Math.round(floor-totAnnual)),'floor &minus; annual cost',(floor-totAnnual)>=0?'var(--green)':'var(--red)'):'')
     +'</div>';
   var ud=function(key){var s={};pos.forEach(function(p){var v=p[key]||'';if(v)s[v]=1;});return Object.keys(s).sort();};
   function fsel(key,label,vals){return '<select class="fld-sel" style="width:auto" onchange="contractSetFilter(\''+key+'\',this.value)"><option value="">'+label+'</option>'+vals.map(function(v){return '<option value="'+esc(v)+'"'+(contractFilter[key]===v?' selected':'')+'>'+esc(v)+'</option>';}).join('')+'</select>';}
