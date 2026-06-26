@@ -3320,15 +3320,15 @@ function _contractStaffHTML(c){
     var gFte=gp.reduce(function(a,p){return a+(Number(p.fte)||0);},0),gCost=gp.reduce(function(a,p){return a+(Number(p.annualCost)||0);},0);
     var addBtn='<button class="btn btn-sec btn-sm" style="font-size:9px;padding:1px 7px" onclick="contractAddPosToGroup(\''+c.id+'\','+gi+')" title="Add a position to this group">+ Position</button>';
     var rows=gp.length?gp.map(function(p,i){return _ctPosRow(c,p,i);}).join('')
-      :'<tr><td colspan="11" style="padding:8px;font-size:11px;color:var(--text-muted);font-style:italic">No positions in this '+esc(GLBL.toLowerCase())+' yet — click <b>+ Position</b>.</td></tr>';
+      :'<tr><td colspan="12" style="padding:8px;font-size:11px;color:var(--text-muted);font-style:italic">No positions in this '+esc(GLBL.toLowerCase())+' yet — click <b>+ Position</b>.</td></tr>';
     return '<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:12px">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;background:linear-gradient(135deg,var(--navy),var(--navy-light));color:#fff"><span style="font-size:13px;font-weight:800">'+esc(g)+'</span><span style="display:flex;gap:10px;align-items:center"><span style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.85);white-space:nowrap">'+gFte.toFixed(2)+' FTE · '+fmt(Math.round(gCost))+'</span>'+addBtn+'</span></div>'
-      +'<div style="overflow-x:auto"><table style="width:100%;font-size:11.5px;border-collapse:collapse;min-width:920px"><thead><tr style="text-align:left;color:var(--text-muted);font-size:9px;text-transform:uppercase;letter-spacing:.3px;background:var(--page-bg)"><th style="padding:5px 8px">Resource</th><th style="padding:5px 8px">Contractor Lead</th><th style="padding:5px 8px">LCAT</th><th style="padding:5px 8px">Company</th><th style="padding:5px 8px;text-align:right">FTE</th><th style="padding:5px 8px;text-align:right">$/hr</th><th style="padding:5px 8px;text-align:right">Annual</th><th style="padding:5px 8px">Civilian Lead</th><th style="padding:5px 8px">PWS</th><th style="padding:5px 8px">Status</th><th style="padding:5px 8px"></th></tr></thead><tbody>'
+      +'<div style="overflow-x:auto"><table style="width:100%;font-size:11.5px;border-collapse:collapse;min-width:920px"><thead><tr style="text-align:left;color:var(--text-muted);font-size:9px;text-transform:uppercase;letter-spacing:.3px;background:var(--page-bg)"><th style="padding:5px 8px">Resource</th><th style="padding:5px 8px">Alternate</th><th style="padding:5px 8px">Contractor Lead</th><th style="padding:5px 8px">LCAT</th><th style="padding:5px 8px">Company</th><th style="padding:5px 8px;text-align:right">FTE</th><th style="padding:5px 8px;text-align:right">$/hr</th><th style="padding:5px 8px;text-align:right">Annual</th><th style="padding:5px 8px">Civilian Lead</th><th style="padding:5px 8px">PWS</th><th style="padding:5px 8px">Status</th><th style="padding:5px 8px"></th></tr></thead><tbody>'
       +rows+'</tbody></table></div></div>';
   }).join('');
   if(!groups.length)tableHTML='<div class="empty-msg">No positions'+(anyFilter?' match the filters':' yet — click + Position or import a workbook')+'.</div>';
   var oyBar=ud('oy').length?'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px"><span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted)">Option year</span>'+fsel('oy','All option years',ud('oy'))+'</div>':'';
-  return oyBar+kpis+coRollup+filters+groupBar+'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:6px">Positions by '+esc(GLBL.toLowerCase())+'</div>'+(_ctHasBothOy?'<div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;display:flex;gap:14px;flex-wrap:wrap;align-items:center"><b style="text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary)">OY2→OY3 changes</b><span style="border-left:3px solid #16A34A;padding-left:5px">NEW in OY3</span><span style="border-left:3px solid #D97706;padding-left:5px">FTE / company changed</span><span style="border-left:3px solid #DC2626;padding-left:5px">removed in OY3</span></div>':'')+tableHTML;
+  return oyBar+kpis+coRollup+filters+groupBar+'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:6px">Positions by '+esc(GLBL.toLowerCase())+'</div>'+(_ctHasBothOy?'<div style="font-size:10px;color:var(--text-muted);margin-bottom:8px;display:flex;gap:14px;flex-wrap:wrap;align-items:center"><b style="text-transform:uppercase;letter-spacing:.5px;color:var(--text-secondary)">OY2→OY3 changes</b><span style="border-left:3px solid #16A34A;padding-left:5px">NEW in OY3</span><span style="border-left:3px solid #D97706;padding-left:5px">FTE / company / role changed</span><span style="border-left:3px solid #DC2626;padding-left:5px">removed in OY3</span></div>':'')+tableHTML;
 }
 // Inline edit of a position field. fte/rate recompute annual; annual can be
 // overridden directly. Re-renders so the (read-only) totals refresh.
@@ -3374,8 +3374,8 @@ function _ctBuildOyDelta(c){
   (c.positions||[]).forEach(function(p){
     var oy=p.oy||'';if(oy!=='OY2'&&oy!=='OY3')return;
     var k=_ctNormName(p.resource);if(!k)return;
-    var m=(oy==='OY2')?a:b;if(!m[k])m[k]={fte:0,co:''};
-    m[k].fte+=Number(p.fte)||0;if(p.company)m[k].co=_ctNormCo(p.company);
+    var m=(oy==='OY2')?a:b;if(!m[k])m[k]={fte:0,co:'',role:''};
+    m[k].fte+=Number(p.fte)||0;if(p.company)m[k].co=_ctNormCo(p.company);if(p.role&&String(p.role).trim())m[k].role=String(p.role).trim();
   });
   if(!Object.keys(a).length||!Object.keys(b).length)return {};
   var map={};
@@ -3384,6 +3384,7 @@ function _ctBuildOyDelta(c){
     var parts=[];
     if(a[k].fte!==b[k].fte)parts.push('FTE '+a[k].fte+'→'+b[k].fte);
     if(a[k].co&&b[k].co&&a[k].co!==b[k].co)parts.push(a[k].co+'→'+b[k].co);
+    if(a[k].role&&b[k].role&&a[k].role.toLowerCase()!==b[k].role.toLowerCase())parts.push('role: '+a[k].role+'→'+b[k].role);
     if(parts.length)map[k]={t:'chg',label:'vs OY2: '+parts.join(' · ')};
   });
   Object.keys(a).forEach(function(k){if(!b[k])map[k]={t:'rem',label:'removed in OY3 (OY2-only)'};});
@@ -3404,6 +3405,7 @@ function _ctPosRow(c,p,i){
   var bridge=(p.status==='TBH'||p.status==='TBD')?'<button class="btn btn-outline btn-sm" style="font-size:9px;padding:1px 6px" onclick="contractPosToRecruiting(\''+c.id+'\',\''+p.id+'\')" title="Create a Recruiting requisition from this open position (one-way)">&rarr; Req</button> ':'';
   return '<tr style="border-top:1px solid var(--border);'+bg+'">'
     +'<td style="padding:2px 4px;min-width:140px'+(_acc?';border-left:3px solid '+_acc:'')+'">'+cin('resource')+(_dnote?'<div style="font-size:9px;font-weight:700;color:'+_acc+';margin-top:1px" title="Option-year change">'+esc(_dnote)+'</div>':'')+'</td>'
+    +'<td style="padding:2px 4px;min-width:130px">'+cin('alternate')+'</td>'
     +'<td style="padding:2px 4px;min-width:130px">'+cin('contractorLead')+'</td>'
     +'<td style="padding:2px 4px;min-width:120px">'+cin('lcat')+'</td>'
     +'<td style="padding:2px 4px;min-width:130px">'+cin('company')+'</td>'
@@ -3462,6 +3464,7 @@ function _ctWsOptions(c,cur){
 function _ctPosFields(p,c){
   p=p||{};c=c||{};
   return [{key:'resource',label:'Resource (name or “TBH …”)',type:'text',value:p.resource||''},
+    {key:'alternate',label:'Alternate (backup resource)',type:'text',value:p.alternate||''},
     {key:'status',label:'Status',type:'select',value:p.status||'Filled',options:['Filled','TBH','TBD','Reserve'].map(function(s){return {value:s,label:s};})},
     {key:'oy',label:'Option year',type:'text',value:p.oy||''},
     {key:'workstreamGroup',label:'Workstream',type:'select',value:p.workstreamGroup||'',options:_ctWsOptions(c,p.workstreamGroup||'')},
@@ -3480,7 +3483,7 @@ function _ctPosFields(p,c){
 function _ctApplyPos(p,v,c){
   var wg=v.workstreamGroup||'';
   if(wg==='__new__'){var nm=prompt('New workstream name:');wg=(nm||'').trim();if(wg&&c){c.workstreamGroups=c.workstreamGroups||[];if(c.workstreamGroups.indexOf(wg)<0&&!(c.positions||[]).some(function(x){return (x.workstreamGroup||'')===wg;}))c.workstreamGroups.push(wg);}}
-  p.resource=(v.resource||'').trim()||'(TBH)';p.status=v.status||'Filled';p.oy=(v.oy||'').trim();
+  p.resource=(v.resource||'').trim()||'(TBH)';p.alternate=(v.alternate||'').trim();p.status=v.status||'Filled';p.oy=(v.oy||'').trim();
   p.workstreamGroup=wg;p.workstream=(v.workstream||'').trim();p.role=(v.role||'').trim();
   p.company=(v.company||'').trim();p.lcat=(v.lcat||'').trim();p.fte=Number(v.fte)||0;p.rateHr=Number(v.rateHr)||0;
   p.civilianLead=(v.civilianLead||'').trim();p.contractorLead=(v.contractorLead||'').trim();p.pwsRef=(v.pwsRef||'').trim();p.description=(v.description||'').trim();
