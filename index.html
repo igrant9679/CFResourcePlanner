@@ -3450,6 +3450,10 @@ const COMM_CUST_DEFS = {
   marketing: [],
 };
 
+/* Sales stage win-probabilities → pipeline forecast (potential vs weighted/expected). */
+const COMM_SALES_PROB = { 'Qualification':0.2, 'Value Prop/Demo':0.4, 'Pricing/Proposal':0.6, 'Verbal':0.9, 'Closed Won':1, 'Closed Lost':0 };
+const COMM_SALES_OPEN = ['Qualification','Value Prop/Demo','Pricing/Proposal','Verbal'];
+
 /* ---- UI state (not persisted) ---- */
 const commUI = { tab:'dash', dept:'support', dashSub:'overview', dashWeek:null, edit:null, editWeek:null, draft:null };
 
@@ -3548,6 +3552,7 @@ function commHead(title,sub){
 function commDashSubTabs(dept){
   const meta=commDeptMeta(dept), defs=COMM_DEFS[dept]||[], hasCust=(COMM_CUST_DEFS[dept]||[]).length>0;
   const t=['overview'];
+  if(dept==='sales') t.push('pipeline');
   if(hasCust) t.push('customers');
   if(defs.length>=1 && !meta.single) t.push('trends');
   t.push('narrative');
@@ -3575,12 +3580,13 @@ function commDashHTML(dept){
   const tabs=commDashSubTabs(dept);
   let sub=commUI.dashSub; if(tabs.indexOf(sub)<0) sub=tabs[0];
   const cur=commCurFor(dept,rows);
-  const labels={overview:'Overview',customers:'Customers',trends:'Trends',narrative:'Narrative'};
+  const labels={overview:'Overview',pipeline:'Pipeline $',customers:'Customers',trends:'Trends',narrative:'Narrative'};
   const bar=`<div class="comm-tabs" role="tablist" style="margin-top:8px">${tabs.map(t=>
     `<button class="comm-tab" role="tab" aria-selected="${sub===t}" onclick="commSetDashSub('${t}')">${labels[t]}</button>`).join('')}</div>`;
   const wp=(sub!=='trends')?commWeekPicker(dept,rows,cur):'';
   let body='';
   if(sub==='overview')       body=commDashOverview(dept,rows,cur);
+  else if(sub==='pipeline')  body=commSalesPipeline(rows,cur);
   else if(sub==='customers') body=commDashCustomers(dept,rows,cur);
   else if(sub==='trends')    body=commDashTrends(dept,rows);
   else                       body=commDashNarrativeTab(dept,rows,cur);
@@ -3683,6 +3689,63 @@ function commDashCustomers(dept,rows,cur){
   }).join('');
   return editBtn+`<p class="comm-ph">Week ending ${commFmtWeek(cur.weekEnding)} · ${cs.length} account${cs.length===1?'':'s'}</p>
     <div class="comm-panel" style="padding-top:6px"><table class="comm-ledger"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+/* sales pipeline forecast — potential revenue, weighted/expected, at-risk, won/lost */
+function commMoney(v){ return '$'+Math.round(Number(v)||0).toLocaleString(); }
+function commSalesProb(stage){ return COMM_SALES_PROB[stage]!=null?COMM_SALES_PROB[stage]:0.3; }
+function commSalesEconomics(cur){
+  const cs=cur.customers||[], hasVal=c=>c.value!=null&&c.value!=='';
+  const isOpen=c=>{ const s=c.stage; return !s || COMM_SALES_OPEN.indexOf(s)>=0; };
+  const open=cs.filter(isOpen), won=cs.filter(c=>c.stage==='Closed Won'), lost=cs.filter(c=>c.stage==='Closed Lost');
+  const sumEntered=open.filter(hasVal).reduce((a,c)=>a+Number(c.value||0),0);
+  const pipelineTotal=Number((cur.fields&&cur.fields.pipelineValue)||0);
+  const remainder=Math.max(0,pipelineTotal-sumEntered);
+  const unvalued=open.filter(c=>!hasVal(c));
+  const wsum=unvalued.reduce((a,c)=>a+commSalesProb(c.stage),0)||1;
+  const rows=open.map(c=>{ const entered=hasVal(c);
+    const value=entered?Number(c.value):(unvalued.length?remainder*(commSalesProb(c.stage)/wsum):0);
+    const prob=commSalesProb(c.stage);
+    return {account:c.account||'(unnamed)',stage:c.stage||'(unspecified)',prob,value,weighted:value*prob,est:!entered}; })
+    .sort((a,b)=>b.value-a.value);
+  const potential=rows.reduce((a,r)=>a+r.value,0)||pipelineTotal;
+  const weighted=rows.reduce((a,r)=>a+r.weighted,0);
+  return { rows, open, won, lost, potential, weighted, atRisk:potential-weighted,
+    wonVal:won.reduce((a,c)=>a+Number(c.value||0),0), lostVal:lost.reduce((a,c)=>a+Number(c.value||0),0) };
+}
+function commSalesPipeline(rows,cur){
+  const e=commSalesEconomics(cur);
+  const kpis=`<div class="comm-kpis">
+    ${commRaw('Potential revenue',commMoney(e.potential),'good','snapshot','open pipeline if all win')}
+    ${commRaw('Weighted / expected',e.rows.length?commMoney(e.weighted):'—','warn','snapshot','probability-adjusted')}
+    ${commRaw('At risk',e.rows.length?commMoney(e.atRisk):'—','bad','snapshot','potential − weighted')}
+    ${commRaw('Closed-won',e.won.length+(e.wonVal?(' · '+commMoney(e.wonVal)):''),'good','flow','secured this week')}
+    ${commRaw('Closed-lost',e.lost.length+(e.lostVal?(' · '+commMoney(e.lostVal)):''),e.lost.length?'bad':'flat','flow','lost this week')}
+  </div>`;
+  let table;
+  if(e.rows.length){
+    const body=e.rows.map(r=>`<tr>
+      <td style="text-align:left;font-weight:600">${commEsc(r.account)}</td>
+      <td style="text-align:left">${commChip(r.stage)}</td>
+      <td>${Math.round(r.prob*100)}%</td>
+      <td>${commMoney(r.value)}${r.est?' <span style="color:var(--comm-mute);font-size:10px">est</span>':''}</td>
+      <td>${commMoney(r.weighted)}</td></tr>`).join('');
+    table=`<div class="comm-panel" style="padding-top:6px"><table class="comm-ledger">
+      <thead><tr><th>Account</th><th style="text-align:left">Stage</th><th>Win %</th><th>Potential</th><th>Weighted</th></tr></thead>
+      <tbody>${body}</tbody>
+      <tfoot><tr style="font-weight:700"><td style="text-align:left">Total · ${e.rows.length} open</td><td></td><td></td><td>${commMoney(e.potential)}</td><td>${commMoney(e.weighted)}</td></tr></tfoot>
+      </table></div>`;
+  } else {
+    table=`<p class="comm-ph">No open opportunities recorded for ${commFmtWeek(cur.weekEnding)}. Reported pipeline value: ${commMoney(e.potential)}. Add opportunities (with stage + value) on the <b>Customers</b> tab to see the per-account forecast.</p>`;
+  }
+  const byStage={}; e.rows.forEach(r=>{byStage[r.stage]=(byStage[r.stage]||0)+r.value;});
+  const sk=Object.keys(byStage).sort((a,b)=>byStage[b]-byStage[a]), mx=Math.max(1,...sk.map(k=>byStage[k]));
+  const bars=sk.map(k=>`<div style="margin:7px 0">
+    <div style="display:flex;justify-content:space-between;font-size:12px"><span>${commEsc(k)}</span><span class="num">${commMoney(byStage[k])}</span></div>
+    <div style="background:var(--comm-flat-bg);border-radius:4px;height:10px;overflow:hidden"><div style="height:100%;width:${Math.round(100*byStage[k]/mx)}%;background:var(--comm-slate)"></div></div></div>`).join('');
+  const stagePanel=sk.length?`<div class="comm-panel"><h3>Potential revenue by stage</h3>${bars}</div>`:'';
+  const note=`<div class="comm-note">Forecast uses stage win-probabilities (Qualification 20% · Value Prop/Demo 40% · Pricing/Proposal 60% · Verbal 90%). Where a per-opportunity <b>value</b> isn't entered, the reported weekly pipeline total is apportioned across open opps by stage weight (marked <span style="color:var(--comm-mute)">est</span>). Enter real deal values on the <b>Customers</b> tab to override.</div>`;
+  return kpis+table+stagePanel+note;
 }
 
 /* trends tab — small multiples (all weeks) */
