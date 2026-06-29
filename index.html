@@ -3451,7 +3451,7 @@ const COMM_CUST_DEFS = {
 };
 
 /* ---- UI state (not persisted) ---- */
-const commUI = { tab:'dash', dept:'support', dashSub:'overview', editWeek:null, draft:null };
+const commUI = { tab:'dash', dept:'support', dashSub:'overview', dashWeek:null, edit:null, editWeek:null, draft:null };
 
 /* ---- data slice ---- */
 function commEnsure(){
@@ -3521,14 +3521,30 @@ function commDeptBar(){
       `<option value="${d.key}" ${d.key===commUI.dept?'selected':''}>${commEsc(d.label)}</option>`).join('')}</select>
   </div>`;
 }
-function commSetTab(t){ commUI.tab=t; commUI.editWeek=null; if(t==='form') commBuildDraft(commUI.dept,null); commRerender(); }
-function commSetDept(d){ commUI.dept=d; commUI.editWeek=null; commRerender(); }
-function commSetDashSub(s){ commUI.dashSub=s; commRerender(); }
+function commSetTab(t){ commUI.tab=t; commUI.editWeek=null; commUI.edit=null; commUI.draft=null; if(t==='form') commBuildDraft(commUI.dept,null); commRerender(); }
+function commSetDept(d){ commUI.dept=d; commUI.editWeek=null; commUI.dashWeek=null; commUI.edit=null; commUI.draft=null; commRerender(); }
+function commSetDashSub(s){ commUI.dashSub=s; commUI.edit=null; commUI.draft=null; commRerender(); }
+function commSetDashWeek(w){ commUI.dashWeek=w; commUI.edit=null; commUI.draft=null; commRerender(); }
+function commDashEdit(sub){ const rows=commSubs(commUI.dept); if(!rows.length) return; const cur=commCurFor(commUI.dept,rows); commUI.dashWeek=cur.weekEnding; commUI.edit={sub:sub}; commBuildDraft(commUI.dept,cur); commRerender(); }
+function commDashCancelEdit(){ commUI.edit=null; commUI.draft=null; commRerender(); }
+async function commDashSaveEdit(){
+  commEnsure(); commFormCollect();
+  const dr=commUI.draft; if(!dr) return;
+  const dept=dr.dept, week=commToFriday(dr.weekEnding);
+  const rec={ id:dept+'-'+week, dept, weekEnding:week,
+    submittedBy:((typeof ME!=='undefined'&&ME&&ME.email)||'editor'), submittedAt:new Date().toISOString(),
+    fields:dr.fields||{}, narrative:dr.narrative||{summary:''}, customers:dr.customers||[] };
+  const list=D.commercial.submissions; const ix=list.findIndex(s=>s.dept===dept&&s.weekEnding===week);
+  if(ix>=0) list[ix]=rec; else list.push(rec);
+  commUI.edit=null; commUI.draft=null;
+  try{ await commPersist(); }catch(e){ return; }
+  commRerender();
+}
 function commHead(title,sub){
   return `<div class="comm-sechead"><h2>${commEsc(title)}</h2><span class="comm-sub">${commEsc(sub)}</span></div><div class="comm-rule"></div>`;
 }
 
-/* ---------- DASHBOARD (sub-tabbed) ---------- */
+/* ---------- DASHBOARD (sub-tabbed, week-selectable, inline-editable) ---------- */
 function commDashSubTabs(dept){
   const meta=commDeptMeta(dept), defs=COMM_DEFS[dept]||[], hasCust=(COMM_CUST_DEFS[dept]||[]).length>0;
   const t=['overview'];
@@ -3537,35 +3553,61 @@ function commDashSubTabs(dept){
   t.push('narrative');
   return t;
 }
+function commPrev(rows,cur){ const i=rows.findIndex(r=>r.weekEnding===cur.weekEnding); return i>0?rows[i-1]:null; }
+function commCurFor(dept,rows){ const w=commUI.dashWeek, f=w&&rows.find(r=>r.weekEnding===w); return f||rows[rows.length-1]; }
+function commWeekPicker(dept,rows,cur){
+  return `<div class="comm-weekbar" style="margin:8px 0 0"><label for="comm_week">Week</label>
+    <select id="comm_week" onchange="commSetDashWeek(this.value)">${rows.slice().reverse().map(r=>
+      `<option value="${r.weekEnding}" ${r.weekEnding===cur.weekEnding?'selected':''}>${commFmtWeek(r.weekEnding)}, 2026</option>`).join('')}</select></div>`;
+}
+function commEditBtn(sub,label){ return `<div style="margin:2px 0 12px"><button class="comm-btn comm-btn-ghost" style="padding:5px 12px;font-size:12px" onclick="commDashEdit('${sub}')">✎ Edit ${commEsc(label)}</button></div>`; }
+function commEditActions(wk){ return `<div class="comm-actions" style="margin-top:14px">
+    <button class="comm-btn comm-btn-primary" onclick="commDashSaveEdit()">Save ${commFmtWeek(wk)}</button>
+    <button class="comm-btn comm-btn-ghost" onclick="commDashCancelEdit()">Cancel</button></div>`; }
+function commFieldRow(d,val){ return `<div class="comm-frow">
+    <label for="cf_${d.key}">${commEsc(d.label)}<span class="comm-hint">${d.kind==='flow'?'count during the week':'state at week-end'}</span></label>
+    <div><input type="number" id="cf_${d.key}" min="0" value="${val==null?'':val}" placeholder="—"></div></div>`; }
+
 function commDashHTML(dept){
   const meta=commDeptMeta(dept), rows=commSubs(dept);
   if(!rows.length) return commHead(meta.label,'No weeks submitted yet')
     + `<div class="comm-empty">Nothing here yet. Switch to <b>Submit weekly</b> to add the first week.</div>`;
-  const cur=rows[rows.length-1], tabs=commDashSubTabs(dept);
+  const tabs=commDashSubTabs(dept);
   let sub=commUI.dashSub; if(tabs.indexOf(sub)<0) sub=tabs[0];
+  const cur=commCurFor(dept,rows);
   const labels={overview:'Overview',customers:'Customers',trends:'Trends',narrative:'Narrative'};
   const bar=`<div class="comm-tabs" role="tablist" style="margin-top:8px">${tabs.map(t=>
     `<button class="comm-tab" role="tab" aria-selected="${sub===t}" onclick="commSetDashSub('${t}')">${labels[t]}</button>`).join('')}</div>`;
+  const wp=(sub!=='trends')?commWeekPicker(dept,rows,cur):'';
   let body='';
-  if(sub==='overview')       body=commDashOverview(dept,rows);
-  else if(sub==='customers') body=commDashCustomers(dept,rows);
+  if(sub==='overview')       body=commDashOverview(dept,rows,cur);
+  else if(sub==='customers') body=commDashCustomers(dept,rows,cur);
   else if(sub==='trends')    body=commDashTrends(dept,rows);
-  else                       body=commDashNarrativeTab(dept,rows);
-  return commHead(meta.label,'Week ending '+commFmtWeek(cur.weekEnding)+', 2026 · '+rows.length+(rows.length===1?' week':' weeks')+' on record')+bar+body;
+  else                       body=commDashNarrativeTab(dept,rows,cur);
+  return commHead(meta.label,rows.length+(rows.length===1?' week':' weeks')+' on record · viewing '+commFmtWeek(cur.weekEnding)+', 2026')+bar+wp+body;
 }
 
-/* overview routes by dept */
-function commDashOverview(dept,rows){
-  if(dept==='support') return commSupportOverview(rows);
-  if(dept==='impl')    return commImplOverview(rows);
-  return commGenericOverview(dept,rows);
-}
 function commSummaryNote(cur){
   const n=commNormNarr(cur.narrative);
   return n.summary?`<div class="comm-note" style="white-space:pre-line">${commEsc(n.summary)}</div>`:'';
 }
-function commGenericOverview(dept,rows){
-  const defs=COMM_DEFS[dept]||[], cur=rows[rows.length-1], prev=rows[rows.length-2];
+
+/* overview — read-only (with ✎ Edit) or metric editor */
+function commDashOverview(dept,rows,cur){
+  const defs=COMM_DEFS[dept]||[];
+  if(commUI.edit&&commUI.edit.sub==='overview'){ if(!commUI.draft) commBuildDraft(dept,cur);
+    const dr=commUI.draft;
+    const snaps=defs.filter(d=>d.kind==='snapshot').map(d=>commFieldRow(d,dr.fields[d.key])).join('');
+    const flows=defs.filter(d=>d.kind==='flow').map(d=>commFieldRow(d,dr.fields[d.key])).join('');
+    return `<div class="comm-form" style="max-width:600px"><div class="comm-gh">Editing metrics — week ending ${commFmtWeek(cur.weekEnding)}</div>
+      ${snaps?`<div class="comm-fgroup"><div class="comm-gh">Snapshot <small>state at end of week</small></div>${snaps}</div>`:''}
+      ${flows?`<div class="comm-fgroup"><div class="comm-gh">Flow <small>what happened this week</small></div>${flows}</div>`:''}
+      ${commEditActions(cur.weekEnding)}</div>`; }
+  const inner = dept==='support'?commSupportOverview(rows,cur):dept==='impl'?commImplOverview(rows,cur):commGenericOverview(dept,rows,cur);
+  return (defs.length?commEditBtn('overview','metrics'):'')+inner;
+}
+function commGenericOverview(dept,rows,cur){
+  const defs=COMM_DEFS[dept]||[], prev=commPrev(rows,cur);
   const cards=defs.map(d=>commKpi(d,cur.fields[d.key],prev?prev.fields[d.key]:null)).join('');
   const lead=defs.find(d=>d.lead)||defs.find(d=>d.kind==='snapshot');
   let html=`<div class="comm-kpis">${cards}</div>`;
@@ -3573,11 +3615,11 @@ function commGenericOverview(dept,rows){
   if(lead && rows.length>=2 && !commDeptMeta(dept).single)
     html += `<div class="comm-panel"><h3>${commEsc(lead.label)} — trend</h3>
       <p class="comm-ph">Snapshot metric over ${rows.length} weeks</p>${commLine(rows,lead.key,lead)}</div>`;
-  html += commSummaryNote(cur)?`<div class="comm-panel"><h3>This week</h3>${commSummaryNote(cur)}</div>`:'';
+  html += commSummaryNote(cur)?`<div class="comm-panel"><h3>Summary</h3>${commSummaryNote(cur)}</div>`:'';
   return html;
 }
-function commImplOverview(rows){
-  const cur=rows[rows.length-1], cs=cur.customers||[];
+function commImplOverview(rows,cur){
+  const cs=cur.customers||[];
   const byStatus={}; cs.forEach(c=>{const s=c.status||'—';byStatus[s]=(byStatus[s]||0)+1;});
   const card=(label,val,rag,sub)=>commRaw(label,String(val),rag,'snapshot',sub);
   const cards=[
@@ -3587,11 +3629,11 @@ function commImplOverview(rows){
     card('Pending kickoff',byStatus['Pending Kickoff']||0,'flat','awaiting start'),
   ].join('');
   return `<div class="comm-kpis">${cards}</div>`
-    + (commSummaryNote(cur)?`<div class="comm-panel"><h3>This week</h3>${commSummaryNote(cur)}</div>`:'')
-    + `<p class="comm-ph" style="margin-top:12px">Per-client detail on the <b>Customers</b> tab · full status history on <b>Narrative</b>.</p>`;
+    + (commSummaryNote(cur)?`<div class="comm-panel"><h3>Summary</h3>${commSummaryNote(cur)}</div>`:'')
+    + `<p class="comm-ph" style="margin-top:12px">Per-client detail on the <b>Customers</b> tab (editable) · status history on <b>Narrative</b>.</p>`;
 }
-function commSupportOverview(rows){
-  const dept='support', cur=rows[rows.length-1], prev=rows[rows.length-2], defs=COMM_DEFS[dept];
+function commSupportOverview(rows,cur){
+  const dept='support', prev=commPrev(rows,cur), defs=COMM_DEFS[dept];
   const cards = defs.map(d=>commKpi(d,cur.fields[d.key],prev?prev.fields[d.key]:null)).join('');
   const net=(cur.fields.ticketsSolved??0)-(cur.fields.ticketsCreated??0);
   const csTot=(cur.fields.csatGood||0)+(cur.fields.csatBad||0);
@@ -3603,7 +3645,7 @@ function commSupportOverview(rows){
      </div>
      <div class="comm-panel">
        <h3>Median first reply time</h3>
-       <p class="comm-ph">Snapshot metric · target ≤ 20 min · the line that tells the story</p>
+       <p class="comm-ph">Snapshot metric · target ≤ 20 min · all weeks</p>
        ${commLine(rows,'medianReplyMin',commDef(dept,'medianReplyMin'))}
        <div class="comm-legend">
          <span><i style="background:var(--comm-good)"></i>≤20 on target</span>
@@ -3612,23 +3654,22 @@ function commSupportOverview(rows){
        </div>
      </div>
      <div class="comm-grid2">
-       <div class="comm-panel">
-         <h3>Ticket throughput</h3><p class="comm-ph">Flow metrics · created vs solved per week</p>
-         ${commBars(rows)}
-         <div class="comm-legend"><span><i style="background:var(--comm-slate)"></i>Created</span><span><i style="background:var(--comm-ink)"></i>Solved</span></div>
-       </div>
-       <div class="comm-panel">
-         <h3>SLA breaches</h3><p class="comm-ph">Flow metric · target 0 per week</p>
-         ${commSla(rows)}
-       </div>
+       <div class="comm-panel"><h3>Ticket throughput</h3><p class="comm-ph">Flow · created vs solved per week</p>${commBars(rows)}
+         <div class="comm-legend"><span><i style="background:var(--comm-slate)"></i>Created</span><span><i style="background:var(--comm-ink)"></i>Solved</span></div></div>
+       <div class="comm-panel"><h3>SLA breaches</h3><p class="comm-ph">Flow · target 0 per week</p>${commSla(rows)}</div>
      </div>
-     ${commSummaryNote(cur)?`<div class="comm-panel"><h3>This week</h3>${commSummaryNote(cur)}</div>`:''}`;
+     ${commSummaryNote(cur)?`<div class="comm-panel"><h3>Summary — ${commFmtWeek(cur.weekEnding)}</h3>${commSummaryNote(cur)}</div>`:''}`;
 }
 
-/* customers tab */
-function commDashCustomers(dept,rows){
-  const defs=COMM_CUST_DEFS[dept]||[], cur=rows[rows.length-1], cs=cur.customers||[];
-  if(!cs.length) return `<p class="comm-ph">No customer line-items recorded for week ending ${commFmtWeek(cur.weekEnding)}. Add them in <b>Submit weekly</b>.</p>`;
+/* customers tab — read-only table (✎ Edit) or inline row editor */
+function commDashCustomers(dept,rows,cur){
+  const defs=COMM_CUST_DEFS[dept]||[];
+  if(commUI.edit&&commUI.edit.sub==='customers'){ if(!commUI.draft) commBuildDraft(dept,cur);
+    return `<div class="comm-form" style="max-width:920px"><div class="comm-gh">Editing customers — week ending ${commFmtWeek(cur.weekEnding)}</div>
+      <datalist id="commCustDL">${commCustomerList().map(a=>`<option value="${commEsc(a)}">`).join('')}</datalist>
+      ${commCustRowsHTML(dept)}${commEditActions(cur.weekEnding)}</div>`; }
+  const cs=cur.customers||[], editBtn=commEditBtn('customers','customers');
+  if(!cs.length) return editBtn+`<p class="comm-ph">No customer line-items for week ending ${commFmtWeek(cur.weekEnding)}. Click <b>✎ Edit customers</b> to add them.</p>`;
   const chipKeys={health:1,status:1,stage:1};
   const head=`<th>Account</th>`+defs.map(d=>`<th style="text-align:left">${commEsc(d.label)}</th>`).join('');
   const body=cs.map(c=>{
@@ -3640,11 +3681,11 @@ function commDashCustomers(dept,rows){
     }).join('');
     return `<tr><td style="text-align:left;font-weight:600">${commEsc(c.account||'—')}</td>${cells}</tr>`;
   }).join('');
-  return `<p class="comm-ph">Week ending ${commFmtWeek(cur.weekEnding)} · ${cs.length} account${cs.length===1?'':'s'}</p>
+  return editBtn+`<p class="comm-ph">Week ending ${commFmtWeek(cur.weekEnding)} · ${cs.length} account${cs.length===1?'':'s'}</p>
     <div class="comm-panel" style="padding-top:6px"><table class="comm-ledger"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
-/* trends tab — small multiples */
+/* trends tab — small multiples (all weeks) */
 function commDashTrends(dept,rows){
   const defs=COMM_DEFS[dept]||[];
   if(!defs.length||rows.length<2) return `<p class="comm-ph">Not enough data for trends yet (need 2+ weeks).</p>`;
@@ -3652,17 +3693,24 @@ function commDashTrends(dept,rows){
   return `<div class="comm-grid2">${panels}</div>`;
 }
 
-/* narrative tab — structured blocks, newest week first */
-function commDashNarrativeTab(dept,rows){
+/* narrative tab — selected week editable (✎); full timeline below, selected week marked */
+function commDashNarrativeTab(dept,rows,cur){
+  if(commUI.edit&&commUI.edit.sub==='narrative'){ if(!commUI.draft) commBuildDraft(dept,cur);
+    const n=commNormNarr(commUI.draft.narrative);
+    return `<div class="comm-form" style="max-width:760px"><div class="comm-gh">Editing narrative — week ending ${commFmtWeek(cur.weekEnding)}</div>
+      <label class="comm-nlabel">Summary</label><textarea id="cf_summary" placeholder="Overall status this week…">${commEsc(n.summary)}</textarea>
+      <label class="comm-nlabel">Highlights <small>one per line</small></label><textarea id="cf_highlights" placeholder="One win per line…">${commEsc((n.highlights||[]).join('\n'))}</textarea>
+      <label class="comm-nlabel">Risks &amp; blockers <small>one per line</small></label><textarea id="cf_risks" placeholder="One risk/blocker per line…">${commEsc((n.risks||[]).join('\n'))}</textarea>
+      <label class="comm-nlabel">Next week <small>one per line</small></label><textarea id="cf_next" placeholder="One planned item per line…">${commEsc((n.next||[]).join('\n'))}</textarea>
+      ${commEditActions(cur.weekEnding)}</div>`; }
   const block=(title,arr)=>arr&&arr.length?`<div style="margin-top:10px"><div class="comm-nh">${title}</div><ul class="comm-nlist">${arr.map(x=>`<li>${commEsc(x)}</li>`).join('')}</ul></div>`:'';
-  return rows.slice().reverse().map(r=>{
-    const n=commNormNarr(r.narrative);
+  const panel=r=>{ const n=commNormNarr(r.narrative), sel=r.weekEnding===cur.weekEnding;
     const custNotes=(r.customers||[]).filter(c=>c.note).map(c=>`<li><b>${commEsc(c.account||'')}</b> — ${commEsc(c.note)}</li>`).join('');
-    return `<div class="comm-panel"><h3>Week ending ${commFmtWeek(r.weekEnding)}</h3>
+    return `<div class="comm-panel"${sel?' style="border-left:3px solid var(--comm-red)"':''}><h3>Week ending ${commFmtWeek(r.weekEnding)}${sel?' · selected':''}</h3>
       ${n.summary?`<div style="white-space:pre-line;font-size:13px;color:var(--comm-slate)">${commEsc(n.summary)}</div>`:'<span style="color:var(--comm-mute);font-size:12px">No summary recorded.</span>'}
       ${block('Highlights',n.highlights)}${block('Risks &amp; blockers',n.risks)}${block('Next week',n.next)}
-      ${custNotes?`<div style="margin-top:10px"><div class="comm-nh">By account</div><ul class="comm-nlist">${custNotes}</ul></div>`:''}</div>`;
-  }).join('');
+      ${custNotes?`<div style="margin-top:10px"><div class="comm-nh">By account</div><ul class="comm-nlist">${custNotes}</ul></div>`:''}</div>`; };
+  return commEditBtn('narrative','narrative for '+commFmtWeek(cur.weekEnding))+rows.slice().reverse().map(panel).join('');
 }
 
 /* ---------- KPI + chart primitives ---------- */
@@ -3870,7 +3918,7 @@ function commFormCollect(){
   const rk=gv('cf_risks'); if(rk!==undefined) dr.narrative.risks=toList(rk);
   const nx=gv('cf_next'); if(nx!==undefined) dr.narrative.next=toList(nx);
   const defs=COMM_CUST_DEFS[dr.dept]||[];
-  if(defs.length){
+  if(defs.length && document.getElementById('comm_cust_rows')){   // only rebuild when the customer editor is present
     const out=[]; let i=0;
     while(document.getElementById('cf_cust_'+i+'_account')){
       const acc=document.getElementById('cf_cust_'+i+'_account').value.trim();
