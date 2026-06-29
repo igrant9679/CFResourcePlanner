@@ -3362,12 +3362,13 @@ function _ctFilteredPos(c){
 
 /* ---- Departments ---- */
 const COMM_DEPTS = [
-  { key:'support',  label:'Customer Support', ready:true },
-  { key:'sales',    label:'Sales Pipeline',   ready:true },
-  { key:'success',  label:'Client Success',   ready:true },
-  { key:'impl',     label:'Implementation',   ready:true, narrative:true },
-  { key:'infra',    label:'Infrastructure',   ready:true },
-  { key:'marketing',label:'Marketing',        ready:true, single:true },
+  { key:'support',    label:'Customer Support', ready:true },
+  { key:'sales',      label:'Sales Pipeline',   ready:true },
+  { key:'success',    label:'Client Success',   ready:true },
+  { key:'impl',       label:'Implementation',   ready:true, narrative:true },
+  { key:'development',label:'Development',       ready:true, narrative:true },
+  { key:'infra',      label:'Infrastructure',   ready:true },
+  { key:'marketing',  label:'Marketing',        ready:true },
 ];
 
 /* ---- Metric registry. kind=flow(sum/bars) | snapshot(latest/line); dir+band=RAG;
@@ -3445,6 +3446,10 @@ const COMM_CUST_DEFS = {
   infra: [
     { key:'item', label:'Item', type:'text' },
     { key:'status', label:'Status', type:'select', options:['In Progress','Awaiting Client','Completed','On Hold','Scheduled'] },
+    { key:'note', label:'Note', type:'note' },
+  ],
+  development: [
+    { key:'status', label:'Status', type:'select', options:['This Week','Up Next','In Progress','Completed','On Hold'] },
     { key:'note', label:'Note', type:'note' },
   ],
   marketing: [],
@@ -3614,6 +3619,14 @@ function commDashOverview(dept,rows,cur){
 }
 function commGenericOverview(dept,rows,cur){
   const defs=COMM_DEFS[dept]||[], prev=commPrev(rows,cur);
+  if(!defs.length){   // narrative-only dept with no scalar metrics (e.g. Development) → item counts + summary
+    var cs=cur.customers||[],by={}; cs.forEach(function(c){var s=c.status||'—';by[s]=(by[s]||0)+1;});
+    var nc=commRaw('Items this week',String(cs.length),'flat','snapshot','accounts / components');
+    Object.keys(by).slice(0,3).forEach(function(s){nc+=commRaw(s,String(by[s]),'flat','snapshot','status');});
+    return '<div class="comm-kpis">'+nc+'</div>'
+      +(commSummaryNote(cur)?'<div class="comm-panel"><h3>Summary</h3>'+commSummaryNote(cur)+'</div>':'')
+      +'<p class="comm-ph" style="margin-top:12px">Detail on the <b>Customers</b> tab · history on <b>Narrative</b>.</p>';
+  }
   const cards=defs.map(d=>commKpi(d,cur.fields[d.key],prev?prev.fields[d.key]:null)).join('');
   const lead=defs.find(d=>d.lead)||defs.find(d=>d.kind==='snapshot');
   let html=`<div class="comm-kpis">${cards}</div>`;
