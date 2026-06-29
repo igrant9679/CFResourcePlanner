@@ -4108,6 +4108,174 @@ async function commLoadSeed(seedArray){
   console.log('commLoadSeed: added '+added+' weeks');
 }
 
+/* ============================================================
+   ATLAS · Customers — master client registry
+   A single editable list of every customer in the system: seeded by merging
+   the client spreadsheet (Active Clients + Latest Logins + Deadlines, by Site
+   URL) with every project's subClients (by name). Add new customers, edit any
+   field, and pull in new project subClients via "Sync from projects".
+   D.customers = [ { id, name, url, type, region, version, siteStatus,
+     latestLogin, daysSinceLogin, product, value, renewalDate, project,
+     contact, notes, deadlines:[{date,status,app,orgType}], source } ]
+   ============================================================ */
+var custUI = { q:'', region:'', type:'', status:'', source:'', sort:'name' };
+function custEnsure(){ if(!Array.isArray(D.customers)) D.customers=[]; return D.customers; }
+function custCanEdit(){ return !!(ME&&(ME.role==='admin'||ME.role==='editor')); }
+function custNameKey(n){ return String(n||'').trim().toLowerCase().replace(/[^a-z0-9]/g,''); }
+function custDaysNum(c){ var n=parseInt(c.daysSinceLogin,10); return isNaN(n)?null:n; }
+function custVal(c){ return Number(c.value)||0; }
+
+function custFiltered(){
+  custEnsure();
+  var q=(custUI.q||'').toLowerCase();
+  return D.customers.filter(function(c){
+    if(custUI.region&&c.region!==custUI.region)return false;
+    if(custUI.type&&c.type!==custUI.type)return false;
+    if(custUI.status&&(c.siteStatus||'')!==custUI.status)return false;
+    if(custUI.source&&(c.source||'').indexOf(custUI.source)===-1)return false;
+    if(q){ var hay=((c.name||'')+' '+(c.url||'')+' '+(c.type||'')+' '+(c.region||'')+' '+(c.product||'')+' '+(c.project||'')+' '+(c.contact||'')+' '+(c.notes||'')).toLowerCase();
+      if(hay.indexOf(q)===-1)return false; }
+    return true;
+  }).sort(function(a,b){
+    if(custUI.sort==='value')return custVal(b)-custVal(a);
+    if(custUI.sort==='login'){var da=custDaysNum(a),db=custDaysNum(b);return (da==null?9e9:da)-(db==null?9e9:db);}
+    if(custUI.sort==='deadlines')return (b.deadlines||[]).length-(a.deadlines||[]).length;
+    return String(a.name||'').localeCompare(String(b.name||''));
+  });
+}
+function custDistinct(field){ custEnsure(); var s={}; D.customers.forEach(function(c){if(c[field])s[c[field]]=1;}); return Object.keys(s).sort(); }
+
+function renderCustomersView(q){
+  custEnsure();
+  if(q!=null&&q!=='') custUI.q=q;   // honor the global search box
+  var all=D.customers, rows=custFiltered();
+  var active=all.filter(function(c){return (c.siteStatus||'').toLowerCase()==='active';}).length;
+  var sch=all.filter(function(c){return c.type==='Scholarship';}).length;
+  var grn=all.filter(function(c){return c.type==='Grants';}).length;
+  var engaged=all.filter(function(c){var d=custDaysNum(c);return d!=null&&d<=7;}).length;
+  var stale=all.filter(function(c){var d=custDaysNum(c);return d!=null&&d>30;}).length;
+  var arr=all.reduce(function(a,c){return a+custVal(c);},0);
+  var upcoming=all.reduce(function(a,c){return a+(c.deadlines||[]).filter(function(d){return (d.status||'')!=='Passed';}).length;},0);
+  var kpi=function(lbl,val,sub){return '<div class="cust-kpi"><div class="cust-kpi-v">'+val+'</div><div class="cust-kpi-l">'+lbl+'</div>'+(sub?'<div class="cust-kpi-s">'+sub+'</div>':'')+'</div>';};
+  var html='<div class="plan-wrap"><div class="cust-head"><div><strong style="font-size:15px">Customers</strong>'
+    +'<span style="font-size:12px;color:var(--text-secondary);margin-left:8px">'+all.length+' total &middot; '+rows.length+' shown</span></div>'
+    +(custCanEdit()?'<div style="display:flex;gap:8px"><button class="btn btn-outline btn-sm" onclick="custSyncProjects()" title="Pull in any customers from project client lists that aren\'t here yet">&#8635; Sync from projects</button><button class="btn btn-gold btn-sm" onclick="custOpenAdd()">+ Add customer</button></div>':'')
+    +'</div>';
+  html+='<div class="cust-kpis">'+kpi('Customers',all.length)+kpi('Active sites',active)+kpi('Scholarship',sch)+kpi('Grants',grn)
+    +kpi('Engaged',engaged,'logged in &le;7d')+kpi('Stale',stale,'&gt;30d no login')+kpi('Total ARR',fmt(arr))+kpi('Open deadlines',upcoming)+'</div>';
+  // filters
+  var opt=function(v,cur){return '<option value="'+esc(v)+'"'+(cur===v?' selected':'')+'>'+esc(v)+'</option>';};
+  html+='<div class="plan-toolbar" style="flex-wrap:wrap;gap:8px">'
+    +'<input type="text" id="cust_q" placeholder="Search name, URL, product, project…" value="'+esc(custUI.q)+'" oninput="custSet(\'q\',this.value)" style="flex:1;min-width:200px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font:13px inherit">'
+    +'<select onchange="custSet(\'region\',this.value)"><option value="">All regions</option>'+custDistinct('region').map(function(v){return opt(v,custUI.region);}).join('')+'</select>'
+    +'<select onchange="custSet(\'type\',this.value)"><option value="">All types</option>'+custDistinct('type').map(function(v){return opt(v,custUI.type);}).join('')+'</select>'
+    +'<select onchange="custSet(\'status\',this.value)"><option value="">Any status</option>'+custDistinct('siteStatus').map(function(v){return opt(v,custUI.status);}).join('')+'</select>'
+    +'<select onchange="custSet(\'source\',this.value)"><option value="">Any source</option><option value="active"'+(custUI.source==='active'?' selected':'')+'>Active-clients list</option><option value="login"'+(custUI.source==='login'?' selected':'')+'>Has login data</option><option value="deadline"'+(custUI.source==='deadline'?' selected':'')+'>Has deadlines</option><option value="project"'+(custUI.source==='project'?' selected':'')+'>From a project</option><option value="manual"'+(custUI.source==='manual'?' selected':'')+'>Added manually</option></select>'
+    +'<select onchange="custSet(\'sort\',this.value)"><option value="name"'+(custUI.sort==='name'?' selected':'')+'>Sort: Name</option><option value="value"'+(custUI.sort==='value'?' selected':'')+'>Sort: ARR</option><option value="login"'+(custUI.sort==='login'?' selected':'')+'>Sort: Last login</option><option value="deadlines"'+(custUI.sort==='deadlines'?' selected':'')+'>Sort: Deadlines</option></select>'
+    +'</div>';
+  if(!rows.length){ html+='<div class="empty-msg">'+(all.length?'No customers match the filters.':'No customers yet. Click <b>+ Add customer</b> or <b>Sync from projects</b>.')+'</div></div>'; return html; }
+  // table
+  html+='<div style="overflow:auto;border:1px solid var(--border);border-radius:10px;margin-top:10px"><table class="cust-tbl"><thead><tr>'
+    +'<th style="text-align:left">Customer</th><th style="text-align:left">Type</th><th style="text-align:left">Region</th><th>Ver</th><th>Status</th><th>Last login</th><th style="text-align:right">ARR</th><th>Deadlines</th><th style="text-align:left">Project</th><th></th></tr></thead><tbody>';
+  rows.forEach(function(c){
+    var d=custDaysNum(c), loginCls=d==null?'':(d<=7?'cust-good':(d>30?'cust-bad':'cust-warn'));
+    html+='<tr onclick="custOpenEdit(\''+c.id+'\')">'
+      +'<td style="text-align:left"><div style="font-weight:600">'+esc(c.name||'(unnamed)')+'</div>'+(c.url?'<div style="font-size:11px;color:var(--text-muted)">'+esc(c.url)+'</div>':'')+'</td>'
+      +'<td style="text-align:left">'+esc(c.type||'—')+'</td>'
+      +'<td style="text-align:left">'+esc(c.region||'—')+'</td>'
+      +'<td>'+esc(c.version||'—')+'</td>'
+      +'<td>'+(c.siteStatus?'<span class="cust-pill '+((c.siteStatus||'').toLowerCase()==='active'?'cust-pill-g':'cust-pill-n')+'">'+esc(c.siteStatus)+'</span>':'—')+'</td>'
+      +'<td class="'+loginCls+'">'+(d==null?'—':(d+'d'))+'</td>'
+      +'<td style="text-align:right">'+(custVal(c)?fmt(custVal(c)):'—')+'</td>'
+      +'<td>'+((c.deadlines||[]).length||'—')+'</td>'
+      +'<td style="text-align:left;font-size:11px;color:var(--text-muted)">'+esc(c.project||'')+'</td>'
+      +'<td><button class="btn btn-outline btn-xs" onclick="event.stopPropagation();custOpenEdit(\''+c.id+'\')">'+(custCanEdit()?'Edit':'View')+'</button></td></tr>';
+  });
+  html+='</tbody></table></div></div>';
+  return html;
+}
+function custSet(field,val){ custUI[field]=val; if(field==='q'){ custUI.q=val; var host=document.querySelector('.cust-tbl'); } renderView(); }
+
+/* ---- detail / add / edit modal ---- */
+function custField(label,id,val,type,opts){
+  type=type||'text';
+  if(type==='textarea')return '<div class="cust-f"><label>'+label+'</label><textarea id="'+id+'">'+esc(val||'')+'</textarea></div>';
+  if(type==='number')return '<div class="cust-f"><label>'+label+'</label><input type="number" id="'+id+'" value="'+(val==null||val===''?'':val)+'"></div>';
+  if(type==='select')return '<div class="cust-f"><label>'+label+'</label><select id="'+id+'"><option value=""></option>'+(opts||[]).map(function(o){return '<option'+(val===o?' selected':'')+'>'+esc(o)+'</option>';}).join('')+'</select></div>';
+  return '<div class="cust-f"><label>'+label+'</label><input type="text" id="'+id+'" value="'+esc(val||'')+'"></div>';
+}
+function custModalHTML(c,isNew){
+  custEnsure();
+  var regions=custDistinct('region'),types=custDistinct('type'),statuses=custDistinct('status').length?custDistinct('siteStatus'):['Active','Inactive'];
+  var ro=!custCanEdit();
+  var body='<div class="mdl-over">Customer</div><div class="mdl-title">'+(isNew?'Add customer':esc(c.name||'Customer'))+'</div>'
+    +'<div class="cust-grid">'
+    +custField('Client / organization name','cf_name',c.name,'text')
+    +custField('Site URL','cf_url',c.url,'text')
+    +custField('Type','cf_type',c.type,'select',types.length?types:['Scholarship','Grants'])
+    +custField('Region','cf_region',c.region,'select',regions.length?regions:['US','New Zealand','Australia (Oceania)','West Africa','IN','Bahamas'])
+    +custField('Version','cf_version',c.version,'text')
+    +custField('Site status','cf_siteStatus',c.siteStatus,'select',statuses)
+    +custField('Latest login','cf_latestLogin',c.latestLogin,'text')
+    +custField('Days since login','cf_daysSinceLogin',c.daysSinceLogin,'number')
+    +custField('Product','cf_product',c.product,'text')
+    +custField('ARR / value ($/yr)','cf_value',c.value,'number')
+    +custField('Renewal date','cf_renewalDate',c.renewalDate,'text')
+    +custField('Project','cf_project',c.project,'text')
+    +custField('Contact','cf_contact',c.contact,'text')
+    +'</div>'
+    +custField('Notes','cf_notes',c.notes,'textarea');
+  var dls=(c.deadlines||[]);
+  if(dls.length){
+    var drows=dls.slice(0,200).map(function(d){return '<tr><td style="text-align:left">'+esc(d.date||'')+'</td><td><span class="cust-pill '+((d.status||'')==='Passed'?'cust-pill-n':'cust-pill-g')+'">'+esc(d.status||'')+'</span></td><td style="text-align:left">'+esc(d.app||'')+'</td><td style="text-align:left">'+esc(d.orgType||'')+'</td></tr>';}).join('');
+    body+='<div class="cust-dl-h">Application deadlines ('+dls.length+')</div>'
+      +'<div style="max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:8px"><table class="cust-tbl cust-dl"><thead><tr><th style="text-align:left">Date</th><th>Status</th><th style="text-align:left">Application</th><th style="text-align:left">Type</th></tr></thead><tbody>'+drows+'</tbody></table></div>';
+  }
+  if(c.source)body+='<div style="font-size:11px;color:var(--text-muted);margin-top:8px">Data sources: '+esc(c.source)+'</div>';
+  body+='<div class="btn-row" style="margin-top:14px">';
+  if(!ro){ body+='<button class="btn btn-gold" style="flex:1" onclick="custSave('+(isNew?'null':'\''+c.id+'\'')+')">'+(isNew?'Add customer':'Save changes')+'</button>';
+    if(!isNew)body+='<button class="btn btn-danger-sm" onclick="custDelete(\''+c.id+'\')">Delete</button>'; }
+  body+='<button class="btn btn-sec"'+(ro?' style="flex:1"':'')+' onclick="closeModal(\'ovCust\')">Close</button></div>';
+  return body;
+}
+function custOpenAdd(){ if(!custCanEdit())return; document.getElementById('mdlCust').innerHTML=custModalHTML({deadlines:[]},true); openModal('ovCust'); }
+function custOpenEdit(id){ var c=custEnsure().find(function(x){return x.id===id;}); if(!c)return; document.getElementById('mdlCust').innerHTML=custModalHTML(c,false); openModal('ovCust'); }
+function _custReadForm(){
+  var g=function(id){var el=document.getElementById(id);return el?el.value.trim():'';};
+  var vNum=function(id){var v=g(id);return v===''?null:Number(v);};
+  return {name:g('cf_name'),url:g('cf_url'),type:g('cf_type'),region:g('cf_region'),version:g('cf_version'),
+    siteStatus:g('cf_siteStatus'),latestLogin:g('cf_latestLogin'),daysSinceLogin:g('cf_daysSinceLogin'),
+    product:g('cf_product'),value:vNum('cf_value'),renewalDate:g('cf_renewalDate'),project:g('cf_project'),
+    contact:g('cf_contact'),notes:g('cf_notes')};
+}
+function custSave(id){
+  if(!custCanEdit())return;
+  custEnsure(); var f=_custReadForm();
+  if(!f.name){alert('Customer name is required.');return;}
+  if(id){ var c=D.customers.find(function(x){return x.id===id;}); if(!c)return;
+    for(var k in f)c[k]=f[k]; if(!/manual/.test(c.source||''))c.source=(c.source?c.source+'+':'')+'edited'; }
+  else { f.id='cust_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); f.deadlines=[]; f.source='manual'; D.customers.push(f); }
+  save(); closeModal('ovCust'); renderView();
+}
+function custDelete(id){
+  if(!custCanEdit())return;
+  if(!confirm('Delete this customer from the registry? (Source spreadsheet/project data is not affected.)'))return;
+  D.customers=custEnsure().filter(function(x){return x.id!==id;}); save(); closeModal('ovCust'); renderView();
+}
+function custSyncProjects(){
+  if(!custCanEdit())return;
+  custEnsure();
+  var have={}; D.customers.forEach(function(c){if(c.name)have[custNameKey(c.name)]=1;});
+  var added=0;
+  (D.projects||[]).forEach(function(p){ (p.subClients||[]).forEach(function(sc){
+    var nm=sc.account||''; if(!nm)return; var k=custNameKey(nm); if(have[k])return; have[k]=1;
+    D.customers.push({id:'cust_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:nm,url:'',type:'',region:'',version:'',siteStatus:'',latestLogin:'',daysSinceLogin:'',product:sc.product||'',value:Number(sc.value)||null,renewalDate:sc.renewalDate||'',project:p.name,contact:'',notes:'',deadlines:[],source:'project'});
+    added++;
+  });});
+  save(); renderView();
+  toast(added?('Added '+added+' customer'+(added===1?'':'s')+' from projects.'):'All project customers are already in the registry.', added?'success':'info');
+}
+
 function renderContractsView(q){
   if(!canSee('contracts'))return '<div class="empty-msg">You don\'t have access to the Contract Management module.</div>';
   var cs=D.contracts||[];
