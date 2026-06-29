@@ -1994,7 +1994,7 @@ function _sbirPhase2Template(){
 }
 function canProposal(){
   if(!ME)return false;
-  if(ME.role==='admin'||ME.role==='editor')return true;
+  if(ME.role==='admin'||ME.role==='editor'||ME.role==='capture')return true;
   if(ME.memberId){var f=findMember(ME.memberId);if(f&&f.m&&f.m.proposal)return true;}
   return false;
 }
@@ -6668,7 +6668,7 @@ function _prospectTasksHTML(pid){
 }
 function prospectAddTask(pid){
   var p=prospectList().find(function(x){return x.id===pid;});if(!p)return;
-  if(!(ME&&(ME.role==='admin'||ME.role==='editor'))){toast('You need editor access to add BD tasks.','error');return;}
+  if(!(ME&&(ME.role==='admin'||ME.role==='editor'||ME.role==='capture'))){toast('You need editor access to add BD tasks.','error');return;}
   var memOpts=[{value:'',label:'— unassigned —'}],seen={};
   planMembers().forEach(function(m){if(seen[m.id])return;seen[m.id]=1;memOpts.push({value:m.id,label:m.name+(m.role?' · '+m.role:'')});});
   openFormModal({over:'BD Task · '+prospectTitle(p),title:'New BD task',submitLabel:'Add task',
@@ -16346,7 +16346,7 @@ function setProgramColor(id,c){if(!can('programs'))return;var p=progById(id);if(
 function setPlanStart(v){if(!can('programs'))return;D.planStart=v||'2026-06-01';save();renderView();}
 function delProgram(id){if(!can('programs'))return;var cnt=D.activities.filter(function(a){return a.programId===id;}).length;if(cnt&&!confirm('This program has '+cnt+' task(s). Delete the program AND its tasks?'))return;if(!cnt&&!confirm('Delete this program?'))return;D.activities=D.activities.filter(function(a){return a.programId!==id;});D.programs=D.programs.filter(function(p){return p.id!==id;});save();renderView();openProgramsManager();}
 /* ── ACCOUNTS MANAGER ── */
-var ROLE_LABELS={admin:'Admin',owner:'Program Owner',editor:'Editor',viewer:'Viewer'};
+var ROLE_LABELS={admin:'Admin',owner:'Program Owner',editor:'Editor',viewer:'Viewer',capture:'Capture'};
 function openAccountsManager(){
   if(!can('accounts'))return;
   var rows=(D.accounts||[]).map(function(ac){
@@ -16995,6 +16995,7 @@ function authMigrate(){
   ['owner','editor','viewer'].forEach(function(r){if(!Object.prototype.hasOwnProperty.call(D.sectionVis[r],'commercial'))D.sectionVis[r].commercial=false;});
 }
 function canSee(k){if(!ME)return false;if(k==='proforma'||k==='strat'||k==='valuation')return canProforma();if(ME.role==='admin')return true;
+  if(ME.role==='capture')return (k==='prop'||k==='recruit'||k==='opp');   // Capture role: ONLY Proposals, Recruiting, Opportunities — no other pages.
   // Section Visibility is authoritative for tab/section visibility. An explicit
   // grant or revoke in D.sectionVis[role] always wins. For the capability-gated
   // modules (Proposals, Recruiting) an UNSET cell falls back to the module
@@ -17006,7 +17007,7 @@ function canSee(k){if(!ME)return false;if(k==='proforma'||k==='strat'||k==='valu
   return has?rv[k]!==false:true;}
 function canRecruit(){
   if(!ME)return false;
-  if(ME.role==='admin'||ME.role==='editor')return true;
+  if(ME.role==='admin'||ME.role==='editor'||ME.role==='capture')return true;
   if(ME.memberId){var f=findMember(ME.memberId);if(f&&f.m&&f.m.recruiter)return true;}
   return false;
 }
@@ -17014,6 +17015,7 @@ function can(act,ctx){
   if(!ME)return false;
   var r=ME.role;
   if(r==='admin')return true;
+  if(r==='capture')r='editor';   // Capture edits like an editor; which PAGES it can reach is restricted in canSee().
   switch(act){
     case 'accounts':return false;
     case 'programs':return r==='editor';
