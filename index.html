@@ -1056,6 +1056,13 @@ select.ct-cell{cursor:pointer;-webkit-appearance:none;appearance:none;}
   padding:12px 16px;font-size:13px;color:var(--comm-slate);margin-top:16px}
 .comm-empty{background:#fff;border:1px dashed var(--comm-line);border-radius:var(--comm-radius);padding:40px 20px;
   text-align:center;color:var(--comm-mute)}
+/* v2: customer rows, structured-narrative labels + lists */
+.comm-custrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid #f0f2f5}
+.comm-nlabel{display:block;font-size:11px;font-weight:700;color:var(--comm-slate);text-transform:uppercase;letter-spacing:.05em;margin:12px 0 4px}
+.comm-nlabel small{font-weight:600;letter-spacing:0;text-transform:none;color:var(--comm-mute);margin-left:6px}
+.comm-nh{font-size:11px;font-weight:700;color:var(--comm-red);text-transform:uppercase;letter-spacing:.06em}
+.comm-nlist{margin:4px 0 0;padding-left:18px;font-size:13px;color:var(--comm-slate)}
+.comm-nlist li{margin:2px 0}
 .comm-root :focus-visible{outline:2px solid var(--comm-ink);outline-offset:2px;border-radius:4px}
 </style>
 </head>
@@ -3349,11 +3356,11 @@ function _ctFilteredPos(c){
 /* ============================================================
    ATLAS · Commercial module  (clean parallel module)
    Home for the Scholarship & Grants commercial-side weekly status data.
-   Only Customer Support is wired end to end; other departments are
-   registered in COMM_DEFS so the pattern extends without new plumbing.
+   v2 — customer dimension + structured narrative + sub-tabbed dashboards.
+   Six departments wired; metrics/customer-columns are per-department registries.
    ============================================================ */
 
-/* ---- Departments (only support is ready) ---- */
+/* ---- Departments ---- */
 const COMM_DEPTS = [
   { key:'support',  label:'Customer Support', ready:true },
   { key:'sales',    label:'Sales Pipeline',   ready:true },
@@ -3363,14 +3370,14 @@ const COMM_DEPTS = [
   { key:'marketing',label:'Marketing',        ready:true, single:true },
 ];
 
-/* ---- Metric definitions. `kind` decides aggregation
-        (flow=sum/bars, snapshot=latest/line). `dir`+`band` decide RAG. ---- */
+/* ---- Metric registry. kind=flow(sum/bars) | snapshot(latest/line); dir+band=RAG;
+        lead=trend-line metric; money=$ formatting. ---- */
 const COMM_DEFS = {
   support: [
     { key:'ticketsCreated', label:'Tickets created',   kind:'flow',     unit:'',  dir:'none' },
     { key:'ticketsSolved',  label:'Tickets solved',    kind:'flow',     unit:'',  dir:'up'   },
     { key:'ticketsOpen',    label:'Open at week-end',  kind:'snapshot', unit:'',  dir:'down' },
-    { key:'medianReplyMin', label:'Median first reply',kind:'snapshot', unit:'m', dir:'down', band:{good:20,warn:30} },
+    { key:'medianReplyMin', label:'Median first reply',kind:'snapshot', unit:'m', dir:'down', band:{good:20,warn:30}, lead:true },
     { key:'csatGood',       label:'CSAT good',         kind:'flow',     unit:'',  dir:'up'   },
     { key:'csatBad',        label:'CSAT bad',          kind:'flow',     unit:'',  dir:'down' },
     { key:'slaBreached',    label:'SLA breaches',      kind:'flow',     unit:'',  dir:'down', band:{good:0,warn:0} },
@@ -3378,17 +3385,22 @@ const COMM_DEFS = {
   sales: [
     { key:'totalOpps',     label:'Total opportunities', kind:'snapshot', unit:'', dir:'up' },
     { key:'pipelineValue', label:'Pipeline value',      kind:'snapshot', unit:'', dir:'up', money:true, lead:true },
+    { key:'closedWon',     label:'Closed-won (wk)',     kind:'flow',     unit:'', dir:'up' },
+    { key:'activeStages',  label:'Active stages',       kind:'snapshot', unit:'', dir:'none' },
   ],
   success: [
-    { key:'meetingsMonth', label:'Meetings scheduled (MTD)', kind:'snapshot', unit:'', dir:'up', lead:true },
-    { key:'meetingsNext',  label:'Meetings — next month',    kind:'snapshot', unit:'', dir:'up' },
-    { key:'nps',           label:'NPS',                      kind:'snapshot', unit:'', dir:'up', band:{good:70,warn:50} },
-    { key:'csatResponses', label:'CSAT survey responses',    kind:'snapshot', unit:'', dir:'up' },
+    { key:'meetingsMonth',     label:'Meetings scheduled (MTD)', kind:'snapshot', unit:'', dir:'up', lead:true },
+    { key:'meetingsNext',      label:'Meetings — next month',    kind:'snapshot', unit:'', dir:'up' },
+    { key:'nps',               label:'NPS',                      kind:'snapshot', unit:'', dir:'up', band:{good:70,warn:50} },
+    { key:'csatResponses',     label:'CSAT survey responses',    kind:'snapshot', unit:'', dir:'up' },
+    { key:'wellnessResponses', label:'Wellness responses',       kind:'snapshot', unit:'', dir:'up' },
   ],
   infra: [
-    { key:'activeSites',       label:'Active sites',       kind:'snapshot', unit:'', dir:'up', lead:true },
-    { key:'deletionsQueue',    label:'Deletions in queue', kind:'snapshot', unit:'', dir:'down' },
-    { key:'deadlinesUpcoming', label:'Deadlines next 7d',  kind:'snapshot', unit:'', dir:'none' },
+    { key:'activeSites',       label:'Active sites',          kind:'snapshot', unit:'', dir:'up', lead:true },
+    { key:'deletionsQueue',    label:'Deletions in queue',    kind:'snapshot', unit:'', dir:'down' },
+    { key:'deadlinesUpcoming', label:'Deadlines next 7d',     kind:'snapshot', unit:'', dir:'none' },
+    { key:'deadlinesPassed',   label:'Deadlines passed (7d)', kind:'flow',     unit:'', dir:'none' },
+    { key:'mtdActiveApps',     label:'Active apps (MTD)',     kind:'snapshot', unit:'', dir:'none' },
   ],
   marketing: [
     { key:'emailsSent',        label:'Emails sent',         kind:'snapshot', unit:'', dir:'up', lead:true },
@@ -3396,55 +3408,100 @@ const COMM_DEFS = {
     { key:'followupsScheduled',label:'Follow-ups scheduled',kind:'snapshot', unit:'', dir:'up' },
     { key:'interested',        label:'Interested',          kind:'snapshot', unit:'', dir:'up' },
     { key:'meetingsBooked',    label:'Meetings booked',     kind:'snapshot', unit:'', dir:'up' },
+    { key:'loopClosed',        label:'Loop closed',         kind:'snapshot', unit:'', dir:'none' },
+    { key:'archivedBounced',   label:'Archived / bounced',  kind:'snapshot', unit:'', dir:'down' },
+    { key:'notInterested',     label:'Not interested',      kind:'snapshot', unit:'', dir:'down' },
     { key:'orgsIdentified',    label:'Orgs identified',     kind:'snapshot', unit:'', dir:'up' },
     { key:'totalContacts',     label:'Contacts generated',  kind:'snapshot', unit:'', dir:'up' },
   ],
 };
 
-/* ---- UI state (not persisted), parallels contractTab / _govRpt ---- */
-const commUI = { tab:'dash', editWeek:null, dept:'support' };
+/* ---- Per-customer line-item columns per department (account is implicit, always first). ---- */
+const COMM_CUST_DEFS = {
+  sales: [
+    { key:'stage', label:'Stage', type:'select', options:['Qualification','Value Prop/Demo','Pricing/Proposal','Verbal','Closed Won','Closed Lost'] },
+    { key:'value', label:'Value', type:'money' },
+    { key:'closeMonth', label:'Close', type:'text' },
+    { key:'note', label:'Note', type:'note' },
+  ],
+  support: [
+    { key:'openTickets', label:'Open', type:'num' },
+    { key:'issue', label:'Top issue', type:'text' },
+    { key:'escalatedTo', label:'Escalated to', type:'text' },
+    { key:'note', label:'Note', type:'note' },
+  ],
+  success: [
+    { key:'health', label:'Health', type:'select', options:['Green','Amber','Red'] },
+    { key:'meetings', label:'Meetings', type:'num' },
+    { key:'renewal', label:'Renewal', type:'text' },
+    { key:'note', label:'Note', type:'note' },
+  ],
+  impl: [
+    { key:'phase', label:'Phase', type:'select', options:['Discovery','Phase 0','Phase 1','Build','Testing','Go-Live','Live','On Hold'] },
+    { key:'status', label:'Status', type:'select', options:['On Track','At Risk','Blocked','Pending Kickoff','Complete'] },
+    { key:'goLive', label:'Go-live', type:'text' },
+    { key:'note', label:'Note', type:'note' },
+  ],
+  infra: [
+    { key:'item', label:'Item', type:'text' },
+    { key:'status', label:'Status', type:'select', options:['In Progress','Awaiting Client','Completed','On Hold','Scheduled'] },
+    { key:'note', label:'Note', type:'note' },
+  ],
+  marketing: [],
+};
 
-/* ---- ensure the data slice exists on D (D loads from /api/data) ---- */
+/* ---- UI state (not persisted) ---- */
+const commUI = { tab:'dash', dept:'support', dashSub:'overview', editWeek:null, draft:null };
+
+/* ---- data slice ---- */
 function commEnsure(){
   if(!D.commercial) D.commercial = {};
   if(!Array.isArray(D.commercial.submissions)) D.commercial.submissions = [];
   if(!Array.isArray(D.commercial.clientLedger)) D.commercial.clientLedger = [];
 }
 
-/* ============================================================
-   PERSISTENCE — the only place that writes. Delegates to ATLAS's
-   canonical save() (localStorage mirror + debounced serverSave with the
-   X-Atlas-Base-Updated-At base stamp + 3-way merge / PROTECTED_ARRAYS
-   handling). D.commercial was mutated by the caller; save() ships all of D.
-   ============================================================ */
+/* PERSISTENCE — delegates to ATLAS save() (localStorage mirror + debounced serverSave
+   with the X-Atlas-Base-Updated-At stamp + 3-way-merge/PROTECTED_ARRAYS handling). */
 async function commPersist(){ save(); }
 
-/* ---- small helpers ---- */
+/* ---- helpers ---- */
 function commToFriday(iso){ const d=new Date(iso+'T00:00:00'); const day=d.getDay();
   d.setDate(d.getDate()+((5-day+7)%7)); return d.toISOString().slice(0,10); }
 function commFmtWeek(iso){ return new Date(iso+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
 function commSubs(dept){ commEnsure(); return D.commercial.submissions.filter(s=>s.dept===dept)
   .sort((a,b)=>a.weekEnding<b.weekEnding?-1:1); }
 function commDef(dept,key){ return (COMM_DEFS[dept]||[]).find(d=>d.key===key); }
+function commDeptMeta(dept){ return COMM_DEPTS.find(d=>d.key===dept)||{key:dept,label:dept}; }
 function commEsc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function commRag(dDef,v){ if(v==null||!dDef||!dDef.band) return 'flat'; const {good,warn}=dDef.band;
   if(dDef.dir==='down') return v<=good?'good':v<=warn?'warn':'bad';
   if(dDef.dir==='up')   return v>=good?'good':v>=warn?'warn':'bad'; return 'flat'; }
-/* compact metric formatter (line labels / ledger): money → $NNk, else value+unit */
-function commFmtMetric(d,v){ if(v==null) return '—';
+function commFmtMetric(d,v){ if(v==null||v==='') return '—';
   if(d&&d.money) return '$'+(Math.abs(v)>=1000?Math.round(v/1000)+'K':String(v));
   return v+(d&&d.unit?d.unit:''); }
-function commDeptMeta(dept){ return COMM_DEPTS.find(d=>d.key===dept)||{key:dept,label:dept}; }
+function commNormNarr(n){ n=n||{}; return { summary:(n.summary!=null?n.summary:(n.note||'')), highlights:n.highlights||[], risks:n.risks||[], next:n.next||[] }; }
+/* customer combobox source: unique account names across all project subClients (Awards + Educian + …) */
+function commCustomerList(){
+  const set={};
+  (typeof D!=='undefined'&&D.projects?D.projects:[]).forEach(p=>(p.subClients||[]).forEach(c=>{ const a=c&&c.account?String(c.account).trim():''; if(a) set[a]=1; }));
+  return Object.keys(set).sort((a,b)=>a.localeCompare(b));
+}
+function commChip(v){
+  const tone={Green:'good','On Track':'good','Closed Won':'good',Complete:'good',Completed:'good','Live':'good',
+    Amber:'warn','At Risk':'warn','Pending Kickoff':'warn','Awaiting Client':'warn','In Progress':'warn','Scheduled':'warn',Verbal:'warn',
+    Red:'bad','Closed Lost':'bad',Blocked:'bad'}[v]||'flat';
+  const bg={good:'var(--comm-good-bg)',warn:'var(--comm-warn-bg)',bad:'var(--comm-bad-bg)',flat:'var(--comm-flat-bg)'}[tone];
+  const col={good:'var(--comm-good)',warn:'var(--comm-warn)',bad:'var(--comm-bad)',flat:'var(--comm-slate)'}[tone];
+  return `<span class="comm-pill" style="background:${bg};color:${col}">${commEsc(v)}</span>`;
+}
 
-/* re-render in place without needing the container id */
+/* re-render in place */
 function commRerender(){
   const host = document.querySelector('.comm-root') && document.querySelector('.comm-root').parentElement;
   if(host) host.innerHTML = renderCommercialView();
 }
 
-/* ============================================================
-   VIEW — parallels renderContractsView(); returns an HTML string.
-   ============================================================ */
+/* ============================================================ VIEW ============================================================ */
 function renderCommercialView(){
   commEnsure();
   const tabs = ['dash','form','schema'];
@@ -3457,8 +3514,6 @@ function renderCommercialView(){
   if(commUI.tab==='schema') body = commSchemaHTML();
   return `<div class="comm-root">${tabBar}${body}</div>`;
 }
-
-/* department selector (Dashboard + Submit-weekly share commUI.dept) */
 function commDeptBar(){
   return `<div class="comm-weekbar" style="margin:10px 0 2px">
     <label for="comm_dept">Department</label>
@@ -3466,76 +3521,82 @@ function commDeptBar(){
       `<option value="${d.key}" ${d.key===commUI.dept?'selected':''}>${commEsc(d.label)}</option>`).join('')}</select>
   </div>`;
 }
-
-function commSetTab(t){ commUI.tab=t; commUI.editWeek=null; commRerender(); }
+function commSetTab(t){ commUI.tab=t; commUI.editWeek=null; if(t==='form') commBuildDraft(commUI.dept,null); commRerender(); }
 function commSetDept(d){ commUI.dept=d; commUI.editWeek=null; commRerender(); }
-
+function commSetDashSub(s){ commUI.dashSub=s; commRerender(); }
 function commHead(title,sub){
-  return `<div class="comm-sechead"><h2>${title}</h2><span class="comm-sub">${sub}</span></div><div class="comm-rule"></div>`;
+  return `<div class="comm-sechead"><h2>${commEsc(title)}</h2><span class="comm-sub">${commEsc(sub)}</span></div><div class="comm-rule"></div>`;
 }
 
-/* ---------- DASHBOARD (router by department) ---------- */
+/* ---------- DASHBOARD (sub-tabbed) ---------- */
+function commDashSubTabs(dept){
+  const meta=commDeptMeta(dept), defs=COMM_DEFS[dept]||[], hasCust=(COMM_CUST_DEFS[dept]||[]).length>0;
+  const t=['overview'];
+  if(hasCust) t.push('customers');
+  if(defs.length>=1 && !meta.single) t.push('trends');
+  t.push('narrative');
+  return t;
+}
 function commDashHTML(dept){
-  const meta=commDeptMeta(dept);
-  if(meta.narrative) return commDashNarrative(dept);   // Implementation — prose only
-  if(dept!=='support') return commDashGeneric(dept);   // Sales / Client Success / Infrastructure / Marketing
-  return commDashSupport();                            // Customer Support — bespoke (unchanged)
-}
-
-/* generic snapshot/flow dashboard driven by COMM_DEFS[dept] */
-function commDashGeneric(dept){
-  const rows=commSubs(dept), meta=commDeptMeta(dept), defs=COMM_DEFS[dept]||[];
-  if(!rows.length) return commHead(meta.label,'No weeks submitted yet')
-    + `<div class="comm-empty">Nothing to chart yet. Switch to <b>Submit weekly</b> to add the first week.</div>`;
-  const cur=rows[rows.length-1], prev=rows[rows.length-2];
-  const cards=defs.map(d=>commKpi(d,cur.fields[d.key],prev?prev.fields[d.key]:null)).join('');
-  const lead=defs.find(d=>d.lead)||defs.find(d=>d.kind==='snapshot');
-  let html=commHead(meta.label,'Week ending '+commFmtWeek(cur.weekEnding)+', 2026 · '+rows.length+(rows.length===1?' week':' weeks')+' on record')
-    + `<div class="comm-kpis">${cards}</div>`;
-  if(dept==='marketing') html += commMktConversions(cur);
-  if(lead && rows.length>=2) html += `<div class="comm-panel"><h3>${commEsc(lead.label)} — trend</h3>
-    <p class="comm-ph">Snapshot metric over ${rows.length} weeks</p>${commLine(rows,lead.key,lead)}</div>`;
-  if(cur.narrative&&cur.narrative.note) html += `<div class="comm-panel"><h3>This week</h3>
-    <div class="comm-note" style="margin-top:0;white-space:pre-line">${commEsc(cur.narrative.note)}</div></div>`;
-  return html;
-}
-/* marketing-only conversion-rate strip (single-week funnel) */
-function commMktConversions(cur){
-  const f=cur.fields||{}, pct=(a,b)=>b?100*a/b:0;
-  const cards=[
-    ['Email → researched', f.emailsSent?pct(f.researchedLeads,f.emailsSent).toFixed(1)+'%':'—'],
-    ['Researched → follow-up', f.researchedLeads?pct(f.followupsScheduled,f.researchedLeads).toFixed(1)+'%':'—'],
-    ['Email → interested', f.emailsSent?pct(f.interested,f.emailsSent).toFixed(2)+'%':'—'],
-    ['Email → meeting', f.emailsSent?pct(f.meetingsBooked,f.emailsSent).toFixed(2)+'%':'—'],
-  ].map(c=>commRaw(c[0],c[1],'flat','snapshot','conversion rate')).join('');
-  return `<div class="comm-kpis">${cards}</div>`;
-}
-/* narrative-only dashboard (Implementation) */
-function commDashNarrative(dept){
-  const meta=commDeptMeta(dept), rows=commSubs(dept).slice().reverse();
+  const meta=commDeptMeta(dept), rows=commSubs(dept);
   if(!rows.length) return commHead(meta.label,'No weeks submitted yet')
     + `<div class="comm-empty">Nothing here yet. Switch to <b>Submit weekly</b> to add the first week.</div>`;
-  const items=rows.map(r=>`<div class="comm-panel"><h3>Week ending ${commFmtWeek(r.weekEnding)}</h3>
-    <div style="font-size:13px;color:var(--comm-slate);white-space:pre-line">${(commEsc(r.narrative&&r.narrative.note))||'<span style="color:var(--comm-mute)">No narrative recorded.</span>'}</div></div>`).join('');
-  return commHead(meta.label,rows.length+(rows.length===1?' week':' weeks')+' on record · narrative status')
-    + `<p class="comm-ph" style="margin:-8px 0 4px">Tracked as weekly narrative — no numeric KPIs in the source decks.</p>`
-    + items;
+  const cur=rows[rows.length-1], tabs=commDashSubTabs(dept);
+  let sub=commUI.dashSub; if(tabs.indexOf(sub)<0) sub=tabs[0];
+  const labels={overview:'Overview',customers:'Customers',trends:'Trends',narrative:'Narrative'};
+  const bar=`<div class="comm-tabs" role="tablist" style="margin-top:8px">${tabs.map(t=>
+    `<button class="comm-tab" role="tab" aria-selected="${sub===t}" onclick="commSetDashSub('${t}')">${labels[t]}</button>`).join('')}</div>`;
+  let body='';
+  if(sub==='overview')       body=commDashOverview(dept,rows);
+  else if(sub==='customers') body=commDashCustomers(dept,rows);
+  else if(sub==='trends')    body=commDashTrends(dept,rows);
+  else                       body=commDashNarrativeTab(dept,rows);
+  return commHead(meta.label,'Week ending '+commFmtWeek(cur.weekEnding)+', 2026 · '+rows.length+(rows.length===1?' week':' weeks')+' on record')+bar+body;
 }
 
-/* Customer Support — bespoke dashboard (median-reply line, throughput, SLA) */
-function commDashSupport(){
-  const dept='support';
-  const rows = commSubs(dept);
-  if(!rows.length) return commHead('Customer Support','No weeks submitted yet')
-    + `<div class="comm-empty">Nothing to chart yet. Switch to <b>Submit weekly</b> to add the first week.</div>`;
-  const cur=rows[rows.length-1], prev=rows[rows.length-2], defs=COMM_DEFS[dept];
+/* overview routes by dept */
+function commDashOverview(dept,rows){
+  if(dept==='support') return commSupportOverview(rows);
+  if(dept==='impl')    return commImplOverview(rows);
+  return commGenericOverview(dept,rows);
+}
+function commSummaryNote(cur){
+  const n=commNormNarr(cur.narrative);
+  return n.summary?`<div class="comm-note" style="white-space:pre-line">${commEsc(n.summary)}</div>`:'';
+}
+function commGenericOverview(dept,rows){
+  const defs=COMM_DEFS[dept]||[], cur=rows[rows.length-1], prev=rows[rows.length-2];
+  const cards=defs.map(d=>commKpi(d,cur.fields[d.key],prev?prev.fields[d.key]:null)).join('');
+  const lead=defs.find(d=>d.lead)||defs.find(d=>d.kind==='snapshot');
+  let html=`<div class="comm-kpis">${cards}</div>`;
+  if(dept==='marketing') html += commMktConversions(cur);
+  if(lead && rows.length>=2 && !commDeptMeta(dept).single)
+    html += `<div class="comm-panel"><h3>${commEsc(lead.label)} — trend</h3>
+      <p class="comm-ph">Snapshot metric over ${rows.length} weeks</p>${commLine(rows,lead.key,lead)}</div>`;
+  html += commSummaryNote(cur)?`<div class="comm-panel"><h3>This week</h3>${commSummaryNote(cur)}</div>`:'';
+  return html;
+}
+function commImplOverview(rows){
+  const cur=rows[rows.length-1], cs=cur.customers||[];
+  const byStatus={}; cs.forEach(c=>{const s=c.status||'—';byStatus[s]=(byStatus[s]||0)+1;});
+  const card=(label,val,rag,sub)=>commRaw(label,String(val),rag,'snapshot',sub);
+  const cards=[
+    card('Active implementations',cs.length,'flat','clients in flight'),
+    card('On track',byStatus['On Track']||0,'good','status = on track'),
+    card('At risk / blocked',(byStatus['At Risk']||0)+(byStatus['Blocked']||0),(byStatus['At Risk']||byStatus['Blocked'])?'warn':'flat','need attention'),
+    card('Pending kickoff',byStatus['Pending Kickoff']||0,'flat','awaiting start'),
+  ].join('');
+  return `<div class="comm-kpis">${cards}</div>`
+    + (commSummaryNote(cur)?`<div class="comm-panel"><h3>This week</h3>${commSummaryNote(cur)}</div>`:'')
+    + `<p class="comm-ph" style="margin-top:12px">Per-client detail on the <b>Customers</b> tab · full status history on <b>Narrative</b>.</p>`;
+}
+function commSupportOverview(rows){
+  const dept='support', cur=rows[rows.length-1], prev=rows[rows.length-2], defs=COMM_DEFS[dept];
   const cards = defs.map(d=>commKpi(d,cur.fields[d.key],prev?prev.fields[d.key]:null)).join('');
   const net=(cur.fields.ticketsSolved??0)-(cur.fields.ticketsCreated??0);
   const csTot=(cur.fields.csatGood||0)+(cur.fields.csatBad||0);
   const csPct=csTot?Math.round(100*cur.fields.csatGood/csTot):null;
-
-  return commHead('Customer Support','Week ending '+commFmtWeek(cur.weekEnding)+', 2026 · '+rows.length+' weeks on record')
-  + `<div class="comm-kpis">${cards}</div>
+  return `<div class="comm-kpis">${cards}</div>
      <div class="comm-kpis">
        ${commRaw('Net resolution',(net>=0?'+':'')+net,net>=0?'good':'bad','flow','solved − created this week')}
        ${commRaw('CSAT positive',csPct==null?'—':csPct+'%',csPct==null?'flat':(csPct>=90?'good':csPct>=70?'warn':'bad'),'snapshot',csTot?(csTot+' responses'):'no responses logged')}
@@ -3559,11 +3620,52 @@ function commDashSupport(){
        <div class="comm-panel">
          <h3>SLA breaches</h3><p class="comm-ph">Flow metric · target 0 per week</p>
          ${commSla(rows)}
-         ${cur.narrative&&cur.narrative.note?`<div class="comm-note" style="margin-top:14px"><b>This week:</b> ${commEsc(cur.narrative.note)}</div>`:''}
        </div>
-     </div>`;
+     </div>
+     ${commSummaryNote(cur)?`<div class="comm-panel"><h3>This week</h3>${commSummaryNote(cur)}</div>`:''}`;
 }
 
+/* customers tab */
+function commDashCustomers(dept,rows){
+  const defs=COMM_CUST_DEFS[dept]||[], cur=rows[rows.length-1], cs=cur.customers||[];
+  if(!cs.length) return `<p class="comm-ph">No customer line-items recorded for week ending ${commFmtWeek(cur.weekEnding)}. Add them in <b>Submit weekly</b>.</p>`;
+  const chipKeys={health:1,status:1,stage:1};
+  const head=`<th>Account</th>`+defs.map(d=>`<th style="text-align:left">${commEsc(d.label)}</th>`).join('');
+  const body=cs.map(c=>{
+    const cells=defs.map(d=>{ const v=c[d.key];
+      if(chipKeys[d.key]) return `<td style="text-align:left">${(v!=null&&v!=='')?commChip(v):'—'}</td>`;
+      if(d.type==='money') return `<td>${(v==null||v==='')?'—':'$'+Number(v).toLocaleString()}</td>`;
+      if(d.type==='num')   return `<td>${(v==null||v==='')?'—':v}</td>`;
+      return `<td style="text-align:left;white-space:normal">${commEsc(v||'')||'—'}</td>`;
+    }).join('');
+    return `<tr><td style="text-align:left;font-weight:600">${commEsc(c.account||'—')}</td>${cells}</tr>`;
+  }).join('');
+  return `<p class="comm-ph">Week ending ${commFmtWeek(cur.weekEnding)} · ${cs.length} account${cs.length===1?'':'s'}</p>
+    <div class="comm-panel" style="padding-top:6px"><table class="comm-ledger"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+/* trends tab — small multiples */
+function commDashTrends(dept,rows){
+  const defs=COMM_DEFS[dept]||[];
+  if(!defs.length||rows.length<2) return `<p class="comm-ph">Not enough data for trends yet (need 2+ weeks).</p>`;
+  const panels=defs.map(d=>`<div class="comm-panel"><h3>${commEsc(d.label)}</h3>${commLine(rows,d.key,d)}</div>`).join('');
+  return `<div class="comm-grid2">${panels}</div>`;
+}
+
+/* narrative tab — structured blocks, newest week first */
+function commDashNarrativeTab(dept,rows){
+  const block=(title,arr)=>arr&&arr.length?`<div style="margin-top:10px"><div class="comm-nh">${title}</div><ul class="comm-nlist">${arr.map(x=>`<li>${commEsc(x)}</li>`).join('')}</ul></div>`:'';
+  return rows.slice().reverse().map(r=>{
+    const n=commNormNarr(r.narrative);
+    const custNotes=(r.customers||[]).filter(c=>c.note).map(c=>`<li><b>${commEsc(c.account||'')}</b> — ${commEsc(c.note)}</li>`).join('');
+    return `<div class="comm-panel"><h3>Week ending ${commFmtWeek(r.weekEnding)}</h3>
+      ${n.summary?`<div style="white-space:pre-line;font-size:13px;color:var(--comm-slate)">${commEsc(n.summary)}</div>`:'<span style="color:var(--comm-mute);font-size:12px">No summary recorded.</span>'}
+      ${block('Highlights',n.highlights)}${block('Risks &amp; blockers',n.risks)}${block('Next week',n.next)}
+      ${custNotes?`<div style="margin-top:10px"><div class="comm-nh">By account</div><ul class="comm-nlist">${custNotes}</ul></div>`:''}</div>`;
+  }).join('');
+}
+
+/* ---------- KPI + chart primitives ---------- */
 function commKpi(d,v,pv){
   const rag=commRag(d,v), cls={good:'comm-s-good',warn:'comm-s-warn',bad:'comm-s-bad',flat:'comm-s-flat'}[rag];
   const glyph=d.kind==='flow'?'▦ flow':'— snapshot';
@@ -3579,7 +3681,7 @@ function commKpi(d,v,pv){
     :(''+v+(d.unit?`<span class="comm-unit">${d.unit}</span>`:'')));
   return `<div class="comm-kpi ${cls}"><span class="comm-stripe"></span>
     <div class="comm-top"><span class="comm-glyph">${glyph}</span></div>
-    <div class="comm-klabel">${d.label}</div>
+    <div class="comm-klabel">${commEsc(d.label)}</div>
     <div class="comm-val num">${valHtml}</div>
     <div class="comm-meta">${delta||'<span></span>'}<span class="comm-bench">${bench}</span></div></div>`;
 }
@@ -3587,14 +3689,22 @@ function commRaw(label,val,rag,kind,sub){
   const cls={good:'comm-s-good',warn:'comm-s-warn',bad:'comm-s-bad',flat:'comm-s-flat'}[rag];
   return `<div class="comm-kpi ${cls}"><span class="comm-stripe"></span>
     <div class="comm-top"><span class="comm-glyph">${kind==='flow'?'▦ flow':'— snapshot'}</span></div>
-    <div class="comm-klabel">${label}</div><div class="comm-val num">${val}</div>
-    <div class="comm-meta"><span></span><span class="comm-bench">${sub}</span></div></div>`;
+    <div class="comm-klabel">${commEsc(label)}</div><div class="comm-val num">${val}</div>
+    <div class="comm-meta"><span></span><span class="comm-bench">${commEsc(sub||'')}</span></div></div>`;
 }
-
-/* hand-rolled SVG — no chart dependency, ports straight in */
+function commMktConversions(cur){
+  const f=cur.fields||{}, pct=(a,b)=>b?100*a/b:0;
+  const cards=[
+    ['Email → researched', f.emailsSent?pct(f.researchedLeads,f.emailsSent).toFixed(1)+'%':'—'],
+    ['Researched → follow-up', f.researchedLeads?pct(f.followupsScheduled,f.researchedLeads).toFixed(1)+'%':'—'],
+    ['Email → interested', f.emailsSent?pct(f.interested,f.emailsSent).toFixed(2)+'%':'—'],
+    ['Email → meeting', f.emailsSent?pct(f.meetingsBooked,f.emailsSent).toFixed(2)+'%':'—'],
+  ].map(c=>commRaw(c[0],c[1],'flat','snapshot','conversion rate')).join('');
+  return `<div class="comm-kpis">${cards}</div>`;
+}
 function commLine(rows,key,dDef){
   const W=560,H=180,pad={l:34,r:14,t:14,b:26};
-  const ys=rows.map(r=>r.fields[key]);
+  const ys=rows.map(r=>r.fields?r.fields[key]:null);
   const dmax=Math.max(...ys.filter(v=>v!=null),0);
   const max=(dDef&&dDef.band?Math.max(40,dmax):Math.max(1,dmax))*1.1, min=0;
   const X=i=>pad.l+(W-pad.l-pad.r)*(rows.length<2?0:i/(rows.length-1));
@@ -3632,119 +3742,175 @@ function commSla(rows){
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="SLA breaches by week"><line x1="${pad.l}" y1="${H-pad.b}" x2="${W-pad.r}" y2="${H-pad.b}" stroke="var(--comm-line)"/>${s}</svg>`;
 }
 
-/* ---------- FORM ---------- */
+/* ---------- FORM (draft-based) ---------- */
+function commBuildDraft(dept,existing){
+  if(existing){
+    commUI.draft={ dept, weekEnding:existing.weekEnding,
+      fields:Object.assign({},existing.fields),
+      narrative:commNormNarr(existing.narrative),
+      customers:(existing.customers||[]).map(c=>Object.assign({},c)) };
+  } else {
+    commUI.draft={ dept, weekEnding:commToFriday(new Date().toISOString().slice(0,10)),
+      fields:{}, narrative:{summary:'',highlights:[],risks:[],next:[]}, customers:[] };
+  }
+}
 function commFormHTML(dept){
-  const defs=COMM_DEFS[dept]||[], meta=commDeptMeta(dept);
-  const existing=commUI.editWeek?commSubs(dept).find(s=>s.weekEnding===commUI.editWeek):null;
-  const f=existing?existing.fields:{};
-  const wk=existing?existing.weekEnding:commToFriday(new Date().toISOString().slice(0,10));
-  const row=d=>`<div class="comm-frow">
-      <label for="cf_${d.key}">${d.label}<span class="comm-hint">${d.kind==='flow'?'count during the week (sums across weeks)':'state at week-end (latest wins, never summed)'}</span></label>
-      <div><input type="number" id="cf_${d.key}" min="0" value="${f[d.key]??''}" placeholder="—"></div></div>`;
-  const snaps=defs.filter(d=>d.kind==='snapshot').map(row).join('');
-  const flows=defs.filter(d=>d.kind==='flow').map(row).join('');
-  return commHead('Submit weekly — '+meta.label, existing?('Editing week ending '+commFmtWeek(wk)):'New weekly entry')
-  + `<div class="comm-form">
+  if(!commUI.draft || commUI.draft.dept!==dept) commBuildDraft(dept,commUI.editWeek?commSubs(dept).find(s=>s.weekEnding===commUI.editWeek):null);
+  const dr=commUI.draft, defs=COMM_DEFS[dept]||[], meta=commDeptMeta(dept), n=commNormNarr(dr.narrative);
+  const editing=!!commUI.editWeek;
+  const fieldRow=d=>`<div class="comm-frow">
+      <label for="cf_${d.key}">${commEsc(d.label)}<span class="comm-hint">${d.kind==='flow'?'count during the week (sums across weeks)':'state at week-end (latest wins)'}</span></label>
+      <div><input type="number" id="cf_${d.key}" min="0" value="${dr.fields[d.key]??''}" placeholder="—"></div></div>`;
+  const snaps=defs.filter(d=>d.kind==='snapshot').map(fieldRow).join('');
+  const flows=defs.filter(d=>d.kind==='flow').map(fieldRow).join('');
+  return commHead('Submit weekly — '+meta.label, editing?('Editing week ending '+commFmtWeek(dr.weekEnding)):'New weekly entry')
+  + `<datalist id="commCustDL">${commCustomerList().map(a=>`<option value="${commEsc(a)}">`).join('')}</datalist>
+     <div class="comm-form" style="max-width:920px">
       <div class="comm-weekbar">
         <label for="cf_dept">Department</label>
         <select id="cf_dept" onchange="commFormDept(this.value)">${COMM_DEPTS.filter(d=>d.ready).map(d=>`<option value="${d.key}" ${d.key===dept?'selected':''}>${commEsc(d.label)}</option>`).join('')}</select>
         <label for="cf_week" style="margin-left:8px">Week ending</label>
-        <input type="date" id="cf_week" value="${wk}" onchange="commWeekSnap(this)">
+        <input type="date" id="cf_week" value="${dr.weekEnding}" onchange="commWeekSnap(this)">
         <span class="comm-pill comm-tag-flat">snaps to Friday</span>
       </div>
       ${snaps?`<div class="comm-fgroup"><div class="comm-gh">Snapshot <small>state at end of week</small></div>${snaps}</div>`:''}
       ${flows?`<div class="comm-fgroup"><div class="comm-gh">Flow <small>what happened this week</small></div>${flows}</div>`:''}
-      <div class="comm-fgroup"><div class="comm-gh">Narrative <small>${defs.length?'context, escalations, blockers':'weekly status (this department is narrative-only)'}</small></div>
-        <textarea id="cf_note" placeholder="Notable escalations, cross-team dependencies…">${existing?commEsc(existing.narrative&&existing.narrative.note):''}</textarea></div>
+      ${commCustRowsHTML(dept)}
+      <div class="comm-fgroup"><div class="comm-gh">Narrative <small>summary, highlights, risks, next week</small></div>
+        <label class="comm-nlabel">Summary</label>
+        <textarea id="cf_summary" placeholder="Overall status this week…">${commEsc(n.summary)}</textarea>
+        <label class="comm-nlabel">Highlights <small>one per line</small></label>
+        <textarea id="cf_highlights" placeholder="One win per line…">${commEsc((n.highlights||[]).join('\n'))}</textarea>
+        <label class="comm-nlabel">Risks &amp; blockers <small>one per line</small></label>
+        <textarea id="cf_risks" placeholder="One risk/blocker per line…">${commEsc((n.risks||[]).join('\n'))}</textarea>
+        <label class="comm-nlabel">Next week <small>one per line</small></label>
+        <textarea id="cf_next" placeholder="One planned item per line…">${commEsc((n.next||[]).join('\n'))}</textarea>
+      </div>
       <div class="comm-actions">
-        <button class="comm-btn comm-btn-primary" onclick="commSave()">${existing?'Update week':'Save week'}</button>
-        ${existing?'<button class="comm-btn comm-btn-danger" onclick="commDelete()">Delete</button>':''}
+        <button class="comm-btn comm-btn-primary" onclick="commSave()">${editing?'Update week':'Save week'}</button>
+        ${editing?'<button class="comm-btn comm-btn-danger" onclick="commDelete()">Delete</button>':''}
         <button class="comm-btn comm-btn-ghost" onclick="commCancel()">Cancel</button>
       </div></div>
-     <div class="comm-panel" style="max-width:880px">
+     <div class="comm-panel" style="max-width:920px">
        <h3>Weeks on record</h3>
        <p class="comm-ph">Composite key is department + week-ending — re-submitting a week edits it in place</p>
        ${commLedger(dept)}</div>`;
 }
+function commCustRowsHTML(dept){
+  const defs=COMM_CUST_DEFS[dept]||[]; if(!defs.length) return '';
+  const rows=(commUI.draft.customers||[]);
+  const rowsHTML=rows.map((c,i)=>commCustRowHTML(dept,c,i)).join('') || '<div class="comm-ph" style="margin:0 0 8px">No customer rows yet.</div>';
+  return `<div class="comm-fgroup"><div class="comm-gh">Customers <small>tie line-items to accounts (type-ahead from ${commCustomerList().length} known accounts)</small></div>
+    <div id="comm_cust_rows">${rowsHTML}</div>
+    <button type="button" class="comm-btn comm-btn-ghost" style="margin-top:6px" onclick="commFormAddCustomer()">+ Add customer</button></div>`;
+}
+function commCustRowHTML(dept,c,i){
+  const defs=COMM_CUST_DEFS[dept]||[];
+  const acc=`<input list="commCustDL" id="cf_cust_${i}_account" value="${commEsc(c.account||'')}" placeholder="Account" style="min-width:190px;flex:1">`;
+  const cols=defs.map(d=>{ const id=`cf_cust_${i}_${d.key}`;
+    if(d.type==='select') return `<select id="${id}"><option value=""></option>${d.options.map(o=>`<option ${c[d.key]===o?'selected':''}>${commEsc(o)}</option>`).join('')}</select>`;
+    if(d.type==='note')   return `<input id="${id}" value="${commEsc(c[d.key]||'')}" placeholder="${commEsc(d.label)}" style="min-width:220px;flex:2">`;
+    if(d.type==='money'||d.type==='num') return `<input type="number" id="${id}" value="${c[d.key]??''}" placeholder="${commEsc(d.label)}" style="width:104px">`;
+    return `<input id="${id}" value="${commEsc(c[d.key]||'')}" placeholder="${commEsc(d.label)}" style="min-width:110px">`;
+  }).join('');
+  return `<div class="comm-custrow">${acc}${cols}<button type="button" class="comm-editlink" onclick="commFormDelCustomer(${i})">remove</button></div>`;
+}
 function commLedger(dept){
   const defs=COMM_DEFS[dept]||[], rows=commSubs(dept).slice().reverse();
   if(!rows.length) return `<div class="comm-empty" style="padding:24px">No weeks yet.</div>`;
-  const head=`<th>Week ending</th>`+defs.map(d=>`<th>${commEsc(d.label)}</th>`).join('')+(defs.length?'':`<th>Narrative</th>`)+`<th></th>`;
-  const body=rows.map(r=>{ const note=(r.narrative&&r.narrative.note)||'';
-    return `<tr><td>${commFmtWeek(r.weekEnding)}</td>`
+  const head=`<th>Week ending</th>`+defs.map(d=>`<th>${commEsc(d.label)}</th>`).join('')+`<th>Customers</th><th></th>`;
+  const body=rows.map(r=>`<tr><td>${commFmtWeek(r.weekEnding)}</td>`
     + defs.map(d=>`<td>${commFmtMetric(d,r.fields&&r.fields[d.key])}</td>`).join('')
-    + (defs.length?'':`<td style="text-align:left;white-space:normal;font-weight:400;color:var(--comm-slate);max-width:560px">${commEsc(note.slice(0,160))}${note.length>160?'…':''}</td>`)
-    + `<td><button class="comm-editlink" onclick="commEdit('${r.weekEnding}')">edit</button></td></tr>`;}).join('');
+    + `<td>${(r.customers||[]).length||'—'}</td>`
+    + `<td><button class="comm-editlink" onclick="commEdit('${r.weekEnding}')">edit</button></td></tr>`).join('');
   return `<table class="comm-ledger"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
 /* ---------- SCHEMA ---------- */
 function commSchemaHTML(){
   const shape=
-`D.commercial = {                 // persisted on the single-row JSONB
+`D.commercial = {                       // persisted on the single-row JSONB
   submissions: [
-    { id,                         // dept + weekEnding
-      dept: "support",            // support | sales | success | impl | infra | marketing
-      weekEnding: "2026-06-26",   // normalised to Friday
+    { id, dept, weekEnding,             // dept ∈ support|sales|success|impl|infra|marketing
       submittedBy, submittedAt,
-      fields: { … },              // keys come from COMM_DEFS[dept] (varies by dept;
-                                  //   impl is narrative-only → fields is empty {})
-      narrative: { note } }, … ],
-  clientLedger: [ {client, event, date, note} ]   // single source for churn / active sites
+      fields: { … },                    // keys from COMM_DEFS[dept] (per-dept metrics)
+      narrative: { summary, highlights:[], risks:[], next:[] },
+      customers: [                       // per-account line-items; columns from COMM_CUST_DEFS[dept]
+        { account, …deptFields, note } ] }, … ],
+  clientLedger: [ … ]
 }
-// COMM_DEFS lives in code, not in D — it is the per-department metric registry.
-// Dashboard renders per dept: support=bespoke, sales/success/infra/marketing=generic
-// (KPI cards + lead-metric trend), impl=narrative timeline.`;
-  return commHead('Schema','What lifts into index.html')
+// COMM_DEFS = metric registry, COMM_CUST_DEFS = per-customer columns (both in code, not D).
+// Customer combobox suggests from every project's subClients (Awards Mgmt + Educian).`;
+  return commHead('Schema','The Commercial data model')
   + `<pre class="comm-schema">${commEsc(shape)}</pre>
-     <div class="comm-note"><b>kind</b> tags each metric <span class="num">flow</span> (sums → bars) or <span class="num">snapshot</span> (latest → line) so the renderer never sums a stock value.<br>
-     <b>dir+band</b> drive RAG — median reply <span class="num">{good:20,warn:30}</span> goes amber 21–30, red &gt;30 (why this week reads red at 39).<br>
-     <b>Period values only</b> — Leads enter <span class="num">…ThisWeek</span> counts; YTD churn and active-site totals derive from <span class="num">clientLedger</span> so two teams can't report two numbers.</div>
-     <div class="comm-note"><b>Writes</b> go through <span class="num">commPersist()</span> → ATLAS <span class="num">save()</span>: GET <span class="num">/api/data</span> → set only the <span class="num">commercial</span> key → POST with <span class="num">X-Atlas-Base-Updated-At</span>. View gates on <span class="num">canSee('commercial')</span>, parallel to Contract Management.</div>`;
+     <div class="comm-note"><b>Metrics</b> are per-department (COMM_DEFS): <span class="num">kind</span> flow(bars)/snapshot(line), <span class="num">dir+band</span>→RAG, <span class="num">lead</span>=trend line, <span class="num">money</span>=$.<br>
+     <b>Customers</b> tie metrics to accounts (COMM_CUST_DEFS per dept) — the combobox suggests the ~290 Awards Management + Educian accounts and also accepts free-typed prospects.<br>
+     <b>Narrative</b> is structured (summary + highlights/risks/next) and rendered newest-first on each dashboard's Narrative sub-tab.</div>
+     <div class="comm-note"><b>Dashboards</b> sub-tab into Overview / Customers / Trends / Narrative. <b>Writes</b> go through <span class="num">commPersist()</span> → ATLAS <span class="num">save()</span> (base-stamp + 3-way merge). View gates on <span class="num">canSee('commercial')</span>.</div>`;
 }
 
 /* ---------- handlers ---------- */
-function commWeekSnap(el){ el.value = commToFriday(el.value); }
-function commFormDept(d){ commUI.dept=d; commUI.editWeek=null; commRerender(); }
-function commEdit(week){ commUI.editWeek=week; commUI.tab='form'; commRerender(); window.scrollTo({top:0,behavior:'smooth'}); }
-function commCancel(){ commUI.editWeek=null; commUI.tab='dash'; commRerender(); }
+function commWeekSnap(el){ el.value = commToFriday(el.value); if(commUI.draft) commUI.draft.weekEnding=el.value; }
+function commFormDept(d){ commFormCollect(); commUI.dept=d; commUI.editWeek=null; commBuildDraft(d,null); commRerender(); }
+function commEdit(week){ commUI.editWeek=week; const ex=commSubs(commUI.dept).find(s=>s.weekEnding===week); commBuildDraft(commUI.dept,ex||null); commUI.tab='form'; commRerender(); window.scrollTo({top:0,behavior:'smooth'}); }
+function commCancel(){ commUI.editWeek=null; commUI.draft=null; commUI.tab='dash'; commRerender(); }
+function commFormAddCustomer(){ commFormCollect(); commUI.draft.customers=commUI.draft.customers||[]; commUI.draft.customers.push({}); commRerender(); }
+function commFormDelCustomer(i){ commFormCollect(); commUI.draft.customers.splice(i,1); commRerender(); }
+function commFormCollect(){
+  const dr=commUI.draft; if(!dr) return;
+  const dsel=document.getElementById('cf_dept'); if(dsel) dr.dept=dsel.value;
+  const wk=document.getElementById('cf_week'); if(wk&&wk.value) dr.weekEnding=commToFriday(wk.value);
+  dr.fields=dr.fields||{};
+  (COMM_DEFS[dr.dept]||[]).forEach(d=>{ const el=document.getElementById('cf_'+d.key); if(el){ const v=el.value.trim(); dr.fields[d.key]=v===''?null:Number(v); } });
+  const gv=id=>{ const el=document.getElementById(id); return el?el.value:undefined; };
+  const toList=s=>String(s||'').split('\n').map(x=>x.trim()).filter(Boolean);
+  dr.narrative=dr.narrative||{};
+  const summ=gv('cf_summary'); if(summ!==undefined) dr.narrative.summary=summ.trim();
+  const hi=gv('cf_highlights'); if(hi!==undefined) dr.narrative.highlights=toList(hi);
+  const rk=gv('cf_risks'); if(rk!==undefined) dr.narrative.risks=toList(rk);
+  const nx=gv('cf_next'); if(nx!==undefined) dr.narrative.next=toList(nx);
+  const defs=COMM_CUST_DEFS[dr.dept]||[];
+  if(defs.length){
+    const out=[]; let i=0;
+    while(document.getElementById('cf_cust_'+i+'_account')){
+      const acc=document.getElementById('cf_cust_'+i+'_account').value.trim();
+      const row={account:acc};
+      defs.forEach(d=>{ const el=document.getElementById('cf_cust_'+i+'_'+d.key); if(el){ const v=el.value; row[d.key]=(d.type==='money'||d.type==='num')?(v===''?null:Number(v)):v.trim(); } });
+      if(acc||defs.some(d=>row[d.key]!=null&&row[d.key]!=='')) out.push(row);
+      i++;
+    }
+    dr.customers=out;
+  }
+}
 async function commSave(){
-  commEnsure();
-  const dsel=document.getElementById('cf_dept');
-  const dept=(dsel&&dsel.value)||commUI.dept||'support';
-  const week=commToFriday(document.getElementById('cf_week').value);
-  const fields={};
-  (COMM_DEFS[dept]||[]).forEach(d=>{ const el=document.getElementById('cf_'+d.key); const v=el?el.value.trim():''; fields[d.key]= v===''?null:Number(v); });
-  const note=document.getElementById('cf_note').value.trim();
-  const rec={ id:dept+'-'+week, dept, weekEnding:week, submittedBy:((typeof ME!=='undefined'&&ME&&ME.email)||'editor'), submittedAt:new Date().toISOString(), fields, narrative:{note} };
+  commEnsure(); commFormCollect();
+  const dr=commUI.draft; if(!dr) return;
+  const dept=dr.dept, week=commToFriday(dr.weekEnding);
+  const rec={ id:dept+'-'+week, dept, weekEnding:week,
+    submittedBy:((typeof ME!=='undefined'&&ME&&ME.email)||'editor'), submittedAt:new Date().toISOString(),
+    fields:dr.fields||{}, narrative:dr.narrative||{summary:''}, customers:dr.customers||[] };
   const list=D.commercial.submissions;
   const ix=list.findIndex(s=>s.dept===dept&&s.weekEnding===week);
   if(ix>=0) list[ix]=rec; else list.push(rec);
   commUI.dept=dept;
-  try{ await commPersist(); }catch(e){ return; }   // commPersist alerts on 409
-  commUI.editWeek=null; commUI.tab='dash'; commRerender();
+  try{ await commPersist(); }catch(e){ return; }
+  commUI.editWeek=null; commUI.draft=null; commUI.tab='dash'; commRerender();
 }
 async function commDelete(){
   commEnsure();
-  const dept=commUI.dept, week=commUI.editWeek;
+  const dept=(commUI.draft&&commUI.draft.dept)||commUI.dept, week=commUI.editWeek;
   D.commercial.submissions = D.commercial.submissions.filter(s=>!(s.dept===dept&&s.weekEnding===week));
   try{ await commPersist(); }catch(e){ return; }
-  commUI.editWeek=null; commUI.tab='dash'; commRerender();
+  commUI.editWeek=null; commUI.draft=null; commUI.tab='dash'; commRerender();
 }
 
-/* ---------- one-time seed (optional; run deliberately) ----------
-   Loads weeks captured from the status decks IF that week is absent, then
-   persists once. Safe to re-run: it only adds weeks that don't already exist. */
+/* ---------- one-time seed (optional; run deliberately). Idempotent by dept+weekEnding. */
 async function commLoadSeed(seedArray){
   commEnsure();
   let added=0;
-  (seedArray||[]).forEach(s=>{
-    const wk=commToFriday(s.weekEnding);
+  (seedArray||[]).forEach(s=>{ const wk=commToFriday(s.weekEnding);
     if(!D.commercial.submissions.some(x=>x.dept===s.dept&&x.weekEnding===wk)){
-      D.commercial.submissions.push(Object.assign({}, s, {id:s.dept+'-'+wk, weekEnding:wk}));
-      added++;
-    }
-  });
+      D.commercial.submissions.push(Object.assign({},s,{id:s.dept+'-'+wk,weekEnding:wk})); added++; } });
   if(added){ await commPersist(); }
   console.log('commLoadSeed: added '+added+' weeks');
 }
