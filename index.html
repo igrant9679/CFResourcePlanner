@@ -953,6 +953,110 @@ select.ct-cell{cursor:pointer;-webkit-appearance:none;appearance:none;}
 .print-cover-meta{font-size:11px;letter-spacing:.5px;color:#64748b;margin-top:18px;}
 @media print {.print-frame-bar{display:none;}.print-frame-doc{padding:0;background:#fff;}.print-page{box-shadow:none;margin:0 auto;page-break-after:always;}}
 .wl-action{padding:10px 12px;background:#fff;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;}
+
+/* ============================================================
+   ATLAS · Commercial module styles
+   All rules are scoped under .comm-root and all custom props are
+   --comm-* so nothing here can touch existing ATLAS CSS or its
+   :root variables.
+   ============================================================ */
+.comm-root{
+  --comm-red:#c4122f; --comm-ink:#14233a; --comm-slate:#3f5e7d; --comm-mute:#8295a8;
+  --comm-line:#e4e8ee; --comm-paper:#f6f7f9; --comm-card:#fff;
+  --comm-good:#2e7d57; --comm-warn:#b7791f; --comm-bad:#c4122f;
+  --comm-good-bg:#eaf5ef; --comm-warn-bg:#fdf4e3; --comm-bad-bg:#fbe9ec; --comm-flat-bg:#eef1f5;
+  --comm-radius:10px; --comm-shadow:0 1px 2px rgba(20,35,58,.06),0 2px 8px rgba(20,35,58,.05);
+  --comm-mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+  color:var(--comm-ink); font-size:14px; line-height:1.5;
+}
+.comm-root *{box-sizing:border-box}
+.comm-root .num{font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+
+/* tabs */
+.comm-tabs{display:flex;gap:2px;margin:0 0 4px}
+.comm-tab{background:transparent;border:0;color:var(--comm-slate);padding:7px 14px;border-radius:7px;
+  font:600 13px/1 inherit;cursor:pointer}
+.comm-tab[aria-selected="true"]{background:var(--comm-ink);color:#fff}
+.comm-tab:hover{color:var(--comm-ink)}
+.comm-tab[aria-selected="true"]:hover{color:#fff}
+
+/* section header — echoes the red rule from the status decks */
+.comm-sechead{display:flex;align-items:baseline;gap:12px;padding:14px 0 0}
+.comm-sechead h2{font-size:20px;margin:0;font-weight:700;letter-spacing:-.01em}
+.comm-sechead .comm-sub{color:var(--comm-mute);font-size:13px}
+.comm-rule{height:3px;background:var(--comm-red);border-radius:2px;margin:10px 0 20px}
+
+/* KPI cards — flow vs snapshot + RAG-vs-benchmark (the signature element) */
+.comm-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.comm-kpis+.comm-kpis{margin-top:12px}
+.comm-kpi{background:var(--comm-card);border:1px solid var(--comm-line);border-radius:var(--comm-radius);
+  padding:14px 15px;box-shadow:var(--comm-shadow);position:relative;overflow:hidden}
+.comm-kpi .comm-top{display:flex;align-items:center;gap:7px;margin-bottom:9px}
+.comm-kpi .comm-glyph{font:11px/1 var(--comm-mono);color:var(--comm-mute)}
+.comm-kpi .comm-klabel{font-size:11.5px;font-weight:600;color:var(--comm-slate);text-transform:uppercase;letter-spacing:.05em}
+.comm-kpi .comm-val{font-size:30px;font-weight:700;line-height:1}
+.comm-kpi .comm-unit{font-size:14px;font-weight:600;color:var(--comm-mute);margin-left:3px}
+.comm-kpi .comm-meta{display:flex;align-items:center;justify-content:space-between;margin-top:10px;font-size:12px}
+.comm-kpi .comm-delta{font-weight:600;font-variant-numeric:tabular-nums}
+.comm-kpi .comm-bench{font-size:11px;color:var(--comm-mute)}
+.comm-kpi .comm-stripe{position:absolute;left:0;top:0;bottom:0;width:4px}
+.comm-s-good .comm-stripe{background:var(--comm-good)} .comm-s-warn .comm-stripe{background:var(--comm-warn)}
+.comm-s-bad .comm-stripe{background:var(--comm-bad)}  .comm-s-flat .comm-stripe{background:#c3ccd6}
+.comm-s-good .comm-val{color:var(--comm-good)} .comm-s-warn .comm-val{color:var(--comm-warn)} .comm-s-bad .comm-val{color:var(--comm-bad)}
+.comm-up{color:var(--comm-good)} .comm-down{color:var(--comm-bad)} .comm-flat{color:var(--comm-mute)}
+.comm-tag-flat{background:var(--comm-flat-bg);color:var(--comm-slate)}
+
+/* panels & charts */
+.comm-grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}
+@media(max-width:760px){.comm-grid2{grid-template-columns:1fr}}
+.comm-panel{background:var(--comm-card);border:1px solid var(--comm-line);border-radius:var(--comm-radius);
+  padding:16px 18px;box-shadow:var(--comm-shadow);margin-top:18px}
+.comm-grid2 .comm-panel{margin-top:0}
+.comm-panel h3{font-size:13px;margin:0 0 2px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.comm-panel .comm-ph{color:var(--comm-mute);font-size:12px;margin:0 0 14px}
+.comm-legend{display:flex;gap:14px;font-size:11px;color:var(--comm-slate);margin-top:8px;flex-wrap:wrap}
+.comm-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+
+/* form */
+.comm-form{background:var(--comm-card);border:1px solid var(--comm-line);border-radius:var(--comm-radius);
+  padding:20px 22px;box-shadow:var(--comm-shadow);max-width:640px}
+.comm-weekbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.comm-weekbar label{font-size:12px;color:var(--comm-slate);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.comm-root select,.comm-root input[type=number],.comm-root input[type=date]{font:14px inherit;color:var(--comm-ink);
+  background:#fff;border:1px solid var(--comm-line);border-radius:8px;padding:8px 10px}
+.comm-root input[type=number]{width:100%}
+.comm-pill{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:3px 9px;border-radius:999px}
+.comm-fgroup{margin:18px 0 6px}
+.comm-fgroup .comm-gh{font-size:11px;font-weight:700;color:var(--comm-red);text-transform:uppercase;letter-spacing:.08em;
+  border-bottom:1px solid var(--comm-line);padding-bottom:5px;margin-bottom:12px}
+.comm-fgroup .comm-gh small{color:var(--comm-mute);font-weight:600;letter-spacing:0;text-transform:none;margin-left:6px}
+.comm-frow{display:grid;grid-template-columns:1fr 130px;gap:10px;align-items:center;padding:6px 0}
+.comm-frow label{font-size:13px}
+.comm-frow .comm-hint{display:block;font-size:11px;color:var(--comm-mute)}
+.comm-root textarea{width:100%;font:13px inherit;border:1px solid var(--comm-line);border-radius:8px;padding:10px;min-height:70px;resize:vertical}
+.comm-actions{display:flex;gap:10px;align-items:center;margin-top:22px}
+.comm-btn{border:0;border-radius:8px;padding:10px 18px;font:600 14px inherit;cursor:pointer}
+.comm-btn-primary{background:var(--comm-ink);color:#fff} .comm-btn-primary:hover{background:#0e1a2c}
+.comm-btn-ghost{background:#fff;border:1px solid var(--comm-line);color:var(--comm-slate)}
+.comm-btn-danger{background:#fff;border:1px solid var(--comm-bad-bg);color:var(--comm-bad)}
+
+/* week ledger */
+.comm-ledger{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+.comm-ledger th{text-align:right;font-size:10.5px;color:var(--comm-mute);text-transform:uppercase;letter-spacing:.05em;
+  font-weight:600;padding:6px 8px;border-bottom:1px solid var(--comm-line)}
+.comm-ledger th:first-child{text-align:left}
+.comm-ledger td{padding:7px 8px;border-bottom:1px solid #f0f2f5;text-align:right;font-variant-numeric:tabular-nums}
+.comm-ledger td:first-child{text-align:left;font-weight:600}
+.comm-ledger tr:hover td{background:#fafbfc}
+.comm-editlink{background:none;border:0;color:var(--comm-slate);cursor:pointer;font-size:12px;text-decoration:underline}
+
+.comm-schema{background:#0e1a2c;color:#cdd9e6;border-radius:var(--comm-radius);padding:18px 20px;overflow:auto;
+  font:12px/1.6 var(--comm-mono)}
+.comm-note{background:#fff;border:1px solid var(--comm-line);border-left:3px solid var(--comm-red);border-radius:8px;
+  padding:12px 16px;font-size:13px;color:var(--comm-slate);margin-top:16px}
+.comm-empty{background:#fff;border:1px dashed var(--comm-line);border-radius:var(--comm-radius);padding:40px 20px;
+  text-align:center;color:var(--comm-mute)}
+.comm-root :focus-visible{outline:2px solid var(--comm-ink);outline-offset:2px;border-radius:4px}
 </style>
 </head>
 <body>
@@ -1016,6 +1120,7 @@ select.ct-cell{cursor:pointer;-webkit-appearance:none;appearance:none;}
       <button class="tab" id="tabPPlan" onclick="switchTab('pplan')">Resource Planning</button>
       <button class="tab" id="tabProj" onclick="switchTab('proj')">Projects</button>
       <button class="tab tab-confidential" id="tabContracts" onclick="switchTab('contracts')">&#128193; Contract Mgmt</button>
+      <button class="tab tab-confidential" id="tabCommercial" onclick="switchTab('commercial')">&#128188; Commercial</button>
       <button class="tab" id="tabInit" onclick="switchTab('init')">Initiatives</button>
       <button class="tab" id="tabOpp" onclick="switchTab('opp')">Opportunities</button>
       <button class="tab" id="tabProp" onclick="switchTab('prop')">Proposals</button>
@@ -3241,6 +3346,309 @@ function _ctFilteredPos(c){
     return true;
   });
 }
+/* ============================================================
+   ATLAS · Commercial module  (clean parallel module)
+   Home for the Scholarship & Grants commercial-side weekly status data.
+   Only Customer Support is wired end to end; other departments are
+   registered in COMM_DEFS so the pattern extends without new plumbing.
+   ============================================================ */
+
+/* ---- Departments (only support is ready) ---- */
+const COMM_DEPTS = [
+  { key:'support',  label:'Customer Support', ready:true  },
+  { key:'sales',    label:'Sales Pipeline',   ready:false },
+  { key:'marketing',label:'Marketing',        ready:false },
+  { key:'success',  label:'Client Success',   ready:false },
+  { key:'impl',     label:'Implementation',   ready:false },
+];
+
+/* ---- Metric definitions. `kind` decides aggregation
+        (flow=sum/bars, snapshot=latest/line). `dir`+`band` decide RAG. ---- */
+const COMM_DEFS = {
+  support: [
+    { key:'ticketsCreated', label:'Tickets created',   kind:'flow',     unit:'',  dir:'none' },
+    { key:'ticketsSolved',  label:'Tickets solved',    kind:'flow',     unit:'',  dir:'up'   },
+    { key:'ticketsOpen',    label:'Open at week-end',  kind:'snapshot', unit:'',  dir:'down' },
+    { key:'medianReplyMin', label:'Median first reply',kind:'snapshot', unit:'m', dir:'down', band:{good:20,warn:30} },
+    { key:'csatGood',       label:'CSAT good',         kind:'flow',     unit:'',  dir:'up'   },
+    { key:'csatBad',        label:'CSAT bad',          kind:'flow',     unit:'',  dir:'down' },
+    { key:'slaBreached',    label:'SLA breaches',      kind:'flow',     unit:'',  dir:'down', band:{good:0,warn:0} },
+  ],
+};
+
+/* ---- UI state (not persisted), parallels contractTab / _govRpt ---- */
+const commUI = { tab:'dash', editWeek:null };
+
+/* ---- ensure the data slice exists on D (D loads from /api/data) ---- */
+function commEnsure(){
+  if(!D.commercial) D.commercial = {};
+  if(!Array.isArray(D.commercial.submissions)) D.commercial.submissions = [];
+  if(!Array.isArray(D.commercial.clientLedger)) D.commercial.clientLedger = [];
+}
+
+/* ============================================================
+   PERSISTENCE — the only place that writes. Delegates to ATLAS's
+   canonical save() (localStorage mirror + debounced serverSave with the
+   X-Atlas-Base-Updated-At base stamp + 3-way merge / PROTECTED_ARRAYS
+   handling). D.commercial was mutated by the caller; save() ships all of D.
+   ============================================================ */
+async function commPersist(){ save(); }
+
+/* ---- small helpers ---- */
+function commToFriday(iso){ const d=new Date(iso+'T00:00:00'); const day=d.getDay();
+  d.setDate(d.getDate()+((5-day+7)%7)); return d.toISOString().slice(0,10); }
+function commFmtWeek(iso){ return new Date(iso+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
+function commSubs(dept){ commEnsure(); return D.commercial.submissions.filter(s=>s.dept===dept)
+  .sort((a,b)=>a.weekEnding<b.weekEnding?-1:1); }
+function commDef(dept,key){ return (COMM_DEFS[dept]||[]).find(d=>d.key===key); }
+function commEsc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function commRag(dDef,v){ if(v==null||!dDef||!dDef.band) return 'flat'; const {good,warn}=dDef.band;
+  if(dDef.dir==='down') return v<=good?'good':v<=warn?'warn':'bad';
+  if(dDef.dir==='up')   return v>=good?'good':v>=warn?'warn':'bad'; return 'flat'; }
+
+/* re-render in place without needing the container id */
+function commRerender(){
+  const host = document.querySelector('.comm-root') && document.querySelector('.comm-root').parentElement;
+  if(host) host.innerHTML = renderCommercialView();
+}
+
+/* ============================================================
+   VIEW — parallels renderContractsView(); returns an HTML string.
+   ============================================================ */
+function renderCommercialView(){
+  commEnsure();
+  const tabs = ['dash','form','schema'];
+  const labels = { dash:'Dashboard', form:'Submit weekly', schema:'Schema' };
+  const tabBar = `<div class="comm-tabs" role="tablist">${tabs.map(t=>
+    `<button class="comm-tab" role="tab" aria-selected="${commUI.tab===t}" onclick="commSetTab('${t}')">${labels[t]}</button>`).join('')}</div>`;
+  let body = '';
+  if(commUI.tab==='dash')   body = commDashHTML('support');
+  if(commUI.tab==='form')   body = commFormHTML('support');
+  if(commUI.tab==='schema') body = commSchemaHTML();
+  return `<div class="comm-root">${tabBar}${body}</div>`;
+}
+
+function commSetTab(t){ commUI.tab=t; commUI.editWeek=null; commRerender(); }
+
+function commHead(title,sub){
+  return `<div class="comm-sechead"><h2>${title}</h2><span class="comm-sub">${sub}</span></div><div class="comm-rule"></div>`;
+}
+
+/* ---------- DASHBOARD ---------- */
+function commDashHTML(dept){
+  const rows = commSubs(dept);
+  if(!rows.length) return commHead('Customer Support','No weeks submitted yet')
+    + `<div class="comm-empty">Nothing to chart yet. Switch to <b>Submit weekly</b> to add the first week.</div>`;
+  const cur=rows[rows.length-1], prev=rows[rows.length-2], defs=COMM_DEFS[dept];
+  const cards = defs.map(d=>commKpi(d,cur.fields[d.key],prev?prev.fields[d.key]:null)).join('');
+  const net=(cur.fields.ticketsSolved??0)-(cur.fields.ticketsCreated??0);
+  const csTot=(cur.fields.csatGood||0)+(cur.fields.csatBad||0);
+  const csPct=csTot?Math.round(100*cur.fields.csatGood/csTot):null;
+
+  return commHead('Customer Support','Week ending '+commFmtWeek(cur.weekEnding)+', 2026 · '+rows.length+' weeks on record')
+  + `<div class="comm-kpis">${cards}</div>
+     <div class="comm-kpis">
+       ${commRaw('Net resolution',(net>=0?'+':'')+net,net>=0?'good':'bad','flow','solved − created this week')}
+       ${commRaw('CSAT positive',csPct==null?'—':csPct+'%',csPct==null?'flat':(csPct>=90?'good':csPct>=70?'warn':'bad'),'snapshot',csTot?(csTot+' responses'):'no responses logged')}
+     </div>
+     <div class="comm-panel">
+       <h3>Median first reply time</h3>
+       <p class="comm-ph">Snapshot metric · target ≤ 20 min · the line that tells the story</p>
+       ${commLine(rows,'medianReplyMin',commDef(dept,'medianReplyMin'))}
+       <div class="comm-legend">
+         <span><i style="background:var(--comm-good)"></i>≤20 on target</span>
+         <span><i style="background:var(--comm-warn)"></i>21–30 slipping</span>
+         <span><i style="background:var(--comm-bad)"></i>&gt;30 breach risk</span>
+       </div>
+     </div>
+     <div class="comm-grid2">
+       <div class="comm-panel">
+         <h3>Ticket throughput</h3><p class="comm-ph">Flow metrics · created vs solved per week</p>
+         ${commBars(rows)}
+         <div class="comm-legend"><span><i style="background:var(--comm-slate)"></i>Created</span><span><i style="background:var(--comm-ink)"></i>Solved</span></div>
+       </div>
+       <div class="comm-panel">
+         <h3>SLA breaches</h3><p class="comm-ph">Flow metric · target 0 per week</p>
+         ${commSla(rows)}
+         ${cur.narrative&&cur.narrative.note?`<div class="comm-note" style="margin-top:14px"><b>This week:</b> ${commEsc(cur.narrative.note)}</div>`:''}
+       </div>
+     </div>`;
+}
+
+function commKpi(d,v,pv){
+  const rag=commRag(d,v), cls={good:'comm-s-good',warn:'comm-s-warn',bad:'comm-s-bad',flat:'comm-s-flat'}[rag];
+  const glyph=d.kind==='flow'?'▦ flow':'— snapshot';
+  let delta='';
+  if(v!=null&&pv!=null){ const diff=v-pv;
+    if(diff===0) delta=`<span class="comm-delta comm-flat">±0</span>`;
+    else{ const improving=d.dir==='down'?diff<0:d.dir==='up'?diff>0:null;
+      const c=improving==null?'comm-flat':improving?'comm-up':'comm-down';
+      delta=`<span class="comm-delta ${c}">${diff>0?'▲':'▼'} ${Math.abs(diff)}${d.unit}</span>`; } }
+  const bench=d.band?(d.dir==='down'?`target ≤${d.band.good}${d.unit}`:`target ≥${d.band.good}${d.unit}`):'';
+  return `<div class="comm-kpi ${cls}"><span class="comm-stripe"></span>
+    <div class="comm-top"><span class="comm-glyph">${glyph}</span></div>
+    <div class="comm-klabel">${d.label}</div>
+    <div class="comm-val num">${v==null?'—':v}${v!=null&&d.unit?`<span class="comm-unit">${d.unit}</span>`:''}</div>
+    <div class="comm-meta">${delta||'<span></span>'}<span class="comm-bench">${bench}</span></div></div>`;
+}
+function commRaw(label,val,rag,kind,sub){
+  const cls={good:'comm-s-good',warn:'comm-s-warn',bad:'comm-s-bad',flat:'comm-s-flat'}[rag];
+  return `<div class="comm-kpi ${cls}"><span class="comm-stripe"></span>
+    <div class="comm-top"><span class="comm-glyph">${kind==='flow'?'▦ flow':'— snapshot'}</span></div>
+    <div class="comm-klabel">${label}</div><div class="comm-val num">${val}</div>
+    <div class="comm-meta"><span></span><span class="comm-bench">${sub}</span></div></div>`;
+}
+
+/* hand-rolled SVG — no chart dependency, ports straight in */
+function commLine(rows,key,dDef){
+  const W=560,H=180,pad={l:34,r:14,t:14,b:26};
+  const ys=rows.map(r=>r.fields[key]);
+  const max=Math.max(40,...ys.filter(v=>v!=null))*1.1, min=0;
+  const X=i=>pad.l+(W-pad.l-pad.r)*(rows.length<2?0:i/(rows.length-1));
+  const Y=v=>H-pad.b-(H-pad.t-pad.b)*((v-min)/(max-min));
+  const b=dDef.band, rect=(lo,hi,c)=>`<rect x="${pad.l}" y="${Y(hi)}" width="${W-pad.l-pad.r}" height="${Y(lo)-Y(hi)}" fill="${c}" opacity=".10"/>`;
+  const pts=ys.map((v,i)=>v==null?null:[X(i),Y(v)]).filter(Boolean);
+  const path=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+  const dots=ys.map((v,i)=>{ if(v==null)return''; const c={good:'var(--comm-good)',warn:'var(--comm-warn)',bad:'var(--comm-bad)',flat:'var(--comm-slate)'}[commRag(dDef,v)];
+    return `<circle cx="${X(i)}" cy="${Y(v)}" r="4.5" fill="${c}"/><text x="${X(i)}" y="${Y(v)-10}" text-anchor="middle" font-size="11" font-weight="700" fill="${c}">${v}</text>`;}).join('');
+  const xl=rows.map((r,i)=>`<text x="${X(i)}" y="${H-7}" text-anchor="middle" font-size="10" fill="var(--comm-mute)">${commFmtWeek(r.weekEnding)}</text>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Median first reply time by week">
+    ${rect(0,b.good,'var(--comm-good)')}${rect(b.good,b.warn,'var(--comm-warn)')}${rect(b.warn,max,'var(--comm-bad)')}
+    <line x1="${pad.l}" y1="${H-pad.b}" x2="${W-pad.r}" y2="${H-pad.b}" stroke="var(--comm-line)"/>
+    <path d="${path}" fill="none" stroke="var(--comm-ink)" stroke-width="2"/>${dots}${xl}</svg>`;
+}
+function commBars(rows){
+  const W=480,H=180,pad={l:28,r:10,t:14,b:26};
+  const max=Math.max(...rows.flatMap(r=>[r.fields.ticketsCreated||0,r.fields.ticketsSolved||0]))*1.15||1;
+  const gw=(W-pad.l-pad.r)/rows.length, bw=Math.min(16,gw/3), Y=v=>H-pad.b-(H-pad.t-pad.b)*(v/max);
+  let s=''; rows.forEach((r,i)=>{ const cx=pad.l+gw*i+gw/2, c=r.fields.ticketsCreated||0, so=r.fields.ticketsSolved||0;
+    s+=`<rect x="${cx-bw-1}" y="${Y(c)}" width="${bw}" height="${H-pad.b-Y(c)}" fill="var(--comm-slate)"/>
+        <rect x="${cx+1}" y="${Y(so)}" width="${bw}" height="${H-pad.b-Y(so)}" fill="var(--comm-ink)"/>
+        <text x="${cx}" y="${H-7}" text-anchor="middle" font-size="10" fill="var(--comm-mute)">${commFmtWeek(r.weekEnding)}</text>`;});
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Tickets created vs solved by week"><line x1="${pad.l}" y1="${H-pad.b}" x2="${W-pad.r}" y2="${H-pad.b}" stroke="var(--comm-line)"/>${s}</svg>`;
+}
+function commSla(rows){
+  const W=480,H=120,pad={l:28,r:10,t:14,b:26};
+  const max=Math.max(1,...rows.map(r=>r.fields.slaBreached||0));
+  const gw=(W-pad.l-pad.r)/rows.length, bw=Math.min(26,gw*.5), Y=v=>H-pad.b-(H-pad.t-pad.b)*(v/max);
+  let s=''; rows.forEach((r,i)=>{ const cx=pad.l+gw*i+gw/2, v=r.fields.slaBreached||0, col=v===0?'var(--comm-good)':'var(--comm-bad)';
+    s+=`<rect x="${cx-bw/2}" y="${Y(v)}" width="${bw}" height="${Math.max(2,H-pad.b-Y(v))}" fill="${col}" rx="2"/>
+        <text x="${cx}" y="${Y(v)-5}" text-anchor="middle" font-size="11" font-weight="700" fill="${col}">${v}</text>
+        <text x="${cx}" y="${H-7}" text-anchor="middle" font-size="10" fill="var(--comm-mute)">${commFmtWeek(r.weekEnding)}</text>`;});
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="SLA breaches by week"><line x1="${pad.l}" y1="${H-pad.b}" x2="${W-pad.r}" y2="${H-pad.b}" stroke="var(--comm-line)"/>${s}</svg>`;
+}
+
+/* ---------- FORM ---------- */
+function commFormHTML(dept){
+  const defs=COMM_DEFS[dept];
+  const existing=commUI.editWeek?commSubs(dept).find(s=>s.weekEnding===commUI.editWeek):null;
+  const f=existing?existing.fields:{};
+  const wk=existing?existing.weekEnding:commToFriday(new Date().toISOString().slice(0,10));
+  const row=d=>`<div class="comm-frow">
+      <label for="cf_${d.key}">${d.label}<span class="comm-hint">${d.kind==='flow'?'count during the week (sums across weeks)':'state at week-end (latest wins, never summed)'}</span></label>
+      <div><input type="number" id="cf_${d.key}" min="0" value="${f[d.key]??''}" placeholder="—"></div></div>`;
+  const snaps=defs.filter(d=>d.kind==='snapshot').map(row).join('');
+  const flows=defs.filter(d=>d.kind==='flow').map(row).join('');
+  return commHead('Submit weekly — Customer Support', existing?('Editing week ending '+commFmtWeek(wk)):'New weekly entry')
+  + `<div class="comm-form">
+      <div class="comm-weekbar">
+        <label for="cf_dept">Department</label>
+        <select id="cf_dept">${COMM_DEPTS.map(d=>`<option value="${d.key}" ${d.key===dept?'selected':''} ${d.ready?'':'disabled'}>${d.label}${d.ready?'':' — coming soon'}</option>`).join('')}</select>
+        <label for="cf_week" style="margin-left:8px">Week ending</label>
+        <input type="date" id="cf_week" value="${wk}" onchange="commWeekSnap(this)">
+        <span class="comm-pill comm-tag-flat">snaps to Friday</span>
+      </div>
+      <div class="comm-fgroup"><div class="comm-gh">Snapshot <small>state at end of week</small></div>${snaps}</div>
+      <div class="comm-fgroup"><div class="comm-gh">Flow <small>what happened this week</small></div>${flows}</div>
+      <div class="comm-fgroup"><div class="comm-gh">Narrative <small>context, escalations, blockers</small></div>
+        <textarea id="cf_note" placeholder="Notable escalations, cross-team dependencies…">${existing?commEsc(existing.narrative&&existing.narrative.note):''}</textarea></div>
+      <div class="comm-actions">
+        <button class="comm-btn comm-btn-primary" onclick="commSave()">${existing?'Update week':'Save week'}</button>
+        ${existing?'<button class="comm-btn comm-btn-danger" onclick="commDelete()">Delete</button>':''}
+        <button class="comm-btn comm-btn-ghost" onclick="commCancel()">Cancel</button>
+      </div></div>
+     <div class="comm-panel" style="max-width:640px">
+       <h3>Weeks on record</h3>
+       <p class="comm-ph">Composite key is department + week-ending — re-submitting a week edits it in place</p>
+       ${commLedger(dept)}</div>`;
+}
+function commLedger(dept){
+  const rows=commSubs(dept).slice().reverse();
+  if(!rows.length) return `<div class="comm-empty" style="padding:24px">No weeks yet.</div>`;
+  return `<table class="comm-ledger"><thead><tr>
+      <th>Week ending</th><th>Created</th><th>Solved</th><th>Open</th><th>Median reply</th><th>SLA</th><th></th></tr></thead>
+    <tbody>${rows.map(r=>`<tr>
+      <td>${commFmtWeek(r.weekEnding)}</td><td>${r.fields.ticketsCreated??'—'}</td><td>${r.fields.ticketsSolved??'—'}</td>
+      <td>${r.fields.ticketsOpen??'—'}</td><td>${r.fields.medianReplyMin??'—'}m</td><td>${r.fields.slaBreached??'—'}</td>
+      <td><button class="comm-editlink" onclick="commEdit('${r.weekEnding}')">edit</button></td></tr>`).join('')}</tbody></table>`;
+}
+
+/* ---------- SCHEMA ---------- */
+function commSchemaHTML(){
+  const shape=
+`D.commercial = {                 // persisted on the single-row JSONB
+  submissions: [
+    { id,                         // dept + weekEnding
+      dept: "support",
+      weekEnding: "2026-06-26",   // normalised to Friday
+      submittedBy, submittedAt,
+      fields: { ticketsCreated, ticketsSolved, ticketsOpen,
+                medianReplyMin, csatGood, csatBad, slaBreached },
+      narrative: { note } }, … ],
+  clientLedger: [ {client, event, date, note} ]   // single source for churn / active sites
+}
+// COMM_DEFS lives in code, not in D — it is the metric registry.`;
+  return commHead('Schema','What lifts into index.html')
+  + `<pre class="comm-schema">${commEsc(shape)}</pre>
+     <div class="comm-note"><b>kind</b> tags each metric <span class="num">flow</span> (sums → bars) or <span class="num">snapshot</span> (latest → line) so the renderer never sums a stock value.<br>
+     <b>dir+band</b> drive RAG — median reply <span class="num">{good:20,warn:30}</span> goes amber 21–30, red &gt;30 (why this week reads red at 39).<br>
+     <b>Period values only</b> — Leads enter <span class="num">…ThisWeek</span> counts; YTD churn and active-site totals derive from <span class="num">clientLedger</span> so two teams can't report two numbers.</div>
+     <div class="comm-note"><b>Writes</b> go through <span class="num">commPersist()</span> → ATLAS <span class="num">save()</span>: GET <span class="num">/api/data</span> → set only the <span class="num">commercial</span> key → POST with <span class="num">X-Atlas-Base-Updated-At</span>. View gates on <span class="num">canSee('commercial')</span>, parallel to Contract Management.</div>`;
+}
+
+/* ---------- handlers ---------- */
+function commWeekSnap(el){ el.value = commToFriday(el.value); }
+function commEdit(week){ commUI.editWeek=week; commUI.tab='form'; commRerender(); window.scrollTo({top:0,behavior:'smooth'}); }
+function commCancel(){ commUI.editWeek=null; commUI.tab='dash'; commRerender(); }
+async function commSave(){
+  commEnsure();
+  const dept='support';
+  const week=commToFriday(document.getElementById('cf_week').value);
+  const fields={};
+  COMM_DEFS[dept].forEach(d=>{ const v=document.getElementById('cf_'+d.key).value.trim(); fields[d.key]= v===''?null:Number(v); });
+  const note=document.getElementById('cf_note').value.trim();
+  const rec={ id:dept+'-'+week, dept, weekEnding:week, submittedBy:((typeof ME!=='undefined'&&ME&&ME.email)||'editor'), submittedAt:new Date().toISOString(), fields, narrative:{note} };
+  const list=D.commercial.submissions;
+  const ix=list.findIndex(s=>s.dept===dept&&s.weekEnding===week);
+  if(ix>=0) list[ix]=rec; else list.push(rec);
+  try{ await commPersist(); }catch(e){ return; }   // commPersist alerts on 409
+  commUI.editWeek=null; commUI.tab='dash'; commRerender();
+}
+async function commDelete(){
+  commEnsure();
+  const week=commUI.editWeek;
+  D.commercial.submissions = D.commercial.submissions.filter(s=>!(s.dept==='support'&&s.weekEnding===week));
+  try{ await commPersist(); }catch(e){ return; }
+  commUI.editWeek=null; commUI.tab='dash'; commRerender();
+}
+
+/* ---------- one-time seed (optional; run deliberately) ----------
+   Loads weeks captured from the status decks IF that week is absent, then
+   persists once. Safe to re-run: it only adds weeks that don't already exist. */
+async function commLoadSeed(seedArray){
+  commEnsure();
+  let added=0;
+  (seedArray||[]).forEach(s=>{
+    const wk=commToFriday(s.weekEnding);
+    if(!D.commercial.submissions.some(x=>x.dept===s.dept&&x.weekEnding===wk)){
+      D.commercial.submissions.push(Object.assign({}, s, {id:s.dept+'-'+wk, weekEnding:wk}));
+      added++;
+    }
+  });
+  if(added){ await commPersist(); }
+  console.log('commLoadSeed: added '+added+' weeks');
+}
+
 function renderContractsView(q){
   if(!canSee('contracts'))return '<div class="empty-msg">You don\'t have access to the Contract Management module.</div>';
   var cs=D.contracts||[];
@@ -6668,6 +7076,7 @@ function renderView(){
   else if(viewMode==='init')html=renderInitiativesView(q);
   else if(viewMode==='opp')html=renderOppView(q);
   else if(viewMode==='contracts')html=renderContractsView(q);
+  else if(viewMode==='commercial')html=renderCommercialView();
   else if(viewMode==='over')html=renderProjView(q,'overhead');
   else if(viewMode==='orgchart')html=renderOrgChartView(q);
   else if(viewMode==='plan'||viewMode==='ptask')html=renderPlanView(q);
@@ -16160,7 +16569,7 @@ function rptCsvBuiltin(key){var f=RPT_CSV[key],b=rptBuiltin(key);if(!f||(b&&b.fi
 /* ── AUTH & PERMISSIONS (client-side roles only — not API security) ── */
 var AUTH_USER='khaja@communityforce.com',AUTH_PASS='Namtra_CF27',DEFAULT_PW='CommunityForce2026';
 var ME=null;
-var SECTIONS=[{k:'proforma',tab:'tabProforma',l:'Proforma'},{k:'strat',tab:'tabStrat',l:'Strategy'},{k:'valuation',tab:'tabValuation',l:'Valuation'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'pplan',tab:'tabPPlan',l:'Resource Planning'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'contracts',tab:'tabContracts',l:'Contract Mgmt'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources'},{k:'reports',tab:'tabReports',l:'Reports'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'plan',tab:'tabPlan',l:'COE Tasks'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'orgchart',tab:'tabChart',l:'Org Chart'}];
+var SECTIONS=[{k:'proforma',tab:'tabProforma',l:'Proforma'},{k:'strat',tab:'tabStrat',l:'Strategy'},{k:'valuation',tab:'tabValuation',l:'Valuation'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'pplan',tab:'tabPPlan',l:'Resource Planning'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'contracts',tab:'tabContracts',l:'Contract Mgmt'},{k:'commercial',tab:'tabCommercial',l:'Commercial'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources'},{k:'reports',tab:'tabReports',l:'Reports'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'plan',tab:'tabPlan',l:'COE Tasks'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'orgchart',tab:'tabChart',l:'Org Chart'}];
 function emailFromName(name){var clean=(name||'').replace(/\(.*?\)/g,'').replace(/[^A-Za-z .\-]/g,'').trim();var parts=clean.split(/\s+/).filter(Boolean);var local=parts.length>=2?(parts[0]+'.'+parts[parts.length-1]):(parts[0]||'user');return local.toLowerCase().replace(/[^a-z0-9.]/g,'')+'@communityforce.com';}
 function authMigrate(){
   if(!D.accounts)D.accounts=[];
@@ -16178,6 +16587,10 @@ function authMigrate(){
   }
   D.accounts.forEach(function(a){if(!('active' in a))a.active=true;if(!a.programIds)a.programIds=[];if(!a.role)a.role='viewer';});
   if(!D.sectionVis)D.sectionVis={};['owner','editor','viewer'].forEach(function(r){if(!D.sectionVis[r])D.sectionVis[r]={};});
+  // Commercial defaults to admin-only: seed an explicit revoke for the non-admin
+  // roles so canSee('commercial') is false until an admin grants it in the
+  // Section Visibility matrix (and so the matrix renders unchecked, matching).
+  ['owner','editor','viewer'].forEach(function(r){if(!Object.prototype.hasOwnProperty.call(D.sectionVis[r],'commercial'))D.sectionVis[r].commercial=false;});
 }
 function canSee(k){if(!ME)return false;if(k==='proforma'||k==='strat'||k==='valuation')return canProforma();if(ME.role==='admin')return true;
   // Section Visibility is authoritative for tab/section visibility. An explicit
