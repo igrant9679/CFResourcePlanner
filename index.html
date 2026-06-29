@@ -8645,10 +8645,22 @@ function _valProjNTM(p){
 // project's operational startDate/endDate, and finally to the editable
 // default-term assumption (V.defaultTermMonths, 36) when no dates exist at all.
 function _valTermOf(p){return {start:(p.contractStart!=null&&p.contractStart!=='')?p.contractStart:(p.startDate||''),end:(p.contractEnd!=null&&p.contractEnd!=='')?p.contractEnd:(p.endDate||'')};}
-function _valMonthsLeft(endStr){if(!endStr)return null;var pr=String(endStr).split('-');var ey=+pr[0],em=(+pr[1]||1)-1;if(!ey)return null;var now=new Date();var ni=now.getFullYear()*12+now.getMonth(),ei=ey*12+em;return Math.max(0,ei-ni+1);}
-// Months remaining for a project: from its contract end if set, else the editable
-// default-term assumption when no Start/End is entered. Returns {months,assumed}.
-function _valProjMonthsLeft(p){var ml=_valMonthsLeft(_valTermOf(p).end);if(ml!=null)return {months:ml,assumed:false};var V=_valEnsure();return {months:Number(V.defaultTermMonths)||36,assumed:true};}
+function _valMonthIdx(str){if(!str)return null;var pr=String(str).split('-');var y=+pr[0],m=(+pr[1]||1)-1;if(!y)return null;return y*12+m;}
+function _valMonthsLeft(endStr){var ei=_valMonthIdx(endStr);if(ei==null)return null;var now=new Date();var ni=now.getFullYear()*12+now.getMonth();return Math.max(0,ei-ni+1);}
+// Months remaining for a project, BOUNDED by the contract's own term length so a
+// distinct (option-year) term counts only its own window — not a cumulative
+// multi-year span from today to a far-future end. e.g. a 12-month option year
+// that starts next year is worth 12 months of backlog, not (today → its end).
+// Falls back to the editable default-term assumption when no Start/End exists.
+function _valProjMonthsLeft(p){
+  var t=_valTermOf(p),ml=_valMonthsLeft(t.end);
+  if(ml!=null){
+    var si=_valMonthIdx(t.start),ei=_valMonthIdx(t.end);
+    if(si!=null&&ei!=null&&ei>si&&ml>(ei-si))ml=ei-si;   // cap at the term's own length
+    return {months:ml,assumed:false};
+  }
+  var V=_valEnsure();return {months:Number(V.defaultTermMonths)||36,assumed:true};
+}
 function _valProjMonthlyRR(p){return Number(p.revenue)||0;}   // headline monthly run-rate
 function _valProjBacklog(p){return _valProjMonthlyRR(p)*_valProjMonthsLeft(p).months;}
 // Contracted backlog (remaining committed revenue) summed per segment; Educian net of Expentor.
