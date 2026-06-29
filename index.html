@@ -3355,11 +3355,12 @@ function _ctFilteredPos(c){
 
 /* ---- Departments (only support is ready) ---- */
 const COMM_DEPTS = [
-  { key:'support',  label:'Customer Support', ready:true  },
-  { key:'sales',    label:'Sales Pipeline',   ready:false },
-  { key:'marketing',label:'Marketing',        ready:false },
-  { key:'success',  label:'Client Success',   ready:false },
-  { key:'impl',     label:'Implementation',   ready:false },
+  { key:'support',  label:'Customer Support', ready:true },
+  { key:'sales',    label:'Sales Pipeline',   ready:true },
+  { key:'success',  label:'Client Success',   ready:true },
+  { key:'impl',     label:'Implementation',   ready:true, narrative:true },
+  { key:'infra',    label:'Infrastructure',   ready:true },
+  { key:'marketing',label:'Marketing',        ready:true, single:true },
 ];
 
 /* ---- Metric definitions. `kind` decides aggregation
@@ -3374,10 +3375,34 @@ const COMM_DEFS = {
     { key:'csatBad',        label:'CSAT bad',          kind:'flow',     unit:'',  dir:'down' },
     { key:'slaBreached',    label:'SLA breaches',      kind:'flow',     unit:'',  dir:'down', band:{good:0,warn:0} },
   ],
+  sales: [
+    { key:'totalOpps',     label:'Total opportunities', kind:'snapshot', unit:'', dir:'up' },
+    { key:'pipelineValue', label:'Pipeline value',      kind:'snapshot', unit:'', dir:'up', money:true, lead:true },
+  ],
+  success: [
+    { key:'meetingsMonth', label:'Meetings scheduled (MTD)', kind:'snapshot', unit:'', dir:'up', lead:true },
+    { key:'meetingsNext',  label:'Meetings — next month',    kind:'snapshot', unit:'', dir:'up' },
+    { key:'nps',           label:'NPS',                      kind:'snapshot', unit:'', dir:'up', band:{good:70,warn:50} },
+    { key:'csatResponses', label:'CSAT survey responses',    kind:'snapshot', unit:'', dir:'up' },
+  ],
+  infra: [
+    { key:'activeSites',       label:'Active sites',       kind:'snapshot', unit:'', dir:'up', lead:true },
+    { key:'deletionsQueue',    label:'Deletions in queue', kind:'snapshot', unit:'', dir:'down' },
+    { key:'deadlinesUpcoming', label:'Deadlines next 7d',  kind:'snapshot', unit:'', dir:'none' },
+  ],
+  marketing: [
+    { key:'emailsSent',        label:'Emails sent',         kind:'snapshot', unit:'', dir:'up', lead:true },
+    { key:'researchedLeads',   label:'Researched leads',    kind:'snapshot', unit:'', dir:'up' },
+    { key:'followupsScheduled',label:'Follow-ups scheduled',kind:'snapshot', unit:'', dir:'up' },
+    { key:'interested',        label:'Interested',          kind:'snapshot', unit:'', dir:'up' },
+    { key:'meetingsBooked',    label:'Meetings booked',     kind:'snapshot', unit:'', dir:'up' },
+    { key:'orgsIdentified',    label:'Orgs identified',     kind:'snapshot', unit:'', dir:'up' },
+    { key:'totalContacts',     label:'Contacts generated',  kind:'snapshot', unit:'', dir:'up' },
+  ],
 };
 
 /* ---- UI state (not persisted), parallels contractTab / _govRpt ---- */
-const commUI = { tab:'dash', editWeek:null };
+const commUI = { tab:'dash', editWeek:null, dept:'support' };
 
 /* ---- ensure the data slice exists on D (D loads from /api/data) ---- */
 function commEnsure(){
@@ -3405,6 +3430,11 @@ function commEsc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&
 function commRag(dDef,v){ if(v==null||!dDef||!dDef.band) return 'flat'; const {good,warn}=dDef.band;
   if(dDef.dir==='down') return v<=good?'good':v<=warn?'warn':'bad';
   if(dDef.dir==='up')   return v>=good?'good':v>=warn?'warn':'bad'; return 'flat'; }
+/* compact metric formatter (line labels / ledger): money → $NNk, else value+unit */
+function commFmtMetric(d,v){ if(v==null) return '—';
+  if(d&&d.money) return '$'+(Math.abs(v)>=1000?Math.round(v/1000)+'K':String(v));
+  return v+(d&&d.unit?d.unit:''); }
+function commDeptMeta(dept){ return COMM_DEPTS.find(d=>d.key===dept)||{key:dept,label:dept}; }
 
 /* re-render in place without needing the container id */
 function commRerender(){
@@ -3422,20 +3452,79 @@ function renderCommercialView(){
   const tabBar = `<div class="comm-tabs" role="tablist">${tabs.map(t=>
     `<button class="comm-tab" role="tab" aria-selected="${commUI.tab===t}" onclick="commSetTab('${t}')">${labels[t]}</button>`).join('')}</div>`;
   let body = '';
-  if(commUI.tab==='dash')   body = commDashHTML('support');
-  if(commUI.tab==='form')   body = commFormHTML('support');
+  if(commUI.tab==='dash')   body = commDeptBar() + commDashHTML(commUI.dept);
+  if(commUI.tab==='form')   body = commFormHTML(commUI.dept);
   if(commUI.tab==='schema') body = commSchemaHTML();
   return `<div class="comm-root">${tabBar}${body}</div>`;
 }
 
+/* department selector (Dashboard + Submit-weekly share commUI.dept) */
+function commDeptBar(){
+  return `<div class="comm-weekbar" style="margin:10px 0 2px">
+    <label for="comm_dept">Department</label>
+    <select id="comm_dept" onchange="commSetDept(this.value)">${COMM_DEPTS.filter(d=>d.ready).map(d=>
+      `<option value="${d.key}" ${d.key===commUI.dept?'selected':''}>${commEsc(d.label)}</option>`).join('')}</select>
+  </div>`;
+}
+
 function commSetTab(t){ commUI.tab=t; commUI.editWeek=null; commRerender(); }
+function commSetDept(d){ commUI.dept=d; commUI.editWeek=null; commRerender(); }
 
 function commHead(title,sub){
   return `<div class="comm-sechead"><h2>${title}</h2><span class="comm-sub">${sub}</span></div><div class="comm-rule"></div>`;
 }
 
-/* ---------- DASHBOARD ---------- */
+/* ---------- DASHBOARD (router by department) ---------- */
 function commDashHTML(dept){
+  const meta=commDeptMeta(dept);
+  if(meta.narrative) return commDashNarrative(dept);   // Implementation — prose only
+  if(dept!=='support') return commDashGeneric(dept);   // Sales / Client Success / Infrastructure / Marketing
+  return commDashSupport();                            // Customer Support — bespoke (unchanged)
+}
+
+/* generic snapshot/flow dashboard driven by COMM_DEFS[dept] */
+function commDashGeneric(dept){
+  const rows=commSubs(dept), meta=commDeptMeta(dept), defs=COMM_DEFS[dept]||[];
+  if(!rows.length) return commHead(meta.label,'No weeks submitted yet')
+    + `<div class="comm-empty">Nothing to chart yet. Switch to <b>Submit weekly</b> to add the first week.</div>`;
+  const cur=rows[rows.length-1], prev=rows[rows.length-2];
+  const cards=defs.map(d=>commKpi(d,cur.fields[d.key],prev?prev.fields[d.key]:null)).join('');
+  const lead=defs.find(d=>d.lead)||defs.find(d=>d.kind==='snapshot');
+  let html=commHead(meta.label,'Week ending '+commFmtWeek(cur.weekEnding)+', 2026 · '+rows.length+(rows.length===1?' week':' weeks')+' on record')
+    + `<div class="comm-kpis">${cards}</div>`;
+  if(dept==='marketing') html += commMktConversions(cur);
+  if(lead && rows.length>=2) html += `<div class="comm-panel"><h3>${commEsc(lead.label)} — trend</h3>
+    <p class="comm-ph">Snapshot metric over ${rows.length} weeks</p>${commLine(rows,lead.key,lead)}</div>`;
+  if(cur.narrative&&cur.narrative.note) html += `<div class="comm-panel"><h3>This week</h3>
+    <div class="comm-note" style="margin-top:0;white-space:pre-line">${commEsc(cur.narrative.note)}</div></div>`;
+  return html;
+}
+/* marketing-only conversion-rate strip (single-week funnel) */
+function commMktConversions(cur){
+  const f=cur.fields||{}, pct=(a,b)=>b?100*a/b:0;
+  const cards=[
+    ['Email → researched', f.emailsSent?pct(f.researchedLeads,f.emailsSent).toFixed(1)+'%':'—'],
+    ['Researched → follow-up', f.researchedLeads?pct(f.followupsScheduled,f.researchedLeads).toFixed(1)+'%':'—'],
+    ['Email → interested', f.emailsSent?pct(f.interested,f.emailsSent).toFixed(2)+'%':'—'],
+    ['Email → meeting', f.emailsSent?pct(f.meetingsBooked,f.emailsSent).toFixed(2)+'%':'—'],
+  ].map(c=>commRaw(c[0],c[1],'flat','snapshot','conversion rate')).join('');
+  return `<div class="comm-kpis">${cards}</div>`;
+}
+/* narrative-only dashboard (Implementation) */
+function commDashNarrative(dept){
+  const meta=commDeptMeta(dept), rows=commSubs(dept).slice().reverse();
+  if(!rows.length) return commHead(meta.label,'No weeks submitted yet')
+    + `<div class="comm-empty">Nothing here yet. Switch to <b>Submit weekly</b> to add the first week.</div>`;
+  const items=rows.map(r=>`<div class="comm-panel"><h3>Week ending ${commFmtWeek(r.weekEnding)}</h3>
+    <div style="font-size:13px;color:var(--comm-slate);white-space:pre-line">${(commEsc(r.narrative&&r.narrative.note))||'<span style="color:var(--comm-mute)">No narrative recorded.</span>'}</div></div>`).join('');
+  return commHead(meta.label,rows.length+(rows.length===1?' week':' weeks')+' on record · narrative status')
+    + `<p class="comm-ph" style="margin:-8px 0 4px">Tracked as weekly narrative — no numeric KPIs in the source decks.</p>`
+    + items;
+}
+
+/* Customer Support — bespoke dashboard (median-reply line, throughput, SLA) */
+function commDashSupport(){
+  const dept='support';
   const rows = commSubs(dept);
   if(!rows.length) return commHead('Customer Support','No weeks submitted yet')
     + `<div class="comm-empty">Nothing to chart yet. Switch to <b>Submit weekly</b> to add the first week.</div>`;
@@ -3483,12 +3572,15 @@ function commKpi(d,v,pv){
     if(diff===0) delta=`<span class="comm-delta comm-flat">±0</span>`;
     else{ const improving=d.dir==='down'?diff<0:d.dir==='up'?diff>0:null;
       const c=improving==null?'comm-flat':improving?'comm-up':'comm-down';
-      delta=`<span class="comm-delta ${c}">${diff>0?'▲':'▼'} ${Math.abs(diff)}${d.unit}</span>`; } }
+      const dtxt=d.money?('$'+Math.abs(diff).toLocaleString()):(Math.abs(diff)+d.unit);
+      delta=`<span class="comm-delta ${c}">${diff>0?'▲':'▼'} ${dtxt}</span>`; } }
   const bench=d.band?(d.dir==='down'?`target ≤${d.band.good}${d.unit}`:`target ≥${d.band.good}${d.unit}`):'';
+  const valHtml = v==null?'—':(d.money?('$'+Number(v).toLocaleString())
+    :(''+v+(d.unit?`<span class="comm-unit">${d.unit}</span>`:'')));
   return `<div class="comm-kpi ${cls}"><span class="comm-stripe"></span>
     <div class="comm-top"><span class="comm-glyph">${glyph}</span></div>
     <div class="comm-klabel">${d.label}</div>
-    <div class="comm-val num">${v==null?'—':v}${v!=null&&d.unit?`<span class="comm-unit">${d.unit}</span>`:''}</div>
+    <div class="comm-val num">${valHtml}</div>
     <div class="comm-meta">${delta||'<span></span>'}<span class="comm-bench">${bench}</span></div></div>`;
 }
 function commRaw(label,val,rag,kind,sub){
@@ -3503,17 +3595,19 @@ function commRaw(label,val,rag,kind,sub){
 function commLine(rows,key,dDef){
   const W=560,H=180,pad={l:34,r:14,t:14,b:26};
   const ys=rows.map(r=>r.fields[key]);
-  const max=Math.max(40,...ys.filter(v=>v!=null))*1.1, min=0;
+  const dmax=Math.max(...ys.filter(v=>v!=null),0);
+  const max=(dDef&&dDef.band?Math.max(40,dmax):Math.max(1,dmax))*1.1, min=0;
   const X=i=>pad.l+(W-pad.l-pad.r)*(rows.length<2?0:i/(rows.length-1));
   const Y=v=>H-pad.b-(H-pad.t-pad.b)*((v-min)/(max-min));
-  const b=dDef.band, rect=(lo,hi,c)=>`<rect x="${pad.l}" y="${Y(hi)}" width="${W-pad.l-pad.r}" height="${Y(lo)-Y(hi)}" fill="${c}" opacity=".10"/>`;
+  const b=dDef&&dDef.band, rect=(lo,hi,c)=>`<rect x="${pad.l}" y="${Y(hi)}" width="${W-pad.l-pad.r}" height="${Y(lo)-Y(hi)}" fill="${c}" opacity=".10"/>`;
+  const bands=b?(rect(0,b.good,'var(--comm-good)')+rect(b.good,b.warn,'var(--comm-warn)')+rect(b.warn,max,'var(--comm-bad)')):'';
   const pts=ys.map((v,i)=>v==null?null:[X(i),Y(v)]).filter(Boolean);
   const path=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
-  const dots=ys.map((v,i)=>{ if(v==null)return''; const c={good:'var(--comm-good)',warn:'var(--comm-warn)',bad:'var(--comm-bad)',flat:'var(--comm-slate)'}[commRag(dDef,v)];
-    return `<circle cx="${X(i)}" cy="${Y(v)}" r="4.5" fill="${c}"/><text x="${X(i)}" y="${Y(v)-10}" text-anchor="middle" font-size="11" font-weight="700" fill="${c}">${v}</text>`;}).join('');
+  const dots=ys.map((v,i)=>{ if(v==null)return''; const c=b?{good:'var(--comm-good)',warn:'var(--comm-warn)',bad:'var(--comm-bad)',flat:'var(--comm-slate)'}[commRag(dDef,v)]:'var(--comm-ink)';
+    return `<circle cx="${X(i)}" cy="${Y(v)}" r="4.5" fill="${c}"/><text x="${X(i)}" y="${Y(v)-10}" text-anchor="middle" font-size="11" font-weight="700" fill="${c}">${commFmtMetric(dDef,v)}</text>`;}).join('');
   const xl=rows.map((r,i)=>`<text x="${X(i)}" y="${H-7}" text-anchor="middle" font-size="10" fill="var(--comm-mute)">${commFmtWeek(r.weekEnding)}</text>`).join('');
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Median first reply time by week">
-    ${rect(0,b.good,'var(--comm-good)')}${rect(b.good,b.warn,'var(--comm-warn)')}${rect(b.warn,max,'var(--comm-bad)')}
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${commEsc((dDef&&dDef.label)||key)} by week">
+    ${bands}
     <line x1="${pad.l}" y1="${H-pad.b}" x2="${W-pad.r}" y2="${H-pad.b}" stroke="var(--comm-line)"/>
     <path d="${path}" fill="none" stroke="var(--comm-ink)" stroke-width="2"/>${dots}${xl}</svg>`;
 }
@@ -3540,7 +3634,7 @@ function commSla(rows){
 
 /* ---------- FORM ---------- */
 function commFormHTML(dept){
-  const defs=COMM_DEFS[dept];
+  const defs=COMM_DEFS[dept]||[], meta=commDeptMeta(dept);
   const existing=commUI.editWeek?commSubs(dept).find(s=>s.weekEnding===commUI.editWeek):null;
   const f=existing?existing.fields:{};
   const wk=existing?existing.weekEnding:commToFriday(new Date().toISOString().slice(0,10));
@@ -3549,38 +3643,39 @@ function commFormHTML(dept){
       <div><input type="number" id="cf_${d.key}" min="0" value="${f[d.key]??''}" placeholder="—"></div></div>`;
   const snaps=defs.filter(d=>d.kind==='snapshot').map(row).join('');
   const flows=defs.filter(d=>d.kind==='flow').map(row).join('');
-  return commHead('Submit weekly — Customer Support', existing?('Editing week ending '+commFmtWeek(wk)):'New weekly entry')
+  return commHead('Submit weekly — '+meta.label, existing?('Editing week ending '+commFmtWeek(wk)):'New weekly entry')
   + `<div class="comm-form">
       <div class="comm-weekbar">
         <label for="cf_dept">Department</label>
-        <select id="cf_dept">${COMM_DEPTS.map(d=>`<option value="${d.key}" ${d.key===dept?'selected':''} ${d.ready?'':'disabled'}>${d.label}${d.ready?'':' — coming soon'}</option>`).join('')}</select>
+        <select id="cf_dept" onchange="commFormDept(this.value)">${COMM_DEPTS.filter(d=>d.ready).map(d=>`<option value="${d.key}" ${d.key===dept?'selected':''}>${commEsc(d.label)}</option>`).join('')}</select>
         <label for="cf_week" style="margin-left:8px">Week ending</label>
         <input type="date" id="cf_week" value="${wk}" onchange="commWeekSnap(this)">
         <span class="comm-pill comm-tag-flat">snaps to Friday</span>
       </div>
-      <div class="comm-fgroup"><div class="comm-gh">Snapshot <small>state at end of week</small></div>${snaps}</div>
-      <div class="comm-fgroup"><div class="comm-gh">Flow <small>what happened this week</small></div>${flows}</div>
-      <div class="comm-fgroup"><div class="comm-gh">Narrative <small>context, escalations, blockers</small></div>
+      ${snaps?`<div class="comm-fgroup"><div class="comm-gh">Snapshot <small>state at end of week</small></div>${snaps}</div>`:''}
+      ${flows?`<div class="comm-fgroup"><div class="comm-gh">Flow <small>what happened this week</small></div>${flows}</div>`:''}
+      <div class="comm-fgroup"><div class="comm-gh">Narrative <small>${defs.length?'context, escalations, blockers':'weekly status (this department is narrative-only)'}</small></div>
         <textarea id="cf_note" placeholder="Notable escalations, cross-team dependencies…">${existing?commEsc(existing.narrative&&existing.narrative.note):''}</textarea></div>
       <div class="comm-actions">
         <button class="comm-btn comm-btn-primary" onclick="commSave()">${existing?'Update week':'Save week'}</button>
         ${existing?'<button class="comm-btn comm-btn-danger" onclick="commDelete()">Delete</button>':''}
         <button class="comm-btn comm-btn-ghost" onclick="commCancel()">Cancel</button>
       </div></div>
-     <div class="comm-panel" style="max-width:640px">
+     <div class="comm-panel" style="max-width:880px">
        <h3>Weeks on record</h3>
        <p class="comm-ph">Composite key is department + week-ending — re-submitting a week edits it in place</p>
        ${commLedger(dept)}</div>`;
 }
 function commLedger(dept){
-  const rows=commSubs(dept).slice().reverse();
+  const defs=COMM_DEFS[dept]||[], rows=commSubs(dept).slice().reverse();
   if(!rows.length) return `<div class="comm-empty" style="padding:24px">No weeks yet.</div>`;
-  return `<table class="comm-ledger"><thead><tr>
-      <th>Week ending</th><th>Created</th><th>Solved</th><th>Open</th><th>Median reply</th><th>SLA</th><th></th></tr></thead>
-    <tbody>${rows.map(r=>`<tr>
-      <td>${commFmtWeek(r.weekEnding)}</td><td>${r.fields.ticketsCreated??'—'}</td><td>${r.fields.ticketsSolved??'—'}</td>
-      <td>${r.fields.ticketsOpen??'—'}</td><td>${r.fields.medianReplyMin??'—'}m</td><td>${r.fields.slaBreached??'—'}</td>
-      <td><button class="comm-editlink" onclick="commEdit('${r.weekEnding}')">edit</button></td></tr>`).join('')}</tbody></table>`;
+  const head=`<th>Week ending</th>`+defs.map(d=>`<th>${commEsc(d.label)}</th>`).join('')+(defs.length?'':`<th>Narrative</th>`)+`<th></th>`;
+  const body=rows.map(r=>{ const note=(r.narrative&&r.narrative.note)||'';
+    return `<tr><td>${commFmtWeek(r.weekEnding)}</td>`
+    + defs.map(d=>`<td>${commFmtMetric(d,r.fields&&r.fields[d.key])}</td>`).join('')
+    + (defs.length?'':`<td style="text-align:left;white-space:normal;font-weight:400;color:var(--comm-slate);max-width:560px">${commEsc(note.slice(0,160))}${note.length>160?'…':''}</td>`)
+    + `<td><button class="comm-editlink" onclick="commEdit('${r.weekEnding}')">edit</button></td></tr>`;}).join('');
+  return `<table class="comm-ledger"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
 
 /* ---------- SCHEMA ---------- */
@@ -3589,15 +3684,17 @@ function commSchemaHTML(){
 `D.commercial = {                 // persisted on the single-row JSONB
   submissions: [
     { id,                         // dept + weekEnding
-      dept: "support",
+      dept: "support",            // support | sales | success | impl | infra | marketing
       weekEnding: "2026-06-26",   // normalised to Friday
       submittedBy, submittedAt,
-      fields: { ticketsCreated, ticketsSolved, ticketsOpen,
-                medianReplyMin, csatGood, csatBad, slaBreached },
+      fields: { … },              // keys come from COMM_DEFS[dept] (varies by dept;
+                                  //   impl is narrative-only → fields is empty {})
       narrative: { note } }, … ],
   clientLedger: [ {client, event, date, note} ]   // single source for churn / active sites
 }
-// COMM_DEFS lives in code, not in D — it is the metric registry.`;
+// COMM_DEFS lives in code, not in D — it is the per-department metric registry.
+// Dashboard renders per dept: support=bespoke, sales/success/infra/marketing=generic
+// (KPI cards + lead-metric trend), impl=narrative timeline.`;
   return commHead('Schema','What lifts into index.html')
   + `<pre class="comm-schema">${commEsc(shape)}</pre>
      <div class="comm-note"><b>kind</b> tags each metric <span class="num">flow</span> (sums → bars) or <span class="num">snapshot</span> (latest → line) so the renderer never sums a stock value.<br>
@@ -3608,26 +3705,29 @@ function commSchemaHTML(){
 
 /* ---------- handlers ---------- */
 function commWeekSnap(el){ el.value = commToFriday(el.value); }
+function commFormDept(d){ commUI.dept=d; commUI.editWeek=null; commRerender(); }
 function commEdit(week){ commUI.editWeek=week; commUI.tab='form'; commRerender(); window.scrollTo({top:0,behavior:'smooth'}); }
 function commCancel(){ commUI.editWeek=null; commUI.tab='dash'; commRerender(); }
 async function commSave(){
   commEnsure();
-  const dept='support';
+  const dsel=document.getElementById('cf_dept');
+  const dept=(dsel&&dsel.value)||commUI.dept||'support';
   const week=commToFriday(document.getElementById('cf_week').value);
   const fields={};
-  COMM_DEFS[dept].forEach(d=>{ const v=document.getElementById('cf_'+d.key).value.trim(); fields[d.key]= v===''?null:Number(v); });
+  (COMM_DEFS[dept]||[]).forEach(d=>{ const el=document.getElementById('cf_'+d.key); const v=el?el.value.trim():''; fields[d.key]= v===''?null:Number(v); });
   const note=document.getElementById('cf_note').value.trim();
   const rec={ id:dept+'-'+week, dept, weekEnding:week, submittedBy:((typeof ME!=='undefined'&&ME&&ME.email)||'editor'), submittedAt:new Date().toISOString(), fields, narrative:{note} };
   const list=D.commercial.submissions;
   const ix=list.findIndex(s=>s.dept===dept&&s.weekEnding===week);
   if(ix>=0) list[ix]=rec; else list.push(rec);
+  commUI.dept=dept;
   try{ await commPersist(); }catch(e){ return; }   // commPersist alerts on 409
   commUI.editWeek=null; commUI.tab='dash'; commRerender();
 }
 async function commDelete(){
   commEnsure();
-  const week=commUI.editWeek;
-  D.commercial.submissions = D.commercial.submissions.filter(s=>!(s.dept==='support'&&s.weekEnding===week));
+  const dept=commUI.dept, week=commUI.editWeek;
+  D.commercial.submissions = D.commercial.submissions.filter(s=>!(s.dept===dept&&s.weekEnding===week));
   try{ await commPersist(); }catch(e){ return; }
   commUI.editWeek=null; commUI.tab='dash'; commRerender();
 }
