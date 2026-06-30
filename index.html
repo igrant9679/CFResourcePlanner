@@ -10440,13 +10440,15 @@ function _homeStyle(){return '<style>'
 /* Resolve everything a goal touches — combines MANUAL links (g.links{...}) with
    links AUTO-DERIVED from the goal's linked initiative(s). Defensive: any failure
    yields empty sets so the scorecard never breaks. */
+function _homeMoneyShort(n){n=Math.round(Number(n)||0);var neg=n<0;n=Math.abs(n);var s;if(n>=1e6)s='$'+(n/1e6).toFixed(n>=1e7?0:1)+'M';else if(n>=1e3)s='$'+Math.round(n/1e3)+'K';else s='$'+n;return neg?'−'+s:s;}
 function _goalLinkData(g){
-  var out={opps:[],proposals:[],accounts:[],contacts:[],milestones:[],tasks:[],profit:0};
+  var out={opps:[],proposals:[],accounts:[],contacts:[],milestones:[],tasks:[],profit:0,oppPotential:0};
   try{
     var L=g.links||{},initIds=(g.linkedInitiativeIds||[]);
     var initNames={};(D.projects||[]).forEach(function(p){if(initIds.indexOf(p.id)>-1)initNames[String(p.name||'').toLowerCase()]=1;});
     var oppMap={};(D.projects||[]).forEach(function(p){if(projCat(p)!=='opportunity')return;var auto=(p.initiativeIds||[]).some(function(i){return initIds.indexOf(i)>-1;});if(auto||(L.opportunities||[]).indexOf(p.id)>-1)oppMap[p.id]=p;});
     out.opps=Object.keys(oppMap).map(function(k){return oppMap[k];});
+    out.oppPotential=out.opps.reduce(function(a,o){return a+(Number(o.potential)||0);},0);
     var oppIds=out.opps.map(function(o){return o.id;});
     var prMap={};(D.proposals||[]).forEach(function(pr){if((L.proposals||[]).indexOf(pr.id)>-1||oppIds.indexOf(pr.opportunityId)>-1)prMap[pr.id]=pr;});
     out.proposals=Object.keys(prMap).map(function(k){return prMap[k];});
@@ -10485,7 +10487,7 @@ function _homeGoalsBlock(){
     var th='<tr style="text-align:left;border-bottom:1px solid var(--exh-line)">'
       +'<th style="'+hc+'">Goal</th><th style="'+hc+'">Owner</th><th style="'+hc+';white-space:nowrap">Target date</th>'
       +'<th style="'+hc+';text-align:right">Target</th><th style="'+hc+';text-align:right">Current</th><th style="'+hc+';min-width:120px">Progress</th>'
-      +'<th style="'+hc+';text-align:center" title="Linked opportunities">Opps</th><th style="'+hc+';text-align:center" title="Linked proposals">Prop</th>'
+      +'<th style="'+hc+';text-align:center" title="Linked opportunities">Opps</th><th style="'+hc+';text-align:right" title="Total potential $ of linked opportunities">Opp $</th><th style="'+hc+';text-align:center" title="Linked proposals">Prop</th>'
       +'<th style="'+hc+';text-align:center" title="Linked accounts">Accts</th><th style="'+hc+';text-align:center" title="Distinct contacts on linked accounts">Contacts</th>'
       +'<th style="'+hc+';text-align:center" title="Linked milestones">Miles</th><th style="'+hc+';text-align:center" title="Linked tasks">Tasks</th>'
       +'<th style="'+hc+';text-align:right" title="Linked projects’ profit + opportunities’ expected value">Profit</th></tr>';
@@ -10504,6 +10506,7 @@ function _homeGoalsBlock(){
         +'<td style="padding:7px 8px;text-align:right;font-weight:700;color:var(--exh-ink);vertical-align:top">'+_goalFmt(g,Math.round(ev.current))+'</td>'
         +'<td style="padding:7px 8px;vertical-align:top"><span class="exh-chip '+col+'">'+esc(st.label)+'</span><div class="exh-mini" style="width:100%;margin-top:5px"><span style="width:'+pct+'%;background:'+bc+'"></span></div></td>'
         +_gCnt(ld.opps,function(o){return o.name;})
+        +'<td style="padding:7px 6px;text-align:right;vertical-align:top;'+(ld.oppPotential?'font-weight:700;color:var(--exh-ink)':'color:var(--exh-muted)')+'" title="Total potential of linked opportunities">'+(ld.oppPotential?_homeMoneyShort(ld.oppPotential):'—')+'</td>'
         +_gCnt(ld.proposals,pname)
         +_gCnt(ld.accounts,function(a){return a.name;})
         +'<td style="padding:7px 6px;text-align:center;vertical-align:top;'+(ld.contacts.length?'font-weight:700;color:var(--exh-ink)':'color:var(--exh-muted)')+'"'+(ld.contacts.length?' title="'+esc(ld.contacts.slice(0,15).join(', '))+'"':'')+'>'+(ld.contacts.length||'—')+'</td>'
@@ -10512,7 +10515,7 @@ function _homeGoalsBlock(){
         +'<td style="padding:7px 8px;text-align:right;vertical-align:top;'+(ld.profit?'font-weight:700;color:var(--exh-ink)':'color:var(--exh-muted)')+'">'+(ld.profit?fmt(Math.round(ld.profit)):'—')+'</td>'
         +'</tr>';
       var detailParts=_gChips('Opportunities',ld.opps,function(o){return o.name;})+_gChips('Proposals',ld.proposals,pname)+_gChips('Accounts',ld.accounts,function(a){return a.name;})+(ld.contacts.length?_gChips('Contacts',ld.contacts.map(function(c){return {n:c};}),function(x){return x.n;}):'')+_gChips('Milestones',ld.milestones,aname)+_gChips('Tasks',ld.tasks,aname);
-      var detail='<tr id="gd_'+g.id+'" style="display:none"><td colspan="13" style="padding:6px 10px 12px 24px;background:#FAFBFD;border-bottom:1px solid var(--exh-line2)">'+(detailParts||'<span style="font-size:11px;color:var(--exh-muted)">No linked items yet — add some in Strategy → Goals → edit this goal.</span>')+'</td></tr>';
+      var detail='<tr id="gd_'+g.id+'" style="display:none"><td colspan="14" style="padding:6px 10px 12px 24px;background:#FAFBFD;border-bottom:1px solid var(--exh-line2)">'+(detailParts||'<span style="font-size:11px;color:var(--exh-muted)">No linked items yet — add some in Strategy → Goals → edit this goal.</span>')+'</td></tr>';
       return main+detail;
     }).join('');
     inner='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead>'+th+'</thead><tbody>'+rows+'</tbody></table></div>';
