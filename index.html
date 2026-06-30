@@ -1152,11 +1152,9 @@ select.ct-cell{cursor:pointer;-webkit-appearance:none;appearance:none;}
       <button class="tab" id="tabProj" onclick="switchTab('proj')">Projects</button>
       <button class="tab tab-confidential" id="tabContracts" onclick="switchTab('contracts')">&#128193; Contract Mgmt</button>
       <button class="tab tab-confidential" id="tabCommercial" onclick="switchTab('commercial')">&#128188; Commercial</button>
-      <button class="tab" id="tabCustomers" onclick="switchTab('customers')">&#128101; Customers</button>
       <button class="tab" id="tabInit" onclick="switchTab('init')">Initiatives</button>
       <button class="tab" id="tabOpp" onclick="switchTab('opp')">Opportunities</button>
       <button class="tab" id="tabProp" onclick="switchTab('prop')">Proposals</button>
-      <button class="tab" id="tabOver" onclick="switchTab('over')">Overhead</button>
       <button class="tab active" id="tabRes" onclick="switchTab('res')">Resources</button>
       <button class="tab" id="tabReports" onclick="switchTab('reports')">&#128202; Reports</button>
       <button class="tab" id="tabRecruit" onclick="switchTab('recruit')">Recruiting</button>
@@ -10035,7 +10033,7 @@ function renderProformaView(q){
   if(!D.proforma)proformaMigrate();
   var P=D.proforma,c=P.company||{},f=P.financials||{},meta=P.meta||{};
   var gateTarget=f.cashGateTarget||1500000,cash=f.openingCash||c.cashPosition||0,pct=Math.max(0,Math.min(100,Math.round(cash/gateTarget*100)));
-  var tabs=[['overview','Overview'],['financials','Financials & Cash'],['contracts','Contracts'],['debt','Debt'],['pipeline','Marines'],['strategy','Strategy'],['technology','Technology'],['costs','Cost Structure'],['risks','Risks & Dates'],['snapshots','Snapshots']];
+  var tabs=[['overview','Overview'],['financials','Financials & Cash'],['contracts','Contracts'],['debt','Debt'],['pipeline','Marines'],['strategy','Strategy'],['technology','Technology'],['costs','Cost Structure'],['overhead','Overhead'],['risks','Risks & Dates'],['snapshots','Snapshots']];
   var nav='<div class="pf-subtabs">'+tabs.map(function(t){return '<button class="pf-subtab'+(proformaTab===t[0]?' active':'')+'" onclick="pfSetTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
   var kpis=[['Cash position',_pfMoney(cash)],['Cash gate',_pfMoney(gateTarget)+' · '+pct+'%'],['Monthly profit',_pfMoney(c.monthlyProfit)+' → '+_pfMoney(c.monthlyProfitOct)],['Corporate debt',_pfMoney(c.corporateDebt)],['Gate ETA',esc(c.gateDate||'—')]];
   var kpiBar='<div class="pf-kpis">'+kpis.map(function(k){return '<div class="pf-kpi"><div class="pf-kpi-l">'+k[0]+'</div><div class="pf-kpi-v">'+k[1]+'</div></div>';}).join('')+'</div>';
@@ -10054,13 +10052,10 @@ function renderProformaView(q){
       +'<div class="pf-card">'+_pfH('Cash gate progress',"pfEditObj('financials')")+'<div class="pf-gate"><div class="pf-gate-bar"><div class="pf-gate-fill" style="width:'+pct+'%"></div></div>'
         +'<div class="pf-gate-lbl">'+_pfMoney(cash)+' of '+_pfMoney(gateTarget)+' ('+pct+'%) · ETA '+esc(c.gateDate||'—')+'</div></div>'
         +_pfH('Core competencies',"pfEditList('company.competencies')")+'<ul class="pf-list">'+(c.competencies||[]).map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul></div>'
-      +'<div class="pf-card">'+_pfH('Notable clients')+_pfTable(['Client','Type'],(c.notableClients||[]).map(function(x){return [esc(x.name),esc(x.type)];}),'company.notableClients')+'</div>'
       +'<div class="pf-card">'+_pfH('Competitive landscape')+_pfTable(['Competitor','Type','Note'],(c.competitors||[]).map(function(x){return [esc(x.name),esc(x.type),esc(x.note)];}),'company.competitors')+'</div>'
       +'</div>';
   } else if(proformaTab==='financials'){
-    var projRows=_pfScenarioRows();
     body='<div class="pf-card">'+_pfH('Cash position — actuals (fixed, past)',"pfEditObj('financials')")+_pfTable(['Date','Cash','Monthly Δ','Status','Notes'],(f.cashTrajectory||[]).map(function(r){return [esc(r.date),_pfMoney(r.cash),_pfMoney(r.delta),'<span class="pf-pill pf-ok">'+esc(r.status||'Actual')+'</span>',esc(r.notes)];}),'financials.cashTrajectory')+'</div>'
-      +'<div class="pf-card">'+_pfH('Projected cash trajectory — computed live by Capacity Planning')+_pfTable(['Month','Cash balance','Monthly Δ','Source'],projRows.map(function(r){return [CAP_MONTHS[r.m]+" '"+(r.y%100),_pfMoney(Math.round(r.cashBal)),_pfMoney(Math.round(r.netCash)),'<span class="pf-pill">Projected</span>'];}))+'<div class="pf-note">Opening cash + cumulative (profit − debt service), from the live base-case projection. Edit the inputs in Capacity Planning &amp; Cost Structure — not here.</div></div>'
       +'<div class="pf-card">'+_pfH('Survival-mode exit gates')+_pfTable(['Gate','Status','Projected close','Notes'],(f.gates||[]).map(function(g){return [esc(g.name),esc(g.status),esc(g.projectedClose),esc(g.notes)];}),'financials.gates')+'</div>';
   } else if(proformaTab==='contracts'){
     var contracts=(D.projects||[]).filter(function(p){return p.timeline&&p.timeline.length;});
@@ -10119,6 +10114,8 @@ function renderProformaView(q){
       +'<div class="pf-grid">'
       +'<div class="pf-card">'+_pfH('Overhead lines')+_pfTable(['Category','Monthly','Type','Notes'],(cs.overhead||[]).map(function(x){return [esc(x.category),_pfMoney(x.monthly)+_pfLineSchedTag(x)+_pfLineWindowTag(x),tpill(x.category,x.type),esc(x.notes)];}),'costStructure.overhead',function(i){return _pfSchedBtn('costStructure.overhead',i);})+'</div>'
       +'<div class="pf-card">'+_pfH('Software subscriptions — '+_pfMoney((cs.softwareSubs||[]).reduce(function(s,x){return s+(Number(x.monthly)||0);},0))+'/mo')+_pfTable(['Vendor','Monthly','Type','Notes'],(cs.softwareSubs||[]).map(function(x){return [esc(x.vendor),_pfMoney(x.monthly)+_pfLineSchedTag(x)+_pfLineWindowTag(x),tpill(x.vendor,x.type),esc(x.notes)];}),'costStructure.softwareSubs',function(i){return _pfSchedBtn('costStructure.softwareSubs',i);})+'</div></div>';
+  } else if(proformaTab==='overhead'){
+    body=renderProjView(q,'overhead');
   } else if(proformaTab==='risks'){
     body='<div class="pf-card">'+_pfH('Critical dates timeline')+_pfTable(['Date','Event','Impact / action','Status'],(P.dates||[]).map(function(x){return [esc(x.date),esc(x.event),esc(x.impact),'<span class="pf-pill">'+esc(x.status)+'</span>'];}),'dates')+'</div>'
       +'<div class="pf-card">'+_pfH('Risk register')+_pfTable(['Risk','Level','Status','Owner','Mitigation'],(P.risks||[]).map(function(x){return [esc(x.risk),'<span class="pf-pill pf-'+(/CRITICAL/.test(x.level)?'crit':/HIGH/.test(x.level)?'high':/RESOLVED/.test(x.level)?'ok':'med')+'">'+esc(x.level)+'</span>',esc(x.status),esc(x.owner),esc(x.mitigation)];}),'risks')+'</div>'
