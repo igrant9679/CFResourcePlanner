@@ -1162,7 +1162,6 @@ select.ct-cell{cursor:pointer;-webkit-appearance:none;appearance:none;}
       <button class="tab" id="tabRecruit" onclick="switchTab('recruit')">Recruiting</button>
       <button class="tab" id="tabPlan" onclick="switchTab('plan')">COE Tasks</button>
       <button class="tab" id="tabPTask" onclick="switchTab('ptask')">Project Tasks</button>
-      <button class="tab" id="tabChart" onclick="switchTab('orgchart')">Org Chart</button>
     </div>
   </div>
 </div></div>
@@ -3544,14 +3543,14 @@ function commRerender(){
 /* ============================================================ VIEW ============================================================ */
 function renderCommercialView(){
   commEnsure();
-  const tabs = ['dash','form','schema'];
-  const labels = { dash:'Dashboard', form:'Submit weekly', schema:'Schema' };
+  const tabs = ['dash','form','customers'];
+  const labels = { dash:'Dashboard', form:'Submit weekly', customers:'Customers' };
   const tabBar = `<div class="comm-tabs" role="tablist">${tabs.map(t=>
     `<button class="comm-tab" role="tab" aria-selected="${commUI.tab===t}" onclick="commSetTab('${t}')">${labels[t]}</button>`).join('')}</div>`;
   let body = '';
-  if(commUI.tab==='dash')   body = commDeptBar() + commDashHTML(commUI.dept);
-  if(commUI.tab==='form')   body = commFormHTML(commUI.dept);
-  if(commUI.tab==='schema') body = commSchemaHTML();
+  if(commUI.tab==='dash')      body = commDeptBar() + commDashHTML(commUI.dept);
+  if(commUI.tab==='form')      body = commFormHTML(commUI.dept);
+  if(commUI.tab==='customers') body = renderCustomersView();
   return `<div class="comm-root">${tabBar}${body}</div>`;
 }
 function commDeptBar(){
@@ -10315,7 +10314,7 @@ var resTab='location';
 function resSetTab(t){resTab=t;renderView();}
 function ptoCanEdit(){return !!(ME&&(ME.role==='admin'||ME.role==='editor'));}
 function renderResourcesView(q){
-  var tabs=[['location','By Location'],['dept','Departments'],['class','Classifications'],['pto','PTO']];
+  var tabs=[['location','By Location'],['dept','Departments'],['class','Classifications'],['orgchart','Org Chart'],['pto','PTO']];
   var addBtn=(resTab==='pto'&&ptoCanEdit())?'<button class="btn btn-gold btn-sm" onclick="openPTOModal()">+ Add Time Off</button>':'';
   var nav='<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">'
     +'<div class="pf-subtabs">'+tabs.map(function(t){return '<button class="pf-subtab'+(resTab===t[0]?' active':'')+'" onclick="resSetTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>'
@@ -10323,6 +10322,7 @@ function renderResourcesView(q){
   var body;
   if(resTab==='dept')body=renderOrgView(q);
   else if(resTab==='class')body=renderClassificationView(q);
+  else if(resTab==='orgchart')body=renderOrgChartView(q);
   else if(resTab==='pto')body=renderPTOView(q);
   else body=renderResLocationView(q);
   return nav+body;
