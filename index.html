@@ -1574,6 +1574,7 @@ function prospectMigrate(){
     ['name','accountName','contactName','title','email','phone','linkedin','website','industry','location','ownerId','source','notes','nextAction','nextActionDate','convertedOppId'].forEach(function(k){if(!(k in p))p[k]='';});
     if(!Array.isArray(p.tags))p.tags=[];
     if(!Array.isArray(p.linkedOppIds))p.linkedOppIds=[];
+    if(!Array.isArray(p.linkedInitiativeIds))p.linkedInitiativeIds=[];
     if(!p.status)p.status='To Contact';
     if(!p.priority)p.priority='Medium';
     if(!('createdAt' in p))p.createdAt=Date.now();
@@ -6855,7 +6856,7 @@ function _prospectKindToggle(){
 function openProspectModal(id){
   prospectEditId=id||null;
   var p=id?prospectList().find(function(x){return x.id===id;}):null;
-  var v=p||{kind:'account',name:'',accountName:'',contactName:'',title:'',email:'',phone:'',linkedin:'',website:'',industry:'',location:'',ownerId:'',status:'To Contact',priority:'Medium',source:'',notes:'',nextAction:'',nextActionDate:'',tags:[],linkedOppIds:[],convertedOppId:''};
+  var v=p||{kind:'account',name:'',accountName:'',contactName:'',title:'',email:'',phone:'',linkedin:'',website:'',industry:'',location:'',ownerId:'',status:'To Contact',priority:'Medium',source:'',notes:'',nextAction:'',nextActionDate:'',tags:[],linkedOppIds:[],linkedInitiativeIds:[],convertedOppId:''};
   var canEdit=can('globals'),dis=canEdit?'':' disabled',isPoc=v.kind==='poc';
   function row(a,b){return '<div style="display:flex;gap:10px">'+a+b+'</div>';}
   function fld(id2,label,val,ph){return '<div class="fld" style="flex:1"><label class="fld-l">'+label+'</label><input class="fld-i" id="'+id2+'" value="'+esc(val||'')+'" placeholder="'+esc(ph||'')+'"'+dis+'></div>';}
@@ -6874,6 +6875,9 @@ function openProspectModal(id){
     fld('pr_source','Source',v.source,'e.g. Conference, referral, inbound'));
   h+=row(fld('pr_nextAction','Next action',v.nextAction,'e.g. Send intro email'),'<div class="fld" style="flex:1"><label class="fld-l">Next action date</label><input class="fld-i" type="date" id="pr_nextActionDate" value="'+esc(v.nextActionDate||'')+'"'+dis+'></div>');
   h+='<div class="fld"><label class="fld-l">Tags <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted)">— comma-separated</span></label><input class="fld-i" id="pr_tags" value="'+esc((v.tags||[]).join(', '))+'"'+dis+'></div>';
+  var _prInits=(D.projects||[]).filter(function(x){return projCat(x)==='initiative';});
+  h+='<div class="fld"><label class="fld-l">Linked initiatives <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-muted)">— ties this account/contact to strategic initiative(s); flows to the Executive Home Goals scorecard</span></label>'
+    +'<div id="pr_inits" class="fm-checks" style="max-height:130px;overflow:auto">'+(_prInits.length?_prInits.map(function(it){return '<label class="fm-check"><input type="checkbox" value="'+it.id+'"'+(((v.linkedInitiativeIds||[]).indexOf(it.id)>-1)?' checked':'')+dis+'> <span>'+esc(it.name)+'</span></label>';}).join(''):'<span style="font-size:11px;color:var(--text-muted)">No initiatives defined yet.</span>')+'</div></div>';
   h+='<div class="fld"><label class="fld-l">Notes</label><textarea class="fld-i" id="pr_notes" rows="3"'+dis+'>'+esc(v.notes||'')+'</textarea></div>';
   if(p){
     h+='<div class="pl-sec"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><div class="fld-l" style="margin:0">Business-development tasks</div>'+(canEdit?'<button class="btn btn-sec btn-sm" onclick="prospectAddTask(\''+p.id+'\')">+ BD task</button>':'')+'</div>'
@@ -6934,7 +6938,8 @@ function prospectAddTask(pid){
 function saveProspect(){
   if(!can('globals')){toast('No permission.','error');return;}
   var name=gv('pr_name').trim();if(!name){alert('Name is required.');return;}
-  var data={kind:gv('pr_kind'),name:name,accountName:gv('pr_accountName').trim(),contactName:gv('pr_contactName').trim(),title:gv('pr_title').trim(),email:gv('pr_email').trim(),phone:gv('pr_phone').trim(),linkedin:gv('pr_linkedin').trim(),website:gv('pr_website').trim(),industry:gv('pr_industry').trim(),location:gv('pr_location').trim(),ownerId:gv('pr_owner'),status:gv('pr_status'),priority:gv('pr_priority'),source:gv('pr_source').trim(),nextAction:gv('pr_nextAction').trim(),nextActionDate:gv('pr_nextActionDate'),notes:gv('pr_notes').trim(),tags:gv('pr_tags').split(',').map(function(t){return t.trim();}).filter(Boolean)};
+  var prInitIds=[];var _ib=document.getElementById('pr_inits');if(_ib)_ib.querySelectorAll('input[type=checkbox]:checked').forEach(function(c){prInitIds.push(c.value);});
+  var data={kind:gv('pr_kind'),name:name,accountName:gv('pr_accountName').trim(),contactName:gv('pr_contactName').trim(),title:gv('pr_title').trim(),email:gv('pr_email').trim(),phone:gv('pr_phone').trim(),linkedin:gv('pr_linkedin').trim(),website:gv('pr_website').trim(),industry:gv('pr_industry').trim(),location:gv('pr_location').trim(),ownerId:gv('pr_owner'),status:gv('pr_status'),priority:gv('pr_priority'),source:gv('pr_source').trim(),nextAction:gv('pr_nextAction').trim(),nextActionDate:gv('pr_nextActionDate'),notes:gv('pr_notes').trim(),tags:gv('pr_tags').split(',').map(function(t){return t.trim();}).filter(Boolean),linkedInitiativeIds:prInitIds};
   if(prospectEditId){var p=prospectList().find(function(x){return x.id===prospectEditId;});if(p){data.updatedAt=Date.now();Object.assign(p,data);}}
   else{D.prospects=D.prospects||[];data.id=uid();data.createdAt=Date.now();data.createdBy=ME?ME.name:'';data.linkedOppIds=[];data.convertedOppId='';data.order=D.prospects.length;D.prospects.push(data);}
   closeModal('ovProspect');save();renderView();
@@ -10396,9 +10401,13 @@ function _goalLinkData(g){
     var oppIds=out.opps.map(function(o){return o.id;});
     var prMap={};(D.proposals||[]).forEach(function(pr){if((L.proposals||[]).indexOf(pr.id)>-1||oppIds.indexOf(pr.opportunityId)>-1)prMap[pr.id]=pr;});
     out.proposals=Object.keys(prMap).map(function(k){return prMap[k];});
-    var acMap={};(D.customers||[]).forEach(function(c){var auto=c.project&&initNames[String(c.project).toLowerCase()];if(auto||(L.accounts||[]).indexOf(c.id)>-1)acMap[c.id]=c;});
+    // accounts: customers (auto by project / manual) + Prospect "account" records linked to the initiative(s)
+    var acMap={};(D.customers||[]).forEach(function(c){var auto=c.project&&initNames[String(c.project).toLowerCase()];if(auto||(L.accounts||[]).indexOf(c.id)>-1)acMap['c:'+c.id]={name:c.name,contact:c.contact};});
+    (D.prospects||[]).forEach(function(pr){if(pr.kind==='poc')return;if((pr.linkedInitiativeIds||[]).some(function(i){return initIds.indexOf(i)>-1;}))acMap['p:'+pr.id]={name:pr.name,contact:pr.contactName};});
     out.accounts=Object.keys(acMap).map(function(k){return acMap[k];});
-    var cset={};out.accounts.forEach(function(c){if(c.contact)cset[c.contact]=1;});out.contacts=Object.keys(cset);
+    // contacts: Prospect POCs linked to the initiative(s) + contact names on linked accounts
+    var cset={};(D.prospects||[]).forEach(function(pr){if(pr.kind!=='poc')return;if((pr.linkedInitiativeIds||[]).some(function(i){return initIds.indexOf(i)>-1;})&&pr.name)cset[pr.name]=1;});
+    out.accounts.forEach(function(c){if(c.contact)cset[c.contact]=1;});out.contacts=Object.keys(cset);
     var mMap={};(D.activities||[]).forEach(function(a){if(!a.isMilestone)return;if(initIds.indexOf(a.projectId)>-1||(L.milestones||[]).indexOf(a.id)>-1)mMap[a.id]=a;});
     out.milestones=Object.keys(mMap).map(function(k){return mMap[k];});
     var tMap={};(D.activities||[]).forEach(function(a){if(a.isMilestone)return;if(initIds.indexOf(a.projectId)>-1||(L.tasks||[]).indexOf(a.id)>-1)tMap[a.id]=a;});
