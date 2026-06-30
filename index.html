@@ -1144,6 +1144,7 @@ select.ct-cell{cursor:pointer;-webkit-appearance:none;appearance:none;}
   <div class="stats" id="statsBar"></div>
   <div class="toolbar">
     <div class="tab-bar">
+      <button class="tab tab-confidential" id="tabHome" onclick="switchTab('home')">&#127968; Home</button>
       <button class="tab tab-confidential" id="tabProforma" onclick="switchTab('proforma')">&#128274; Proforma</button>
       <button class="tab tab-confidential" id="tabStrat" onclick="switchTab('strat')">&#127919; Strategy</button>
       <button class="tab tab-confidential" id="tabValuation" onclick="switchTab('valuation')">&#128142; Valuation</button>
@@ -2021,7 +2022,7 @@ function canProposal(){
   return false;
 }
 /* Confidential Proforma section — Admin only (CEO second brain). */
-function canProforma(){ return !!(ME&&ME.role==='admin'); }
+function canProforma(){ return !!(ME&&(ME.role==='admin'||ME.role==='exec')); }
 function recruitMigrate(){
   if(!D.recruitings)D.recruitings=[];
   if(!D.candidates)D.candidates=[];
@@ -2876,7 +2877,7 @@ function openUnallocatedModal(){
   openModal('ovForm');
 }
 
-function switchTab(mode){viewMode=mode;var tabs={org:'tabOrg',proj:'tabProj',contracts:'tabContracts',recruit:'tabRecruit',init:'tabInit',opp:'tabOpp',prop:'tabProp',over:'tabOver',orgchart:'tabChart',res:'tabRes',cap:'tabCap',class:'tabClass',plan:'tabPlan',ptask:'tabPTask',pplan:'tabPPlan',reports:'tabReports',strat:'tabStrat',valuation:'tabValuation',proforma:'tabProforma'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
+function switchTab(mode){viewMode=mode;var tabs={home:'tabHome',org:'tabOrg',proj:'tabProj',contracts:'tabContracts',recruit:'tabRecruit',init:'tabInit',opp:'tabOpp',prop:'tabProp',over:'tabOver',orgchart:'tabChart',res:'tabRes',cap:'tabCap',class:'tabClass',plan:'tabPlan',ptask:'tabPTask',pplan:'tabPPlan',reports:'tabReports',strat:'tabStrat',valuation:'tabValuation',proforma:'tabProforma'};Object.keys(tabs).forEach(function(k){var el=document.getElementById(tabs[k]);if(el)el.className='tab'+(mode===k?' active':'');});renderView();}
 
 function cardHTML(m,did){
 var dept=D.departments.find(function(d){return d.id===did;});
@@ -7704,6 +7705,7 @@ function renderView(){
   // Data not loaded yet (nav click during boot): skip — initApp calls
   // renderView() after bootstrapData, which then renders the clicked tab.
   if(!D)return;
+  if(!_homeLanded&&ME&&ME.role==='exec'){_homeLanded=true;viewMode='home';}   // execs land on the Home dashboard
   if(ME&&!canSee(viewMode)){var f=SECTIONS.find(function(s){return canSee(s.k);});if(f)viewMode=f.k;}
   applyRoleUI();renderStats();
   var q=(document.getElementById('searchInput').value||'').toLowerCase().trim();var html;
@@ -7726,6 +7728,7 @@ function renderView(){
   else if(viewMode==='proforma')html=renderProformaView(q);
   else if(viewMode==='strat')html=renderStrategyView(q);
   else if(viewMode==='valuation')html=renderValuationView(q);
+  else if(viewMode==='home')html=renderHomeView(q);
   else html=renderResourcesView(q);
   document.getElementById('mainContent').innerHTML=html;
 }
@@ -10024,6 +10027,220 @@ function _stratTeamHTML(model){
     +'<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">'+rows+foot+'</div>';
 }
 function _stratStatusDot(k){var c={ontrack:'#16A34A',atrisk:'#D97706',off:'#DC2626',done:'#16A34A'}[k]||'#94A3B8';return '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+c+';vertical-align:middle"></span>';}
+/* ============================================================
+   EXECUTIVE HOME — single shared, admin-customizable dashboard
+   for CEO / COO / CFO. Every widget reads LIVE from an existing
+   engine (cash model, Strategy goals, Proforma risks, Customers,
+   Commercial, BCLM tasks, Capacity) — no data duplication.
+   Access: admin + the new 'exec' role (canSee/canProforma).
+   Layout persisted in D.execHome {order:[keys],hidden:[keys]};
+   customization is admin-only. Persona lens is client-only.
+   ============================================================ */
+var HOME_LENS='all', HOME_EDIT=false, _homeLanded=false;
+function _homeCash(){try{return _stratCash();}catch(e){return null;}}
+function _homeEmpty(t){return '<div class="exh-empty">'+esc(t)+'</div>';}
+function _homeMon(r){try{return _stratMonLbl(r);}catch(e){return '';}}
+function _homeOwnerName(id){try{var m=allM().find(function(x){return x.id===id;});return m?String(m.name||'').split(' ')[0]:'';}catch(e){return '';}}
+function _homeRevByYear(m){var by={};(m&&m.rows||[]).forEach(function(r){by[r.y]=(by[r.y]||0)+(r.rev||0);});return by;}
+function _homeWidget(key){return HOME_WIDGETS.find(function(w){return w.key===key;});}
+function _homeSpark(vals,o){o=o||{};var n=vals.length;if(!n)return '';var min=Math.min.apply(null,vals),max=Math.max.apply(null,vals);if(o.floor!=null)min=Math.min(min,o.floor);if(max===min)max=min+1;var W=320,H=46;var x=function(i){return n<2?W:Math.round(i*W/(n-1));};var y=function(v){return (H-2-(v-min)/(max-min)*(H-7)).toFixed(1);};var pts=vals.map(function(v,i){return x(i)+','+y(v);}).join(' ');var floor=(o.floor!=null)?'<line x1="0" y1="'+y(o.floor)+'" x2="'+W+'" y2="'+y(o.floor)+'" stroke="var(--exh-gold)" stroke-width="1" stroke-dasharray="4 4"/>':'';return '<svg class="exh-spark" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" aria-hidden="true">'+floor+'<polyline points="'+pts+'" fill="none" stroke="'+(o.stroke||'#2563EB')+'" stroke-width="2.2"/><circle cx="'+x(n-1)+'" cy="'+y(vals[n-1])+'" r="3.4" fill="'+(o.stroke||'#2563EB')+'"/></svg>';}
+function _homeBar(pct,col){return '<div class="exh-mini"><span style="width:'+Math.max(0,Math.min(100,Math.round(pct)))+'%;background:'+col+'"></span></div>';}
+
+/* ---- North Star strip (pinned, not customizable) ---- */
+function _homeNorthStar(){
+  var m=_homeCash(),P=D.proforma||{},c=P.company||{},t='';
+  function tile(persona,ey,val,sub,pct,col,isKey){var dim=(HOME_LENS!=='all'&&persona.indexOf(HOME_LENS)<0);return '<div class="exh-ns'+(isKey?' key':'')+(dim?' dim':'')+'"><div class="exh-ns-ey">'+ey+'</div><div class="exh-ns-val num">'+val+'</div><div class="exh-ns-sub">'+sub+'</div>'+(pct!=null?'<div class="exh-ns-bar"><span style="width:'+Math.max(0,Math.min(100,Math.round(pct)))+'%;background:'+col+'"></span></div>':'<div class="exh-ns-bar" style="visibility:hidden"></div>')+'</div>';}
+  if(m){
+    var gp=m.gate?m.opening/m.gate*100:0;
+    t+=tile(['ceo','cfo'],'Cash gate',fmt(Math.round(m.opening))+' <span style="font-size:13px;color:#AEB7C7">/ '+fmt(m.gate)+'</span>',Math.round(gp)+'% · ETA '+(m.gateMet?_homeMon(m.gateMet):'beyond horizon'),gp,'var(--exh-gold)',true);
+    var tr=m.trough;if(tr){var gap=m.gate-tr.cashBal,below=gap>0;t+=tile(['cfo','ceo'],'Projected trough',fmt(Math.round(tr.cashBal)),below?'<span style="color:var(--exh-crit)">'+_homeMon(tr)+' · '+fmt(Math.round(gap))+' below gate</span>':_homeMon(tr)+' · above gate',m.gate?tr.cashBal/m.gate*100:0,below?'var(--exh-crit)':'var(--exh-good)');}
+    var by=_homeRevByYear(m),yrs=Object.keys(by).sort(),cur=by[2027]||by[yrs[yrs.length-1]]||0,tgt=Number(c.fy27RevenueTarget)||0,rp=tgt?cur/tgt*100:0;
+    t+=tile(['ceo','cfo'],'FY27 revenue',fmt(Math.round(cur))+(tgt?' <span style="font-size:13px;color:var(--exh-muted)">/ '+fmt(tgt)+'</span>':''),tgt?Math.round(rp)+'% to target':'projected',tgt?rp:null,rp>=90?'var(--exh-good)':'var(--exh-warn)');
+  }
+  var wp=0;try{(D.projects||[]).forEach(function(p){if(projCat(p)==='opportunity'){var st=(typeof capOppStage==='function'?capOppStage(p):(p.stage||''));if(/lost/i.test(st))return;wp+=(Number(p.potential)||0)*_initOppProb(p);}});}catch(e){}
+  t+=tile(['ceo'],'Weighted pipeline',fmt(Math.round(wp)),'Σ potential × P(close)',null);
+  var debt=Number(c.corporateDebt)||((P.debt&&P.debt.total)||0);
+  t+=tile(['cfo','ceo'],'Corporate debt',fmt(Math.round(debt)),'total outstanding',null);
+  return '<div class="exh-ns-strip">'+t+'</div>';
+}
+
+/* ---- Widget registry — each render() returns the card BODY ---- */
+var HOME_WIDGETS=[
+  {key:'goals',lane:'perf',size:'w6',persona:['ceo'],title:'Goals & KPI scorecard',sub:'Strategy → Goals · live vs target',render:function(){
+    var gs=((D.strategy||{}).goals)||[];if(!gs.length)return _homeEmpty('No goals set. Add them in Strategy → Goals.');var m=_homeCash()||_stratCash();
+    return gs.slice(0,6).map(function(g){var ev=_stratGoalEval(g,m),st=_stratGoalStatus(g,ev),tg=Number(g.target)||0,pct=tg?ev.current/tg*100:0;var col=({ontrack:'good',atrisk:'warn',off:'crit',done:'good'}[st.key]||'flat');var bc=({good:'var(--exh-good)',warn:'var(--exh-warn)',crit:'var(--exh-crit)',flat:'#9aa6b6'}[col]);return '<div class="exh-mrow"><div class="exh-lab">'+esc(g.label)+'</div><div class="exh-rt">'+_homeBar(pct,bc)+'<span class="exh-chip '+col+'">'+esc(st.label)+'</span></div></div>';}).join('');
+  }},
+  {key:'revenue',lane:'perf',size:'w6',persona:['ceo','cfo'],title:'Revenue trajectory',sub:'Debt-free plan · projected by fiscal year',render:function(){
+    var m=_homeCash();if(!m)return _homeEmpty('No projection available.');var by=_homeRevByYear(m),yrs=Object.keys(by).sort();if(!yrs.length)return _homeEmpty('No projection rows.');var vals=yrs.map(function(y){return by[y];});var leg=yrs.map(function(y){return '<span>FY'+String(y).slice(2)+' <b class="num">'+fmt(Math.round(by[y]))+'</b></span>';}).join('');return _homeSpark(vals,{stroke:'#2563EB'})+'<div class="exh-legend">'+leg+'</div>';
+  }},
+  {key:'commercial',lane:'perf',size:'w6',persona:['ceo','coo'],title:'Commercial dept health',sub:'Weekly status · most recent week',render:function(){
+    if(!D.commercial||typeof COMM_DEPTS==='undefined')return _homeEmpty('No commercial data.');var depts=COMM_DEPTS.filter(function(d){return d.ready;});if(!depts.length)return _homeEmpty('No departments configured.');var subs=D.commercial.submissions||[];var latest='';subs.forEach(function(s){if(s.weekEnding>latest)latest=s.weekEnding;});
+    return '<div class="exh-rag">'+depts.map(function(d){var has=subs.some(function(s){return s.dept===d.key&&s.weekEnding===latest;});return '<div class="exh-cell"><span class="exh-sw" style="background:'+(has?'var(--exh-good)':'var(--exh-warn)')+'"></span><span class="exh-nm">'+esc(d.label)+'</span><span class="exh-mt">'+(has?'reported':'no update')+'</span></div>';}).join('')+'</div>';
+  }},
+  {key:'customers',lane:'perf',size:'w6',persona:['coo','cfo'],title:'ARR & customer health',sub:'Customers registry · by login recency',render:function(){
+    var cs=D.customers||[];if(!cs.length)return _homeEmpty('No customers in the registry.');var arr=cs.reduce(function(a,c){return a+(Number(c.value)||0);},0);var eng=0,act=0,risk=0,dorm=0;cs.forEach(function(c){var d=custDaysNum(c);if(d==null)return;if(d<=7)eng++;else if(d<=30)act++;else if(d<=90)risk++;else dorm++;});var tot=(eng+act+risk+dorm)||1;function seg(v,col){return v?'<span style="width:'+(v/tot*100)+'%;background:'+col+'"></span>':'';}
+    return '<div class="exh-bigstat"><span class="n num">'+fmt(Math.round(arr))+'</span><span class="u">ARR · '+cs.length+' customers</span></div><div class="exh-seg">'+seg(eng,'var(--exh-good)')+seg(act,'#74A892')+seg(risk,'var(--exh-warn)')+seg(dorm,'var(--exh-crit)')+'</div><div class="exh-legend"><span><i style="background:var(--exh-good)"></i>Engaged <b class="num">'+eng+'</b></span><span><i style="background:#74A892"></i>Active <b class="num">'+act+'</b></span><span><i style="background:var(--exh-warn)"></i>At risk <b class="num">'+risk+'</b></span><span><i style="background:var(--exh-crit)"></i>Dormant <b class="num">'+dorm+'</b></span></div>';
+  }},
+  {key:'tasks',lane:'exec',size:'',persona:['coo'],title:'Task completion',sub:'BCLM contract tracker',render:function(){
+    var c=(typeof contractCur==='function')?contractCur():null,ts=(c&&c.dashboard&&c.dashboard.tasks)||[];if(!ts.length)return _homeEmpty('No contract tasks.');var done=0,late=0;ts.forEach(function(t){var cd=t.completedDate||/complete/i.test(t.progress||'');if(cd)done++;else if(t.late)late++;});var total=ts.length,open=total-done,pct=Math.round(done/total*100);
+    return '<div class="exh-donutwrap"><div class="exh-donut" style="--p:'+pct+'"><b class="num">'+pct+'%</b></div><div style="flex:1"><div class="exh-mrow tight"><span class="exh-lab">Completed</span><span class="exh-v num">'+done+'</span></div><div class="exh-mrow tight"><span class="exh-lab">Open</span><span class="exh-v num">'+open+'</span></div><div class="exh-mrow tight"><span class="exh-lab" style="color:var(--exh-crit)">Late</span><span class="exh-v num" style="color:var(--exh-crit)">'+late+'</span></div></div></div>';
+  }},
+  {key:'milestones',lane:'exec',size:'',persona:['coo','ceo'],title:'Milestones at risk',sub:'Initiatives & projects',render:function(){
+    var today=new Date();today.setHours(0,0,0,0);var ms=(D.activities||[]).filter(function(a){return a.isMilestone&&a.status!=='done';});if(!ms.length)return _homeEmpty('No open milestones.');ms.forEach(function(a){var d=a.dueDate?new Date(a.dueDate):null;a._d=(d&&!isNaN(d))?d:null;a._over=a._d&&a._d<today;});ms.sort(function(a,b){return (a._d?a._d.getTime():9e15)-(b._d?b._d.getTime():9e15);});
+    return ms.slice(0,4).map(function(a){var col=(a._over||a.status==='blocked')?'var(--exh-crit)':'var(--exh-warn)';var due=a._d?((a._over?'Overdue · ':'Due ')+a._d.toLocaleDateString('en-US',{month:'short',day:'numeric'})):'No due date';var own=(a.owners&&a.owners.length)?_homeOwnerName(a.owners[0]):'';return '<div class="exh-risk"><div class="exh-stripe" style="background:'+col+'"></div><div class="exh-rb"><div class="exh-rt">'+esc(a.subtask||a.task||'milestone')+'</div><div class="exh-rs">'+due+'</div></div>'+(own?'<span class="exh-own">'+esc(own)+'</span>':'')+'</div>';}).join('');
+  }},
+  {key:'staffing',lane:'exec',size:'',persona:['coo','cfo'],title:'Staffing gaps',sub:'Contract positions',render:function(){
+    var c=(typeof contractCur==='function')?contractCur():null,pos=(c&&c.positions)||[];if(!pos.length)return _homeEmpty('No positions defined.');var tbh=pos.filter(function(p){return /TBH/i.test(p.status||'');}).length,tbd=pos.filter(function(p){return /TBD/i.test(p.status||'');}).length,filled=pos.filter(function(p){return /Filled/i.test(p.status||'');}).length;
+    return '<div class="exh-mrow"><span class="exh-lab">Filled</span><span class="exh-v num">'+filled+'</span></div><div class="exh-mrow"><span class="exh-lab">To be hired (TBH)</span><span class="exh-chip '+(tbh?'warn':'flat')+'">'+tbh+' open</span></div><div class="exh-mrow"><span class="exh-lab">To be determined (TBD)</span><span class="exh-chip flat">'+tbd+'</span></div><div class="exh-mrow"><span class="exh-lab">Total positions</span><span class="exh-v num">'+pos.length+'</span></div>';
+  }},
+  {key:'owners',lane:'exec',size:'w6',persona:['coo'],title:'Open items by owner',sub:'BCLM tasks · most loaded first',render:function(){
+    var c=(typeof contractCur==='function')?contractCur():null,ts=(c&&c.dashboard&&c.dashboard.tasks)||[];if(!ts.length)return _homeEmpty('No contract tasks.');var by={};ts.forEach(function(t){var done=t.completedDate||/complete/i.test(t.progress||'');if(done)return;var as=(t.assignees&&t.assignees.length)?t.assignees:['Unassigned'];as.forEach(function(a){by[a]=by[a]||{open:0,late:0};by[a].open++;if(t.late)by[a].late++;});});var rows=Object.keys(by).map(function(k){return {n:k,o:by[k].open,l:by[k].late};}).sort(function(a,b){return b.o-a.o;}).slice(0,5);if(!rows.length)return _homeEmpty('No open items — all caught up.');
+    return rows.map(function(r){return '<div class="exh-mrow"><div class="exh-lab">'+esc(r.n)+'</div><div class="exh-rt"><span class="exh-chip '+(r.l?'crit':'flat')+'">'+r.l+' late</span><span class="exh-v num"><em>'+r.o+' open</em></span></div></div>';}).join('');
+  }},
+  {key:'proposals',lane:'exec',size:'',persona:['ceo','coo'],title:'Proposals in flight',sub:'Pipeline → Proposals',render:function(){
+    var ps=D.proposals||[];if(!ps.length)return _homeEmpty('No proposals yet.');var by={};ps.forEach(function(p){by[p.status||'draft']=(by[p.status||'draft']||0)+1;});function row(k,lbl,cls){return '<div class="exh-mrow"><span class="exh-lab">'+lbl+'</span><span class="exh-chip '+(cls||'flat')+'">'+(by[k]||0)+'</span></div>';}
+    return row('to-be-drafted','To be drafted','warn')+row('draft','In draft')+row('in-review','In review')+row('submitted','Submitted')+'<div class="exh-mrow"><span class="exh-lab">Total active</span><span class="exh-v num">'+ps.filter(function(p){return p.status!=='won'&&p.status!=='lost';}).length+'</span></div>';
+  }},
+  {key:'risks',lane:'risk',size:'w6',persona:['ceo','coo','cfo'],title:'Risk register',sub:'Proforma · open critical & high',render:function(){
+    var rs=((D.proforma||{}).risks)||[];var open=rs.filter(function(r){return !/RESOLVED|CLOSED/i.test(r.status||'')&&/CRITICAL|HIGH/i.test(r.level||'');});if(!open.length)return _homeEmpty('No open critical or high risks.');
+    return open.slice(0,4).map(function(r){var crit=/CRITICAL/i.test(r.level||'');return '<div class="exh-risk"><div class="exh-stripe" style="background:'+(crit?'var(--exh-crit)':'var(--exh-warn)')+'"></div><div class="exh-rb"><div class="exh-rt">'+esc(r.risk||'')+'</div>'+(r.mitigation?'<div class="exh-rs">Mitigation: '+esc(r.mitigation)+'</div>':'')+'</div>'+(r.owner?'<span class="exh-own">'+esc(r.owner)+'</span>':'')+'</div>';}).join('');
+  }},
+  {key:'runway',lane:'risk',size:'w6',persona:['cfo','ceo'],title:'Cash runway',sub:'Projected balance vs $1.5M gate',render:function(){
+    var m=_homeCash();if(!m||!m.rows.length)return _homeEmpty('No projection.');var vals=m.rows.map(function(r){return r.cashBal;});var tr=m.trough;return _homeSpark(vals,{stroke:'#1B2A4A',floor:m.gate})+'<div class="exh-legend"><span><i style="background:var(--exh-gold)"></i>'+fmt(m.gate)+' gate</span>'+(tr?'<span><i style="background:var(--exh-crit)"></i>trough '+fmt(Math.round(tr.cashBal))+' ('+_homeMon(tr)+')</span>':'')+(m.gateMet?'<span><i style="background:var(--exh-good)"></i>clears '+_homeMon(m.gateMet)+'</span>':'')+'</div>';
+  }},
+  {key:'dates',lane:'risk',size:'',persona:['coo','cfo'],title:'Critical dates',sub:'Proforma timeline',render:function(){
+    var ds=((D.proforma||{}).dates)||[];if(!ds.length)return _homeEmpty('No critical dates.');var rows=ds.slice().sort(function(a,b){return String(a.date).localeCompare(String(b.date));}).slice(0,4);
+    return rows.map(function(d){var crit=/CRITICAL|HIGH/i.test(d.status||'')||/sunset|cliff/i.test(d.event||'');return '<div class="exh-mrow"><div class="exh-lab">'+esc(d.event||'')+(d.impact?'<small>'+esc(d.impact)+'</small>':'')+'</div><span class="exh-chip '+(crit?'crit':'warn')+'">'+esc(d.date||'')+'</span></div>';}).join('');
+  }},
+  {key:'datagaps',lane:'risk',size:'',persona:['coo'],title:'Data gaps',sub:'Proforma · blocks decisions',render:function(){
+    var gs=((D.proforma||{}).dataGaps)||[];if(!gs.length)return _homeEmpty('No open data gaps.');
+    return gs.slice(0,4).map(function(g){var hi=/HIGHEST|CRITICAL|HIGH/i.test(g.priority||'');return '<div class="exh-risk"><div class="exh-stripe" style="background:'+(hi?'var(--exh-crit)':'var(--exh-warn)')+'"></div><div class="exh-rb"><div class="exh-rt">'+esc(g.gap||'')+'</div>'+(g.impact?'<div class="exh-rs">'+esc(g.impact)+'</div>':'')+'</div></div>';}).join('');
+  }},
+  {key:'overalloc',lane:'risk',size:'',persona:['coo'],title:'Resource overallocation',sub:'Capacity · current allocation',render:function(){
+    var over=[];try{over=allM().filter(function(m){return totalAlloc(m)>100;}).map(function(m){return {n:m.name,a:totalAlloc(m)};}).sort(function(a,b){return b.a-a.a;});}catch(e){return _homeEmpty('Allocation data unavailable.');}if(!over.length)return _homeEmpty('No one is over-allocated.');
+    return over.slice(0,5).map(function(r){return '<div class="exh-mrow"><div class="exh-lab">'+esc(r.n)+'</div><div class="exh-rt">'+_homeBar(r.a,r.a>=130?'var(--exh-crit)':'var(--exh-warn)')+'<span class="exh-chip '+(r.a>=130?'crit':'warn')+'">'+Math.round(r.a)+'%</span></div></div>';}).join('');
+  }}
+];
+
+function _homeEnsure(){
+  var H=D.execHome=D.execHome||{};var keys=HOME_WIDGETS.map(function(w){return w.key;});
+  if(!Array.isArray(H.order))H.order=keys.slice();
+  if(!Array.isArray(H.hidden))H.hidden=[];
+  H.order=H.order.filter(function(k){return keys.indexOf(k)>-1;});
+  H.hidden=H.hidden.filter(function(k){return keys.indexOf(k)>-1;});
+  keys.forEach(function(k){if(H.order.indexOf(k)<0&&H.hidden.indexOf(k)<0)H.order.push(k);});
+  return H;
+}
+function _homeRenderWidget(w){
+  var body;try{body=w.render();}catch(e){body='<div class="exh-empty">Couldn’t load this widget.</div>';}
+  if(!body)body='<div class="exh-empty">No data.</div>';
+  var dim=(HOME_LENS!=='all'&&(w.persona||[]).indexOf(HOME_LENS)<0);
+  var admin=(ME&&ME.role==='admin'&&HOME_EDIT);
+  var tools=admin?'<div class="exh-tools"><button onclick="homeMove(\''+w.key+'\',-1)" title="Move up">▲</button><button onclick="homeMove(\''+w.key+'\',1)" title="Move down">▼</button><button class="rm" onclick="homeRemove(\''+w.key+'\')" title="Remove">✕</button></div>':'';
+  var ptags='<div class="exh-ptags">'+(w.persona||[]).map(function(p){return '<span>'+p.toUpperCase()+'</span>';}).join('')+'</div>';
+  return '<div class="exh-w '+(w.size||'')+(dim?' dim':'')+(admin?' editing':'')+'">'+tools+'<div class="exh-wh"><div class="exh-wt">'+esc(w.title)+(w.sub?'<small>'+esc(w.sub)+'</small>':'')+'</div></div>'+body+ptags+'</div>';
+}
+function _homeLane(lane,title,dot,meta){
+  var H=_homeEnsure();var ws=H.order.map(_homeWidget).filter(function(w){return w&&w.lane===lane;});
+  var cards=ws.map(_homeRenderWidget).join('');
+  var add=(ME&&ME.role==='admin'&&HOME_EDIT)?'<div class="exh-add" onclick="homeOpenPicker()">＋ Add widget</div>':'';
+  if(!cards&&!add)return '';
+  return '<div class="exh-lane"><div class="exh-laneh"><span class="exh-dot" style="background:'+dot+'"></span><span class="exh-lt">'+title+'</span><span class="exh-rule"></span><span class="exh-meta">'+meta+'</span></div><div class="exh-grid">'+cards+add+'</div></div>';
+}
+function homeSetLens(p){HOME_LENS=p;renderView();}
+function homeToggleEdit(){if(!ME||ME.role!=='admin')return;HOME_EDIT=!HOME_EDIT;renderView();}
+function homeRemove(key){if(!ME||ME.role!=='admin')return;var H=_homeEnsure();H.order=H.order.filter(function(k){return k!==key;});if(H.hidden.indexOf(key)<0)H.hidden.push(key);save();renderView();}
+function homeAdd(key){if(!ME||ME.role!=='admin')return;var H=_homeEnsure();H.hidden=H.hidden.filter(function(k){return k!==key;});if(H.order.indexOf(key)<0)H.order.push(key);save();try{closeModal('ovForm');}catch(e){}renderView();}
+function homeMove(key,dir){if(!ME||ME.role!=='admin')return;var H=_homeEnsure();var lane=(_homeWidget(key)||{}).lane;var laneKeys=H.order.filter(function(k){return (_homeWidget(k)||{}).lane===lane;});var i=laneKeys.indexOf(key),j=dir<0?i-1:i+1;if(j<0||j>=laneKeys.length)return;var swap=laneKeys[j],ai=H.order.indexOf(key),bi=H.order.indexOf(swap);H.order[ai]=swap;H.order[bi]=key;save();renderView();}
+function homeOpenPicker(){var H=_homeEnsure();var mdl=document.getElementById('mdlForm');if(!mdl)return;var list=H.hidden.length?H.hidden.map(function(k){var w=_homeWidget(k);return '<div class="exh-pitem"><span>'+esc(w.title)+'</span><button class="exh-padd" onclick="homeAdd(\''+k+'\')">+ Add</button></div>';}).join(''):'<div class="exh-empty" style="padding:18px;text-align:center">All widgets are on the dashboard. Remove one with ✕ to make it available here.</div>';mdl.innerHTML='<div class="mdl-over">Executive Home</div><div class="mdl-title">Add a widget</div><div class="exh">'+list+'</div><div class="btn-row" style="margin-top:12px"><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovForm\')">Close</button></div>';openModal('ovForm');}
+
+function _homeStyle(){return '<style>'
+  +'.exh{--exh-navy:#1B2A4A;--exh-gold:#C5A55A;--exh-ink:#1B2A4A;--exh-text:#33415C;--exh-muted:#8A94A6;--exh-line:#E6E9F0;--exh-line2:#EEF1F6;--exh-card:#fff;--exh-good:#15803D;--exh-warn:#B45309;--exh-crit:#B91C1C}'
+  +'.exh{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--exh-text)}'
+  +'.exh .num{font-variant-numeric:tabular-nums}'
+  +'.exh-top{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:18px}'
+  +'.exh-top h1{font-family:Georgia,"Times New Roman",serif;font-weight:700;color:var(--exh-ink);font-size:27px;margin:0;letter-spacing:-.01em}'
+  +'.exh-top p{margin:5px 0 0;font-size:13px;color:var(--exh-muted);max-width:60ch;line-height:1.5}'
+  +'.exh-tools-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}'
+  +'.exh-lens{display:inline-flex;background:#fff;border:1px solid var(--exh-line);border-radius:999px;padding:3px;gap:2px}'
+  +'.exh-lens button{font:inherit;font-size:12px;font-weight:600;color:var(--exh-muted);background:none;border:0;padding:6px 13px;border-radius:999px;cursor:pointer}'
+  +'.exh-lens button[aria-pressed="true"]{background:var(--exh-navy);color:#fff}'
+  +'.exh-cust{font:inherit;font-size:12.5px;font-weight:600;border-radius:7px;padding:8px 14px;cursor:pointer;border:1px solid var(--exh-navy);background:var(--exh-navy);color:#fff}'
+  +'.exh-cust.on{background:var(--exh-gold);border-color:var(--exh-gold);color:var(--exh-navy)}'
+  +'.exh-editbar{display:flex;align-items:center;gap:10px;background:rgba(197,165,90,.13);border:1px solid var(--exh-gold);border-radius:7px;padding:9px 14px;margin-bottom:16px;font-size:12.5px;color:var(--exh-navy)}'
+  +'.exh-ns-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:13px;margin-bottom:28px}'
+  +'.exh-ns{background:var(--exh-card);border:1px solid var(--exh-line);border-radius:7px;padding:14px 15px}'
+  +'.exh-ns.key{background:linear-gradient(180deg,#1B2A4A,#22335A);border-color:#22335A;color:#fff}'
+  +'.exh-ns-ey{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--exh-muted)}'
+  +'.exh-ns.key .exh-ns-ey{color:var(--exh-gold)}'
+  +'.exh-ns-val{font-size:23px;font-weight:800;color:var(--exh-ink);margin-top:6px;letter-spacing:-.02em}'
+  +'.exh-ns.key .exh-ns-val{color:#fff}'
+  +'.exh-ns-sub{font-size:11px;color:var(--exh-muted);margin-top:3px}'
+  +'.exh-ns.key .exh-ns-sub{color:#AEB7C7}'
+  +'.exh-ns-bar{height:5px;border-radius:3px;background:#EEF1F6;margin-top:10px;overflow:hidden}'
+  +'.exh-ns.key .exh-ns-bar{background:rgba(255,255,255,.16)}'
+  +'.exh-ns-bar>span{display:block;height:100%;border-radius:3px}'
+  +'.exh-lane{margin-bottom:24px}'
+  +'.exh-laneh{display:flex;align-items:center;gap:12px;margin:0 0 12px}'
+  +'.exh-lt{font-size:11.5px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:var(--exh-navy)}'
+  +'.exh-dot{width:7px;height:7px;border-radius:50%}'
+  +'.exh-rule{flex:1;height:1px;background:var(--exh-line)}'
+  +'.exh-meta{font-size:11px;color:var(--exh-muted)}'
+  +'.exh-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}'
+  +'.exh-w{grid-column:span 4;background:var(--exh-card);border:1px solid var(--exh-line);border-radius:7px;padding:15px 16px;position:relative;transition:box-shadow .15s}'
+  +'.exh-w:hover{box-shadow:0 4px 18px -8px rgba(27,42,74,.18)}'
+  +'.exh-w.w6{grid-column:span 6}.exh-w.w8{grid-column:span 8}'
+  +'.exh-w.editing{border-style:dashed;border-color:#C7CEDA}'
+  +'.exh-w.dim{opacity:.34;filter:grayscale(.45)}'
+  +'.exh-wh{margin-bottom:10px}'
+  +'.exh-wt{font-size:13px;font-weight:700;color:var(--exh-ink)}'
+  +'.exh-wt small{display:block;font-weight:500;font-size:10.5px;color:var(--exh-muted);margin-top:1px}'
+  +'.exh-tools{position:absolute;top:9px;right:10px;display:inline-flex;gap:5px}'
+  +'.exh-tools button{width:22px;height:22px;border-radius:5px;border:1px solid var(--exh-line);background:#fff;cursor:pointer;color:var(--exh-muted);font-size:11px;line-height:1;display:grid;place-items:center}'
+  +'.exh-tools button.rm:hover{border-color:var(--exh-crit);color:var(--exh-crit)}'
+  +'.exh-chip{font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}'
+  +'.exh-chip.good{background:#E9F5EE;color:var(--exh-good)}.exh-chip.warn{background:#FAF0E2;color:var(--exh-warn)}.exh-chip.crit{background:#FBEAEA;color:var(--exh-crit)}.exh-chip.flat{background:#EEF1F6;color:#5A6678}'
+  +'.exh-mrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--exh-line2)}'
+  +'.exh-mrow:first-of-type{border-top:0}.exh-mrow.tight{padding:4px 0;border-top:0}'
+  +'.exh-lab{font-size:12.5px;color:var(--exh-text)}.exh-lab small{display:block;color:var(--exh-muted);font-size:10.5px;margin-top:1px}'
+  +'.exh-rt{display:flex;align-items:center;gap:9px}'
+  +'.exh-v{font-size:13px;font-weight:700;color:var(--exh-ink)}.exh-v em{font-style:normal;color:var(--exh-muted);font-weight:500}'
+  +'.exh-mini{width:78px;height:6px;border-radius:3px;background:#EEF1F6;overflow:hidden;flex:none}.exh-mini>span{display:block;height:100%;border-radius:3px}'
+  +'.exh-bigstat{display:flex;align-items:baseline;gap:9px;margin:2px 0 7px}.exh-bigstat .n{font-size:27px;font-weight:800;color:var(--exh-ink);letter-spacing:-.02em}.exh-bigstat .u{font-size:12px;color:var(--exh-muted)}'
+  +'.exh-rag{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}.exh-cell{display:flex;align-items:center;gap:8px;border:1px solid var(--exh-line);border-radius:6px;padding:7px 9px;font-size:11.5px}.exh-cell .exh-sw{width:8px;height:8px;border-radius:50%;flex:none}.exh-cell .exh-nm{flex:1;font-weight:600;color:var(--exh-text)}.exh-cell .exh-mt{color:var(--exh-muted);font-size:10px}'
+  +'.exh-risk{display:flex;gap:10px;padding:9px 0;border-top:1px solid var(--exh-line2)}.exh-risk:first-of-type{border-top:0}.exh-stripe{width:3px;border-radius:2px;flex:none}.exh-rb{flex:1;min-width:0}.exh-rt{font-size:12.5px;font-weight:600;color:var(--exh-ink)}.exh-rs{font-size:11px;color:var(--exh-muted);margin-top:2px}.exh-own{font-size:10.5px;color:var(--exh-muted);white-space:nowrap}'
+  +'.exh-seg{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:4px 0 9px}.exh-seg>span{display:block;height:100%}'
+  +'.exh-legend{display:flex;flex-wrap:wrap;gap:9px 15px;font-size:11px;color:var(--exh-text)}.exh-legend i{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:middle}.exh-legend b{font-variant-numeric:tabular-nums}'
+  +'.exh-donutwrap{display:flex;align-items:center;gap:16px}.exh-donut{--p:0;width:74px;height:74px;border-radius:50%;flex:none;background:conic-gradient(var(--exh-good) calc(var(--p)*1%),#EEF1F6 0);display:grid;place-items:center;position:relative}.exh-donut::after{content:"";position:absolute;width:52px;height:52px;border-radius:50%;background:#fff}.exh-donut b{position:relative;font-size:16px;font-weight:800;color:var(--exh-ink)}'
+  +'.exh-spark{width:100%;height:46px;display:block;margin:2px 0 6px}'
+  +'.exh-ptags{display:flex;gap:4px;margin-top:10px}.exh-ptags span{font-size:9px;font-weight:700;letter-spacing:.08em;color:var(--exh-muted);border:1px solid var(--exh-line);border-radius:4px;padding:2px 5px}'
+  +'.exh-add{grid-column:span 4;border:1.5px dashed #C7CEDA;border-radius:7px;background:#FCFDFF;color:var(--exh-navy);display:flex;align-items:center;justify-content:center;gap:8px;font-weight:600;font-size:13px;cursor:pointer;min-height:90px}.exh-add:hover{border-color:var(--exh-gold);background:rgba(197,165,90,.1)}'
+  +'.exh-empty{font-size:12px;color:var(--exh-muted);padding:6px 0}'
+  +'.exh-pitem{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 4px;border-bottom:1px solid var(--exh-line2);font-size:13px}.exh-padd{font-size:11px;font-weight:700;color:var(--exh-navy);border:1px solid var(--exh-line);border-radius:5px;padding:5px 11px;cursor:pointer;background:#fff}'
+  +'.exh-foot{margin-top:26px;font-size:11.5px;color:var(--exh-muted);line-height:1.6;border-top:1px solid var(--exh-line);padding-top:14px}'
+  +'@media(max-width:1180px){.exh-w,.exh-w.w8{grid-column:span 6}.exh-add{grid-column:span 6}.exh-ns-strip{grid-template-columns:repeat(2,1fr)}}'
+  +'@media(max-width:760px){.exh-w,.exh-w.w6,.exh-w.w8{grid-column:span 12}.exh-add{grid-column:span 12}.exh-ns-strip{grid-template-columns:1fr}}'
+  +'</style>';}
+
+function renderHomeView(q){
+  if(!canSee('home'))return '<div class="empty-msg">No access. The Executive Home is restricted to Admin and Executive roles.</div>';
+  _homeEnsure();
+  var admin=(ME&&ME.role==='admin');
+  var lens=['all','ceo','coo','cfo'].map(function(p){return '<button aria-pressed="'+(HOME_LENS===p?'true':'false')+'" onclick="homeSetLens(\''+p+'\')">'+(p==='all'?'All':p.toUpperCase())+'</button>';}).join('');
+  var cust=admin?'<button class="exh-cust'+(HOME_EDIT?' on':'')+'" onclick="homeToggleEdit()">'+(HOME_EDIT?'✓ Done':'✎ Customize')+'</button>':'';
+  var editbar=(admin&&HOME_EDIT)?'<div class="exh-editbar">⚙ Customize mode — ▲▼ reorder within a lane, ✕ remove, ＋ add. <b style="margin-left:auto">Changes apply to the shared exec dashboard</b></div>':'';
+  return _homeStyle()+'<div class="exh" style="max-width:1320px;margin:0 auto">'
+    +'<div class="exh-top"><div><h1>Executive briefing</h1><p>One shared view of where the company stands against the cash gate, what’s getting done, and what’s at risk — live from the same engine as Capacity, Strategy &amp; Proforma.</p></div>'
+    +'<div class="exh-tools-row"><div class="exh-lens" role="group" aria-label="Persona lens">'+lens+'</div>'+cust+'</div></div>'
+    +editbar
+    +_homeNorthStar()
+    +_homeLane('perf','Performance vs targets','var(--exh-good)','are we meeting our metrics')
+    +_homeLane('exec','Execution & delivery','#2563EB','are tasks getting completed')
+    +_homeLane('risk','Risk & exposure','var(--exh-crit)','what must be eliminated')
+    +'<div class="exh-foot">Single shared executive dashboard. Every figure is live from an existing Atlas source (cash engine, Strategy goals, Proforma risks, Customers, Commercial, BCLM tasks, Capacity). Customization is admin-only; access is gated to the Executive role.</div>'
+    +'</div>';
+}
+
 function renderProformaView(q){
   if(!canProforma())return '<div class="empty-msg">No access. The Proforma section is restricted to Admin.</div>';
   if(!D.proforma)proformaMigrate();
@@ -16610,7 +16827,7 @@ function setProgramColor(id,c){if(!can('programs'))return;var p=progById(id);if(
 function setPlanStart(v){if(!can('programs'))return;D.planStart=v||'2026-06-01';save();renderView();}
 function delProgram(id){if(!can('programs'))return;var cnt=D.activities.filter(function(a){return a.programId===id;}).length;if(cnt&&!confirm('This program has '+cnt+' task(s). Delete the program AND its tasks?'))return;if(!cnt&&!confirm('Delete this program?'))return;D.activities=D.activities.filter(function(a){return a.programId!==id;});D.programs=D.programs.filter(function(p){return p.id!==id;});save();renderView();openProgramsManager();}
 /* ── ACCOUNTS MANAGER ── */
-var ROLE_LABELS={admin:'Admin',owner:'Program Owner',editor:'Editor',viewer:'Viewer',capture:'Capture'};
+var ROLE_LABELS={admin:'Admin',owner:'Program Owner',editor:'Editor',viewer:'Viewer',capture:'Capture',exec:'Executive'};
 function openAccountsManager(){
   if(!can('accounts'))return;
   var rows=(D.accounts||[]).map(function(ac){
@@ -17235,7 +17452,7 @@ function rptCsvBuiltin(key){var f=RPT_CSV[key],b=rptBuiltin(key);if(!f||(b&&b.fi
 /* ── AUTH & PERMISSIONS (client-side roles only — not API security) ── */
 var AUTH_USER='khaja@communityforce.com',AUTH_PASS='Namtra_CF27',DEFAULT_PW='CommunityForce2026';
 var ME=null;
-var SECTIONS=[{k:'proforma',tab:'tabProforma',l:'Proforma'},{k:'strat',tab:'tabStrat',l:'Strategy'},{k:'valuation',tab:'tabValuation',l:'Valuation'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'pplan',tab:'tabPPlan',l:'Resource Planning'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'contracts',tab:'tabContracts',l:'Contract Mgmt'},{k:'commercial',tab:'tabCommercial',l:'Commercial'},{k:'customers',tab:'tabCustomers',l:'Customers'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources'},{k:'reports',tab:'tabReports',l:'Reports'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'plan',tab:'tabPlan',l:'COE Tasks'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'orgchart',tab:'tabChart',l:'Org Chart'}];
+var SECTIONS=[{k:'home',tab:'tabHome',l:'Executive Home'},{k:'proforma',tab:'tabProforma',l:'Proforma'},{k:'strat',tab:'tabStrat',l:'Strategy'},{k:'valuation',tab:'tabValuation',l:'Valuation'},{k:'cap',tab:'tabCap',l:'Capacity Planning'},{k:'pplan',tab:'tabPPlan',l:'Resource Planning'},{k:'proj',tab:'tabProj',l:'Projects'},{k:'contracts',tab:'tabContracts',l:'Contract Mgmt'},{k:'commercial',tab:'tabCommercial',l:'Commercial'},{k:'customers',tab:'tabCustomers',l:'Customers'},{k:'init',tab:'tabInit',l:'Initiatives'},{k:'opp',tab:'tabOpp',l:'Opportunities'},{k:'prop',tab:'tabProp',l:'Proposals'},{k:'over',tab:'tabOver',l:'Overhead'},{k:'res',tab:'tabRes',l:'Resources'},{k:'reports',tab:'tabReports',l:'Reports'},{k:'recruit',tab:'tabRecruit',l:'Recruiting'},{k:'plan',tab:'tabPlan',l:'COE Tasks'},{k:'ptask',tab:'tabPTask',l:'Project Tasks'},{k:'orgchart',tab:'tabChart',l:'Org Chart'}];
 function emailFromName(name){var clean=(name||'').replace(/\(.*?\)/g,'').replace(/[^A-Za-z .\-]/g,'').trim();var parts=clean.split(/\s+/).filter(Boolean);var local=parts.length>=2?(parts[0]+'.'+parts[parts.length-1]):(parts[0]||'user');return local.toLowerCase().replace(/[^a-z0-9.]/g,'')+'@communityforce.com';}
 function authMigrate(){
   if(!D.accounts)D.accounts=[];
@@ -17258,7 +17475,8 @@ function authMigrate(){
   // Section Visibility matrix (and so the matrix renders unchecked, matching).
   ['owner','editor','viewer'].forEach(function(r){if(!Object.prototype.hasOwnProperty.call(D.sectionVis[r],'commercial'))D.sectionVis[r].commercial=false;});
 }
-function canSee(k){if(!ME)return false;if(k==='proforma'||k==='strat'||k==='valuation')return canProforma();if(ME.role==='admin')return true;
+function canSee(k){if(!ME)return false;if(k==='home'||k==='proforma'||k==='strat'||k==='valuation')return canProforma();if(ME.role==='admin')return true;
+  if(ME.role==='exec')return true;   // Executive role: sees all sections (read-only via can()); customization & Admin panel stay admin-only.
   if(ME.role==='capture')return (k==='prop'||k==='recruit'||k==='opp');   // Capture role: ONLY Proposals, Recruiting, Opportunities — no other pages.
   // Section Visibility is authoritative for tab/section visibility. An explicit
   // grant or revoke in D.sectionVis[role] always wins. For the capability-gated
