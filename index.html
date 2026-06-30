@@ -10247,6 +10247,21 @@ var HOME_WIDGETS=[
     var c=(typeof contractCur==='function')?contractCur():null,ts=(c&&c.dashboard&&c.dashboard.tasks)||[];if(!ts.length)return _homeEmpty('No contract tasks.');var by={};ts.forEach(function(t){var done=t.completedDate||/complete/i.test(t.progress||'');if(done)return;var as=(t.assignees&&t.assignees.length)?t.assignees:['Unassigned'];as.forEach(function(a){by[a]=by[a]||{open:0,late:0};by[a].open++;if(t.late)by[a].late++;});});var rows=Object.keys(by).map(function(k){return {n:k,o:by[k].open,l:by[k].late};}).sort(function(a,b){return b.o-a.o;}).slice(0,5);if(!rows.length)return _homeEmpty('No open items — all caught up.');
     return rows.map(function(r){return '<div class="exh-mrow"><div class="exh-lab">'+esc(r.n)+'</div><div class="exh-rt"><span class="exh-chip '+(r.l?'crit':'flat')+'">'+r.l+' late</span><span class="exh-v num"><em>'+r.o+' open</em></span></div></div>';}).join('');
   }},
+  {key:'opportunities',lane:'exec',size:'',persona:['ceo','coo'],title:'Opportunities',sub:'CRM pipeline',render:function(){
+    var opps=(D.projects||[]).filter(function(p){return projCat(p)==='opportunity';});
+    if(!opps.length)return _homeEmpty('No opportunities in the pipeline.');
+    var stg=function(o){return (typeof capOppStage==='function')?capOppStage(o):(o.stage||'');};
+    var open=opps.filter(function(o){return !/won|lost/i.test(stg(o));});
+    var pot=0,wt=0;open.forEach(function(o){var p=Number(o.potential)||0;pot+=p;wt+=p*_initOppProb(o);});
+    var won=opps.filter(function(o){return /won/i.test(stg(o));}).length;
+    var lost=opps.filter(function(o){return /lost/i.test(stg(o));}).length;
+    var b='<div class="exh-bigstat"><span class="n num">'+fmt(Math.round(wt))+'</span><span class="u">weighted pipeline</span></div>';
+    b+='<div class="exh-mrow tight"><span class="exh-lab">Open opportunities</span><span class="exh-v num">'+open.length+'</span></div>';
+    b+='<div class="exh-mrow tight"><span class="exh-lab">Potential (unweighted)</span><span class="exh-v num">'+fmt(Math.round(pot))+'</span></div>';
+    b+='<div class="exh-mrow tight"><span class="exh-lab">Won</span><span class="exh-v num" style="color:var(--exh-good)">'+won+'</span></div>';
+    b+='<div class="exh-mrow tight"><span class="exh-lab">Lost</span><span class="exh-v num" style="color:var(--exh-muted)">'+lost+'</span></div>';
+    return b;
+  }},
   {key:'proposals',lane:'exec',size:'',persona:['ceo','coo'],title:'Proposals in flight',sub:'Pipeline → Proposals',render:function(){
     var ps=D.proposals||[];if(!ps.length)return _homeEmpty('No proposals yet.');var by={};ps.forEach(function(p){by[p.status||'draft']=(by[p.status||'draft']||0)+1;});function row(k,lbl,cls){return '<div class="exh-mrow"><span class="exh-lab">'+lbl+'</span><span class="exh-chip '+(cls||'flat')+'">'+(by[k]||0)+'</span></div>';}
     return row('to-be-drafted','To be drafted','warn')+row('draft','In draft')+row('in-review','In review')+row('submitted','Submitted')+'<div class="exh-mrow"><span class="exh-lab">Total active</span><span class="exh-v num">'+ps.filter(function(p){return p.status!=='won'&&p.status!=='lost';}).length+'</span></div>';
@@ -10287,6 +10302,14 @@ function _homeEnsure(){
       H.order.unshift('revtodate','revenue');
     }
     H.revPairV1=true;
+  }
+  // One-time: place the Opportunities widget immediately before Proposals.
+  if(!H.oppPlacedV1){
+    if(H.order.indexOf('opportunities')>-1&&H.order.indexOf('proposals')>-1){
+      H.order=H.order.filter(function(k){return k!=='opportunities';});
+      H.order.splice(H.order.indexOf('proposals'),0,'opportunities');
+    }
+    H.oppPlacedV1=true;
   }
   return H;
 }
