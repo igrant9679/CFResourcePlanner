@@ -9378,24 +9378,44 @@ function _stratGoalsHTML(model){
   var goals=D.strategy.goals||[];
   var head='<div style="display:flex;justify-content:space-between;align-items:center;margin:18px 0 8px"><div style="font-size:14px;font-weight:800">Goals &amp; KPIs</div><div style="display:flex;gap:6px">'+(goals.length?'':'<button class="btn btn-outline btn-sm" onclick="stratSeedGoals()">✨ Seed starter goals</button>')+'<button class="btn btn-gold btn-sm" onclick="stratEditGoal(\'\')">+ New Goal</button></div></div>';
   if(!goals.length)return head+'<div class="empty-msg">No goals yet. Click <b>✨ Seed starter goals</b> for the cash gate, FY27 revenue, weighted pipeline, and one revenue goal per initiative — then edit targets/owners. Or add your own (ARR, skilled-hire counts…) with <b>+ New Goal</b>.</div>';
+  var th='<thead><tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);text-align:left;border-bottom:2px solid var(--border)">'
+    +'<th style="padding:7px 8px">Goal</th>'
+    +'<th style="padding:7px 8px">Metric</th>'
+    +'<th style="padding:7px 8px">Owner</th>'
+    +'<th style="padding:7px 8px;white-space:nowrap">Target date</th>'
+    +'<th style="padding:7px 8px">Cadence</th>'
+    +'<th style="padding:7px 8px;text-align:right">Current</th>'
+    +'<th style="padding:7px 8px;text-align:right">Target</th>'
+    +'<th style="padding:7px 8px;min-width:150px">Progress</th>'
+    +'<th style="padding:7px 8px"></th></tr></thead>';
   var rows=goals.map(function(g){
     var ev=_stratGoalEval(g,model),stt=_stratGoalStatus(g,ev),cfg=_stratMetricCfg(g.metric);
     var target=Number(g.target)||0;
     var disp=(g.metric==='manual'&&g.unit)?function(n){return n.toLocaleString()+' '+g.unit;}:fmt;
     var pct=target?Math.max(0,Math.min(100,Math.round(ev.current/target*100))):0;
     var links=(g.linkedInitiativeIds||[]).map(function(id){var p=(D.projects||[]).find(function(x){return x.id===id;});return p?esc(p.name):'';}).filter(Boolean).join(', ');
-    return '<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px">'
-      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
-      +'<div style="flex:1"><div style="font-size:13px;font-weight:700">'+esc(g.label)+' '+_stratStatusChip(stt.key,stt.label)+(g.metric!=='manual'?' <span class="plan-chip">auto</span>':' <span class="plan-chip">manual</span>')+(g.suggested?' <span class="plan-chip" style="border-color:#7C3AED;color:#7C3AED" title="Atlas-recommended figure — review and adjust to your plan">suggested</span>':'')+'</div>'
-      +'<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+esc(cfg.l)+(g.targetDate?' · by '+g.targetDate:'')+(g.owner?' · '+esc(_stratOwnerName(g.owner)):'')+(links?' · ↳ '+links:'')+'</div></div>'
-      +'<div style="text-align:right;flex-shrink:0"><div style="font-size:16px;font-weight:800">'+disp(Math.round(ev.current))+'</div><div style="font-size:10px;color:var(--text-muted)">of '+disp(target)+'</div></div>'
-      +'<div style="display:flex;flex-direction:column;gap:3px"><button class="btn btn-sec btn-sm" style="padding:2px 8px" onclick="stratEditGoal(\''+g.id+'\')">Edit</button><button class="btn btn-danger-sm btn-sm" style="padding:2px 8px" onclick="stratDelGoal(\''+g.id+'\')">&times;</button></div>'
-      +'</div>'
-      +'<div style="height:6px;background:var(--page-bg);border-radius:4px;overflow:hidden;margin-top:8px"><div style="height:100%;width:'+pct+'%;background:'+({ontrack:'#16A34A',atrisk:'#D97706',off:'#DC2626',done:'#16A34A'}[stt.key]||'#64748b')+'"></div></div>'
-      +'<div style="font-size:10px;color:var(--text-muted);margin-top:3px">'+esc(ev.detail)+(g.notes?' · '+esc(g.notes):'')+'</div>'
-      +'</div>';
+    var owner=_stratOwnerName(g.owner);
+    var barColor={ontrack:'#16A34A',atrisk:'#D97706',off:'#DC2626',done:'#16A34A'}[stt.key]||'#64748b';
+    var sub=[esc(ev.detail||'')].concat(g.notes?[esc(g.notes)]:[]).filter(Boolean).join(' · ');
+    return '<tr style="border-top:1px solid var(--border)">'
+      +'<td style="padding:8px;vertical-align:top">'
+        +'<div style="font-size:13px;font-weight:700">'+esc(g.label)+(g.metric!=='manual'?' <span class="plan-chip">auto</span>':' <span class="plan-chip">manual</span>')+(g.suggested?' <span class="plan-chip" style="border-color:#7C3AED;color:#7C3AED" title="Atlas-recommended figure — review and adjust to your plan">suggested</span>':'')+'</div>'
+        +(links?'<div style="font-size:10px;color:var(--text-muted);margin-top:2px">↳ '+links+'</div>':'')
+        +(sub?'<div style="font-size:10px;color:var(--text-muted);margin-top:2px">'+sub+'</div>':'')
+      +'</td>'
+      +'<td style="padding:8px;font-size:11px;color:var(--text-secondary);vertical-align:top">'+esc(cfg.l)+'</td>'
+      +'<td style="padding:8px;font-size:12px;vertical-align:top">'+(owner?esc(owner):'<span style="color:var(--text-muted)">— unassigned —</span>')+'</td>'
+      +'<td style="padding:8px;font-size:12px;white-space:nowrap;vertical-align:top">'+(g.targetDate?esc(g.targetDate):'<span style="color:var(--text-muted)">—</span>')+'</td>'
+      +'<td style="padding:8px;font-size:11px;color:var(--text-secondary);vertical-align:top;text-transform:capitalize">'+esc(g.cadence||'—')+'</td>'
+      +'<td style="padding:8px;text-align:right;font-size:13px;font-weight:800;vertical-align:top">'+disp(Math.round(ev.current))+'</td>'
+      +'<td style="padding:8px;text-align:right;font-size:12px;color:var(--text-muted);vertical-align:top">'+disp(target)+'</td>'
+      +'<td style="padding:8px;vertical-align:top">'+_stratStatusChip(stt.key,stt.label)
+        +'<div style="height:6px;background:var(--page-bg);border-radius:4px;overflow:hidden;margin-top:6px"><div style="height:100%;width:'+pct+'%;background:'+barColor+'"></div></div>'
+      +'</td>'
+      +'<td style="padding:8px;vertical-align:top;white-space:nowrap"><button class="btn btn-sec btn-sm" style="padding:2px 8px" onclick="stratEditGoal(\''+g.id+'\')">Edit</button> <button class="btn btn-danger-sm btn-sm" style="padding:2px 8px" onclick="stratDelGoal(\''+g.id+'\')">&times;</button></td>'
+      +'</tr>';
   }).join('');
-  return head+rows;
+  return head+'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'+th+'<tbody>'+rows+'</tbody></table></div>';
 }
 function stratEditGoal(id){
   var S=_stratEnsure();
@@ -9424,6 +9444,7 @@ function stratEditGoal(id){
     }});
 }
 function stratDelGoal(id){if(!confirm('Delete this goal?'))return;var S=_stratEnsure();S.goals=S.goals.filter(function(x){return x.id!==id;});save();renderView();}
+function stratSetGoalOwner(id,owner){var S=_stratEnsure();var g=(S.goals||[]).find(function(x){return x.id===id;});if(!g)return;g.owner=owner||'';g.updatedAt=Date.now();save();renderView();}
 // ── 3. INITIATIVE SCORECARDS ──
 /* FY revenue bridge — shows exactly how existing revenue + each initiative's
    target build to the debt-payoff revenue target, so the logic is visible
@@ -9441,13 +9462,16 @@ function _stratBridgeHTML(model){
   function initName(x){var p=(D.projects||[]).find(function(z){return z.id===(x.linkedInitiativeIds||[])[0];});return p?p.name:x.label;}
   function fyh(y){return 'FY'+String(y).slice(2);}
   function cells(fn,o){o=o||{};return years.map(function(y,i){return '<td style="text-align:right;padding:'+(o.bold?'5px':'4px')+' 0 4px 12px;'+(o.bold?'font-weight:800;':'')+'">'+fn(y,i)+'</td>';}).join('');}
-  var head='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)"><td style="padding:4px 0">Source</td>'+years.map(function(y){return '<td style="text-align:right;padding-left:12px">'+fyh(y)+'</td>';}).join('')+'</tr>';
+  var head='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted)"><td style="padding:4px 0">Source</td><td style="padding:4px 0 4px 12px">Team member</td>'+years.map(function(y){return '<td style="text-align:right;padding-left:12px">'+fyh(y)+'</td>';}).join('')+'</tr>';
   // Base & other = each year's total minus the itemized initiative contributions
   var baseRow='<tr><td style="padding:4px 0">Base &amp; other revenue <span style="color:var(--text-muted);font-weight:400">(existing contracts + residual to target)</span></td>'
+    +'<td style="padding:4px 0 4px 12px;color:var(--text-muted)">—</td>'
     +cells(function(y,i){var initSum=initGoals.reduce(function(a,x){return a+(Number(x.target)||0)*mult(y);},0);return fmt(Math.round(P.rows[i].rev-initSum));})+'</tr>';
   var initRows=initGoals.map(function(x){var t=Number(x.target)||0;
-    return '<tr><td style="padding:4px 0;padding-left:12px">+ '+esc(initName(x))+' <span class="plan-chip" style="border-color:#7C3AED;color:#7C3AED">suggested</span></td>'+cells(function(y){return fmt(Math.round(t*mult(y)));})+'</tr>';}).join('');
-  var totRow='<tr style="border-top:2px solid var(--border)"><td style="padding:5px 0;font-weight:800">= Revenue target ('+Math.round(g*100)+'% growth)</td>'+cells(function(y,i){return fmt(Math.round(P.rows[i].rev));},{bold:true})+'</tr>';
+    return '<tr><td style="padding:4px 0;padding-left:12px">+ '+esc(initName(x))+' <span class="plan-chip" style="border-color:#7C3AED;color:#7C3AED">suggested</span></td>'
+      +'<td style="padding:4px 0 4px 12px"><select class="inp" style="font-size:11px;padding:2px 4px;max-width:170px" onchange="stratSetGoalOwner(\''+x.id+'\',this.value)">'+_stratMemberOpts(x.owner)+'</select></td>'
+      +cells(function(y){return fmt(Math.round(t*mult(y)));})+'</tr>';}).join('');
+  var totRow='<tr style="border-top:2px solid var(--border)"><td style="padding:5px 0;font-weight:800">= Revenue target ('+Math.round(g*100)+'% growth)</td><td style="padding:5px 0 4px 12px"></td>'+cells(function(y,i){return fmt(Math.round(P.rows[i].rev));},{bold:true})+'</tr>';
   return '<div style="font-size:14px;font-weight:800;margin:18px 0 8px">Revenue</div>'
     +'<div style="border:1px solid var(--border);border-radius:8px;padding:12px 14px">'
     +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Revenue target across the debt-free plan ('+Math.round(g*100)+'% annual growth). Initiative targets are set for <b>'+fyh(anchorYr)+'</b> and projected at the plan growth rate in the other years; &ldquo;Base &amp; other&rdquo; is existing contracts plus the residual needed to hit each year&rsquo;s target. Edit growth on the Debt-Free Plan tab or any initiative goal to update this live.</div>'
