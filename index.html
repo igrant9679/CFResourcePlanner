@@ -10166,9 +10166,26 @@ function _homeFY26MonthsElapsed(){var now=new Date(),y=now.getFullYear();return 
 
 /* ---- Widget registry — each render() returns the card BODY ---- */
 var HOME_WIDGETS=[
-  {key:'goals',lane:'perf',size:'w6',persona:['ceo'],title:'Goals & KPI scorecard',sub:'Strategy → Goals · live vs target',render:function(){
+  {key:'goals',lane:'perf',size:'w12',persona:['ceo'],title:'Goals & KPI scorecard',sub:'Strategy → Goals · live vs target',render:function(){
     var gs=((D.strategy||{}).goals)||[];if(!gs.length)return _homeEmpty('No goals set. Add them in Strategy → Goals.');var m=_homeCash()||_stratCash();
-    return gs.map(function(g){var ev=_stratGoalEval(g,m),st=_stratGoalStatus(g,ev),tg=Number(g.target)||0,pct=tg?ev.current/tg*100:0;var col=({ontrack:'good',atrisk:'warn',off:'crit',done:'good'}[st.key]||'flat');var bc=({good:'var(--exh-good)',warn:'var(--exh-warn)',crit:'var(--exh-crit)',flat:'#9aa6b6'}[col]);return '<div class="exh-mrow"><div class="exh-lab">'+esc(g.label)+'</div><div class="exh-rt">'+_homeBar(pct,bc)+'<span class="exh-chip '+col+'">'+esc(st.label)+'</span></div></div>';}).join('');
+    var th='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--exh-muted);text-align:left;border-bottom:1px solid var(--exh-line)">'
+      +'<th style="padding:6px 8px">Goal</th><th style="padding:6px 8px">Owner</th><th style="padding:6px 8px;white-space:nowrap">Target date</th>'
+      +'<th style="padding:6px 8px;text-align:right">Target</th><th style="padding:6px 8px;text-align:right">Current</th><th style="padding:6px 8px;min-width:140px">Progress</th></tr>';
+    var rows=gs.map(function(g){
+      var ev=_stratGoalEval(g,m),st=_stratGoalStatus(g,ev),tg=Number(g.target)||0,pct=tg?Math.max(0,Math.min(100,Math.round(ev.current/tg*100))):0;
+      var col=({ontrack:'good',atrisk:'warn',off:'crit',done:'good'}[st.key]||'flat');var bc=({good:'var(--exh-good)',warn:'var(--exh-warn)',crit:'var(--exh-crit)',flat:'#9aa6b6'}[col]);
+      var owner=_stratOwnerName(g.owner);
+      var links=(g.linkedInitiativeIds||[]).map(function(id){var p=(D.projects||[]).find(function(x){return x.id===id;});return p?esc(p.name):'';}).filter(Boolean).join(', ');
+      return '<tr style="border-bottom:1px solid var(--exh-line2)">'
+        +'<td style="padding:7px 8px;vertical-align:top"><div style="font-weight:600;color:var(--exh-ink)">'+esc(g.label)+'</div>'+(links?'<div style="font-size:10px;color:var(--exh-muted);margin-top:1px">↳ '+links+'</div>':'')+(ev.detail?'<div style="font-size:10px;color:var(--exh-muted);margin-top:1px">'+esc(ev.detail)+'</div>':'')+'</td>'
+        +'<td style="padding:7px 8px;vertical-align:top">'+(owner?esc(owner):'<span style="color:var(--exh-muted)">—</span>')+'</td>'
+        +'<td style="padding:7px 8px;white-space:nowrap;vertical-align:top">'+(g.targetDate?esc(g.targetDate):'<span style="color:var(--exh-muted)">—</span>')+'</td>'
+        +'<td style="padding:7px 8px;text-align:right;color:var(--exh-muted);vertical-align:top">'+_goalFmt(g,tg)+'</td>'
+        +'<td style="padding:7px 8px;text-align:right;font-weight:700;color:var(--exh-ink);vertical-align:top">'+_goalFmt(g,Math.round(ev.current))+'</td>'
+        +'<td style="padding:7px 8px;vertical-align:top"><span class="exh-chip '+col+'">'+esc(st.label)+'</span><div class="exh-mini" style="width:100%;margin-top:5px"><span style="width:'+pct+'%;background:'+bc+'"></span></div></td>'
+        +'</tr>';
+    }).join('');
+    return '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead>'+th+'</thead><tbody>'+rows+'</tbody></table></div>';
   }},
   {key:'revenue',lane:'perf',size:'w6',persona:['ceo','cfo'],title:'Revenue trajectory',sub:'FY26 · cumulative by month',render:function(){
     var monthly=_homeFY26MonthlyTotal();if(!monthly)return _homeEmpty('No FY26 project revenue.');
