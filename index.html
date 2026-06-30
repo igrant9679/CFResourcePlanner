@@ -10183,41 +10183,46 @@ function _homeNorthStar(){
 /* ---- FY26 revenue (active projects, monthly from the start of the fiscal year) ---- */
 function _homeFYProjects(year){var yy=String(year),sh=yy.slice(-2);return (D.projects||[]).filter(function(p){if(projCat(p)!=='project')return false;var d=String(p.fiscalYear||'').replace(/\D/g,'');return d===yy||d===sh;});}
 function _homeFY26Projects(){var fy=_homeFYProjects(2026);return fy.length?fy:(D.projects||[]).filter(function(p){return projCat(p)==='project';});}   // FY26 falls back to all active projects when FY isn't labelled
-function _homeFYAnnual(year){   // annual = sum of the engine's per-month revenue across the FY (captures timelines/sunsets/escalators)
+function _homeFYAnnual(year){   // annual = sum of per-month revenue across the FEDERAL FY (Oct year-1 → Sep year); captures timelines/sunsets/escalators
   var ps=(year===2026)?_homeFY26Projects():_homeFYProjects(year);
-  return ps.reduce(function(a,p){var s=0;for(var m=0;m<12;m++){s+=(typeof capProjRevAt==='function')?(Number(capProjRevAt(p,year,m))||0):(Number(p.revenue)||0);}return a+s;},0);
+  return ps.reduce(function(a,p){var s=0;for(var k=0;k<12;k++){var mi=9+k,y=year-1+Math.floor(mi/12),m=mi%12;s+=(typeof capProjRevAt==='function')?(Number(capProjRevAt(p,y,m))||0):(Number(p.revenue)||0);}return a+s;},0);
 }
 // A project's monthly revenue = its own number (p.revenue); fall back to the
 // current-month run-rate from the engine only when the project has no flat number.
 function _homeProjMonthly(p){var r=Number(p.revenue)||0;if(r)return r;try{var now=new Date();return Number(capProjRevAt(p,2026,now.getFullYear()===2026?now.getMonth():0))||0;}catch(e){return 0;}}
 // Total monthly revenue across active FY26 projects (the run-rate).
 function _homeFY26MonthlyTotal(){return _homeFY26Projects().reduce(function(a,p){return a+_homeProjMonthly(p);},0);}
-function _homeFY26MonthsElapsed(){var now=new Date(),y=now.getFullYear();return y>2026?12:(y<2026?0:now.getMonth()+1);}
+// FY26 = federal fiscal year Oct 1 2025 → Sep 30 2026. Months elapsed counts from Oct 1.
+function _homeFY26MonthsElapsed(){var now=new Date(),fs=new Date(2025,9,1),fe=new Date(2026,8,30,23,59);if(now<fs)return 0;if(now>fe)return 12;return (now.getFullYear()-2025)*12+(now.getMonth()-9)+1;}
 
 /* ---- Widget registry — each render() returns the card BODY ---- */
 var HOME_WIDGETS=[
-  {key:'revenue',lane:'perf',size:'w6',persona:['ceo','cfo'],title:'Revenue trajectory',sub:'Annual revenue · FY26–FY28 (time-phased)',render:function(){
-    var years=[2026,2027,2028],vals=years.map(_homeFYAnnual);
-    if(!vals.some(function(v){return v>0;}))return _homeEmpty('No project revenue tagged by fiscal year.');
-    var max=Math.max.apply(null,vals)||1;
-    var bars=years.map(function(y,i){var hp=Math.max(6,Math.round(vals[i]/max*82));
-      return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1">'
-        +'<div style="font-size:11px;font-weight:700;color:var(--exh-ink);margin-bottom:4px" class="num">'+fmt(Math.round(vals[i]))+'</div>'
-        +'<div style="width:64%;max-width:56px;background:#2563EB;border-radius:4px 4px 0 0;height:'+hp+'px"></div>'
-        +'<div style="font-size:10px;color:var(--exh-muted);margin-top:5px">FY'+String(y).slice(2)+'</div></div>';}).join('');
-    return '<div style="display:flex;align-items:flex-end;justify-content:space-around;gap:14px;height:128px;padding-top:4px">'+bars+'</div>';
+  {key:'revenue',lane:'perf',size:'w6',persona:['ceo','cfo'],title:'Revenue trajectory',sub:'Contracted vs projected · FY26–FY28',render:function(){
+    var years=[2026,2027,2028],actual=years.map(_homeFYAnnual);
+    var proj={};try{var P=_stratProjModel();(P&&P.rows||[]).forEach(function(r){proj[r.y]=r.rev;});}catch(e){}
+    var target=years.map(function(y){return Number(proj[y])||0;});
+    if(!actual.some(function(v){return v>0;})&&!target.some(function(v){return v>0;}))return _homeEmpty('No FY revenue available.');
+    var max=Math.max.apply(null,actual.concat(target))||1;
+    function bar(val,color){var h=val>0?Math.max(4,Math.round(val/max*78)):2;return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end"><div style="font-size:9px;font-weight:700;color:'+color+';white-space:nowrap" class="num">'+(val?_homeMoneyShort(val):'—')+'</div><div style="width:22px;background:'+(val?color:'#E6E9F0')+';border-radius:3px 3px 0 0;height:'+h+'px"></div></div>';}
+    var groups=years.map(function(y,i){
+      return '<div style="display:flex;flex-direction:column;align-items:center;flex:1">'
+        +'<div style="display:flex;align-items:flex-end;justify-content:center;gap:6px;height:102px">'+bar(actual[i],'#2563EB')+bar(target[i],'var(--exh-gold)')+'</div>'
+        +'<div style="font-size:10px;color:var(--exh-muted);margin-top:5px">FY'+String(y).slice(2)+'</div></div>';
+    }).join('');
+    return '<div style="display:flex;align-items:flex-end;justify-content:space-around;gap:10px;padding-top:2px">'+groups+'</div>'
+      +'<div class="exh-legend" style="justify-content:center;margin-top:8px"><span><i style="background:#2563EB"></i>Contracted</span><span><i style="background:var(--exh-gold)"></i>Projected/target</span></div>';
   }},
-  {key:'revtodate',lane:'perf',size:'w6',persona:['ceo','cfo'],title:'Revenue to date',sub:'FY26 YTD · monthly × months elapsed',render:function(){
+  {key:'revtodate',lane:'perf',size:'w6',persona:['ceo','cfo'],title:'Revenue to date',sub:'FY26 YTD · monthly × months since Oct 1',render:function(){
     var ps=_homeFY26Projects(),monthly=_homeFY26MonthlyTotal(),el=_homeFY26MonthsElapsed();
     var ytd=monthly*el;
     var fin=(D.proforma&&D.proforma.financials)||{};
     var manual=(fin.revenueYTD!=null&&fin.revenueYTD!=='')?Number(fin.revenueYTD):null;
     var val=(manual!=null)?manual:ytd;
-    var thru=el>0?(MON_ABBR[Math.min(el,12)-1]+' 2026'):'pre-FY26';
+    var now=new Date();var thru=el<=0?'pre-FY26':(el>=12?'Sep 2026':(MON_ABBR[now.getMonth()]+' '+now.getFullYear()));
     var b='<div class="exh-bigstat"><span class="n num">'+fmt(Math.round(val))+'</span><span class="u">'+(manual!=null?'entered actual':'computed')+' · FY26 through '+thru+'</span></div>';
     b+='<div class="exh-mrow tight"><span class="exh-lab">Active FY26 projects</span><span class="exh-v num">'+ps.length+'</span></div>';
     b+='<div class="exh-mrow tight"><span class="exh-lab">Monthly run-rate</span><span class="exh-v num">'+fmt(Math.round(monthly))+'</span></div>';
-    b+='<div class="exh-mrow tight"><span class="exh-lab">Months elapsed (from Jan)</span><span class="exh-v num">'+el+'</span></div>';
+    b+='<div class="exh-mrow tight"><span class="exh-lab">Months elapsed (from Oct 1)</span><span class="exh-v num">'+el+'</span></div>';
     b+='<div class="exh-mrow tight"><span class="exh-lab">Computed YTD <span style="color:var(--exh-muted)">(monthly × '+el+')</span></span><span class="exh-v num">'+fmt(Math.round(ytd))+'</span></div>';
     if(ME&&ME.role==='admin')b+='<div class="exh-entry"><input type="number" id="exh_revytd" placeholder="Enter actual $" value="'+(manual!=null?manual:'')+'"><button onclick="homeSetRevYTD()">Save actual</button>'+(manual!=null?' <button class="ghost" onclick="homeClearRevYTD()">Use computed</button>':'')+'</div>';
     return b;
