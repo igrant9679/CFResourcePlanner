@@ -7705,7 +7705,7 @@ function renderView(){
   // Data not loaded yet (nav click during boot): skip — initApp calls
   // renderView() after bootstrapData, which then renders the clicked tab.
   if(!D)return;
-  if(!_homeLanded&&ME&&ME.role==='exec'){_homeLanded=true;viewMode='home';}   // execs land on the Home dashboard
+  if(!_homeLanded&&ME&&canSee('home')){_homeLanded=true;viewMode='home';}   // Home is the default landing for anyone who can see it (admin + exec)
   if(ME&&!canSee(viewMode)){var f=SECTIONS.find(function(s){return canSee(s.k);});if(f)viewMode=f.k;}
   applyRoleUI();renderStats();
   var q=(document.getElementById('searchInput').value||'').toLowerCase().trim();var html;
