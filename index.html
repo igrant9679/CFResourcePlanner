@@ -8729,12 +8729,37 @@ function stratNewlyNegative(baseRows,slipRows){
 }
 /* ── END STRAT BREAK-EVEN PURE LOGIC ── */
 var STRAT_METRICS=[
-  {k:'cash-gate',l:'Cash gate ($ position)',auto:true,hint:'Current cash vs target; ETA from the projection.'},
-  {k:'annual-revenue',l:'Annual revenue (FY of target date)',auto:true,hint:'Sum of projected revenue in the target year.'},
-  {k:'monthly-runrate',l:'Monthly revenue run-rate',auto:true,hint:'Latest projected monthly revenue.'},
-  {k:'weighted-pipeline',l:'Weighted pipeline value',auto:true,hint:'Σ opportunity potential × probability of close.'},
-  {k:'initiative-revenue',l:'Initiative revenue contribution',auto:true,hint:'Projected FY revenue from the linked initiative(s).'},
-  {k:'manual',l:'Manual KPI (ARR, hires, utilization…)',auto:false,hint:'You set current & target by hand.'}
+  // ── Financial (projection engine) ──
+  {k:'cash-gate',l:'Cash gate ($ position)',group:'Financial (auto)',auto:true,fmt:'money',dir:'up',hint:'Current cash vs target; ETA from the projection.',
+    resolve:function(g,m){var o={current:m.opening,detail:'',eta:''};o.eta=m.gateMet?_stratMonLbl(m.gateMet):'beyond horizon';o.detail='ETA to target: '+o.eta;return o;}},
+  {k:'annual-revenue',l:'Annual revenue (FY of target date)',group:'Financial (auto)',auto:true,fmt:'money',dir:'up',hint:'Sum of projected revenue in the target year.',
+    resolve:function(g,m){var yr=_stratYM(g.targetDate||D.strategy.gateTargetDate).y;return {current:m.rows.filter(function(r){return r.y===yr;}).reduce(function(a,r){return a+r.rev;},0),detail:'FY'+String(yr).slice(2)+' projected revenue'};}},
+  {k:'monthly-runrate',l:'Monthly revenue run-rate',group:'Financial (auto)',auto:true,fmt:'money',dir:'up',hint:'Latest projected monthly revenue.',
+    resolve:function(g,m){var last=m.rows[m.rows.length-1];return {current:last?last.rev:0,detail:'Latest projected month ('+(last?_stratMonLbl(last):'—')+')'};}},
+  {k:'weighted-pipeline',l:'Weighted pipeline value',group:'Financial (auto)',auto:true,fmt:'money',dir:'up',hint:'Σ opportunity potential × probability of close.',
+    resolve:function(g,m){var sum=0;(D.projects||[]).filter(function(p){return projCat(p)==='opportunity';}).forEach(function(o){var st=(typeof capOppStage==='function')?capOppStage(o):(o.stage||'');if(st==='Lost')return;var pr=(o.probabilityClose!=null&&o.probabilityClose!=='')?Number(o.probabilityClose)/100:((typeof CAP_STAGE_PROB!=='undefined'&&CAP_STAGE_PROB[st])||0.1);sum+=(Number(o.potential)||0)*pr;});return {current:Math.round(sum),detail:'Σ potential × P(close) across open pipeline'};}},
+  // ── Initiatives ──
+  {k:'initiative-revenue',l:'Initiative revenue contribution',group:'Initiatives',auto:true,fmt:'money',dir:'up',hint:'Projected FY revenue from the linked initiative(s).',
+    resolve:function(g,m){var yr=_stratYM(g.targetDate||D.strategy.gateTargetDate).y;var ids=g.linkedInitiativeIds||[];var sum=0;m.rows.filter(function(r){return r.y===yr;}).forEach(function(r){ids.forEach(function(iid){var p=(D.projects||[]).find(function(x){return x.id===iid;});if(p&&capInWindow(p,r.y,r.m))sum+=(typeof capProjRevAt==='function'?capProjRevAt(p,r.y,r.m):0);});});return {current:Math.round(sum),detail:'FY'+String(yr).slice(2)+' contribution from linked initiative(s)'};}},
+  // ── Customers (registry) ──
+  {k:'customers.arr',l:'Customer ARR',group:'Customers',auto:true,fmt:'money',dir:'up',hint:'Σ annual recurring revenue across the registry (optionally one customer type).',
+    resolve:function(g){var cs=D.customers||[];var t=(g.sourceParams&&g.sourceParams.custType)||'';var rows=t?cs.filter(function(c){return c.type===t;}):cs;return {current:Math.round(rows.reduce(function(a,c){return a+(Number(c.value)||0);},0)),detail:(t?t+' ':'')+'ARR across '+rows.length+' customer'+(rows.length===1?'':'s')};}},
+  {k:'customers.health',l:'Customers by login recency',group:'Customers',auto:true,fmt:'number',hint:'Count of customers in a login-recency bucket (engaged / active / at-risk / dormant).',
+    dir:function(g){var b=(g.sourceParams&&g.sourceParams.bucket)||'dormant';return (b==='atrisk'||b==='dormant')?'down':'up';},
+    resolve:function(g){var b=(g.sourceParams&&g.sourceParams.bucket)||'dormant';var cs=D.customers||[],n=0;cs.forEach(function(c){var d=custDaysNum(c);if(d==null)return;var k=d<=7?'engaged':d<=30?'active':d<=90?'atrisk':'dormant';if(k===b)n++;});var lbl={engaged:'engaged (≤7d)',active:'active (8–30d)',atrisk:'at risk (31–90d)',dormant:'dormant (>90d)'}[b];return {current:n,detail:lbl+' · by login recency'};}},
+  // ── Commercial (weekly status) ──
+  {k:'commercial.metric',l:'Commercial weekly metric',group:'Commercial',auto:true,fmt:'number',hint:'Latest weekly value for a chosen department + metric.',
+    dir:function(g){var dp=g.sourceParams||{};var def=(dp.dept&&dp.metricKey&&typeof commDef==='function')?commDef(dp.dept,dp.metricKey):null;return (def&&def.dir==='down')?'down':'up';},
+    resolve:function(g){var dp=g.sourceParams||{};if(!dp.dept||!dp.metricKey)return {current:0,detail:'Pick a department & metric'};var subs=((D.commercial&&D.commercial.submissions)||[]).filter(function(s){return s.dept===dp.dept;}).sort(function(a,b){return String(a.weekEnding).localeCompare(String(b.weekEnding));});var last=subs[subs.length-1];var v=(last&&last.fields)?Number(last.fields[dp.metricKey]):0;var def=(typeof commDef==='function')?commDef(dp.dept,dp.metricKey):null;return {current:Number(v)||0,detail:(def?def.label:dp.metricKey)+(last?' · wk '+last.weekEnding:' · no data')};}},
+  // ── Delivery (BCLM tasks) ──
+  {k:'tasks.completion',l:'Contract task delivery',group:'Delivery',auto:true,
+    fmt:function(g){return ((g.sourceParams&&g.sourceParams.measure)&&g.sourceParams.measure!=='pct')?'number':'percent';},
+    dir:function(g){var ms=(g.sourceParams&&g.sourceParams.measure)||'pct';return (ms==='open'||ms==='late')?'down':'up';},
+    hint:'BCLM task completion % (or open / late task count), optionally one workstream.',
+    resolve:function(g){var c=(typeof contractCur==='function')?contractCur():null;var ts=(c&&c.dashboard&&c.dashboard.tasks)||[];var ws=(g.sourceParams&&g.sourceParams.ws)||'';if(ws)ts=ts.filter(function(t){return t.ws===ws;});var total=ts.length,done=0,late=0;ts.forEach(function(t){var cd=t.completedDate||/complete/i.test(t.progress||'');if(cd)done++;else if(t.late)late++;});var ms=(g.sourceParams&&g.sourceParams.measure)||'pct';var cur=ms==='late'?late:ms==='open'?(total-done):(total?Math.round(done/total*100):0);var dl=ms==='late'?'late tasks':ms==='open'?'open tasks':(done+'/'+total+' complete');return {current:cur,detail:dl+(ws?' · '+ws:'')};}},
+  // ── Manual ──
+  {k:'manual',l:'Manual KPI (typed by hand)',group:'Manual',auto:false,dir:'up',hint:'You set current & target by hand. Use only for things the app doesn’t track.',
+    resolve:function(g){return {current:Number(g.manualCurrent)||0,detail:g.cadence?('Manual · review '+g.cadence):'Manual entry'};}}
 ];
 function _stratMetricCfg(k){return STRAT_METRICS.find(function(m){return m.k===k;})||STRAT_METRICS[STRAT_METRICS.length-1];}
 // The live cash model — one call drives the whole page.
@@ -8783,30 +8808,44 @@ function _stratStatusChip(key,label){
   return '<span class="plan-chip" style="border-color:'+c+';color:'+c+';font-weight:700">'+esc(label||key)+'</span>';
 }
 // Auto-derive a goal's current value + ETA/detail from the live model.
+/* Goal evaluation is now a DISPATCHER over the STRAT_METRICS source registry:
+   each source declares resolve(goal,model) → {current,detail,eta}. Adding a new
+   data-driven KPI is just adding a source — no change here. Unknown/legacy
+   sources fall back to the manual value. */
 function _stratGoalEval(g,model){
-  var cfg=_stratMetricCfg(g.metric),out={current:0,detail:'',eta:''};
-  var yr=_stratYM(g.targetDate||D.strategy.gateTargetDate).y;
-  if(g.metric==='cash-gate'){out.current=model.opening;if(model.gateMet)out.eta=_stratMonLbl(model.gateMet);else out.eta='beyond horizon';out.detail='ETA to target: '+out.eta;}
-  else if(g.metric==='annual-revenue'){out.current=model.rows.filter(function(r){return r.y===yr;}).reduce(function(a,r){return a+r.rev;},0);out.detail='FY'+String(yr).slice(2)+' projected revenue';}
-  else if(g.metric==='monthly-runrate'){var last=model.rows[model.rows.length-1];out.current=last?last.rev:0;out.detail='Latest projected month ('+(last?_stratMonLbl(last):'—')+')';}
-  else if(g.metric==='weighted-pipeline'){
-    var sum=0;(D.projects||[]).filter(function(p){return projCat(p)==='opportunity';}).forEach(function(o){
-      var st=capOppStage?capOppStage(o):(o.stage||'');if(st==='Lost')return;
-      var pr=(o.probabilityClose!=null&&o.probabilityClose!=='')?Number(o.probabilityClose)/100:((typeof CAP_STAGE_PROB!=='undefined'&&CAP_STAGE_PROB[st])||0.1);
-      sum+=(Number(o.potential)||0)*pr;});
-    out.current=Math.round(sum);out.detail='Σ potential × P(close) across open pipeline';}
-  else if(g.metric==='initiative-revenue'){
-    var ids=g.linkedInitiativeIds||[];
-    var sum=0;model.rows.filter(function(r){return r.y===yr;}).forEach(function(r){
-      ids.forEach(function(iid){var p=(D.projects||[]).find(function(x){return x.id===iid;});if(p&&capInWindow(p,r.y,r.m))sum+=(capProjRevAt?capProjRevAt(p,r.y,r.m):0);});});
-    out.current=Math.round(sum);out.detail='FY'+String(yr).slice(2)+' contribution from linked initiative(s)';}
-  else { out.current=Number(g.manualCurrent)||0; out.detail=g.cadence?('Manual · review '+g.cadence):'Manual entry'; }
-  return out;
+  var src=_stratMetricCfg(g.metric);
+  if(src&&typeof src.resolve==='function'){
+    try{var o=src.resolve(g,model)||{};return {current:Number(o.current)||0,detail:o.detail||'',eta:o.eta||''};}
+    catch(e){return {current:0,detail:'(source unavailable)',eta:''};}
+  }
+  return {current:Number(g.manualCurrent)||0,detail:'Manual entry',eta:''};
+}
+/* Which direction is "good" for a goal: an explicit per-goal override (g.dir),
+   else the source's dir (which may be a function of the goal's params), else up. */
+function _goalDir(g){
+  if(g&&g.dir)return g.dir;
+  var s=_stratMetricCfg(g.metric);if(!s)return 'up';
+  var d=(typeof s.dir==='function')?s.dir(g):s.dir;
+  return d||'up';
+}
+/* Format a goal value by its source's fmt kind: money ($) / number / percent,
+   with the manual-unit special case preserved. */
+function _goalFmt(g,n){
+  n=Number(n)||0;
+  if(g.metric==='manual'&&g.unit)return n.toLocaleString()+' '+g.unit;
+  var s=_stratMetricCfg(g.metric),k=s&&s.fmt;if(typeof k==='function')k=k(g);
+  if(k==='percent')return Math.round(n)+'%';
+  if(k==='number')return Math.round(n).toLocaleString();
+  return fmt(n);
 }
 function _stratGoalStatus(g,ev){
   var target=Number(g.target)||0,base=Number(g.baseline)||0,cur=ev.current;
-  if(!target)return {key:'atrisk',label:'no target'};
-  var pct=target>base?(cur-base)/(target-base):cur/target;
+  if(!target&&_goalDir(g)!=='down')return {key:'atrisk',label:'no target'};   // 0 is a valid target for "lower is better" goals
+  // Direction-aware progress: 'up' keeps the original formula (existing goals
+  // unchanged); 'down' (lower is better, e.g. reduce dormant/late) inverts it.
+  var pct;
+  if(_goalDir(g)==='down'){ pct=(base>target)?((base-cur)/(base-target)):(cur<=target?1:(cur>0?target/cur:0)); }
+  else { pct=target>base?(cur-base)/(target-base):cur/target; }
   if(pct>=1)return {key:'done',label:'met'};
   // time pacing if we have a window
   var now=new Date(),tgt=_stratYM(g.targetDate||'');
@@ -9388,7 +9427,7 @@ function _stratGoalsHTML(model){
   var rows=goals.map(function(g){
     var ev=_stratGoalEval(g,model),stt=_stratGoalStatus(g,ev);
     var target=Number(g.target)||0;
-    var disp=(g.metric==='manual'&&g.unit)?function(n){return n.toLocaleString()+' '+g.unit;}:fmt;
+    var disp=function(n){return _goalFmt(g,n);};
     var pct=target?Math.max(0,Math.min(100,Math.round(ev.current/target*100))):0;
     var links=(g.linkedInitiativeIds||[]).map(function(id){var p=(D.projects||[]).find(function(x){return x.id===id;});return p?esc(p.name):'';}).filter(Boolean).join(', ');
     var owner=_stratOwnerName(g.owner);
@@ -9413,31 +9452,81 @@ function _stratGoalsHTML(model){
   }).join('');
   return head+'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'+th+'<tbody>'+rows+'</tbody></table></div>';
 }
+/* ── Goal editor (custom modal) ──
+   Binds a goal to a live data source from the STRAT_METRICS registry. The source
+   picker drives a dynamic params section + a live preview of the resolved value.
+   Manual remains the explicit fallback for things the app doesn't track. */
+var _sgEdit=null;
+function _sgField(label,ctrl){return '<div class="fld" style="margin-bottom:9px"><label class="fld-l">'+label+'</label>'+ctrl+'</div>';}
+function _sgCommMetricSelect(dept,sel){var defs=(typeof COMM_DEFS!=='undefined'&&COMM_DEFS[dept])||[];return _sgField('Metric','<select class="fld-sel" id="sg_cmetric" onchange="stratGoalPreview()">'+defs.map(function(d){return '<option value="'+esc(d.key)+'"'+((sel||'')===d.key?' selected':'')+'>'+esc(d.label)+'</option>';}).join('')+'</select>');}
+function _sgParamsHTML(k,g){
+  var p=(g&&g.sourceParams)||{};
+  if(k==='manual')return _sgField('Current value','<input class="fld-i" type="number" id="sg_manual" value="'+(g&&g.manualCurrent!=null?g.manualCurrent:'')+'" oninput="stratGoalPreview()">')
+    +_sgField('Unit label (e.g. people, %)','<input class="fld-i" id="sg_unit" value="'+esc(g&&g.unit?g.unit:'')+'" placeholder="optional">');
+  if(k==='initiative-revenue'){var inits=(D.projects||[]).filter(function(x){return projCat(x)==='initiative';});var sel=(g&&g.linkedInitiativeIds)||[];return _sgField('Linked initiative(s)','<div id="sg_inits" class="fm-checks" onchange="stratGoalPreview()">'+(inits.length?inits.map(function(pp){return '<label class="fm-check"><input type="checkbox" value="'+pp.id+'"'+(sel.indexOf(pp.id)>-1?' checked':'')+'> <span>'+esc(pp.name)+'</span></label>';}).join(''):'<span style="font-size:11px;color:var(--text-muted)">No initiatives defined.</span>')+'</div>');}
+  if(k==='customers.arr'){var types=[''];(typeof custDistinct==='function'?custDistinct('type'):[]).forEach(function(t){types.push(t);});return _sgField('Customer type (optional)','<select class="fld-sel" id="sg_custType" onchange="stratGoalPreview()">'+types.map(function(t){return '<option value="'+esc(t)+'"'+((p.custType||'')===t?' selected':'')+'>'+(t||'All types')+'</option>';}).join('')+'</select>');}
+  if(k==='customers.health'){var bs=[['engaged','Engaged (≤7d)'],['active','Active (8–30d)'],['atrisk','At risk (31–90d)'],['dormant','Dormant (>90d)']];return _sgField('Login bucket','<select class="fld-sel" id="sg_bucket" onchange="stratGoalPreview()">'+bs.map(function(b){return '<option value="'+b[0]+'"'+((p.bucket||'dormant')===b[0]?' selected':'')+'>'+b[1]+'</option>';}).join('')+'</select>');}
+  if(k==='commercial.metric'){var depts=(typeof COMM_DEPTS!=='undefined'?COMM_DEPTS.filter(function(d){return d.ready;}):[]);var dsel=p.dept||(depts[0]&&depts[0].key)||'';return _sgField('Department','<select class="fld-sel" id="sg_cdept" onchange="stratGoalCommDept()">'+depts.map(function(d){return '<option value="'+d.key+'"'+(dsel===d.key?' selected':'')+'>'+esc(d.label)+'</option>';}).join('')+'</select>')+'<div id="sg_cmetric_wrap">'+_sgCommMetricSelect(dsel,p.metricKey)+'</div>';}
+  if(k==='tasks.completion')return _sgField('Measure','<select class="fld-sel" id="sg_measure" onchange="stratGoalPreview()">'+[['pct','Completion %'],['open','Open tasks'],['late','Late tasks']].map(function(m){return '<option value="'+m[0]+'"'+((p.measure||'pct')===m[0]?' selected':'')+'>'+m[1]+'</option>';}).join('')+'</select>')
+    +_sgField('Workstream (optional)','<select class="fld-sel" id="sg_ws" onchange="stratGoalPreview()"><option value="">All</option>'+['Transformation','Support'].map(function(w){return '<option value="'+w+'"'+((p.ws||'')===w?' selected':'')+'>'+w+'</option>';}).join('')+'</select>');
+  return '<div style="font-size:11px;color:var(--text-muted);margin:-2px 0 6px">Computed live from the projection engine — no parameters needed.</div>';
+}
+function stratGoalCommDept(){var dept=(document.getElementById('sg_cdept')||{}).value;var w=document.getElementById('sg_cmetric_wrap');if(w)w.innerHTML=_sgCommMetricSelect(dept,'');stratGoalPreview();}
+function stratGoalSourceChanged(){var k=(document.getElementById('sg_src')||{}).value;var w=document.getElementById('sg_params');if(w)w.innerHTML=_sgParamsHTML(k,_sgEdit&&_sgEdit.g);stratGoalPreview();}
+function _sgCollect(){
+  var k=(document.getElementById('sg_src')||{}).value||'manual',sp={},linked=[];
+  function val(id){var e=document.getElementById(id);return e?e.value:'';}
+  if(k==='customers.arr')sp.custType=val('sg_custType');
+  else if(k==='customers.health')sp.bucket=val('sg_bucket')||'dormant';
+  else if(k==='commercial.metric'){sp.dept=val('sg_cdept');sp.metricKey=val('sg_cmetric');}
+  else if(k==='tasks.completion'){sp.measure=val('sg_measure')||'pct';sp.ws=val('sg_ws');}
+  if(k==='initiative-revenue'){var box=document.getElementById('sg_inits');if(box)box.querySelectorAll('input[type=checkbox]:checked').forEach(function(c){linked.push(c.value);});}
+  return {metric:k,label:(val('sg_label')||'').trim(),target:Number(val('sg_target'))||0,baseline:Number(val('sg_base'))||0,
+    manualCurrent:Number(val('sg_manual'))||0,unit:(val('sg_unit')||'').trim(),dir:val('sg_dir')||'',
+    targetDate:val('sg_date')||'',cadence:val('sg_cad')||'monthly',owner:val('sg_owner')||'',notes:(val('sg_notes')||'').trim(),
+    sourceParams:sp,linkedInitiativeIds:linked};
+}
+function stratGoalPreview(){
+  var w=document.getElementById('sg_preview');if(!w)return;
+  var v=_sgCollect();var model;try{model=_stratCash();}catch(e){model={opening:0,rows:[],gate:0};}
+  var ev=_stratGoalEval(v,model),st=_stratGoalStatus(v,ev);
+  w.innerHTML='<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:5px">Live preview</div>'
+    +'<div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:21px;font-weight:800;color:var(--text)">'+_goalFmt(v,ev.current)+'</span><span style="font-size:12px;color:var(--text-muted)">of '+_goalFmt(v,v.target)+' target</span>'+_stratStatusChip(st.key,st.label)+'</div>'
+    +(ev.detail?'<div style="font-size:11px;color:var(--text-muted);margin-top:3px">'+esc(ev.detail)+'</div>':'');
+}
 function stratEditGoal(id){
   var S=_stratEnsure();
   var g=id?S.goals.find(function(x){return x.id===id;}):null;
-  var inits=(D.projects||[]).filter(function(p){return projCat(p)==='initiative';});
-  openFormModal({over:'Strategy',title:id?'Edit Goal':'New Goal',submitLabel:'Save Goal',
-    intro:'Auto metrics pull live from the projection engine; pick "Manual KPI" for anything the model can\'t compute (ARR, skilled hires, utilization).',
-    fields:[
-      {key:'label',label:'Goal',type:'text',required:true,value:g?g.label:'',placeholder:'e.g. Reach $1.1M ARR'},
-      {key:'metric',label:'Metric type',type:'select',value:g?g.metric:'manual',options:STRAT_METRICS.map(function(m){return {value:m.k,label:m.l};})},
-      {key:'target',label:'Target value ($, or number for manual)',type:'number',value:g?g.target:''},
-      {key:'baseline',label:'Baseline / starting value (optional)',type:'number',value:g?g.baseline:''},
-      {key:'manualCurrent',label:'Current value (manual metrics only)',type:'number',value:g?g.manualCurrent:''},
-      {key:'unit',label:'Unit label (manual, e.g. "people", "%")',type:'text',value:g?g.unit:''},
-      {key:'targetDate',label:'Target date',type:'month',value:g?g.targetDate:(S.gateTargetDate||'2027-06')},
-      {key:'owner',label:'Owner',type:'select',value:g?g.owner:'',options:[{value:'',label:'— unassigned —'}].concat(allM().map(function(m){return {value:m.id,label:m.name+(m.role?' · '+m.role:'')};}))},
-      {key:'cadence',label:'Review cadence',type:'select',value:g?g.cadence:'monthly',options:[{value:'weekly',label:'Weekly'},{value:'monthly',label:'Monthly'},{value:'quarterly',label:'Quarterly'}]},
-      {key:'linked',label:'Linked initiatives',type:'checkboxes',value:g?(g.linkedInitiativeIds||[]):[],options:inits.map(function(p){return {value:p.id,label:p.name};})},
-      {key:'notes',label:'Notes',type:'textarea',rows:2,value:g?g.notes:''}
-    ],
-    onSubmit:function(v){
-      if(!v.label||!v.label.trim()){alert('Goal name required.');return false;}
-      if(g){g.label=v.label.trim();g.metric=v.metric;g.target=Number(v.target)||0;g.baseline=Number(v.baseline)||0;g.manualCurrent=Number(v.manualCurrent)||0;g.unit=(v.unit||'').trim();g.targetDate=v.targetDate;g.owner=v.owner||'';g.cadence=v.cadence;g.linkedInitiativeIds=v.linked||[];g.notes=(v.notes||'').trim();g.updatedAt=Date.now();}
-      else S.goals.push({id:uid(),label:v.label.trim(),metric:v.metric,target:Number(v.target)||0,baseline:Number(v.baseline)||0,manualCurrent:Number(v.manualCurrent)||0,unit:(v.unit||'').trim(),targetDate:v.targetDate,owner:v.owner||'',cadence:v.cadence,linkedInitiativeIds:v.linked||[],notes:(v.notes||'').trim(),createdAt:Date.now(),updatedAt:Date.now()});
-      save();renderView();
-    }});
+  _sgEdit={id:id||'',g:g};
+  var mdl=document.getElementById('mdlForm');if(!mdl)return;
+  var srcVal=g?g.metric:'manual';
+  var groups={},order=[];STRAT_METRICS.forEach(function(s){var gr=s.group||'Other';if(!groups[gr]){groups[gr]=[];order.push(gr);}groups[gr].push(s);});
+  var sel='<select class="fld-sel" id="sg_src" onchange="stratGoalSourceChanged()">'+order.map(function(gr){return '<optgroup label="'+esc(gr)+'">'+groups[gr].map(function(s){return '<option value="'+s.k+'"'+(s.k===srcVal?' selected':'')+'>'+esc(s.l)+'</option>';}).join('')+'</optgroup>';}).join('')+'</select>';
+  var ownerSel='<select class="fld-sel" id="sg_owner">'+_stratMemberOpts(g?g.owner:'')+'</select>';
+  var cadSel='<select class="fld-sel" id="sg_cad">'+[['weekly','Weekly'],['monthly','Monthly'],['quarterly','Quarterly']].map(function(c){return '<option value="'+c[0]+'"'+((g?g.cadence:'monthly')===c[0]?' selected':'')+'>'+c[1]+'</option>';}).join('')+'</select>';
+  var dirSel='<select class="fld-sel" id="sg_dir"><option value="">Auto (from source)</option><option value="up"'+((g&&g.dir==='up')?' selected':'')+'>Higher is better</option><option value="down"'+((g&&g.dir==='down')?' selected':'')+'>Lower is better</option></select>';
+  mdl.innerHTML='<div class="mdl-over">Strategy</div><div class="mdl-title">'+(id?'Edit Goal':'New Goal')+'</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Bind the goal to a live data source so it tracks itself — or pick Manual to enter values by hand.</div>'
+    +_sgField('Goal','<input class="fld-i" id="sg_label" value="'+esc(g?g.label:'')+'" placeholder="e.g. Reach $1.1M ARR">')
+    +_sgField('Data source',sel)
+    +'<div id="sg_params"></div>'
+    +'<div style="display:flex;gap:8px"><div style="flex:1">'+_sgField('Target','<input class="fld-i" type="number" id="sg_target" value="'+(g&&g.target!=null?g.target:'')+'">')+'</div><div style="flex:1">'+_sgField('Baseline (optional)','<input class="fld-i" type="number" id="sg_base" value="'+(g&&g.baseline?g.baseline:'')+'">')+'</div></div>'
+    +_sgField('Better when',dirSel)
+    +'<div style="display:flex;gap:8px"><div style="flex:1">'+_sgField('Target date','<input class="fld-i" type="month" id="sg_date" value="'+esc(g?g.targetDate:(S.gateTargetDate||'2027-06'))+'">')+'</div><div style="flex:1">'+_sgField('Review cadence',cadSel)+'</div></div>'
+    +_sgField('Owner',ownerSel)
+    +_sgField('Notes','<textarea class="fld-i" id="sg_notes" rows="2">'+esc(g?g.notes:'')+'</textarea>')
+    +'<div id="sg_preview" style="margin-top:8px;border-top:1px solid var(--border);padding-top:10px"></div>'
+    +'<div class="btn-row" style="margin-top:12px"><button class="btn btn-navy" style="flex:1" onclick="stratGoalSave()">Save Goal</button><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovForm\')">Cancel</button></div>';
+  openModal('ovForm');
+  stratGoalSourceChanged();
+}
+function stratGoalSave(){
+  var S=_stratEnsure();var v=_sgCollect();
+  if(!v.label){alert('Goal name required.');return;}
+  var g=(_sgEdit&&_sgEdit.id)?S.goals.find(function(x){return x.id===_sgEdit.id;}):null;
+  if(g){g.label=v.label;g.metric=v.metric;g.target=v.target;g.baseline=v.baseline;g.manualCurrent=v.manualCurrent;g.unit=v.unit;g.dir=v.dir;g.targetDate=v.targetDate;g.cadence=v.cadence;g.owner=v.owner;g.notes=v.notes;g.sourceParams=v.sourceParams;g.linkedInitiativeIds=v.linkedInitiativeIds;g.suggested=false;g.updatedAt=Date.now();}
+  else S.goals.push({id:uid(),label:v.label,metric:v.metric,target:v.target,baseline:v.baseline,manualCurrent:v.manualCurrent,unit:v.unit,dir:v.dir,targetDate:v.targetDate,cadence:v.cadence,owner:v.owner,notes:v.notes,sourceParams:v.sourceParams,linkedInitiativeIds:v.linkedInitiativeIds,createdAt:Date.now(),updatedAt:Date.now()});
+  save();closeModal('ovForm');renderView();
 }
 function stratDelGoal(id){if(!confirm('Delete this goal?'))return;var S=_stratEnsure();S.goals=S.goals.filter(function(x){return x.id!==id;});save();renderView();}
 function stratSetGoalOwner(id,owner){var S=_stratEnsure();var g=(S.goals||[]).find(function(x){return x.id===id;});if(!g)return;g.owner=owner||'';g.updatedAt=Date.now();save();renderView();}
