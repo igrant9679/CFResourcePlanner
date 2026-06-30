@@ -3521,6 +3521,11 @@ function commCustomerList(){
   (typeof D!=='undefined'&&D.projects?D.projects:[]).forEach(p=>(p.subClients||[]).forEach(c=>{ const a=c&&c.account?String(c.account).trim():''; if(a) set[a]=1; }));
   return Object.keys(set).sort((a,b)=>a.localeCompare(b));
 }
+/* account names from the Customer registry (D.customers) — the link target for line-items */
+function commCustNames(){ var s={}; (typeof D!=='undefined'&&Array.isArray(D.customers)?D.customers:[]).forEach(c=>{ if(c&&c.name) s[c.name]=1; }); var a=Object.keys(s).sort((x,y)=>x.localeCompare(y)); return a.length?a:commCustomerList(); }
+function commCustById(id){ if(!id)return null; return ((typeof D!=='undefined'&&D.customers)?D.customers:[]).find(c=>c.id===id)||null; }
+/* exact (case-insensitive) name → registry id; '' if not a known customer (i.e. a prospect) */
+function commResolveCustomerId(name){ if(!name)return ''; var k=String(name).trim().toLowerCase(); var hit=((typeof D!=='undefined'&&D.customers)?D.customers:[]).find(c=>String(c.name||'').trim().toLowerCase()===k); return hit?hit.id:''; }
 function commChip(v){
   const tone={Green:'good','On Track':'good','Closed Won':'good',Complete:'good',Completed:'good','Live':'good',
     Amber:'warn','At Risk':'warn','Pending Kickoff':'warn','Awaiting Client':'warn','In Progress':'warn','Scheduled':'warn',Verbal:'warn',
@@ -3713,7 +3718,7 @@ function commDashCustomers(dept,rows,cur){
   const defs=COMM_CUST_DEFS[dept]||[];
   if(commUI.edit&&commUI.edit.sub==='customers'){ if(!commUI.draft) commBuildDraft(dept,cur);
     return `<div class="comm-form" style="max-width:920px"><div class="comm-gh">Editing customers — week ending ${commFmtWeek(cur.weekEnding)}</div>
-      <datalist id="commCustDL">${commCustomerList().map(a=>`<option value="${commEsc(a)}">`).join('')}</datalist>
+      <datalist id="commCustDL">${commCustNames().map(a=>`<option value="${commEsc(a)}">`).join('')}</datalist>
       ${commCustRowsHTML(dept)}${commEditActions(cur.weekEnding)}</div>`; }
   const cs=cur.customers||[], editBtn=commEditBtn('customers','customers');
   if(!cs.length) return editBtn+`<p class="comm-ph">No customer line-items for week ending ${commFmtWeek(cur.weekEnding)}. Click <b>✎ Edit customers</b> to add them.</p>`;
@@ -3726,9 +3731,11 @@ function commDashCustomers(dept,rows,cur){
       if(d.type==='num')   return `<td>${(v==null||v==='')?'—':v}</td>`;
       return `<td style="text-align:left;white-space:normal">${commEsc(v||'')||'—'}</td>`;
     }).join('');
-    return `<tr><td style="text-align:left;font-weight:600">${commEsc(c.account||'—')}</td>${cells}</tr>`;
+    const link=c.customerId&&commCustById(c.customerId)?` <span class="comm-pill" style="background:var(--comm-good-bg);color:var(--comm-good);font-size:9px" title="Linked to the customer registry">🔗</span>`:'';
+    return `<tr><td style="text-align:left;font-weight:600">${commEsc(c.account||'—')}${link}</td>${cells}</tr>`;
   }).join('');
-  return editBtn+`<p class="comm-ph">Week ending ${commFmtWeek(cur.weekEnding)} · ${cs.length} account${cs.length===1?'':'s'}</p>
+  const linkedN=cs.filter(c=>c.customerId&&commCustById(c.customerId)).length;
+  return editBtn+`<p class="comm-ph">Week ending ${commFmtWeek(cur.weekEnding)} · ${cs.length} account${cs.length===1?'':'s'} · ${linkedN} linked to the customer registry</p>
     <div class="comm-panel" style="padding-top:6px"><table class="comm-ledger"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
@@ -3957,7 +3964,7 @@ function commFormHTML(dept){
   const snaps=defs.filter(d=>d.kind==='snapshot').map(fieldRow).join('');
   const flows=defs.filter(d=>d.kind==='flow').map(fieldRow).join('');
   return commHead('Submit weekly — '+meta.label, editing?('Editing week ending '+commFmtWeek(dr.weekEnding)):'New weekly entry')
-  + `<datalist id="commCustDL">${commCustomerList().map(a=>`<option value="${commEsc(a)}">`).join('')}</datalist>
+  + `<datalist id="commCustDL">${commCustNames().map(a=>`<option value="${commEsc(a)}">`).join('')}</datalist>
      <div class="comm-form" style="max-width:920px">
       <div class="comm-weekbar">
         <label for="cf_dept">Department</label>
@@ -3993,20 +4000,21 @@ function commCustRowsHTML(dept){
   const defs=COMM_CUST_DEFS[dept]||[]; if(!defs.length) return '';
   const rows=(commUI.draft.customers||[]);
   const rowsHTML=rows.map((c,i)=>commCustRowHTML(dept,c,i)).join('') || '<div class="comm-ph" style="margin:0 0 8px">No customer rows yet.</div>';
-  return `<div class="comm-fgroup"><div class="comm-gh">Customers <small>tie line-items to accounts (type-ahead from ${commCustomerList().length} known accounts)</small></div>
+  return `<div class="comm-fgroup"><div class="comm-gh">Customers <small>link each line-item to a customer (type-ahead from ${commCustNames().length} in the registry); free-type a name to leave it as a prospect</small></div>
     <div id="comm_cust_rows">${rowsHTML}</div>
     <button type="button" class="comm-btn comm-btn-ghost" style="margin-top:6px" onclick="commFormAddCustomer()">+ Add customer</button></div>`;
 }
 function commCustRowHTML(dept,c,i){
   const defs=COMM_CUST_DEFS[dept]||[];
-  const acc=`<input list="commCustDL" id="cf_cust_${i}_account" value="${commEsc(c.account||'')}" placeholder="Account" style="min-width:190px;flex:1">`;
+  const acc=`<input list="commCustDL" id="cf_cust_${i}_account" value="${commEsc(c.account||'')}" placeholder="Account" style="min-width:190px;flex:1"><input type="hidden" id="cf_cust_${i}_cid" value="${commEsc(c.customerId||'')}">`;
+  const link=c.customerId&&commCustById(c.customerId)?`<span class="comm-pill" style="background:var(--comm-good-bg);color:var(--comm-good)" title="Linked to the customer registry">🔗</span>`:'';
   const cols=defs.map(d=>{ const id=`cf_cust_${i}_${d.key}`;
     if(d.type==='select') return `<select id="${id}"><option value=""></option>${d.options.map(o=>`<option ${c[d.key]===o?'selected':''}>${commEsc(o)}</option>`).join('')}</select>`;
     if(d.type==='note')   return `<input id="${id}" value="${commEsc(c[d.key]||'')}" placeholder="${commEsc(d.label)}" style="min-width:220px;flex:2">`;
     if(d.type==='money'||d.type==='num') return `<input type="number" id="${id}" value="${c[d.key]??''}" placeholder="${commEsc(d.label)}" style="width:104px">`;
     return `<input id="${id}" value="${commEsc(c[d.key]||'')}" placeholder="${commEsc(d.label)}" style="min-width:110px">`;
   }).join('');
-  return `<div class="comm-custrow">${acc}${cols}<button type="button" class="comm-editlink" onclick="commFormDelCustomer(${i})">remove</button></div>`;
+  return `<div class="comm-custrow">${acc}${link}${cols}<button type="button" class="comm-editlink" onclick="commFormDelCustomer(${i})">remove</button></div>`;
 }
 function commLedger(dept){
   const defs=COMM_DEFS[dept]||[], rows=commSubs(dept).slice().reverse();
@@ -4067,7 +4075,9 @@ function commFormCollect(){
     const out=[]; let i=0;
     while(document.getElementById('cf_cust_'+i+'_account')){
       const acc=document.getElementById('cf_cust_'+i+'_account').value.trim();
-      const row={account:acc};
+      const cidEl=document.getElementById('cf_cust_'+i+'_cid');
+      // exact registry-name match (re)links; otherwise keep the prior link (hidden field); '' = prospect
+      const row={account:acc, customerId:(commResolveCustomerId(acc)||(cidEl?cidEl.value:'')||'')};
       defs.forEach(d=>{ const el=document.getElementById('cf_cust_'+i+'_'+d.key); if(el){ const v=el.value; row[d.key]=(d.type==='money'||d.type==='num')?(v===''?null:Number(v)):v.trim(); } });
       if(acc||defs.some(d=>row[d.key]!=null&&row[d.key]!=='')) out.push(row);
       i++;
