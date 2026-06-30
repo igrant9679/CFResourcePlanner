@@ -10059,8 +10059,6 @@ function _homeNorthStar(){
   }
   var wp=0;try{(D.projects||[]).forEach(function(p){if(projCat(p)==='opportunity'){var st=(typeof capOppStage==='function'?capOppStage(p):(p.stage||''));if(/lost/i.test(st))return;wp+=(Number(p.potential)||0)*_initOppProb(p);}});}catch(e){}
   t+=tile(['ceo'],'Weighted pipeline',fmt(Math.round(wp)),'Σ potential × P(close)',null);
-  var debt=Number(c.corporateDebt)||((P.debt&&P.debt.total)||0);
-  t+=tile(['cfo','ceo'],'Corporate debt',fmt(Math.round(debt)),'total outstanding',null);
   return '<div class="exh-ns-strip">'+t+'</div>';
 }
 
@@ -10068,14 +10066,29 @@ function _homeNorthStar(){
 var HOME_WIDGETS=[
   {key:'goals',lane:'perf',size:'w6',persona:['ceo'],title:'Goals & KPI scorecard',sub:'Strategy → Goals · live vs target',render:function(){
     var gs=((D.strategy||{}).goals)||[];if(!gs.length)return _homeEmpty('No goals set. Add them in Strategy → Goals.');var m=_homeCash()||_stratCash();
-    return gs.slice(0,6).map(function(g){var ev=_stratGoalEval(g,m),st=_stratGoalStatus(g,ev),tg=Number(g.target)||0,pct=tg?ev.current/tg*100:0;var col=({ontrack:'good',atrisk:'warn',off:'crit',done:'good'}[st.key]||'flat');var bc=({good:'var(--exh-good)',warn:'var(--exh-warn)',crit:'var(--exh-crit)',flat:'#9aa6b6'}[col]);return '<div class="exh-mrow"><div class="exh-lab">'+esc(g.label)+'</div><div class="exh-rt">'+_homeBar(pct,bc)+'<span class="exh-chip '+col+'">'+esc(st.label)+'</span></div></div>';}).join('');
+    return gs.map(function(g){var ev=_stratGoalEval(g,m),st=_stratGoalStatus(g,ev),tg=Number(g.target)||0,pct=tg?ev.current/tg*100:0;var col=({ontrack:'good',atrisk:'warn',off:'crit',done:'good'}[st.key]||'flat');var bc=({good:'var(--exh-good)',warn:'var(--exh-warn)',crit:'var(--exh-crit)',flat:'#9aa6b6'}[col]);return '<div class="exh-mrow"><div class="exh-lab">'+esc(g.label)+'</div><div class="exh-rt">'+_homeBar(pct,bc)+'<span class="exh-chip '+col+'">'+esc(st.label)+'</span></div></div>';}).join('');
   }},
   {key:'revenue',lane:'perf',size:'w6',persona:['ceo','cfo'],title:'Revenue trajectory',sub:'Debt-free plan · projected by fiscal year',render:function(){
     var m=_homeCash();if(!m)return _homeEmpty('No projection available.');var by=_homeRevByYear(m),yrs=Object.keys(by).sort();if(!yrs.length)return _homeEmpty('No projection rows.');var vals=yrs.map(function(y){return by[y];});var leg=yrs.map(function(y){return '<span>FY'+String(y).slice(2)+' <b class="num">'+fmt(Math.round(by[y]))+'</b></span>';}).join('');return _homeSpark(vals,{stroke:'#2563EB'})+'<div class="exh-legend">'+leg+'</div>';
   }},
-  {key:'commercial',lane:'perf',size:'w6',persona:['ceo','coo'],title:'Commercial dept health',sub:'Weekly status · most recent week',render:function(){
+  {key:'revtodate',lane:'perf',size:'',persona:['ceo','cfo'],title:'Revenue to date',sub:'FY26 YTD · from active projects',render:function(){
+    var now=new Date(),months=now.getMonth()+1;   // Jan→current inclusive (projects active from Jan 1)
+    var monthly=0;(D.projects||[]).forEach(function(p){if(projCat(p)==='project')monthly+=Number(p.revenue)||0;});
+    var computed=monthly*months;
+    var fin=(D.proforma&&D.proforma.financials)||{};
+    var manual=(fin.revenueYTD!=null&&fin.revenueYTD!=='')?Number(fin.revenueYTD):null;
+    var val=(manual!=null)?manual:computed;
+    var b='<div class="exh-bigstat"><span class="n num">'+fmt(Math.round(val))+'</span><span class="u">'+(manual!=null?'entered actual':'computed')+' · through '+MON_ABBR[now.getMonth()]+' '+now.getFullYear()+'</span></div>';
+    b+='<div class="exh-mrow tight"><span class="exh-lab">Monthly run-rate (active projects)</span><span class="exh-v num">'+fmt(Math.round(monthly))+'</span></div>';
+    b+='<div class="exh-mrow tight"><span class="exh-lab">Months since Jan 1</span><span class="exh-v num">'+months+'</span></div>';
+    b+='<div class="exh-mrow tight"><span class="exh-lab">Computed YTD</span><span class="exh-v num">'+fmt(Math.round(computed))+'</span></div>';
+    if(ME&&ME.role==='admin')b+='<div class="exh-entry"><input type="number" id="exh_revytd" placeholder="Enter actual $" value="'+(manual!=null?manual:'')+'"><button onclick="homeSetRevYTD()">Save actual</button>'+(manual!=null?' <button class="ghost" onclick="homeClearRevYTD()">Use computed</button>':'')+'</div>';
+    return b;
+  }},
+  {key:'commercial',lane:'perf',size:'w6',persona:['ceo','coo'],title:'Commercial dept health',sub:'Weekly status by department',render:function(){
     if(!D.commercial||typeof COMM_DEPTS==='undefined')return _homeEmpty('No commercial data.');var depts=COMM_DEPTS.filter(function(d){return d.ready;});if(!depts.length)return _homeEmpty('No departments configured.');var subs=D.commercial.submissions||[];var latest='';subs.forEach(function(s){if(s.weekEnding>latest)latest=s.weekEnding;});
-    return '<div class="exh-rag">'+depts.map(function(d){var has=subs.some(function(s){return s.dept===d.key&&s.weekEnding===latest;});return '<div class="exh-cell"><span class="exh-sw" style="background:'+(has?'var(--exh-good)':'var(--exh-warn)')+'"></span><span class="exh-nm">'+esc(d.label)+'</span><span class="exh-mt">'+(has?'reported':'no update')+'</span></div>';}).join('')+'</div>';
+    var cap=latest?'<div class="exh-cap">Week ending '+commFmtWeek(latest)+', '+String(latest).slice(0,4)+'</div>':'<div class="exh-cap">No weekly status submitted yet</div>';
+    return cap+'<div class="exh-rag">'+depts.map(function(d){var has=subs.some(function(s){return s.dept===d.key&&s.weekEnding===latest;});return '<div class="exh-cell"><span class="exh-sw" style="background:'+(has?'var(--exh-good)':'var(--exh-warn)')+'"></span><span class="exh-nm">'+esc(d.label)+'</span><span class="exh-mt">'+(has?'reported':'no update')+'</span></div>';}).join('')+'</div>';
   }},
   {key:'customers',lane:'perf',size:'w6',persona:['coo','cfo'],title:'ARR & customer health',sub:'Customers registry · by login recency',render:function(){
     var cs=D.customers||[];if(!cs.length)return _homeEmpty('No customers in the registry.');var arr=cs.reduce(function(a,c){return a+(Number(c.value)||0);},0);var eng=0,act=0,risk=0,dorm=0;cs.forEach(function(c){var d=custDaysNum(c);if(d==null)return;if(d<=7)eng++;else if(d<=30)act++;else if(d<=90)risk++;else dorm++;});var tot=(eng+act+risk+dorm)||1;function seg(v,col){return v?'<span style="width:'+(v/tot*100)+'%;background:'+col+'"></span>':'';}
@@ -10148,6 +10161,8 @@ function _homeLane(lane,title,dot,meta){
   return '<div class="exh-lane"><div class="exh-laneh"><span class="exh-dot" style="background:'+dot+'"></span><span class="exh-lt">'+title+'</span><span class="exh-rule"></span><span class="exh-meta">'+meta+'</span></div><div class="exh-grid">'+cards+add+'</div></div>';
 }
 function homeSetLens(p){HOME_LENS=p;renderView();}
+function homeSetRevYTD(){if(!ME||ME.role!=='admin')return;var el=document.getElementById('exh_revytd');if(!el)return;D.proforma=D.proforma||{};D.proforma.financials=D.proforma.financials||{};var v=String(el.value).trim();D.proforma.financials.revenueYTD=(v===''?'':(Number(v)||0));D.proforma.financials.revenueYTDAsOf=new Date().toISOString().slice(0,10);save();renderView();}
+function homeClearRevYTD(){if(!ME||ME.role!=='admin')return;if(D.proforma&&D.proforma.financials){delete D.proforma.financials.revenueYTD;delete D.proforma.financials.revenueYTDAsOf;}save();renderView();}
 function homeToggleEdit(){if(!ME||ME.role!=='admin')return;HOME_EDIT=!HOME_EDIT;renderView();}
 function homeRemove(key){if(!ME||ME.role!=='admin')return;var H=_homeEnsure();H.order=H.order.filter(function(k){return k!==key;});if(H.hidden.indexOf(key)<0)H.hidden.push(key);save();renderView();}
 function homeAdd(key){if(!ME||ME.role!=='admin')return;var H=_homeEnsure();H.hidden=H.hidden.filter(function(k){return k!==key;});if(H.order.indexOf(key)<0)H.order.push(key);save();try{closeModal('ovForm');}catch(e){}renderView();}
@@ -10168,7 +10183,12 @@ function _homeStyle(){return '<style>'
   +'.exh-cust{font:inherit;font-size:12.5px;font-weight:600;border-radius:7px;padding:8px 14px;cursor:pointer;border:1px solid var(--exh-navy);background:var(--exh-navy);color:#fff}'
   +'.exh-cust.on{background:var(--exh-gold);border-color:var(--exh-gold);color:var(--exh-navy)}'
   +'.exh-editbar{display:flex;align-items:center;gap:10px;background:rgba(197,165,90,.13);border:1px solid var(--exh-gold);border-radius:7px;padding:9px 14px;margin-bottom:16px;font-size:12.5px;color:var(--exh-navy)}'
-  +'.exh-ns-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:13px;margin-bottom:28px}'
+  +'.exh-ns-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:28px}'
+  +'.exh-cap{font-size:11px;color:var(--exh-muted);margin:-2px 0 9px;font-weight:600}'
+  +'.exh-entry{display:flex;gap:6px;align-items:center;margin-top:11px;flex-wrap:wrap}'
+  +'.exh-entry input{font:inherit;font-size:12px;padding:6px 9px;border:1px solid var(--exh-line);border-radius:6px;max-width:150px}'
+  +'.exh-entry button{font:inherit;font-size:11.5px;font-weight:600;padding:6px 12px;border-radius:6px;border:1px solid var(--exh-navy);background:var(--exh-navy);color:#fff;cursor:pointer}'
+  +'.exh-entry button.ghost{background:#fff;color:var(--exh-navy)}'
   +'.exh-ns{background:var(--exh-card);border:1px solid var(--exh-line);border-radius:7px;padding:14px 15px}'
   +'.exh-ns.key{background:linear-gradient(180deg,#1B2A4A,#22335A);border-color:#22335A;color:#fff}'
   +'.exh-ns-ey{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--exh-muted)}'
