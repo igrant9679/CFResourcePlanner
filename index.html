@@ -10151,26 +10151,44 @@ function _homeNorthStar(){
   return '<div class="exh-ns-strip">'+t+'</div>';
 }
 
+/* ---- FY26 revenue (active projects, monthly from the start of the fiscal year) ---- */
+function _homeFY26Projects(){
+  var ps=(D.projects||[]).filter(function(p){return projCat(p)==='project';});
+  var fy=ps.filter(function(p){var d=String(p.fiscalYear||'').replace(/\D/g,'');return d==='26'||d==='2026';});
+  return fy.length?fy:ps;   // fall back to all active projects when FY isn't labelled
+}
+function _homeFY26Monthly(){   // 12 monthly revenue totals for FY26 (Jan→Dec 2026)
+  var ps=_homeFY26Projects(),arr=[];
+  for(var m=0;m<12;m++){var s=0;ps.forEach(function(p){s+=(typeof capProjRevAt==='function')?(Number(capProjRevAt(p,2026,m))||0):(Number(p.revenue)||0);});arr.push(s);}
+  return arr;
+}
+function _homeFY26MonthsElapsed(){var now=new Date(),y=now.getFullYear();return y>2026?12:(y<2026?0:now.getMonth()+1);}
+
 /* ---- Widget registry — each render() returns the card BODY ---- */
 var HOME_WIDGETS=[
   {key:'goals',lane:'perf',size:'w6',persona:['ceo'],title:'Goals & KPI scorecard',sub:'Strategy → Goals · live vs target',render:function(){
     var gs=((D.strategy||{}).goals)||[];if(!gs.length)return _homeEmpty('No goals set. Add them in Strategy → Goals.');var m=_homeCash()||_stratCash();
     return gs.map(function(g){var ev=_stratGoalEval(g,m),st=_stratGoalStatus(g,ev),tg=Number(g.target)||0,pct=tg?ev.current/tg*100:0;var col=({ontrack:'good',atrisk:'warn',off:'crit',done:'good'}[st.key]||'flat');var bc=({good:'var(--exh-good)',warn:'var(--exh-warn)',crit:'var(--exh-crit)',flat:'#9aa6b6'}[col]);return '<div class="exh-mrow"><div class="exh-lab">'+esc(g.label)+'</div><div class="exh-rt">'+_homeBar(pct,bc)+'<span class="exh-chip '+col+'">'+esc(st.label)+'</span></div></div>';}).join('');
   }},
-  {key:'revenue',lane:'perf',size:'w6',persona:['ceo','cfo'],title:'Revenue trajectory',sub:'Debt-free plan · projected by fiscal year',render:function(){
-    var m=_homeCash();if(!m)return _homeEmpty('No projection available.');var by=_homeRevByYear(m),yrs=Object.keys(by).sort();if(!yrs.length)return _homeEmpty('No projection rows.');var vals=yrs.map(function(y){return by[y];});var leg=yrs.map(function(y){return '<span>FY'+String(y).slice(2)+' <b class="num">'+fmt(Math.round(by[y]))+'</b></span>';}).join('');return _homeSpark(vals,{stroke:'#2563EB'})+'<div class="exh-legend">'+leg+'</div>';
+  {key:'revenue',lane:'perf',size:'w6',persona:['ceo','cfo'],title:'Revenue trajectory',sub:'FY26 · cumulative by month',render:function(){
+    var monthly=_homeFY26Monthly();if(!monthly.some(function(v){return v>0;}))return _homeEmpty('No FY26 project revenue.');
+    var cum=[],run=0;monthly.forEach(function(v){run+=v;cum.push(run);});
+    var el=_homeFY26MonthsElapsed(),ytd=el>0?cum[Math.min(el,12)-1]:0;
+    return _homeSpark(cum,{stroke:'#2563EB'})+'<div class="exh-legend"><span>YTD <b class="num">'+fmt(Math.round(ytd))+'</b></span><span>FY26 total <b class="num">'+fmt(Math.round(run))+'</b></span><span>Jan→Dec 2026</span></div>';
   }},
-  {key:'revtodate',lane:'perf',size:'',persona:['ceo','cfo'],title:'Revenue to date',sub:'FY26 YTD · from active projects',render:function(){
-    var now=new Date(),months=now.getMonth()+1;   // Jan→current inclusive (projects active from Jan 1)
-    var monthly=0;(D.projects||[]).forEach(function(p){if(projCat(p)==='project')monthly+=Number(p.revenue)||0;});
-    var computed=monthly*months;
+  {key:'revtodate',lane:'perf',size:'w6',persona:['ceo','cfo'],title:'Revenue to date',sub:'FY26 YTD · monthly from Jan 1',render:function(){
+    var ps=_homeFY26Projects(),monthly=_homeFY26Monthly(),el=_homeFY26MonthsElapsed();
+    var ytd=0;for(var i=0;i<el;i++)ytd+=monthly[i];
+    var runrate=el>0?monthly[el-1]:monthly[0];
     var fin=(D.proforma&&D.proforma.financials)||{};
     var manual=(fin.revenueYTD!=null&&fin.revenueYTD!=='')?Number(fin.revenueYTD):null;
-    var val=(manual!=null)?manual:computed;
-    var b='<div class="exh-bigstat"><span class="n num">'+fmt(Math.round(val))+'</span><span class="u">'+(manual!=null?'entered actual':'computed')+' · through '+MON_ABBR[now.getMonth()]+' '+now.getFullYear()+'</span></div>';
-    b+='<div class="exh-mrow tight"><span class="exh-lab">Monthly run-rate (active projects)</span><span class="exh-v num">'+fmt(Math.round(monthly))+'</span></div>';
-    b+='<div class="exh-mrow tight"><span class="exh-lab">Months since Jan 1</span><span class="exh-v num">'+months+'</span></div>';
-    b+='<div class="exh-mrow tight"><span class="exh-lab">Computed YTD</span><span class="exh-v num">'+fmt(Math.round(computed))+'</span></div>';
+    var val=(manual!=null)?manual:ytd;
+    var thru=el>0?(MON_ABBR[Math.min(el,12)-1]+' 2026'):'pre-FY26';
+    var b='<div class="exh-bigstat"><span class="n num">'+fmt(Math.round(val))+'</span><span class="u">'+(manual!=null?'entered actual':'computed')+' · FY26 through '+thru+'</span></div>';
+    b+='<div class="exh-mrow tight"><span class="exh-lab">Active FY26 projects</span><span class="exh-v num">'+ps.length+'</span></div>';
+    b+='<div class="exh-mrow tight"><span class="exh-lab">Monthly run-rate</span><span class="exh-v num">'+fmt(Math.round(runrate))+'</span></div>';
+    b+='<div class="exh-mrow tight"><span class="exh-lab">Months elapsed (from Jan)</span><span class="exh-v num">'+el+'</span></div>';
+    b+='<div class="exh-mrow tight"><span class="exh-lab">Computed YTD</span><span class="exh-v num">'+fmt(Math.round(ytd))+'</span></div>';
     if(ME&&ME.role==='admin')b+='<div class="exh-entry"><input type="number" id="exh_revytd" placeholder="Enter actual $" value="'+(manual!=null?manual:'')+'"><button onclick="homeSetRevYTD()">Save actual</button>'+(manual!=null?' <button class="ghost" onclick="homeClearRevYTD()">Use computed</button>':'')+'</div>';
     return b;
   }},
@@ -10231,6 +10249,15 @@ function _homeEnsure(){
   H.order=H.order.filter(function(k){return keys.indexOf(k)>-1;});
   H.hidden=H.hidden.filter(function(k){return keys.indexOf(k)>-1;});
   keys.forEach(function(k){if(H.order.indexOf(k)<0&&H.hidden.indexOf(k)<0)H.order.push(k);});
+  // One-time: lead the Performance lane with the revenue pair (Revenue to date +
+  // Revenue trajectory) so they sit side-by-side. Skipped once an admin customizes.
+  if(!H.revPairV1){
+    if(H.order.indexOf('revtodate')>-1&&H.order.indexOf('revenue')>-1){
+      H.order=H.order.filter(function(k){return k!=='revtodate'&&k!=='revenue';});
+      H.order.unshift('revtodate','revenue');
+    }
+    H.revPairV1=true;
+  }
   return H;
 }
 function _homeRenderWidget(w){
