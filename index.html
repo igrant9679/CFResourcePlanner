@@ -9473,6 +9473,27 @@ function _sgParamsHTML(k,g){
 }
 function stratGoalCommDept(){var dept=(document.getElementById('sg_cdept')||{}).value;var w=document.getElementById('sg_cmetric_wrap');if(w)w.innerHTML=_sgCommMetricSelect(dept,'');stratGoalPreview();}
 function stratGoalSourceChanged(){var k=(document.getElementById('sg_src')||{}).value;var w=document.getElementById('sg_params');if(w)w.innerHTML=_sgParamsHTML(k,_sgEdit&&_sgEdit.g);stratGoalPreview();}
+/* Goal link pickers (editor) — opportunities/proposals/milestones as checkbox
+   lists, accounts as a datalist chip-adder (336 customers → searchable). Stored
+   on g.links and combined with auto-derived links at render. */
+function _sgCheckList(id,items,sel,labelFn){if(!items.length)return '<div style="font-size:11px;color:var(--text-muted)">None available.</div>';return '<div id="'+id+'" class="fm-checks" style="max-height:150px;overflow:auto">'+items.map(function(it){return '<label class="fm-check"><input type="checkbox" value="'+it.id+'"'+((sel||[]).indexOf(it.id)>-1?' checked':'')+'> <span>'+esc(labelFn(it))+'</span></label>';}).join('')+'</div>';}
+function _sgAcctChip(id,name){return '<span data-id="'+esc(id)+'" style="display:inline-flex;align-items:center;gap:5px;background:#EEF1F6;color:#33415C;border-radius:999px;padding:3px 9px;font-size:11px;font-weight:600;margin:2px 4px 2px 0">'+esc(name)+' <a href="#" onclick="this.parentNode.remove();return false" style="color:#B91C1C;text-decoration:none;font-weight:700">×</a></span>';}
+function _sgAcctPicker(ids){ids=ids||[];var chips=ids.map(function(id){var c=(D.customers||[]).find(function(x){return x.id===id;});return c?_sgAcctChip(id,c.name):'';}).join('');
+  return '<div id="sg_lk_accts" style="margin-bottom:5px">'+chips+'</div><div style="display:flex;gap:6px"><input class="fld-i" id="sg_acct_in" list="sg_acct_dl" placeholder="Type a customer name…" style="flex:1"><button type="button" class="btn btn-sec btn-sm" onclick="sgAddAcct()">Add</button></div><datalist id="sg_acct_dl">'+(D.customers||[]).map(function(c){return '<option value="'+esc(c.name)+'"></option>';}).join('')+'</datalist>';}
+function sgAddAcct(){var inp=document.getElementById('sg_acct_in');if(!inp)return;var nm=(inp.value||'').trim();if(!nm){return;}var c=(D.customers||[]).find(function(x){return x.name===nm;});inp.value='';if(!c)return;var box=document.getElementById('sg_lk_accts');if(box&&!box.querySelector('[data-id="'+c.id+'"]'))box.insertAdjacentHTML('beforeend',_sgAcctChip(c.id,c.name));}
+function _sgLinksSection(g){
+  var L=(g&&g.links)||{};
+  var opps=(D.projects||[]).filter(function(p){return projCat(p)==='opportunity';});
+  var miles=(D.activities||[]).filter(function(a){return a.isMilestone;});
+  return '<details style="margin:6px 0"><summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--text)">Linked items (optional)</summary>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin:6px 0">Opportunities, proposals, accounts &amp; milestones also auto-derive from the goal’s linked initiative(s); add more here. Tasks are auto-derived.</div>'
+    +_sgField('Opportunities',_sgCheckList('sg_lk_opps',opps,L.opportunities,function(o){return o.name;}))
+    +_sgField('Proposals',_sgCheckList('sg_lk_props',(D.proposals||[]),L.proposals,function(p){return p.title||p.brief||'proposal';}))
+    +_sgField('Accounts',_sgAcctPicker(L.accounts))
+    +_sgField('Milestones',_sgCheckList('sg_lk_miles',miles,L.milestones,function(a){return a.subtask||a.task||'milestone';}))
+    +'</details>';
+}
+function _sgChecked(id){var a=[],b=document.getElementById(id);if(b)b.querySelectorAll('input[type=checkbox]:checked').forEach(function(c){a.push(c.value);});return a;}
 function _sgCollect(){
   var k=(document.getElementById('sg_src')||{}).value||'manual',sp={},linked=[];
   function val(id){var e=document.getElementById(id);return e?e.value:'';}
@@ -9481,10 +9502,12 @@ function _sgCollect(){
   else if(k==='commercial.metric'){sp.dept=val('sg_cdept');sp.metricKey=val('sg_cmetric');}
   else if(k==='tasks.completion'){sp.measure=val('sg_measure')||'pct';sp.ws=val('sg_ws');}
   if(k==='initiative-revenue'){var box=document.getElementById('sg_inits');if(box)box.querySelectorAll('input[type=checkbox]:checked').forEach(function(c){linked.push(c.value);});}
+  var links={opportunities:_sgChecked('sg_lk_opps'),proposals:_sgChecked('sg_lk_props'),milestones:_sgChecked('sg_lk_miles'),accounts:[]};
+  var ab=document.getElementById('sg_lk_accts');if(ab)ab.querySelectorAll('[data-id]').forEach(function(ch){links.accounts.push(ch.getAttribute('data-id'));});
   return {metric:k,label:(val('sg_label')||'').trim(),target:Number(val('sg_target'))||0,baseline:Number(val('sg_base'))||0,
     manualCurrent:Number(val('sg_manual'))||0,unit:(val('sg_unit')||'').trim(),dir:val('sg_dir')||'',
     targetDate:val('sg_date')||'',cadence:val('sg_cad')||'monthly',owner:val('sg_owner')||'',notes:(val('sg_notes')||'').trim(),
-    sourceParams:sp,linkedInitiativeIds:linked};
+    sourceParams:sp,linkedInitiativeIds:linked,links:links};
 }
 function stratGoalPreview(){
   var w=document.getElementById('sg_preview');if(!w)return;
@@ -9515,6 +9538,7 @@ function stratEditGoal(id){
     +'<div style="display:flex;gap:8px"><div style="flex:1">'+_sgField('Target date','<input class="fld-i" type="month" id="sg_date" value="'+esc(g?g.targetDate:(S.gateTargetDate||'2027-06'))+'">')+'</div><div style="flex:1">'+_sgField('Review cadence',cadSel)+'</div></div>'
     +_sgField('Owner',ownerSel)
     +_sgField('Notes','<textarea class="fld-i" id="sg_notes" rows="2">'+esc(g?g.notes:'')+'</textarea>')
+    +_sgLinksSection(g)
     +'<div id="sg_preview" style="margin-top:8px;border-top:1px solid var(--border);padding-top:10px"></div>'
     +'<div class="btn-row" style="margin-top:12px"><button class="btn btn-navy" style="flex:1" onclick="stratGoalSave()">Save Goal</button><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovForm\')">Cancel</button></div>';
   openModal('ovForm');
@@ -9524,8 +9548,8 @@ function stratGoalSave(){
   var S=_stratEnsure();var v=_sgCollect();
   if(!v.label){alert('Goal name required.');return;}
   var g=(_sgEdit&&_sgEdit.id)?S.goals.find(function(x){return x.id===_sgEdit.id;}):null;
-  if(g){g.label=v.label;g.metric=v.metric;g.target=v.target;g.baseline=v.baseline;g.manualCurrent=v.manualCurrent;g.unit=v.unit;g.dir=v.dir;g.targetDate=v.targetDate;g.cadence=v.cadence;g.owner=v.owner;g.notes=v.notes;g.sourceParams=v.sourceParams;g.linkedInitiativeIds=v.linkedInitiativeIds;g.suggested=false;g.updatedAt=Date.now();}
-  else S.goals.push({id:uid(),label:v.label,metric:v.metric,target:v.target,baseline:v.baseline,manualCurrent:v.manualCurrent,unit:v.unit,dir:v.dir,targetDate:v.targetDate,cadence:v.cadence,owner:v.owner,notes:v.notes,sourceParams:v.sourceParams,linkedInitiativeIds:v.linkedInitiativeIds,createdAt:Date.now(),updatedAt:Date.now()});
+  if(g){g.label=v.label;g.metric=v.metric;g.target=v.target;g.baseline=v.baseline;g.manualCurrent=v.manualCurrent;g.unit=v.unit;g.dir=v.dir;g.targetDate=v.targetDate;g.cadence=v.cadence;g.owner=v.owner;g.notes=v.notes;g.sourceParams=v.sourceParams;g.linkedInitiativeIds=v.linkedInitiativeIds;g.links=v.links;g.suggested=false;g.updatedAt=Date.now();}
+  else S.goals.push({id:uid(),label:v.label,metric:v.metric,target:v.target,baseline:v.baseline,manualCurrent:v.manualCurrent,unit:v.unit,dir:v.dir,targetDate:v.targetDate,cadence:v.cadence,owner:v.owner,notes:v.notes,sourceParams:v.sourceParams,linkedInitiativeIds:v.linkedInitiativeIds,links:v.links,createdAt:Date.now(),updatedAt:Date.now()});
   save();closeModal('ovForm');renderView();
 }
 function stratDelGoal(id){if(!confirm('Delete this goal?'))return;var S=_stratEnsure();S.goals=S.goals.filter(function(x){return x.id!==id;});save();renderView();}
@@ -10359,31 +10383,79 @@ function _homeStyle(){return '<style>'
   +'@media(max-width:760px){.exh-w,.exh-w.w6,.exh-w.w8{grid-column:span 12}.exh-add{grid-column:span 12}.exh-ns-strip{grid-template-columns:1fr}}'
   +'</style>';}
 
+/* Resolve everything a goal touches — combines MANUAL links (g.links{...}) with
+   links AUTO-DERIVED from the goal's linked initiative(s). Defensive: any failure
+   yields empty sets so the scorecard never breaks. */
+function _goalLinkData(g){
+  var out={opps:[],proposals:[],accounts:[],contacts:[],milestones:[],tasks:[],profit:0};
+  try{
+    var L=g.links||{},initIds=(g.linkedInitiativeIds||[]);
+    var initNames={};(D.projects||[]).forEach(function(p){if(initIds.indexOf(p.id)>-1)initNames[String(p.name||'').toLowerCase()]=1;});
+    var oppMap={};(D.projects||[]).forEach(function(p){if(projCat(p)!=='opportunity')return;var auto=(p.initiativeIds||[]).some(function(i){return initIds.indexOf(i)>-1;});if(auto||(L.opportunities||[]).indexOf(p.id)>-1)oppMap[p.id]=p;});
+    out.opps=Object.keys(oppMap).map(function(k){return oppMap[k];});
+    var oppIds=out.opps.map(function(o){return o.id;});
+    var prMap={};(D.proposals||[]).forEach(function(pr){if((L.proposals||[]).indexOf(pr.id)>-1||oppIds.indexOf(pr.opportunityId)>-1)prMap[pr.id]=pr;});
+    out.proposals=Object.keys(prMap).map(function(k){return prMap[k];});
+    var acMap={};(D.customers||[]).forEach(function(c){var auto=c.project&&initNames[String(c.project).toLowerCase()];if(auto||(L.accounts||[]).indexOf(c.id)>-1)acMap[c.id]=c;});
+    out.accounts=Object.keys(acMap).map(function(k){return acMap[k];});
+    var cset={};out.accounts.forEach(function(c){if(c.contact)cset[c.contact]=1;});out.contacts=Object.keys(cset);
+    var mMap={};(D.activities||[]).forEach(function(a){if(!a.isMilestone)return;if(initIds.indexOf(a.projectId)>-1||(L.milestones||[]).indexOf(a.id)>-1)mMap[a.id]=a;});
+    out.milestones=Object.keys(mMap).map(function(k){return mMap[k];});
+    var tMap={};(D.activities||[]).forEach(function(a){if(a.isMilestone)return;if(initIds.indexOf(a.projectId)>-1||(L.tasks||[]).indexOf(a.id)>-1)tMap[a.id]=a;});
+    out.tasks=Object.keys(tMap).map(function(k){return tMap[k];});
+    var all=allM();initIds.forEach(function(iid){try{var r=projRollupData(iid,all);out.profit+=((r.revenue||0)-(r.cost||0));}catch(e){}});
+    out.opps.forEach(function(o){out.profit+=Number(o.expectedValue)||0;});
+  }catch(e){}
+  return out;
+}
+function _homeGoalToggle(id){var el=document.getElementById('gd_'+id);if(el)el.style.display=(el.style.display==='none'?'':'none');}
+function _gCnt(arr,nameFn){var n=arr.length;if(!n)return '<td style="padding:7px 6px;text-align:center;vertical-align:top;color:var(--exh-muted)">—</td>';var names=arr.slice(0,15).map(nameFn).filter(Boolean).join(', ');return '<td style="padding:7px 6px;text-align:center;vertical-align:top;font-weight:700;color:var(--exh-ink)" title="'+esc(names)+'">'+n+'</td>';}
+function _gChips(label,arr,nameFn){if(!arr.length)return '';return '<div style="margin:4px 0;line-height:1.7"><span style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--exh-muted);margin-right:4px">'+label+'</span>'+arr.slice(0,30).map(function(x){var t=nameFn(x);return t?'<span class="exh-chip flat" style="margin:0 4px 2px 0">'+esc(t)+'</span>':'';}).join('')+'</div>';}
+
 /* Goals & KPIs — a PINNED, full-page-width block (not a customizable widget).
-   Reuses the goal source dispatcher (_stratGoalEval/_stratGoalStatus/_goalFmt). */
+   Columns show counts of everything each goal links to (opps/proposals/accounts/
+   contacts/milestones/tasks) + computed Profit; a ▸ toggle expands a detail row
+   listing the linked items. Links = manual (editor) ∪ auto-derived from initiatives. */
 function _homeGoalsBlock(){
   var gs=((D.strategy||{}).goals)||[];
-  var head='<div class="exh-lane"><div class="exh-laneh"><span class="exh-dot" style="background:var(--exh-gold)"></span><span class="exh-lt">Goals &amp; KPIs</span><span class="exh-rule"></span><span class="exh-meta">live vs target</span></div>';
+  var head='<div class="exh-lane"><div class="exh-laneh"><span class="exh-dot" style="background:var(--exh-gold)"></span><span class="exh-lt">Goals &amp; KPIs</span><span class="exh-rule"></span><span class="exh-meta">live vs target · linked items</span></div>';
   var inner;
   if(!gs.length){inner=_homeEmpty('No goals set. Add them in Strategy → Goals.');}
   else{
     var m=_homeCash()||_stratCash();
-    var th='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--exh-muted);text-align:left;border-bottom:1px solid var(--exh-line)">'
-      +'<th style="padding:6px 8px">Goal</th><th style="padding:6px 8px">Owner</th><th style="padding:6px 8px;white-space:nowrap">Target date</th>'
-      +'<th style="padding:6px 8px;text-align:right">Target</th><th style="padding:6px 8px;text-align:right">Current</th><th style="padding:6px 8px;min-width:140px">Progress</th></tr>';
+    var hc='font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--exh-muted);padding:6px 6px';
+    var th='<tr style="text-align:left;border-bottom:1px solid var(--exh-line)">'
+      +'<th style="'+hc+'">Goal</th><th style="'+hc+'">Owner</th><th style="'+hc+';white-space:nowrap">Target date</th>'
+      +'<th style="'+hc+';text-align:right">Target</th><th style="'+hc+';text-align:right">Current</th><th style="'+hc+';min-width:120px">Progress</th>'
+      +'<th style="'+hc+';text-align:center" title="Linked opportunities">Opps</th><th style="'+hc+';text-align:center" title="Linked proposals">Prop</th>'
+      +'<th style="'+hc+';text-align:center" title="Linked accounts">Accts</th><th style="'+hc+';text-align:center" title="Distinct contacts on linked accounts">Contacts</th>'
+      +'<th style="'+hc+';text-align:center" title="Linked milestones">Miles</th><th style="'+hc+';text-align:center" title="Linked tasks">Tasks</th>'
+      +'<th style="'+hc+';text-align:right" title="Linked projects’ profit + opportunities’ expected value">Profit</th></tr>';
     var rows=gs.map(function(g){
       var ev=_stratGoalEval(g,m),st=_stratGoalStatus(g,ev),tg=Number(g.target)||0,pct=tg?Math.max(0,Math.min(100,Math.round(ev.current/tg*100))):0;
       var col=({ontrack:'good',atrisk:'warn',off:'crit',done:'good'}[st.key]||'flat');var bc=({good:'var(--exh-good)',warn:'var(--exh-warn)',crit:'var(--exh-crit)',flat:'#9aa6b6'}[col]);
       var owner=_stratOwnerName(g.owner);
-      var links=(g.linkedInitiativeIds||[]).map(function(id){var p=(D.projects||[]).find(function(x){return x.id===id;});return p?esc(p.name):'';}).filter(Boolean).join(', ');
-      return '<tr style="border-bottom:1px solid var(--exh-line2)">'
-        +'<td style="padding:7px 8px;vertical-align:top"><div style="font-weight:600;color:var(--exh-ink)">'+esc(g.label)+'</div>'+(links?'<div style="font-size:10px;color:var(--exh-muted);margin-top:1px">↳ '+links+'</div>':'')+(ev.detail?'<div style="font-size:10px;color:var(--exh-muted);margin-top:1px">'+esc(ev.detail)+'</div>':'')+'</td>'
+      var initLinks=(g.linkedInitiativeIds||[]).map(function(id){var p=(D.projects||[]).find(function(x){return x.id===id;});return p?esc(p.name):'';}).filter(Boolean).join(', ');
+      var ld=_goalLinkData(g);
+      var pname=function(p){return p.title||p.brief||'proposal';};var aname=function(a){return a.subtask||a.task||'item';};
+      var main='<tr style="border-bottom:1px solid var(--exh-line2)">'
+        +'<td style="padding:7px 8px;vertical-align:top"><div style="font-weight:600;color:var(--exh-ink)"><span onclick="_homeGoalToggle(\''+g.id+'\')" style="cursor:pointer;color:var(--exh-muted);margin-right:5px;user-select:none">▸</span>'+esc(g.label)+'</div>'+(initLinks?'<div style="font-size:10px;color:var(--exh-muted);margin:1px 0 0 16px">↳ '+initLinks+'</div>':'')+(ev.detail?'<div style="font-size:10px;color:var(--exh-muted);margin-left:16px">'+esc(ev.detail)+'</div>':'')+'</td>'
         +'<td style="padding:7px 8px;vertical-align:top">'+(owner?esc(owner):'<span style="color:var(--exh-muted)">—</span>')+'</td>'
         +'<td style="padding:7px 8px;white-space:nowrap;vertical-align:top">'+(g.targetDate?esc(g.targetDate):'<span style="color:var(--exh-muted)">—</span>')+'</td>'
         +'<td style="padding:7px 8px;text-align:right;color:var(--exh-muted);vertical-align:top">'+_goalFmt(g,tg)+'</td>'
         +'<td style="padding:7px 8px;text-align:right;font-weight:700;color:var(--exh-ink);vertical-align:top">'+_goalFmt(g,Math.round(ev.current))+'</td>'
         +'<td style="padding:7px 8px;vertical-align:top"><span class="exh-chip '+col+'">'+esc(st.label)+'</span><div class="exh-mini" style="width:100%;margin-top:5px"><span style="width:'+pct+'%;background:'+bc+'"></span></div></td>'
+        +_gCnt(ld.opps,function(o){return o.name;})
+        +_gCnt(ld.proposals,pname)
+        +_gCnt(ld.accounts,function(a){return a.name;})
+        +'<td style="padding:7px 6px;text-align:center;vertical-align:top;'+(ld.contacts.length?'font-weight:700;color:var(--exh-ink)':'color:var(--exh-muted)')+'"'+(ld.contacts.length?' title="'+esc(ld.contacts.slice(0,15).join(', '))+'"':'')+'>'+(ld.contacts.length||'—')+'</td>'
+        +_gCnt(ld.milestones,aname)
+        +_gCnt(ld.tasks,aname)
+        +'<td style="padding:7px 8px;text-align:right;vertical-align:top;'+(ld.profit?'font-weight:700;color:var(--exh-ink)':'color:var(--exh-muted)')+'">'+(ld.profit?fmt(Math.round(ld.profit)):'—')+'</td>'
         +'</tr>';
+      var detailParts=_gChips('Opportunities',ld.opps,function(o){return o.name;})+_gChips('Proposals',ld.proposals,pname)+_gChips('Accounts',ld.accounts,function(a){return a.name;})+(ld.contacts.length?_gChips('Contacts',ld.contacts.map(function(c){return {n:c};}),function(x){return x.n;}):'')+_gChips('Milestones',ld.milestones,aname)+_gChips('Tasks',ld.tasks,aname);
+      var detail='<tr id="gd_'+g.id+'" style="display:none"><td colspan="13" style="padding:6px 10px 12px 24px;background:#FAFBFD;border-bottom:1px solid var(--exh-line2)">'+(detailParts||'<span style="font-size:11px;color:var(--exh-muted)">No linked items yet — add some in Strategy → Goals → edit this goal.</span>')+'</td></tr>';
+      return main+detail;
     }).join('');
     inner='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead>'+th+'</thead><tbody>'+rows+'</tbody></table></div>';
   }
