@@ -9375,16 +9375,15 @@ function _stratGoalsHTML(model){
   if(!goals.length)return head+'<div class="empty-msg">No goals yet. Click <b>✨ Seed starter goals</b> for the cash gate, FY27 revenue, weighted pipeline, and one revenue goal per initiative — then edit targets/owners. Or add your own (ARR, skilled-hire counts…) with <b>+ New Goal</b>.</div>';
   var th='<thead><tr style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);text-align:left;border-bottom:2px solid var(--border)">'
     +'<th style="padding:7px 8px">Goal</th>'
-    +'<th style="padding:7px 8px">Metric</th>'
     +'<th style="padding:7px 8px">Owner</th>'
     +'<th style="padding:7px 8px;white-space:nowrap">Target date</th>'
     +'<th style="padding:7px 8px">Cadence</th>'
-    +'<th style="padding:7px 8px;text-align:right">Current</th>'
     +'<th style="padding:7px 8px;text-align:right">Target</th>'
+    +'<th style="padding:7px 8px;text-align:right">Current</th>'
     +'<th style="padding:7px 8px;min-width:150px">Progress</th>'
     +'<th style="padding:7px 8px"></th></tr></thead>';
   var rows=goals.map(function(g){
-    var ev=_stratGoalEval(g,model),stt=_stratGoalStatus(g,ev),cfg=_stratMetricCfg(g.metric);
+    var ev=_stratGoalEval(g,model),stt=_stratGoalStatus(g,ev);
     var target=Number(g.target)||0;
     var disp=(g.metric==='manual'&&g.unit)?function(n){return n.toLocaleString()+' '+g.unit;}:fmt;
     var pct=target?Math.max(0,Math.min(100,Math.round(ev.current/target*100))):0;
@@ -9398,12 +9397,11 @@ function _stratGoalsHTML(model){
         +(links?'<div style="font-size:10px;color:var(--text-muted);margin-top:2px">↳ '+links+'</div>':'')
         +(sub?'<div style="font-size:10px;color:var(--text-muted);margin-top:2px">'+sub+'</div>':'')
       +'</td>'
-      +'<td style="padding:8px;font-size:11px;color:var(--text-secondary);vertical-align:top">'+esc(cfg.l)+'</td>'
       +'<td style="padding:8px;font-size:12px;vertical-align:top">'+(owner?esc(owner):'<span style="color:var(--text-muted)">— unassigned —</span>')+'</td>'
       +'<td style="padding:8px;font-size:12px;white-space:nowrap;vertical-align:top">'+(g.targetDate?esc(g.targetDate):'<span style="color:var(--text-muted)">—</span>')+'</td>'
       +'<td style="padding:8px;font-size:11px;color:var(--text-secondary);vertical-align:top;text-transform:capitalize">'+esc(g.cadence||'—')+'</td>'
-      +'<td style="padding:8px;text-align:right;font-size:13px;font-weight:800;vertical-align:top">'+disp(Math.round(ev.current))+'</td>'
       +'<td style="padding:8px;text-align:right;font-size:12px;color:var(--text-muted);vertical-align:top">'+disp(target)+'</td>'
+      +'<td style="padding:8px;text-align:right;font-size:13px;font-weight:800;vertical-align:top">'+disp(Math.round(ev.current))+'</td>'
       +'<td style="padding:8px;vertical-align:top">'+_stratStatusChip(stt.key,stt.label)
         +'<div style="height:6px;background:var(--page-bg);border-radius:4px;overflow:hidden;margin-top:6px"><div style="height:100%;width:'+pct+'%;background:'+barColor+'"></div></div>'
       +'</td>'
