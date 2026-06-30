@@ -1148,15 +1148,14 @@ select.ct-cell{cursor:pointer;-webkit-appearance:none;appearance:none;}
       <button class="tab tab-confidential" id="tabStrat" onclick="switchTab('strat')">&#127919; Strategy</button>
       <button class="tab tab-confidential" id="tabValuation" onclick="switchTab('valuation')">&#128142; Valuation</button>
       <button class="tab" id="tabCap" onclick="switchTab('cap')">Capacity Planning</button>
+      <button class="tab active" id="tabRes" onclick="switchTab('res')">Resources</button>
       <button class="tab" id="tabPPlan" onclick="switchTab('pplan')">Resource Planning</button>
       <button class="tab" id="tabProj" onclick="switchTab('proj')">Projects</button>
+      <button class="tab" id="tabInit" onclick="switchTab('init')">Initiatives</button>
       <button class="tab tab-confidential" id="tabContracts" onclick="switchTab('contracts')">&#128193; Contract Mgmt</button>
       <button class="tab tab-confidential" id="tabCommercial" onclick="switchTab('commercial')">&#128188; Commercial</button>
-      <button class="tab" id="tabInit" onclick="switchTab('init')">Initiatives</button>
       <button class="tab" id="tabOpp" onclick="switchTab('opp')">Opportunities</button>
       <button class="tab" id="tabProp" onclick="switchTab('prop')">Proposals</button>
-      <button class="tab active" id="tabRes" onclick="switchTab('res')">Resources</button>
-      <button class="tab" id="tabReports" onclick="switchTab('reports')">&#128202; Reports</button>
       <button class="tab" id="tabRecruit" onclick="switchTab('recruit')">Recruiting</button>
       <button class="tab" id="tabPlan" onclick="switchTab('plan')">COE Tasks</button>
       <button class="tab" id="tabPTask" onclick="switchTab('ptask')">Project Tasks</button>
@@ -10033,7 +10032,7 @@ function renderProformaView(q){
   if(!D.proforma)proformaMigrate();
   var P=D.proforma,c=P.company||{},f=P.financials||{},meta=P.meta||{};
   var gateTarget=f.cashGateTarget||1500000,cash=f.openingCash||c.cashPosition||0,pct=Math.max(0,Math.min(100,Math.round(cash/gateTarget*100)));
-  var tabs=[['overview','Overview'],['financials','Financials & Cash'],['contracts','Contracts'],['debt','Debt'],['pipeline','Marines'],['strategy','Strategy'],['technology','Technology'],['costs','Cost Structure'],['overhead','Overhead'],['risks','Risks & Dates'],['snapshots','Snapshots']];
+  var tabs=[['overview','Overview'],['financials','Financials & Cash'],['contracts','Contracts'],['debt','Debt'],['pipeline','Marines'],['strategy','Strategy'],['technology','Technology'],['costs','Cost Structure'],['overhead','Overhead'],['reports','Reports'],['risks','Risks & Dates'],['snapshots','Snapshots']];
   var nav='<div class="pf-subtabs">'+tabs.map(function(t){return '<button class="pf-subtab'+(proformaTab===t[0]?' active':'')+'" onclick="pfSetTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
   var kpis=[['Cash position',_pfMoney(cash)],['Cash gate',_pfMoney(gateTarget)+' · '+pct+'%'],['Monthly profit',_pfMoney(c.monthlyProfit)+' → '+_pfMoney(c.monthlyProfitOct)],['Corporate debt',_pfMoney(c.corporateDebt)],['Gate ETA',esc(c.gateDate||'—')]];
   var kpiBar='<div class="pf-kpis">'+kpis.map(function(k){return '<div class="pf-kpi"><div class="pf-kpi-l">'+k[0]+'</div><div class="pf-kpi-v">'+k[1]+'</div></div>';}).join('')+'</div>';
@@ -10116,6 +10115,8 @@ function renderProformaView(q){
       +'<div class="pf-card">'+_pfH('Software subscriptions — '+_pfMoney((cs.softwareSubs||[]).reduce(function(s,x){return s+(Number(x.monthly)||0);},0))+'/mo')+_pfTable(['Vendor','Monthly','Type','Notes'],(cs.softwareSubs||[]).map(function(x){return [esc(x.vendor),_pfMoney(x.monthly)+_pfLineSchedTag(x)+_pfLineWindowTag(x),tpill(x.vendor,x.type),esc(x.notes)];}),'costStructure.softwareSubs',function(i){return _pfSchedBtn('costStructure.softwareSubs',i);})+'</div></div>';
   } else if(proformaTab==='overhead'){
     body=renderProjView(q,'overhead');
+  } else if(proformaTab==='reports'){
+    body=renderReportsView(q);
   } else if(proformaTab==='risks'){
     body='<div class="pf-card">'+_pfH('Critical dates timeline')+_pfTable(['Date','Event','Impact / action','Status'],(P.dates||[]).map(function(x){return [esc(x.date),esc(x.event),esc(x.impact),'<span class="pf-pill">'+esc(x.status)+'</span>'];}),'dates')+'</div>'
       +'<div class="pf-card">'+_pfH('Risk register')+_pfTable(['Risk','Level','Status','Owner','Mitigation'],(P.risks||[]).map(function(x){return [esc(x.risk),'<span class="pf-pill pf-'+(/CRITICAL/.test(x.level)?'crit':/HIGH/.test(x.level)?'high':/RESOLVED/.test(x.level)?'ok':'med')+'">'+esc(x.level)+'</span>',esc(x.status),esc(x.owner),esc(x.mitigation)];}),'risks')+'</div>'
