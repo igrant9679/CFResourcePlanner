@@ -10031,7 +10031,7 @@ function renderProformaView(q){
   var gateTarget=f.cashGateTarget||1500000,cash=f.openingCash||c.cashPosition||0,pct=Math.max(0,Math.min(100,Math.round(cash/gateTarget*100)));
   var tabs=[['overview','Overview'],['financials','Financials & Cash'],['contracts','Contracts'],['debt','Debt'],['strategy','Strategy'],['technology','Technology'],['costs','Cost Structure'],['overhead','Overhead'],['reports','Reports'],['risks','Risks & Dates'],['snapshots','Snapshots']];
   var nav='<div class="pf-subtabs">'+tabs.map(function(t){return '<button class="pf-subtab'+(proformaTab===t[0]?' active':'')+'" onclick="pfSetTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
-  var kpis=[['Cash position',_pfMoney(cash)],['Cash gate',_pfMoney(gateTarget)+' · '+pct+'%'],['Monthly profit',_pfMoney(c.monthlyProfit)+' → '+_pfMoney(c.monthlyProfitOct)],['Corporate debt',_pfMoney(c.corporateDebt)],['Gate ETA',esc(c.gateDate||'—')]];
+  var kpis=[['Cash position',_pfMoney(cash)],['Cash gate',_pfMoney(gateTarget)+' · '+pct+'%'],['Corporate debt',_pfMoney(c.corporateDebt)],['Gate ETA',esc(c.gateDate||'—')]];
   var kpiBar='<div class="pf-kpis">'+kpis.map(function(k){return '<div class="pf-kpi"><div class="pf-kpi-l">'+k[0]+'</div><div class="pf-kpi-v">'+k[1]+'</div></div>';}).join('')+'</div>';
   var upd=(meta.updatedBy&&meta.updatedBy!=='seed')?(' · last edited by '+esc(meta.updatedBy)+(_pfDate(meta.updatedAt)?(' on '+_pfDate(meta.updatedAt)):'')):'';
   var banner='<div class="pf-banner">&#128274; CONFIDENTIAL — CEO second brain. Restricted to Admin. Not synced externally. <span style="opacity:.8">Source: Knowledge Base '+esc(meta.version||'')+' · as of '+esc(meta.asOf||'')+upd+'</span></div>';
