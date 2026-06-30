@@ -10167,7 +10167,7 @@ function _homeFY26MonthsElapsed(){var now=new Date(),y=now.getFullYear();return 
 
 /* ---- Widget registry — each render() returns the card BODY ---- */
 var HOME_WIDGETS=[
-  {key:'goals',lane:'perf',size:'w12',persona:['ceo'],title:'Goals & KPI scorecard',sub:'Strategy → Goals · live vs target',render:function(){
+  {key:'goals',lane:'goals',size:'w12',persona:['ceo','coo','cfo'],title:'Goals & KPI scorecard',sub:'Strategy → Goals · live vs target',render:function(){
     var gs=((D.strategy||{}).goals)||[];if(!gs.length)return _homeEmpty('No goals set. Add them in Strategy → Goals.');var m=_homeCash()||_stratCash();
     var th='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--exh-muted);text-align:left;border-bottom:1px solid var(--exh-line)">'
       +'<th style="padding:6px 8px">Goal</th><th style="padding:6px 8px">Owner</th><th style="padding:6px 8px;white-space:nowrap">Target date</th>'
@@ -10392,6 +10392,7 @@ function renderHomeView(q){
     +'<div class="exh-tools-row"><div class="exh-lens" role="group" aria-label="Persona lens">'+lens+'</div>'+cust+'</div></div>'
     +editbar
     +_homeNorthStar()
+    +_homeLane('goals','Goals & KPIs','var(--exh-gold)','live vs target')
     +_homeLane('perf','Performance vs targets','var(--exh-good)','are we meeting our metrics')
     +_homeLane('exec','Execution & delivery','#2563EB','are tasks getting completed')
     +_homeLane('risk','Risk & exposure','var(--exh-crit)','what must be eliminated')
