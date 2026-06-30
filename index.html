@@ -10152,11 +10152,9 @@ function _homeNorthStar(){
 }
 
 /* ---- FY26 revenue (active projects, monthly from the start of the fiscal year) ---- */
-function _homeFY26Projects(){
-  var ps=(D.projects||[]).filter(function(p){return projCat(p)==='project';});
-  var fy=ps.filter(function(p){var d=String(p.fiscalYear||'').replace(/\D/g,'');return d==='26'||d==='2026';});
-  return fy.length?fy:ps;   // fall back to all active projects when FY isn't labelled
-}
+function _homeFYProjects(year){var yy=String(year),sh=yy.slice(-2);return (D.projects||[]).filter(function(p){if(projCat(p)!=='project')return false;var d=String(p.fiscalYear||'').replace(/\D/g,'');return d===yy||d===sh;});}
+function _homeFY26Projects(){var fy=_homeFYProjects(2026);return fy.length?fy:(D.projects||[]).filter(function(p){return projCat(p)==='project';});}   // FY26 falls back to all active projects when FY isn't labelled
+function _homeFYAnnual(year){var ps=(year===2026)?_homeFY26Projects():_homeFYProjects(year);return ps.reduce(function(a,p){return a+_homeProjMonthly(p)*12;},0);}   // annual = monthly run-rate × 12
 // A project's monthly revenue = its own number (p.revenue); fall back to the
 // current-month run-rate from the engine only when the project has no flat number.
 function _homeProjMonthly(p){var r=Number(p.revenue)||0;if(r)return r;try{var now=new Date();return Number(capProjRevAt(p,2026,now.getFullYear()===2026?now.getMonth():0))||0;}catch(e){return 0;}}
@@ -10187,12 +10185,16 @@ var HOME_WIDGETS=[
     }).join('');
     return '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead>'+th+'</thead><tbody>'+rows+'</tbody></table></div>';
   }},
-  {key:'revenue',lane:'perf',size:'w6',persona:['ceo','cfo'],title:'Revenue trajectory',sub:'FY26 · cumulative by month',render:function(){
-    var monthly=_homeFY26MonthlyTotal();if(!monthly)return _homeEmpty('No FY26 project revenue.');
-    var el=_homeFY26MonthsElapsed();
-    var cum=[];for(var m=0;m<12;m++)cum.push(monthly*(m+1));   // monthly run-rate accumulating across FY26
-    var ytd=monthly*el, total=monthly*12;
-    return _homeSpark(cum,{stroke:'#2563EB'})+'<div class="exh-legend"><span>YTD <b class="num">'+fmt(Math.round(ytd))+'</b></span><span>FY26 total <b class="num">'+fmt(Math.round(total))+'</b></span><span>Jan→Dec 2026</span></div>';
+  {key:'revenue',lane:'perf',size:'w6',persona:['ceo','cfo'],title:'Revenue trajectory',sub:'Annual revenue · FY26–FY28 (monthly × 12)',render:function(){
+    var years=[2026,2027,2028],vals=years.map(_homeFYAnnual);
+    if(!vals.some(function(v){return v>0;}))return _homeEmpty('No project revenue tagged by fiscal year.');
+    var max=Math.max.apply(null,vals)||1;
+    var bars=years.map(function(y,i){var hp=Math.max(6,Math.round(vals[i]/max*82));
+      return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1">'
+        +'<div style="font-size:11px;font-weight:700;color:var(--exh-ink);margin-bottom:4px" class="num">'+fmt(Math.round(vals[i]))+'</div>'
+        +'<div style="width:64%;max-width:56px;background:#2563EB;border-radius:4px 4px 0 0;height:'+hp+'px"></div>'
+        +'<div style="font-size:10px;color:var(--exh-muted);margin-top:5px">FY'+String(y).slice(2)+'</div></div>';}).join('');
+    return '<div style="display:flex;align-items:flex-end;justify-content:space-around;gap:14px;height:128px;padding-top:4px">'+bars+'</div>';
   }},
   {key:'revtodate',lane:'perf',size:'w6',persona:['ceo','cfo'],title:'Revenue to date',sub:'FY26 YTD · monthly × months elapsed',render:function(){
     var ps=_homeFY26Projects(),monthly=_homeFY26MonthlyTotal(),el=_homeFY26MonthsElapsed();
