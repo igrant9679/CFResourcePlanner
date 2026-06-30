@@ -10167,27 +10167,6 @@ function _homeFY26MonthsElapsed(){var now=new Date(),y=now.getFullYear();return 
 
 /* ---- Widget registry — each render() returns the card BODY ---- */
 var HOME_WIDGETS=[
-  {key:'goals',lane:'goals',size:'w12',persona:['ceo','coo','cfo'],title:'Goals & KPI scorecard',sub:'Strategy → Goals · live vs target',render:function(){
-    var gs=((D.strategy||{}).goals)||[];if(!gs.length)return _homeEmpty('No goals set. Add them in Strategy → Goals.');var m=_homeCash()||_stratCash();
-    var th='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--exh-muted);text-align:left;border-bottom:1px solid var(--exh-line)">'
-      +'<th style="padding:6px 8px">Goal</th><th style="padding:6px 8px">Owner</th><th style="padding:6px 8px;white-space:nowrap">Target date</th>'
-      +'<th style="padding:6px 8px;text-align:right">Target</th><th style="padding:6px 8px;text-align:right">Current</th><th style="padding:6px 8px;min-width:140px">Progress</th></tr>';
-    var rows=gs.map(function(g){
-      var ev=_stratGoalEval(g,m),st=_stratGoalStatus(g,ev),tg=Number(g.target)||0,pct=tg?Math.max(0,Math.min(100,Math.round(ev.current/tg*100))):0;
-      var col=({ontrack:'good',atrisk:'warn',off:'crit',done:'good'}[st.key]||'flat');var bc=({good:'var(--exh-good)',warn:'var(--exh-warn)',crit:'var(--exh-crit)',flat:'#9aa6b6'}[col]);
-      var owner=_stratOwnerName(g.owner);
-      var links=(g.linkedInitiativeIds||[]).map(function(id){var p=(D.projects||[]).find(function(x){return x.id===id;});return p?esc(p.name):'';}).filter(Boolean).join(', ');
-      return '<tr style="border-bottom:1px solid var(--exh-line2)">'
-        +'<td style="padding:7px 8px;vertical-align:top"><div style="font-weight:600;color:var(--exh-ink)">'+esc(g.label)+'</div>'+(links?'<div style="font-size:10px;color:var(--exh-muted);margin-top:1px">↳ '+links+'</div>':'')+(ev.detail?'<div style="font-size:10px;color:var(--exh-muted);margin-top:1px">'+esc(ev.detail)+'</div>':'')+'</td>'
-        +'<td style="padding:7px 8px;vertical-align:top">'+(owner?esc(owner):'<span style="color:var(--exh-muted)">—</span>')+'</td>'
-        +'<td style="padding:7px 8px;white-space:nowrap;vertical-align:top">'+(g.targetDate?esc(g.targetDate):'<span style="color:var(--exh-muted)">—</span>')+'</td>'
-        +'<td style="padding:7px 8px;text-align:right;color:var(--exh-muted);vertical-align:top">'+_goalFmt(g,tg)+'</td>'
-        +'<td style="padding:7px 8px;text-align:right;font-weight:700;color:var(--exh-ink);vertical-align:top">'+_goalFmt(g,Math.round(ev.current))+'</td>'
-        +'<td style="padding:7px 8px;vertical-align:top"><span class="exh-chip '+col+'">'+esc(st.label)+'</span><div class="exh-mini" style="width:100%;margin-top:5px"><span style="width:'+pct+'%;background:'+bc+'"></span></div></td>'
-        +'</tr>';
-    }).join('');
-    return '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead>'+th+'</thead><tbody>'+rows+'</tbody></table></div>';
-  }},
   {key:'revenue',lane:'perf',size:'w6',persona:['ceo','cfo'],title:'Revenue trajectory',sub:'Annual revenue · FY26–FY28 (time-phased)',render:function(){
     var years=[2026,2027,2028],vals=years.map(_homeFYAnnual);
     if(!vals.some(function(v){return v>0;}))return _homeEmpty('No project revenue tagged by fiscal year.');
@@ -10380,6 +10359,37 @@ function _homeStyle(){return '<style>'
   +'@media(max-width:760px){.exh-w,.exh-w.w6,.exh-w.w8{grid-column:span 12}.exh-add{grid-column:span 12}.exh-ns-strip{grid-template-columns:1fr}}'
   +'</style>';}
 
+/* Goals & KPIs — a PINNED, full-page-width block (not a customizable widget).
+   Reuses the goal source dispatcher (_stratGoalEval/_stratGoalStatus/_goalFmt). */
+function _homeGoalsBlock(){
+  var gs=((D.strategy||{}).goals)||[];
+  var head='<div class="exh-lane"><div class="exh-laneh"><span class="exh-dot" style="background:var(--exh-gold)"></span><span class="exh-lt">Goals &amp; KPIs</span><span class="exh-rule"></span><span class="exh-meta">live vs target</span></div>';
+  var inner;
+  if(!gs.length){inner=_homeEmpty('No goals set. Add them in Strategy → Goals.');}
+  else{
+    var m=_homeCash()||_stratCash();
+    var th='<tr style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--exh-muted);text-align:left;border-bottom:1px solid var(--exh-line)">'
+      +'<th style="padding:6px 8px">Goal</th><th style="padding:6px 8px">Owner</th><th style="padding:6px 8px;white-space:nowrap">Target date</th>'
+      +'<th style="padding:6px 8px;text-align:right">Target</th><th style="padding:6px 8px;text-align:right">Current</th><th style="padding:6px 8px;min-width:140px">Progress</th></tr>';
+    var rows=gs.map(function(g){
+      var ev=_stratGoalEval(g,m),st=_stratGoalStatus(g,ev),tg=Number(g.target)||0,pct=tg?Math.max(0,Math.min(100,Math.round(ev.current/tg*100))):0;
+      var col=({ontrack:'good',atrisk:'warn',off:'crit',done:'good'}[st.key]||'flat');var bc=({good:'var(--exh-good)',warn:'var(--exh-warn)',crit:'var(--exh-crit)',flat:'#9aa6b6'}[col]);
+      var owner=_stratOwnerName(g.owner);
+      var links=(g.linkedInitiativeIds||[]).map(function(id){var p=(D.projects||[]).find(function(x){return x.id===id;});return p?esc(p.name):'';}).filter(Boolean).join(', ');
+      return '<tr style="border-bottom:1px solid var(--exh-line2)">'
+        +'<td style="padding:7px 8px;vertical-align:top"><div style="font-weight:600;color:var(--exh-ink)">'+esc(g.label)+'</div>'+(links?'<div style="font-size:10px;color:var(--exh-muted);margin-top:1px">↳ '+links+'</div>':'')+(ev.detail?'<div style="font-size:10px;color:var(--exh-muted);margin-top:1px">'+esc(ev.detail)+'</div>':'')+'</td>'
+        +'<td style="padding:7px 8px;vertical-align:top">'+(owner?esc(owner):'<span style="color:var(--exh-muted)">—</span>')+'</td>'
+        +'<td style="padding:7px 8px;white-space:nowrap;vertical-align:top">'+(g.targetDate?esc(g.targetDate):'<span style="color:var(--exh-muted)">—</span>')+'</td>'
+        +'<td style="padding:7px 8px;text-align:right;color:var(--exh-muted);vertical-align:top">'+_goalFmt(g,tg)+'</td>'
+        +'<td style="padding:7px 8px;text-align:right;font-weight:700;color:var(--exh-ink);vertical-align:top">'+_goalFmt(g,Math.round(ev.current))+'</td>'
+        +'<td style="padding:7px 8px;vertical-align:top"><span class="exh-chip '+col+'">'+esc(st.label)+'</span><div class="exh-mini" style="width:100%;margin-top:5px"><span style="width:'+pct+'%;background:'+bc+'"></span></div></td>'
+        +'</tr>';
+    }).join('');
+    inner='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead>'+th+'</thead><tbody>'+rows+'</tbody></table></div>';
+  }
+  return head+'<div class="exh-w" style="width:auto">'+inner+'</div></div>';
+}
+
 function renderHomeView(q){
   if(!canSee('home'))return '<div class="empty-msg">No access. The Executive Home is restricted to Admin and Executive roles.</div>';
   _homeEnsure();
@@ -10387,16 +10397,20 @@ function renderHomeView(q){
   var lens=['all','ceo','coo','cfo'].map(function(p){return '<button aria-pressed="'+(HOME_LENS===p?'true':'false')+'" onclick="homeSetLens(\''+p+'\')">'+(p==='all'?'All':p.toUpperCase())+'</button>';}).join('');
   var cust=admin?'<button class="exh-cust'+(HOME_EDIT?' on':'')+'" onclick="homeToggleEdit()">'+(HOME_EDIT?'✓ Done':'✎ Customize')+'</button>':'';
   var editbar=(admin&&HOME_EDIT)?'<div class="exh-editbar">⚙ Customize mode — ▲▼ reorder within a lane, ✕ remove, ＋ add. <b style="margin-left:auto">Changes apply to the shared exec dashboard</b></div>':'';
-  return _homeStyle()+'<div class="exh" style="max-width:none;margin:0">'
-    +'<div class="exh-top"><div><h1>Executive briefing</h1><p>One shared view of where the company stands against the cash gate, what’s getting done, and what’s at risk — live from the same engine as Capacity, Strategy &amp; Proforma.</p></div>'
-    +'<div class="exh-tools-row"><div class="exh-lens" role="group" aria-label="Persona lens">'+lens+'</div>'+cust+'</div></div>'
-    +editbar
-    +_homeNorthStar()
-    +_homeLane('goals','Goals & KPIs','var(--exh-gold)','live vs target')
-    +_homeLane('perf','Performance vs targets','var(--exh-good)','are we meeting our metrics')
-    +_homeLane('exec','Execution & delivery','#2563EB','are tasks getting completed')
-    +_homeLane('risk','Risk & exposure','var(--exh-crit)','what must be eliminated')
-    +'<div class="exh-foot">Single shared executive dashboard. Every figure is live from an existing Atlas source (cash engine, Strategy goals, Proforma risks, Customers, Commercial, BCLM tasks, Capacity). Customization is admin-only; access is gated to the Executive role.</div>'
+  return _homeStyle()+'<div class="exh" style="margin:0">'
+    +'<div style="max-width:1320px;margin:0 auto">'
+      +'<div class="exh-top"><div><h1>Executive briefing</h1><p>One shared view of where the company stands against the cash gate, what’s getting done, and what’s at risk — live from the same engine as Capacity, Strategy &amp; Proforma.</p></div>'
+      +'<div class="exh-tools-row"><div class="exh-lens" role="group" aria-label="Persona lens">'+lens+'</div>'+cust+'</div></div>'
+      +editbar
+      +_homeNorthStar()
+    +'</div>'
+    +_homeGoalsBlock()
+    +'<div style="max-width:1320px;margin:0 auto">'
+      +_homeLane('perf','Performance vs targets','var(--exh-good)','are we meeting our metrics')
+      +_homeLane('exec','Execution & delivery','#2563EB','are tasks getting completed')
+      +_homeLane('risk','Risk & exposure','var(--exh-crit)','what must be eliminated')
+      +'<div class="exh-foot">Single shared executive dashboard. Every figure is live from an existing Atlas source (cash engine, Strategy goals, Proforma risks, Customers, Commercial, BCLM tasks, Capacity). Customization is admin-only; access is gated to the Executive role.</div>'
+    +'</div>'
     +'</div>';
 }
 
