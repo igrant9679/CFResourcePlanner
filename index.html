@@ -10031,7 +10031,7 @@ function renderProformaView(q){
   if(!D.proforma)proformaMigrate();
   var P=D.proforma,c=P.company||{},f=P.financials||{},meta=P.meta||{};
   var gateTarget=f.cashGateTarget||1500000,cash=f.openingCash||c.cashPosition||0,pct=Math.max(0,Math.min(100,Math.round(cash/gateTarget*100)));
-  var tabs=[['overview','Overview'],['financials','Financials & Cash'],['contracts','Contracts'],['debt','Debt'],['pipeline','Marines'],['strategy','Strategy'],['technology','Technology'],['costs','Cost Structure'],['overhead','Overhead'],['reports','Reports'],['risks','Risks & Dates'],['snapshots','Snapshots']];
+  var tabs=[['overview','Overview'],['financials','Financials & Cash'],['contracts','Contracts'],['debt','Debt'],['strategy','Strategy'],['technology','Technology'],['costs','Cost Structure'],['overhead','Overhead'],['reports','Reports'],['risks','Risks & Dates'],['snapshots','Snapshots']];
   var nav='<div class="pf-subtabs">'+tabs.map(function(t){return '<button class="pf-subtab'+(proformaTab===t[0]?' active':'')+'" onclick="pfSetTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>';
   var kpis=[['Cash position',_pfMoney(cash)],['Cash gate',_pfMoney(gateTarget)+' · '+pct+'%'],['Monthly profit',_pfMoney(c.monthlyProfit)+' → '+_pfMoney(c.monthlyProfitOct)],['Corporate debt',_pfMoney(c.corporateDebt)],['Gate ETA',esc(c.gateDate||'—')]];
   var kpiBar='<div class="pf-kpis">'+kpis.map(function(k){return '<div class="pf-kpi"><div class="pf-kpi-l">'+k[0]+'</div><div class="pf-kpi-v">'+k[1]+'</div></div>';}).join('')+'</div>';
@@ -10065,17 +10065,11 @@ function renderProformaView(q){
     if(!tlBody)tlBody='<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:14px">No time-phased contracts yet. Click <b>+ Add timeline segment</b> to add a contract revenue period.</td></tr>';
     var tlTable='<div style="overflow:auto"><table class="pf-tbl"><thead><tr><th>Contract</th><th>Start</th><th>End</th><th style="text-align:right">Monthly revenue</th><th>Note</th><th></th></tr></thead><tbody>'+tlBody+'</tbody></table></div>'
       +'<button class="btn btn-sec btn-sm pf-add" onclick="pfTimelineAdd()">+ Add timeline segment</button>';
-    body='<div class="pf-card">'+_pfH('Contract revenue — time-phased (drives the Capacity forecast)')+tlTable+'<div class="pf-note">Edit a row to change when each contract earns and how much; the Capacity forecast updates from this. Cost &amp; margin are computed net of payroll + overhead in Capacity Planning → Projects.</div></div>'
-      +'<div class="pf-card">'+_pfH('Strategic role')+_pfTable(['Contract','Strategic role'],(P.contractEconomics||[]).map(function(x){return [esc(x.contract),esc(x.role)];}),'contractEconomics')+'</div>';
+    body='<div class="pf-card">'+_pfH('Contract revenue — time-phased (drives the Capacity forecast)')+tlTable+'<div class="pf-note">Edit a row to change when each contract earns and how much; the Capacity forecast updates from this. Cost &amp; margin are computed net of payroll + overhead in Capacity Planning → Projects.</div></div>';
   } else if(proformaTab==='debt'){
     var dd=P.debt||{};
     body='<div class="pf-card">'+_pfH('Corporate debt — total '+_pfMoney(dd.total),"pfEditObj('debt')")+_pfTable(['Lender','Balance','Monthly payment','Rate / term','Status','Notes'],(dd.corporate||[]).map(function(x){return [esc(x.lender),_pfMoney(x.balance),esc(x.monthlyPayment),esc(x.rateTerm),esc(x.status),esc(x.notes)];}),'debt.corporate')+'</div>'
       +'<div class="pf-note">Corporate-level financial information only.</div>';
-  } else if(proformaTab==='pipeline'){
-    var m=P.marines||{};
-    body='<div class="pf-card">'+_pfH('Marines DD577 — high priority',"pfEditObj('marines')")+_pfTable(['Field','Detail'],[
-        ['POC',esc(m.poc)],['Contact',esc(m.contact)],['Status',esc(m.status)],['Strategy',esc(m.strategy)],['Key advantage',esc(m.advantage)],['AI positioning',esc(m.aiPositioning)],['Next step',esc(m.next)]])
-      +_pfH('Timeline')+_pfTable(['Date','Event'],(m.timeline||[]).map(function(t){return [esc(t.date),esc(t.event)];}),'marines.timeline')+'</div>';
   } else if(proformaTab==='strategy'){
     var st=P.strategy||{},om=st.operatingModel||{};
     body='<div class="pf-card">'+_pfH('Four-Pillar FY27 framework')+'<div class="pf-grid">'+(st.pillars||[]).map(function(p,pi){return '<div class="pf-mini"><div class="pf-mini-h"><b>'+esc(p.name)+'</b><span>'+_pfEditBtn("pfEditRow('strategy.pillars',"+pi+")")+_pfDelBtn("pfDelRow('strategy.pillars',"+pi+")")+'</span></div><div class="pf-sub">'+esc(p.subtitle)+'</div><ul class="pf-list">'+(p.initiatives||[]).map(function(i){return '<li>'+esc(i)+'</li>';}).join('')+'</ul></div>';}).join('')+'</div>'+_pfAddBtn('strategy.pillars','+ Add pillar')+'</div>'
