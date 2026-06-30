@@ -10154,7 +10154,10 @@ function _homeNorthStar(){
 /* ---- FY26 revenue (active projects, monthly from the start of the fiscal year) ---- */
 function _homeFYProjects(year){var yy=String(year),sh=yy.slice(-2);return (D.projects||[]).filter(function(p){if(projCat(p)!=='project')return false;var d=String(p.fiscalYear||'').replace(/\D/g,'');return d===yy||d===sh;});}
 function _homeFY26Projects(){var fy=_homeFYProjects(2026);return fy.length?fy:(D.projects||[]).filter(function(p){return projCat(p)==='project';});}   // FY26 falls back to all active projects when FY isn't labelled
-function _homeFYAnnual(year){var ps=(year===2026)?_homeFY26Projects():_homeFYProjects(year);return ps.reduce(function(a,p){return a+_homeProjMonthly(p)*12;},0);}   // annual = monthly run-rate × 12
+function _homeFYAnnual(year){   // annual = sum of the engine's per-month revenue across the FY (captures timelines/sunsets/escalators)
+  var ps=(year===2026)?_homeFY26Projects():_homeFYProjects(year);
+  return ps.reduce(function(a,p){var s=0;for(var m=0;m<12;m++){s+=(typeof capProjRevAt==='function')?(Number(capProjRevAt(p,year,m))||0):(Number(p.revenue)||0);}return a+s;},0);
+}
 // A project's monthly revenue = its own number (p.revenue); fall back to the
 // current-month run-rate from the engine only when the project has no flat number.
 function _homeProjMonthly(p){var r=Number(p.revenue)||0;if(r)return r;try{var now=new Date();return Number(capProjRevAt(p,2026,now.getFullYear()===2026?now.getMonth():0))||0;}catch(e){return 0;}}
@@ -10185,7 +10188,7 @@ var HOME_WIDGETS=[
     }).join('');
     return '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead>'+th+'</thead><tbody>'+rows+'</tbody></table></div>';
   }},
-  {key:'revenue',lane:'perf',size:'w6',persona:['ceo','cfo'],title:'Revenue trajectory',sub:'Annual revenue · FY26–FY28 (monthly × 12)',render:function(){
+  {key:'revenue',lane:'perf',size:'w6',persona:['ceo','cfo'],title:'Revenue trajectory',sub:'Annual revenue · FY26–FY28 (time-phased)',render:function(){
     var years=[2026,2027,2028],vals=years.map(_homeFYAnnual);
     if(!vals.some(function(v){return v>0;}))return _homeEmpty('No project revenue tagged by fiscal year.');
     var max=Math.max.apply(null,vals)||1;
