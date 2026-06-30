@@ -4118,7 +4118,7 @@ async function commLoadSeed(seedArray){
      latestLogin, daysSinceLogin, product, value, renewalDate, project,
      contact, notes, deadlines:[{date,status,app,orgType}], source } ]
    ============================================================ */
-var custUI = { q:'', region:'', type:'', status:'', source:'', sort:'name' };
+var custUI = { q:'', region:'', type:'', status:'', source:'', project:'', sort:'name' };
 function custEnsure(){ if(!Array.isArray(D.customers)) D.customers=[]; return D.customers; }
 function custCanEdit(){ return !!(ME&&(ME.role==='admin'||ME.role==='editor')); }
 function custNameKey(n){ return String(n||'').trim().toLowerCase().replace(/[^a-z0-9]/g,''); }
@@ -4130,6 +4130,7 @@ function custFiltered(){
   var q=(custUI.q||'').toLowerCase();
   return D.customers.filter(function(c){
     if(custUI.region&&c.region!==custUI.region)return false;
+    if(custUI.project&&(c.project||'')!==custUI.project)return false;
     if(custUI.type&&c.type!==custUI.type)return false;
     if(custUI.status&&(c.siteStatus||'')!==custUI.status)return false;
     if(custUI.source&&(c.source||'').indexOf(custUI.source)===-1)return false;
@@ -4149,25 +4150,27 @@ function renderCustomersView(q){
   custEnsure();
   if(q!=null&&q!=='') custUI.q=q;   // honor the global search box
   var all=D.customers, rows=custFiltered();
-  var active=all.filter(function(c){return (c.siteStatus||'').toLowerCase()==='active';}).length;
-  var sch=all.filter(function(c){return c.type==='Scholarship';}).length;
-  var grn=all.filter(function(c){return c.type==='Grants';}).length;
-  var engaged=all.filter(function(c){var d=custDaysNum(c);return d!=null&&d<=7;}).length;
-  var stale=all.filter(function(c){var d=custDaysNum(c);return d!=null&&d>30;}).length;
-  var arr=all.reduce(function(a,c){return a+custVal(c);},0);
-  var upcoming=all.reduce(function(a,c){return a+(c.deadlines||[]).filter(function(d){return (d.status||'')!=='Passed';}).length;},0);
+  // KPI cards reflect the FILTERED set so the numbers track the active filters.
+  var active=rows.filter(function(c){return (c.siteStatus||'').toLowerCase()==='active';}).length;
+  var sch=rows.filter(function(c){return c.type==='Scholarship';}).length;
+  var grn=rows.filter(function(c){return c.type==='Grants';}).length;
+  var engaged=rows.filter(function(c){var d=custDaysNum(c);return d!=null&&d<=7;}).length;
+  var stale=rows.filter(function(c){var d=custDaysNum(c);return d!=null&&d>30;}).length;
+  var arr=rows.reduce(function(a,c){return a+custVal(c);},0);
+  var upcoming=rows.reduce(function(a,c){return a+(c.deadlines||[]).filter(function(d){return (d.status||'')!=='Passed';}).length;},0);
   var kpi=function(lbl,val,sub){return '<div class="cust-kpi"><div class="cust-kpi-v">'+val+'</div><div class="cust-kpi-l">'+lbl+'</div>'+(sub?'<div class="cust-kpi-s">'+sub+'</div>':'')+'</div>';};
   var html='<div class="plan-wrap"><div class="cust-head"><div><strong style="font-size:15px">Customers</strong>'
     +'<span style="font-size:12px;color:var(--text-secondary);margin-left:8px">'+all.length+' total &middot; '+rows.length+' shown</span></div>'
     +(custCanEdit()?'<div style="display:flex;gap:8px"><button class="btn btn-outline btn-sm" onclick="custSyncProjects()" title="Pull in any customers from project client lists that aren\'t here yet">&#8635; Sync from projects</button><button class="btn btn-gold btn-sm" onclick="custOpenAdd()">+ Add customer</button></div>':'')
     +'</div>';
-  html+='<div class="cust-kpis">'+kpi('Customers',all.length)+kpi('Active sites',active)+kpi('Scholarship',sch)+kpi('Grants',grn)
+  html+='<div class="cust-kpis">'+kpi('Customers',rows.length)+kpi('Active sites',active)+kpi('Scholarship',sch)+kpi('Grants',grn)
     +kpi('Engaged',engaged,'logged in &le;7d')+kpi('Stale',stale,'&gt;30d no login')+kpi('Total ARR',fmt(arr))+kpi('Open deadlines',upcoming)+'</div>';
   // filters
   var opt=function(v,cur){return '<option value="'+esc(v)+'"'+(cur===v?' selected':'')+'>'+esc(v)+'</option>';};
   html+='<div class="plan-toolbar" style="flex-wrap:wrap;gap:8px">'
     +'<input type="text" id="cust_q" placeholder="Search name, URL, product, project…" value="'+esc(custUI.q)+'" oninput="custSet(\'q\',this.value)" style="flex:1;min-width:200px;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font:13px inherit">'
     +'<select onchange="custSet(\'region\',this.value)"><option value="">All regions</option>'+custDistinct('region').map(function(v){return opt(v,custUI.region);}).join('')+'</select>'
+    +'<select onchange="custSet(\'project\',this.value)"><option value="">All projects</option>'+custDistinct('project').map(function(v){return opt(v,custUI.project);}).join('')+'</select>'
     +'<select onchange="custSet(\'type\',this.value)"><option value="">All types</option>'+custDistinct('type').map(function(v){return opt(v,custUI.type);}).join('')+'</select>'
     +'<select onchange="custSet(\'status\',this.value)"><option value="">Any status</option>'+custDistinct('siteStatus').map(function(v){return opt(v,custUI.status);}).join('')+'</select>'
     +'<select onchange="custSet(\'source\',this.value)"><option value="">Any source</option><option value="active"'+(custUI.source==='active'?' selected':'')+'>Active-clients list</option><option value="login"'+(custUI.source==='login'?' selected':'')+'>Has login data</option><option value="deadline"'+(custUI.source==='deadline'?' selected':'')+'>Has deadlines</option><option value="project"'+(custUI.source==='project'?' selected':'')+'>From a project</option><option value="manual"'+(custUI.source==='manual'?' selected':'')+'>Added manually</option></select>'
