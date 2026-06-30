@@ -10387,7 +10387,7 @@ function renderHomeView(q){
   var lens=['all','ceo','coo','cfo'].map(function(p){return '<button aria-pressed="'+(HOME_LENS===p?'true':'false')+'" onclick="homeSetLens(\''+p+'\')">'+(p==='all'?'All':p.toUpperCase())+'</button>';}).join('');
   var cust=admin?'<button class="exh-cust'+(HOME_EDIT?' on':'')+'" onclick="homeToggleEdit()">'+(HOME_EDIT?'✓ Done':'✎ Customize')+'</button>':'';
   var editbar=(admin&&HOME_EDIT)?'<div class="exh-editbar">⚙ Customize mode — ▲▼ reorder within a lane, ✕ remove, ＋ add. <b style="margin-left:auto">Changes apply to the shared exec dashboard</b></div>':'';
-  return _homeStyle()+'<div class="exh" style="max-width:1320px;margin:0 auto">'
+  return _homeStyle()+'<div class="exh" style="max-width:none;margin:0">'
     +'<div class="exh-top"><div><h1>Executive briefing</h1><p>One shared view of where the company stands against the cash gate, what’s getting done, and what’s at risk — live from the same engine as Capacity, Strategy &amp; Proforma.</p></div>'
     +'<div class="exh-tools-row"><div class="exh-lens" role="group" aria-label="Persona lens">'+lens+'</div>'+cust+'</div></div>'
     +editbar
