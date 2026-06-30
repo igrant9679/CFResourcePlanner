@@ -10397,20 +10397,16 @@ function renderHomeView(q){
   var lens=['all','ceo','coo','cfo'].map(function(p){return '<button aria-pressed="'+(HOME_LENS===p?'true':'false')+'" onclick="homeSetLens(\''+p+'\')">'+(p==='all'?'All':p.toUpperCase())+'</button>';}).join('');
   var cust=admin?'<button class="exh-cust'+(HOME_EDIT?' on':'')+'" onclick="homeToggleEdit()">'+(HOME_EDIT?'✓ Done':'✎ Customize')+'</button>':'';
   var editbar=(admin&&HOME_EDIT)?'<div class="exh-editbar">⚙ Customize mode — ▲▼ reorder within a lane, ✕ remove, ＋ add. <b style="margin-left:auto">Changes apply to the shared exec dashboard</b></div>':'';
-  return _homeStyle()+'<div class="exh" style="margin:0">'
-    +'<div style="max-width:1320px;margin:0 auto">'
-      +'<div class="exh-top"><div><h1>Executive briefing</h1><p>One shared view of where the company stands against the cash gate, what’s getting done, and what’s at risk — live from the same engine as Capacity, Strategy &amp; Proforma.</p></div>'
-      +'<div class="exh-tools-row"><div class="exh-lens" role="group" aria-label="Persona lens">'+lens+'</div>'+cust+'</div></div>'
-      +editbar
-      +_homeNorthStar()
-    +'</div>'
+  return _homeStyle()+'<div class="exh" style="max-width:1320px;margin:0 auto">'
+    +'<div class="exh-top"><div><h1>Executive briefing</h1><p>One shared view of where the company stands against the cash gate, what’s getting done, and what’s at risk — live from the same engine as Capacity, Strategy &amp; Proforma.</p></div>'
+    +'<div class="exh-tools-row"><div class="exh-lens" role="group" aria-label="Persona lens">'+lens+'</div>'+cust+'</div></div>'
+    +editbar
+    +_homeNorthStar()
     +_homeGoalsBlock()
-    +'<div style="max-width:1320px;margin:0 auto">'
-      +_homeLane('perf','Performance vs targets','var(--exh-good)','are we meeting our metrics')
-      +_homeLane('exec','Execution & delivery','#2563EB','are tasks getting completed')
-      +_homeLane('risk','Risk & exposure','var(--exh-crit)','what must be eliminated')
-      +'<div class="exh-foot">Single shared executive dashboard. Every figure is live from an existing Atlas source (cash engine, Strategy goals, Proforma risks, Customers, Commercial, BCLM tasks, Capacity). Customization is admin-only; access is gated to the Executive role.</div>'
-    +'</div>'
+    +_homeLane('perf','Performance vs targets','var(--exh-good)','are we meeting our metrics')
+    +_homeLane('exec','Execution & delivery','#2563EB','are tasks getting completed')
+    +_homeLane('risk','Risk & exposure','var(--exh-crit)','what must be eliminated')
+    +'<div class="exh-foot">Single shared executive dashboard. Every figure is live from an existing Atlas source (cash engine, Strategy goals, Proforma risks, Customers, Commercial, BCLM tasks, Capacity). Customization is admin-only; access is gated to the Executive role.</div>'
     +'</div>';
 }
 
