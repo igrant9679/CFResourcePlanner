@@ -10262,6 +10262,22 @@ var HOME_WIDGETS=[
     b+='<div class="exh-mrow tight"><span class="exh-lab">Lost</span><span class="exh-v num" style="color:var(--exh-muted)">'+lost+'</span></div>';
     return b;
   }},
+  {key:'oppstages',lane:'exec',size:'',persona:['ceo','coo'],title:'Pipeline by stage',sub:'Opportunities across CRM stages',render:function(){
+    var opps=(D.projects||[]).filter(function(p){return projCat(p)==='opportunity';});
+    if(!opps.length)return _homeEmpty('No opportunities in the pipeline.');
+    var stg=function(o){return ((typeof capOppStage==='function')?capOppStage(o):(o.stage||''))||'(unset)';};
+    var by={},stages=(typeof CAP_STAGE_PROB!=='undefined')?Object.keys(CAP_STAGE_PROB):['Lead Gen','Presales','Sales','Delivery','Won','Lost'];
+    opps.forEach(function(o){var s=stg(o);if(stages.indexOf(s)<0)stages.push(s);if(!by[s])by[s]={n:0,val:0};by[s].n++;by[s].val+=Number(o.potential)||0;});
+    var max=Math.max.apply(null,stages.map(function(s){return (by[s]||{}).n||0;}))||1;
+    return stages.map(function(s){var d=by[s]||{n:0,val:0};var w=Math.round(d.n/max*100);
+      var col=/won/i.test(s)?'var(--exh-good)':/lost/i.test(s)?'#9aa6b6':'#2563EB';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0">'
+        +'<span style="font-size:12px;color:var(--exh-text);min-width:74px">'+esc(s)+'</span>'
+        +'<div class="exh-mini" style="flex:1">'+(d.n?'<span style="width:'+Math.max(4,w)+'%;background:'+col+'"></span>':'')+'</div>'
+        +'<span class="num" style="font-size:12px;font-weight:700;color:var(--exh-ink);min-width:16px;text-align:right">'+d.n+'</span>'
+        +'<span class="num" style="font-size:10px;color:var(--exh-muted);min-width:56px;text-align:right">'+(d.val?fmt(Math.round(d.val)):'')+'</span></div>';
+    }).join('');
+  }},
   {key:'proposals',lane:'exec',size:'',persona:['ceo','coo'],title:'Proposals in flight',sub:'Pipeline → Proposals',render:function(){
     var ps=D.proposals||[];if(!ps.length)return _homeEmpty('No proposals yet.');var by={};ps.forEach(function(p){by[p.status||'draft']=(by[p.status||'draft']||0)+1;});function row(k,lbl,cls){return '<div class="exh-mrow"><span class="exh-lab">'+lbl+'</span><span class="exh-chip '+(cls||'flat')+'">'+(by[k]||0)+'</span></div>';}
     return row('to-be-drafted','To be drafted','warn')+row('draft','In draft')+row('in-review','In review')+row('submitted','Submitted')+'<div class="exh-mrow"><span class="exh-lab">Total active</span><span class="exh-v num">'+ps.filter(function(p){return p.status!=='won'&&p.status!=='lost';}).length+'</span></div>';
@@ -10310,6 +10326,16 @@ function _homeEnsure(){
       H.order.splice(H.order.indexOf('proposals'),0,'opportunities');
     }
     H.oppPlacedV1=true;
+  }
+  // One-time: place "Pipeline by stage" right after the Opportunities widget.
+  if(!H.oppStagesPlacedV1){
+    if(H.order.indexOf('oppstages')>-1){
+      H.order=H.order.filter(function(k){return k!=='oppstages';});
+      var ai=H.order.indexOf('opportunities');
+      if(ai>-1)H.order.splice(ai+1,0,'oppstages');
+      else{var pi=H.order.indexOf('proposals');if(pi>-1)H.order.splice(pi,0,'oppstages');else H.order.push('oppstages');}
+    }
+    H.oppStagesPlacedV1=true;
   }
   return H;
 }
