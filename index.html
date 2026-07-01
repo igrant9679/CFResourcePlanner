@@ -10197,20 +10197,32 @@ function _homeFY26MonthsElapsed(){var now=new Date(),fs=new Date(2025,9,1),fe=ne
 
 /* ---- Widget registry — each render() returns the card BODY ---- */
 var HOME_WIDGETS=[
-  {key:'revenue',lane:'perf',size:'w6',persona:['ceo','cfo'],title:'Revenue trajectory',sub:'Contracted vs projected · FY26–FY28',render:function(){
+  {key:'revenue',lane:'perf',size:'w6',persona:['ceo','cfo'],title:'Revenue trajectory',sub:'Contracted (to date + remainder) vs projected · FY26–FY28',render:function(){
     var years=[2026,2027,2028],actual=years.map(_homeFYAnnual);
     var proj={};try{var P=_stratProjModel();(P&&P.rows||[]).forEach(function(r){proj[r.y]=r.rev;});}catch(e){}
     var target=years.map(function(y){return Number(proj[y])||0;});
     if(!actual.some(function(v){return v>0;})&&!target.some(function(v){return v>0;}))return _homeEmpty('No FY revenue available.');
     var max=Math.max.apply(null,actual.concat(target))||1;
-    function bar(val,color){var h=val>0?Math.max(4,Math.round(val/max*78)):2;return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end"><div style="font-size:9px;font-weight:700;color:'+color+';white-space:nowrap" class="num">'+(val?_homeMoneyShort(val):'—')+'</div><div style="width:22px;background:'+(val?color:'#E6E9F0')+';border-radius:3px 3px 0 0;height:'+h+'px"></div></div>';}
+    function H(v){return v>0?Math.max(4,Math.round(v/max*78)):2;}
+    function bar(val,color){return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end"><div style="font-size:9px;font-weight:700;color:'+color+';white-space:nowrap" class="num">'+(val?_homeMoneyShort(val):'—')+'</div><div style="width:22px;background:'+(val?color:'#E6E9F0')+';border-radius:3px 3px 0 0;height:'+H(val)+'px"></div></div>';}
+    // FY26 contracted = revenue to date (monthly × months elapsed) + remaining months → stacked bar
+    function contractedFY26(){
+      var monthly=_homeFY26MonthlyTotal(),el=_homeFY26MonthsElapsed(),total=actual[0];
+      var ytd=Math.min(total,monthly*el),rem=Math.max(0,total-ytd);
+      var hTot=H(total),hYtd=total>0?Math.round(ytd/total*hTot):0,hRem=Math.max(0,hTot-hYtd);
+      return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:flex-end" title="To date '+_homeMoneyShort(ytd)+' + remainder '+_homeMoneyShort(rem)+' = '+_homeMoneyShort(total)+'">'
+        +'<div style="font-size:9px;font-weight:700;color:#2563EB;white-space:nowrap" class="num">'+_homeMoneyShort(total)+'</div>'
+        +'<div style="width:22px;height:'+hTot+'px;border-radius:3px 3px 0 0;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end">'
+          +'<div style="background:#93B4F0;height:'+hRem+'px"></div><div style="background:#2563EB;height:'+hYtd+'px"></div></div></div>';
+    }
     var groups=years.map(function(y,i){
+      var contracted=(y===2026)?contractedFY26():bar(actual[i],'#2563EB');
       return '<div style="display:flex;flex-direction:column;align-items:center;flex:1">'
-        +'<div style="display:flex;align-items:flex-end;justify-content:center;gap:6px;height:102px">'+bar(actual[i],'#2563EB')+bar(target[i],'var(--exh-gold)')+'</div>'
+        +'<div style="display:flex;align-items:flex-end;justify-content:center;gap:6px;height:102px">'+contracted+bar(target[i],'var(--exh-gold)')+'</div>'
         +'<div style="font-size:10px;color:var(--exh-muted);margin-top:5px">FY'+String(y).slice(2)+'</div></div>';
     }).join('');
     return '<div style="display:flex;align-items:flex-end;justify-content:space-around;gap:10px;padding-top:2px">'+groups+'</div>'
-      +'<div class="exh-legend" style="justify-content:center;margin-top:8px"><span><i style="background:#2563EB"></i>Contracted</span><span><i style="background:var(--exh-gold)"></i>Projected/target</span></div>';
+      +'<div class="exh-legend" style="justify-content:center;margin-top:8px"><span><i style="background:#2563EB"></i>To date</span><span><i style="background:#93B4F0"></i>Remainder</span><span><i style="background:var(--exh-gold)"></i>Projected/target</span></div>';
   }},
   {key:'revtodate',lane:'perf',size:'w6',persona:['ceo','cfo'],title:'Revenue to date',sub:'FY26 YTD · monthly × months since Oct 1',render:function(){
     var ps=_homeFY26Projects(),monthly=_homeFY26MonthlyTotal(),el=_homeFY26MonthsElapsed();
