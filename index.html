@@ -10480,8 +10480,9 @@ function _goalLinkData(g){
     out.milestones=Object.keys(mMap).map(function(k){return mMap[k];});
     var tMap={};(D.activities||[]).forEach(function(a){if(a.isMilestone)return;if(initIds.indexOf(a.projectId)>-1||(L.tasks||[]).indexOf(a.id)>-1)tMap[a.id]=a;});
     out.tasks=Object.keys(tMap).map(function(k){return tMap[k];});
+    // Profit = linked initiatives'/projects' delivered profit (revenue − cost) only.
+    // Opportunities are NOT added here — pipeline is shown in the Opps / Opp $ columns.
     var all=allM();initIds.forEach(function(iid){try{var r=projRollupData(iid,all);out.profit+=((r.revenue||0)-(r.cost||0));}catch(e){}});
-    out.opps.forEach(function(o){out.profit+=Number(o.expectedValue)||0;});
   }catch(e){}
   return out;
 }
@@ -10507,7 +10508,7 @@ function _homeGoalsBlock(){
       +'<th style="'+hc+';text-align:center" title="Linked opportunities">Opps</th><th style="'+hc+';text-align:right" title="Total potential $ of linked opportunities">Opp $</th><th style="'+hc+';text-align:center" title="Linked proposals">Prop</th>'
       +'<th style="'+hc+';text-align:center" title="Linked accounts">Accts</th><th style="'+hc+';text-align:center" title="Distinct contacts on linked accounts">Contacts</th>'
       +'<th style="'+hc+';text-align:center" title="Linked milestones">Miles</th><th style="'+hc+';text-align:center" title="Linked tasks">Tasks</th>'
-      +'<th style="'+hc+';text-align:right" title="Linked projects’ profit + opportunities’ expected value">Profit</th></tr>';
+      +'<th style="'+hc+';text-align:right" title="Linked initiatives’/projects’ profit (revenue − cost)">Profit</th></tr>';
     var rows=gs.map(function(g){
       var ev=_stratGoalEval(g,m),st=_stratGoalStatus(g,ev),tg=Number(g.target)||0,pct=tg?Math.max(0,Math.min(100,Math.round(ev.current/tg*100))):0;
       var col=({ontrack:'good',atrisk:'warn',off:'crit',done:'good'}[st.key]||'flat');var bc=({good:'var(--exh-good)',warn:'var(--exh-warn)',crit:'var(--exh-crit)',flat:'#9aa6b6'}[col]);
