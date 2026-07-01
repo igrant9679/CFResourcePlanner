@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Atlas · The CommunityForce Operating System</title>
+<title>MissionInsights.ai · The CommunityForce Operating System</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2064%2060'%3E%3Cpath%20d='M32%204L56%2047H38.5L32%2033%2025.5%2047H8Z'%20fill='%23C5A55A'/%3E%3Cpath%20d='M7%2049.5Q32%2060.5%2057%2049.5L52.5%2051.2Q32%2058%2011.5%2051.2Z'%20fill='%239FB0C8'/%3E%3C/svg%3E">
 <style>
 :root{--navy:#1B2A4A;--navy-light:#243656;--navy-hover:#2C4068;--gold:#C5A55A;--gold-dim:rgba(197,165,90,0.12);--green:#2D6A4F;--green-dim:rgba(45,106,79,0.1);--violet:#7C5CBF;--violet-dim:rgba(124,92,191,0.1);--amber:#D97706;--amber-dim:rgba(217,119,6,0.1);--slate:#546478;--slate-dim:rgba(84,100,120,0.07);--red:#DC2626;--red-light:#FEE2E2;--teal:#0D9488;--teal-dim:rgba(13,148,136,0.08);--warn-border:#F59E0B;--warn-text:#92400E;--card-bg:#fff;--page-bg:#ECEEF2;--text-primary:#1B2A4A;--text-secondary:#5A6A7E;--text-muted:#94A3B8;--border:#DDE2EA;--radius:10px;--shadow-sm:0 1px 3px rgba(27,42,74,0.06);--shadow-md:0 6px 24px rgba(27,42,74,0.1);--shadow-lg:0 20px 60px rgba(27,42,74,0.18);}
@@ -1101,7 +1101,7 @@ select.ct-cell{cursor:pointer;-webkit-appearance:none;appearance:none;}
       <path d="M32 4 L56 47 L38.5 47 L32 33 L25.5 47 L8 47 Z" fill="url(#atlasTriL)"/>
       <path d="M7 49.5 Q32 60.5 57 49.5 L52.5 51.2 Q32 58 11.5 51.2 Z" fill="url(#atlasArcL)"/>
     </svg>
-    <div style="font-size:30px;font-weight:800;color:#1B2A4A;letter-spacing:-0.5px;line-height:1">Atlas</div>
+    <div style="font-size:30px;font-weight:800;color:#1B2A4A;letter-spacing:-0.5px;line-height:1">MissionInsights.ai</div>
     <div style="font-size:9px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--gold);margin-top:6px">by CommunityForce</div>
     <div style="font-size:11px;font-weight:600;color:#5A6A7E;margin-top:10px">The <b style="color:#1B2A4A">CommunityForce</b> Operating System (OS)</div>
     <div style="font-size:9px;font-weight:600;letter-spacing:.4px;color:#94A3B8;margin-top:8px">Unify Teams &nbsp;·&nbsp; Execute Strategy &nbsp;·&nbsp; Drive Impact &nbsp;·&nbsp; Scale with Confidence</div>
@@ -1128,7 +1128,7 @@ select.ct-cell{cursor:pointer;-webkit-appearance:none;appearance:none;}
           </svg>
         </span>
         <div>
-          <div><span class="app-name">Atlas</span><span class="app-tagchip">Operating System</span></div>
+          <div><span class="app-name">MissionInsights.ai</span><span class="app-tagchip">Operating System</span></div>
           <div class="hdr-sub" style="margin-top:4px">Workforce · projects · capacity &nbsp;·&nbsp; <span id="ghStatus" style="transition:color 0.3s">Loading…</span></div>
         </div>
       </div>
@@ -1386,7 +1386,7 @@ async function serverSave(opts){
   syncing=true;
   syncSetStatus('Saving…','rgba(255,255,255,0.55)');
   try{
-    // Bake the pre-computed bundle for the read-only LevelUp Atlas mirror so it
+    // Bake the pre-computed bundle for the read-only LevelUp MissionInsights.ai mirror so it
     // ships in /api/atlas-snapshot. Never let a compute error block the save.
     try{D.atlasComputed=buildAtlasComputed();}catch(_){}
     var force=!!(opts&&opts.force);
@@ -1472,7 +1472,7 @@ async function syncPoll(){
     if(_clientBootedAt===null){_clientBootedAt=v.bootedAt||'';}
     if(v.bootedAt&&_clientBootedAt&&v.bootedAt!==_clientBootedAt){
       if(_syncIdle()){location.reload();return;}
-      if(!syncPoll._warnedUpdate){syncPoll._warnedUpdate=true;toast('Atlas was updated — refresh this tab when convenient to pick up the new version.','warn',8000);}
+      if(!syncPoll._warnedUpdate){syncPoll._warnedUpdate=true;toast('MissionInsights.ai was updated — refresh this tab when convenient to pick up the new version.','warn',8000);}
       return;
     }
     if(v.updatedAt&&_serverUpdatedAt&&v.updatedAt!==_serverUpdatedAt&&_syncIdle()){
@@ -4581,10 +4581,10 @@ function contractPosToRecruiting(cid,pid){
 
 /* ════════════════════════════════════════════════════════════════════════
    PORTFOLIO DASHBOARD — second tab on a contract (Contract Management).
-   Incorporates the standalone bclm-dashboard.html into Atlas. Charts are
+   Incorporates the standalone bclm-dashboard.html into MissionInsights.ai. Charts are
    native CSS bars (no Chart.js / no network). Owners, leads, and workstream
    classification tie into the contract roster + org members. Everything is
-   editable through Atlas form modals + inline dropdowns. Data: c.dashboard.
+   editable through MissionInsights.ai form modals + inline dropdowns. Data: c.dashboard.
    ════════════════════════════════════════════════════════════════════════ */
 var contractTab='staff';
 function contractSetTab(t){contractTab=t;renderView();}
@@ -9217,7 +9217,7 @@ function _valSegmentsHTML(model){
   var projTbl='<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:10px 0"><div style="font-size:13px;font-weight:800;margin-bottom:4px">Contract terms &amp; segment mapping</div>'
     +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Enter each project\'s <b>Start</b> and <b>End</b> (YYYY-MM). <b>Months left</b> counts from today; <b>Backlog</b> = monthly × months left. When no Start/End is entered, the model assumes a <b>default term of '+(Number(V.defaultTermMonths)||36)+' months</b> (editable on the Assumptions tab) and tags it <span style="color:#D97706">assumed</span>. These dates write to the project\'s contract fields and won\'t disturb Capacity/Strategy. Re-assign Segment if auto-classification is wrong.</div>'
     +'<table style="width:100%;font-size:12px;border-collapse:collapse"><thead>'+phdr+'</thead><tbody>'+pbody+'</tbody></table></div>';
-  var intro=_valNote('Atlas has no built-in product-line tagging, so the model classifies each project into one of four segments. Segment-level matters because a SaaS dollar and a services dollar earn very different multiples.');
+  var intro=_valNote('MissionInsights.ai has no built-in product-line tagging, so the model classifies each project into one of four segments. Segment-level matters because a SaaS dollar and a services dollar earn very different multiples.');
   var termNote=_valNote('<b>Contract term → backlog → the right multiple.</b> Enter Start/End dates below and the model computes <b>months remaining</b> and <b>contracted backlog</b> (monthly × months left) — your committed, de-risked revenue floor. Backlog is <i>not</i> multiplied into enterprise value (a 5-year book isn\'t worth 5× its annual run-rate), but it tells you how secure each segment is: <b>long, locked terms justify pushing that segment\'s multiple toward the high end</b>; short or expiring terms toward the low end. The multiple you set is then applied to annual revenue across all three scenarios. Educian / Professional IT caveats: Educian backlog is net of the 50% Expentor split; Professional IT shows nothing until it has contracted revenue.');
   return intro+segTbl+termNote+projTbl;
 }
@@ -9440,7 +9440,7 @@ function _stratGoalsHTML(model){
     var sub=[esc(ev.detail||'')].concat(g.notes?[esc(g.notes)]:[]).filter(Boolean).join(' · ');
     return '<tr style="border-top:1px solid var(--border)">'
       +'<td style="padding:8px;vertical-align:top">'
-        +'<div style="font-size:13px;font-weight:700">'+esc(g.label)+(g.metric!=='manual'?' <span class="plan-chip">auto</span>':' <span class="plan-chip">manual</span>')+(g.suggested?' <span class="plan-chip" style="border-color:#7C3AED;color:#7C3AED" title="Atlas-recommended figure — review and adjust to your plan">suggested</span>':'')+'</div>'
+        +'<div style="font-size:13px;font-weight:700">'+esc(g.label)+(g.metric!=='manual'?' <span class="plan-chip">auto</span>':' <span class="plan-chip">manual</span>')+(g.suggested?' <span class="plan-chip" style="border-color:#7C3AED;color:#7C3AED" title="MissionInsights.ai-recommended figure — review and adjust to your plan">suggested</span>':'')+'</div>'
         +(links?'<div style="font-size:10px;color:var(--text-muted);margin-top:2px">↳ '+links+'</div>':'')
         +(sub?'<div style="font-size:10px;color:var(--text-muted);margin-top:2px">'+sub+'</div>':'')
       +'</td>'
@@ -10591,7 +10591,7 @@ function renderHomeView(q){
     +_homeLane('perf','Performance vs targets','var(--exh-good)','are we meeting our metrics')
     +_homeLane('exec','Execution & delivery','#2563EB','are tasks getting completed')
     +_homeLane('risk','Risk & exposure','var(--exh-crit)','what must be eliminated')
-    +'<div class="exh-foot">Single shared executive dashboard. Every figure is live from an existing Atlas source (cash engine, Strategy goals, Proforma risks, Customers, Commercial, BCLM tasks, Capacity). Customization is admin-only; access is gated to the Executive role.</div>'
+    +'<div class="exh-foot">Single shared executive dashboard. Every figure is live from an existing MissionInsights.ai source (cash engine, Strategy goals, Proforma risks, Customers, Commercial, BCLM tasks, Capacity). Customization is admin-only; access is gated to the Executive role.</div>'
     +'</div>';
 }
 
@@ -11746,7 +11746,7 @@ function renderProposalsView(q){
     +(props.length?(
         '<div class="pf-subtabs" style="margin-top:10px">'+[['list','List'],['pipeline','Pipeline'],['dashboard','Dashboard']].map(function(t){return '<button class="pf-subtab'+(propView===t[0]?' active':'')+'" onclick="propSetView(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>'
         +(propView==='pipeline'?propPipelineHTML(props):propView==='dashboard'?propDashboardHTML(props):('<div class="rq-section-lbl">Proposals</div>'+propCardsHTML(props)))
-      ):'<div class="empty-recruit"><div style="font-size:14px;margin-bottom:6px">No proposals yet</div><div style="font-size:12px">Click <b>+ New Proposal</b> to upload an RFP (PDF/DOCX) — Claude will extract the customer, requirements, certifications, roles, scope, period of performance, and key dates. Then Atlas creates or links an opportunity and gives you a tabbed proposal workspace.</div></div>')
+      ):'<div class="empty-recruit"><div style="font-size:14px;margin-bottom:6px">No proposals yet</div><div style="font-size:12px">Click <b>+ New Proposal</b> to upload an RFP (PDF/DOCX) — Claude will extract the customer, requirements, certifications, roles, scope, period of performance, and key dates. Then MissionInsights.ai creates or links an opportunity and gives you a tabbed proposal workspace.</div></div>')
     +'</div>';
 }
 /* ── Proposals Pipeline (kanban) + Dashboard ── */
@@ -12089,7 +12089,7 @@ function openCorporateCertsManager(){
   }).join(''):'<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:24px">No corporate certifications yet. Add SBIR, 8(a), GSA STARS, FedRAMP, ISO, CMMC, DHS Trusted Tester, etc.</div>';
   document.getElementById('mdlCert').innerHTML=
     '<div class="mdl-over">Administration</div><div class="mdl-title">Corporate Certifications &amp; Designations</div>'
-    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Active certifications auto-populate the cover sheet of every proposal. Atlas warns you 60 days before expiration.</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Active certifications auto-populate the cover sheet of every proposal. MissionInsights.ai warns you 60 days before expiration.</div>'
     +'<div>'+rows+'</div>'
     +'<div class="btn-row" style="margin-top:14px">'
     +'<button class="btn btn-gold" style="flex:1" onclick="certEdit(-1)">+ Add Certification</button>'
@@ -12108,7 +12108,7 @@ function certEdit(idx){
       {key:'number',label:'Number / Contract / ID',type:'text',value:c.number},
       {key:'issuer',label:'Issuer',type:'text',value:c.issuer,placeholder:'e.g. GSA, ANAB, FedRAMP PMO'},
       {key:'issuedAt',label:'Issued date',type:'date',value:c.issuedAt},
-      {key:'expiresAt',label:'Expires date',type:'date',value:c.expiresAt,hint:'Atlas warns 60 days before expiry and auto-disables expired certs on cover sheets.'}
+      {key:'expiresAt',label:'Expires date',type:'date',value:c.expiresAt,hint:'MissionInsights.ai warns 60 days before expiry and auto-disables expired certs on cover sheets.'}
     ],
     onSubmit:function(v){
       c.name=v.name.trim();c.number=(v.number||'').trim();c.issuer=(v.issuer||'').trim();c.issuedAt=(v.issuedAt||'').trim();c.expiresAt=(v.expiresAt||'').trim();
@@ -12157,7 +12157,7 @@ function openKnowledgeBankManager(){
   }).join(''):'<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:24px">Knowledge Bank is empty. Upload past proposals, capability statements, and reference docs (PDF / DOCX / TXT) or paste text. The Proposal Generator selects relevant sources from here when drafting.</div>';
   document.getElementById('mdlKB').innerHTML=
     '<div class="mdl-over">Proposals</div><div class="mdl-title">Knowledge Bank</div>'
-    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">CommunityForce history &amp; capabilities. Atlas extracts the text, summarizes it, and the Proposal Generator picks the relevant sources when drafting a new proposal. Original files and full text are stored server-side; only summaries sync in the app state.</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">CommunityForce history &amp; capabilities. MissionInsights.ai extracts the text, summarizes it, and the Proposal Generator picks the relevant sources when drafting a new proposal. Original files and full text are stored server-side; only summaries sync in the app state.</div>'
     +'<div class="kb-upload-row">'
     +'<select id="kb_type" class="inp" style="max-width:230px">'+typeOpts+'</select>'
     +'<input type="file" id="kb_file" class="inp" accept=".pdf,.docx,.xlsx,.xls,.txt,.md,.csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain" style="flex:1;min-width:160px"/>'
@@ -12291,7 +12291,7 @@ function openPartnerBankManager(){
   }).join(''):'<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:24px">No partner proposals yet. Upload a teaming partner\'s past proposals or capability docs (PDF / DOCX / TXT). When generating a proposal, select partners on the BusDev Brief tab to pull their experience in — with or without attribution.</div>';
   document.getElementById('mdlPartner').innerHTML=
     '<div class="mdl-over">Proposals</div><div class="mdl-title">&#129309; Teaming Partner Proposal Bank</div>'
-    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Upload teaming partners\' proposals &amp; capability docs. Atlas extracts and summarizes them; the Proposal Generator can weave a selected partner\'s experience into a new proposal — either attributed ("Our teaming partner X has…") or absorbed into the overall team solution. Choose per proposal on the BusDev Brief tab.</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Upload teaming partners\' proposals &amp; capability docs. MissionInsights.ai extracts and summarizes them; the Proposal Generator can weave a selected partner\'s experience into a new proposal — either attributed ("Our teaming partner X has…") or absorbed into the overall team solution. Choose per proposal on the BusDev Brief tab.</div>'
     +'<div class="kb-upload-row">'
     +'<input type="text" id="pb_partner" class="inp" placeholder="Partner name (e.g. Acme Federal)" style="max-width:200px"/>'
     +'<select id="pb_type" class="inp" style="max-width:170px">'+PARTNER_TYPES.map(function(t){return '<option value="'+t.k+'">'+esc(t.l)+'</option>';}).join('')+'</select>'
@@ -12524,7 +12524,7 @@ function openDossierPicker(propId){
   }).join(''):'<div style="font-size:12px;color:var(--text-muted);padding:16px;text-align:center">Resume Bank is empty. Add resumes in Recruiting &rarr; Resume Bank first.</div>';
   document.getElementById('mdlDoss').innerHTML=
     '<div class="mdl-over">Staffing</div><div class="mdl-title">Add Key Personnel Dossiers</div>'
-    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Select people to include as tailored one-page dossiers in the proposal appendix. Atlas generates each bio from their resume (or profile) against this RFP\'s roles and the CF voice.</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Select people to include as tailored one-page dossiers in the proposal appendix. MissionInsights.ai generates each bio from their resume (or profile) against this RFP\'s roles and the CF voice.</div>'
     +'<div class="doss-list" style="max-height:46vh;overflow:auto">'+rows+'</div>'
     +'<div id="doss_status" style="font-size:11px;color:#7C3AED;min-height:14px;margin:8px 2px"></div>'
     +'<div class="btn-row" style="margin-top:12px">'
@@ -12662,7 +12662,7 @@ function propTplEdit(id){
   }).join('');
   document.getElementById('mdlTplProp').innerHTML=
     '<div class="mdl-over">Template</div><div class="mdl-title">'+esc(t.name)+' <span style="font-size:11px;color:var(--text-muted);font-weight:400">&middot; '+esc(t.serviceLine||'')+'</span></div>'
-    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Each row is a section in the rendered proposal. Source: <b>static</b>=fixed text · <b>ai</b>=Claude drafts · <b>hybrid</b>=template seed + Claude rewrite · <b>user-only</b>=writer fills · <b>computed</b>=auto from Atlas data (e.g. certs cover sheet, resumes).</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Each row is a section in the rendered proposal. Source: <b>static</b>=fixed text · <b>ai</b>=Claude drafts · <b>hybrid</b>=template seed + Claude rewrite · <b>user-only</b>=writer fills · <b>computed</b>=auto from MissionInsights.ai data (e.g. certs cover sheet, resumes).</div>'
     +'<table class="wf-tbl"><thead><tr><th>Title</th><th>Source</th><th>Page</th><th>Req</th><th>Actions</th></tr></thead><tbody>'+rows+'</tbody></table>'
     +'<button class="btn btn-sec btn-sm" style="margin-top:8px" onclick="propTplSecAdd(\''+id+'\')">+ Add Section</button>'
     +'<div class="btn-row" style="margin-top:14px">'
@@ -13300,7 +13300,7 @@ function _pdFilesHTML(p){
   return '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">All files attached to this proposal. The RFP source file is always preserved.</div>'+rfpRow
     +'<div style="margin-top:12px;border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--page-bg)">'
     +'<div style="font-size:11px;font-weight:700;margin-bottom:4px">'+(rfp.sourceAttachmentId?'Replace the RFP source':'Attach an RFP')+'</div>'
-    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Upload the RFP (PDF/DOCX). Atlas extracts customer, requirements, roles, and key dates with AI and fills <b>only empty</b> RFP fields — existing content is never overwritten.</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Upload the RFP (PDF/DOCX). MissionInsights.ai extracts customer, requirements, roles, and key dates with AI and fills <b>only empty</b> RFP fields — existing content is never overwritten.</div>'
     +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
     +'<input type="file" id="pd_rfp_file" accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="font-size:11px">'
     +'<button type="button" id="pd_rfp_upbtn" class="btn btn-navy btn-sm" onclick="pdUploadRFP(\''+p.id+'\')">Upload &amp; Extract</button>'
@@ -13911,7 +13911,7 @@ function _pdSettingsHTML(p){
   var tplOpts='<option value="">— none —</option>'+(D.proposalTemplates||[]).map(function(t){return '<option value="'+t.id+'"'+(p.templateId===t.id?' selected':'')+'>'+esc(t.name)+'</option>';}).join('');
   var tplNote=(p.sections&&p.sections.length)
     ?'This proposal\'s sections are already initialized — changing the template here does not touch them; it only affects future re-initialization.'
-    :'Pick the template that defines this proposal\'s section list. Atlas offers to initialize the sections right away.';
+    :'Pick the template that defines this proposal\'s section list. MissionInsights.ai offers to initialize the sections right away.';
   return '<span class="fld-section-hdr" style="margin-top:0">Template</span>'
     +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">'+tplNote+'</div>'
     +'<div style="display:flex;gap:10px;align-items:flex-end"><div class="fld" style="flex:1"><label class="fld-l">Proposal Template</label><select class="fld-sel" id="pd_tpl_sel">'+tplOpts+'</select></div>'
@@ -14039,7 +14039,7 @@ function _pdSectionsHTML(p,tpl){
   if(activeSec){
     var canDraft=activeSec.source==='ai'||activeSec.source==='hybrid';
     var draftedMeta=activeSec.draftedAt?'<span style="font-size:10px;color:var(--text-muted)">Last AI draft: '+new Date(activeSec.draftedAt).toLocaleString()+(activeSec.draftedWith&&activeSec.draftedWith.provider?' · '+esc(activeSec.draftedWith.provider)+'/'+esc(activeSec.draftedWith.model||'default'):'')+'</span>':'';
-    var computedNote=activeSec.source==='computed'?'<div style="font-size:11px;color:var(--text-muted);background:rgba(5,150,105,0.06);border:1px solid rgba(5,150,105,0.2);padding:8px 10px;border-radius:6px;margin-bottom:8px">This section is <b>computed</b> — it auto-builds from Atlas data at render time (e.g. cover sheet from Corporate Certifications, resumes appendix from member records). No manual editing needed.</div>':'';
+    var computedNote=activeSec.source==='computed'?'<div style="font-size:11px;color:var(--text-muted);background:rgba(5,150,105,0.06);border:1px solid rgba(5,150,105,0.2);padding:8px 10px;border-radius:6px;margin-bottom:8px">This section is <b>computed</b> — it auto-builds from MissionInsights.ai data at render time (e.g. cover sheet from Corporate Certifications, resumes appendix from member records). No manual editing needed.</div>':'';
     var srcCls2='sec-source-'+(activeSec.source==='user-only'?'user':activeSec.source);
     editor='<div class="sec-editor">'
       +'<div class="sec-editor-hdr">'
@@ -14172,9 +14172,9 @@ function _pdBriefHTML(p){
   var b=p.brief||{};
   var kbCount=(D.knowledgeBank||[]).filter(function(d){return d.summary;}).length;
   var aiSecs=(p.sections||[]).filter(function(s){return (s.source==='ai'||s.source==='hybrid')&&_secIncluded(s);}).length;
-  var tplNote=p.templateId?'':'<div style="font-size:11px;color:#92400E;background:#FEF3C7;border:1px solid #FCD34D;padding:7px 10px;border-radius:6px;margin-bottom:10px">No template linked yet — set one in the <b>Settings</b> tab so Atlas knows which sections to generate.</div>';
+  var tplNote=p.templateId?'':'<div style="font-size:11px;color:#92400E;background:#FEF3C7;border:1px solid #FCD34D;padding:7px 10px;border-radius:6px;margin-bottom:10px">No template linked yet — set one in the <b>Settings</b> tab so MissionInsights.ai knows which sections to generate.</div>';
   var updated=b.updatedAt?'<span style="font-size:10px;color:var(--text-muted)">Last saved '+new Date(b.updatedAt).toLocaleString()+'</span>':'';
-  return '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Dump your raw thoughts on what CommunityForce proposes — bullet points, fragments, anything. Atlas develops, enhances, and professionalizes this into full proposal sections using the RFP requirements, the Knowledge Bank (<b>'+kbCount+'</b> source'+(kbCount===1?'':'s')+'), and the CommunityForce brand voice.</div>'
+  return '<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Dump your raw thoughts on what CommunityForce proposes — bullet points, fragments, anything. MissionInsights.ai develops, enhances, and professionalizes this into full proposal sections using the RFP requirements, the Knowledge Bank (<b>'+kbCount+'</b> source'+(kbCount===1?'':'s')+'), and the CommunityForce brand voice.</div>'
     +tplNote
     +'<div class="fld"><label class="fld-l">What we propose (stream of consciousness)</label>'
     +richEditor('pd_brief_text',b.text||'',{placeholder:'e.g. Stand up a 4-person agile pod, reuse our DTMO Passport accelerators, lead with FedRAMP experience, phased 30/60/90 ramp, emphasize low-risk transition, cleared staff already on bench...',tall:true})
@@ -14247,7 +14247,7 @@ function pdGenerateFullProposal(id){
   pdCaptureBrief(p);
   if(!p.sections||!p.sections.length){
     if(p.templateId)_propInitSections(p);
-    if(!p.sections||!p.sections.length){alert('Link a template in the Settings tab so Atlas knows which sections to generate.');return;}
+    if(!p.sections||!p.sections.length){alert('Link a template in the Settings tab so MissionInsights.ai knows which sections to generate.');return;}
   }
   var aiSecs=p.sections.filter(function(s){return (s.source==='ai'||s.source==='hybrid')&&_secIncluded(s);});
   if(!aiSecs.length){alert('No sections selected to draft. Tick the checkbox next to the AI/hybrid sections you want generated (in the Sections tab), then try again.');return;}
@@ -14332,16 +14332,16 @@ function pdGenerateFromSource(propId){
   var kbProps=(D.knowledgeBank||[]).filter(function(d){return d.type==='past-proposal';});
   var sysProps=(D.proposals||[]).filter(function(x){return x.id!==propId&&(x.sections||[]).some(function(s){return (s.html||'').trim();});});
   openFormModal({over:'Proposal Generator',title:'Generate fields from a source',
-    intro:'Atlas analyzes a source and proposes content for the RFP details, BusDev brief, and matching sections. You review before anything is applied — only blank fields/sections are filled.',
+    intro:'MissionInsights.ai analyzes a source and proposes content for the RFP details, BusDev brief, and matching sections. You review before anything is applied — only blank fields/sections are filled.',
     fields:[
       {key:'source',label:'Source',type:'select',value:'upload',options:[
         {value:'upload',label:'Upload a document'},
         {value:'master',label:'Org Master Prompt'},
         {value:'kb',label:'Past proposal — Knowledge Bank'},
-        {value:'system',label:'Past proposal — already in Atlas'}]},
+        {value:'system',label:'Past proposal — already in MissionInsights.ai'}]},
       {key:'file',label:'Document (for Upload)',type:'file',accept:'.pdf,.docx,.xlsx,.xls,.txt,.md,.csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain'},
       {key:'kbId',label:'Knowledge Bank past proposal (for that option)',type:'select',value:'',options:[{value:'',label:'— select —'}].concat(kbProps.map(function(d){return {value:d.id,label:d.name};}))},
-      {key:'sysId',label:'Atlas proposal (for that option)',type:'select',value:'',options:[{value:'',label:'— select —'}].concat(sysProps.map(function(x){return {value:x.id,label:x.title||'(untitled)'};}))},
+      {key:'sysId',label:'MissionInsights.ai proposal (for that option)',type:'select',value:'',options:[{value:'',label:'— select —'}].concat(sysProps.map(function(x){return {value:x.id,label:x.title||'(untitled)'};}))},
       {key:'targets',label:'Populate',type:'checkboxes',value:['rfp','brief','sections'],options:[{value:'rfp',label:'RFP details'},{value:'brief',label:'BusDev brief'},{value:'sections',label:'Matching sections'}]}
     ],
     onSubmit:function(v,files,setStatus){
@@ -14363,7 +14363,7 @@ function pdGenerateFromSource(propId){
         fetch('/api/knowledge/'+v.kbId).then(function(r){return r.json();}).then(function(j){analyze(j&&j.extracted_text||'');}).catch(function(e){setStatus('Load failed: '+e.message);});
         return false;
       } else if(v.source==='system'){
-        if(!v.sysId){setStatus('Pick an Atlas proposal.');return false;}
+        if(!v.sysId){setStatus('Pick an MissionInsights.ai proposal.');return false;}
         var sp=(D.proposals||[]).find(function(x){return x.id===v.sysId;});
         var txt=sp?((((sp.brief&&sp.brief.text)||'')+'\n\n'+(sp.sections||[]).map(function(s){return (s.title||'')+'\n'+String(s.html||'').replace(/<[^>]+>/g,' ');}).join('\n\n'))):'';
         analyze(txt);return false;
@@ -14401,7 +14401,7 @@ function _pdPreviewSource(p,j,targets){
   window._pdSourceApply=function(){_pdApplySource(p,j,targets);};
   document.getElementById('mdlAIPrev').innerHTML=
     '<div class="mdl-over">Proposal Generator</div><div class="mdl-title">Review extracted content</div>'
-    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Atlas fills <b>only empty</b> RFP fields and empty matching sections; brief content is appended. Existing content is never overwritten.</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">MissionInsights.ai fills <b>only empty</b> RFP fields and empty matching sections; brief content is appended. Existing content is never overwritten.</div>'
     +parts.join('')
     +'<div class="btn-row" style="margin-top:14px"><button class="btn btn-navy" style="flex:1" onclick="(window._pdSourceApply&&window._pdSourceApply());closeModal(\'ovAIPrev\')">Apply</button><button class="btn btn-sec" style="flex:1" onclick="closeModal(\'ovAIPrev\')">Cancel</button></div>';
   openModal('ovAIPrev');
@@ -15396,7 +15396,7 @@ function pdExportPrint(propId){
   var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
   var html=_buildProposalPrintHTML(p);
   var w=window.open('','_blank');
-  if(!w){alert('Pop-up blocked. Allow pop-ups for Atlas and try again.');return;}
+  if(!w){alert('Pop-up blocked. Allow pop-ups for MissionInsights.ai and try again.');return;}
   w.document.open();w.document.write(html);w.document.close();
   setTimeout(function(){try{w.focus();w.print();}catch(_){}}, 800);
 }
@@ -16099,7 +16099,7 @@ function openOrgSettingsManager(){
     +'<div class="fld"><label class="fld-l" for="org_master">Master Prompt <span style="font-weight:400;color:var(--text-muted)">— standing instructions for the AI (no length limit)</span></label>'
       +'<textarea class="fld-i" id="org_master" rows="10" placeholder="e.g. Always write in active voice. Lead every section with the customer mission. Never use the words world-class or synergy. Cite CMMI/ISO certifications where relevant…">'+esc(o.masterPrompt||'')+'</textarea></div>'
     +'<div style="font-size:13px;font-weight:700;margin:14px 0 6px;color:var(--text-primary)">Proposal-output branding</div>'
-    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Injected into generation context so drafts use your identity and default voice. (Does not change the Atlas interface.)</div>'
+    +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Injected into generation context so drafts use your identity and default voice. (Does not change the MissionInsights.ai interface.)</div>'
     +'<div class="fld-row2">'
       +'<div class="fld"><label class="fld-l" for="org_brand_name">Company name</label><input class="fld-i" id="org_brand_name" type="text" value="'+esc(b.companyName||'')+'" placeholder="CommunityForce"></div>'
       +'<div class="fld"><label class="fld-l" for="org_brand_tagline">Tagline</label><input class="fld-i" id="org_brand_tagline" type="text" value="'+esc(b.tagline||'')+'" placeholder="e.g. Mission-driven federal modernization"></div>'
@@ -16137,7 +16137,7 @@ function openIntegrationsManager(){
   }).join('');
   document.getElementById('mdlIntg').innerHTML=
     '<div class="mdl-over">Administration</div><div class="mdl-title">Integrations &middot; LLM Providers</div>'
-    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Atlas can call Anthropic Claude, OpenAI, and Google Gemini. Each AI feature picks the provider from the calling user\'s default (set below) or per-proposal override. For each provider you can set an org-wide key on the server (env var) OR a per-user override here.</div>'
+    +'<div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">MissionInsights.ai can call Anthropic Claude, OpenAI, and Google Gemini. Each AI feature picks the provider from the calling user\'s default (set below) or per-proposal override. For each provider you can set an org-wide key on the server (env var) OR a per-user override here.</div>'
     +'<span class="fld-section-hdr">Per-Provider API Keys (your overrides)</span>'
     +keyRows
     +'<span class="fld-section-hdr">Your Default Provider &amp; Model</span>'
@@ -17593,7 +17593,7 @@ function _rptClearHL(){var ns=document.querySelectorAll('.rpt-dnd.rpt-dragover')
 function rptTouchStart(e,key,ctx){_rptDrag=key;_rptDragCtx=ctx||'builtin';}
 function rptTouchMove(e){if(!_rptDrag)return;e.preventDefault();var t=e.touches&&e.touches[0];if(!t)return;_rptClearHL();var el=document.elementFromPoint(t.clientX,t.clientY);while(el&&el!==document.body){if(el.classList&&el.classList.contains('rpt-dnd')){el.classList.add('rpt-dragover');break;}el=el.parentNode;}}
 function rptTouchEnd(e){if(!_rptDrag)return;var t=e.changedTouches&&e.changedTouches[0];var key=t?_rptClosestKey(document.elementFromPoint(t.clientX,t.clientY)):null;_rptClearHL();var from=_rptDrag,ctx=_rptDragCtx;_rptDrag=null;_rptDragCtx=null;if(key)rptReorder(from,key,ctx);}
-/* ── Pre-computed bundle for the read-only LevelUp Atlas mirror ──
+/* ── Pre-computed bundle for the read-only LevelUp MissionInsights.ai mirror ──
    Runs the existing capacity/forecast/report helpers and bakes structured
    results + rendered report HTML onto D.atlasComputed so /api/atlas-snapshot
    can ship them. DOM-free (the rpt_* fns + svg/table helpers are pure string
@@ -17780,7 +17780,7 @@ function rptCsvTemplate(id){var t=(D.reportTemplates||[]).filter(function(x){ret
 function _rptPrintDoc(title,body){var w=window.open('','_blank');if(!w){toast('Pop-up blocked — allow pop-ups to print.','warn');return;}
   w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>'+esc(title)+'</title><style>body{font-family:Arial,Helvetica,sans-serif;color:#16223C;margin:26px;}h1{font-size:18px;margin:0 0 14px;}.pf-grid{display:block;}.pf-card{border:1px solid #d0d7e2;border-radius:8px;padding:12px 14px;margin-bottom:14px;break-inside:avoid;}.pf-card-h{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px;}table{border-collapse:collapse;width:100%;font-size:11px;}.pf-tbl th,.pf-tbl td{border:1px solid #e2e8f0;padding:4px 8px;text-align:left;}.pf-tbl th[style*="right"],.pf-tbl td[style*="right"]{text-align:right;}.pf-tbl thead th{background:#16223C;color:#fff;}.rpt-legend{display:flex;flex-wrap:wrap;gap:10px;font-size:11px;margin-top:6px}.rpt-leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}.rpt-sec-h{font-size:11px;font-weight:800;text-transform:uppercase;color:#64748b;margin:14px 0 6px}svg{max-width:100%}button{display:none!important}@media print{body{margin:12mm}}</style></head><body><h1>'+esc(title)+'</h1>'+body+'<script>window.onload=function(){window.print();};<\/script></body></html>');w.document.close();}
 function rptPrintBuiltin(key){var b=rptBuiltin(key);if(!b||(b.financial&&!canProforma()))return;_rptPrintDoc(b.title,'<div class="pf-card"><div class="pf-card-h">'+esc(b.title)+'</div>'+b.fn(_rptCtx())+'</div>');}
-function rptPrintView(){var root=document.getElementById('rptRoot');if(!root){toast('Open the Reports tab first.','info');return;}_rptPrintDoc('Atlas Reports — '+new Date().toLocaleDateString(),root.innerHTML);}
+function rptPrintView(){var root=document.getElementById('rptRoot');if(!root){toast('Open the Reports tab first.','info');return;}_rptPrintDoc('MissionInsights.ai Reports — '+new Date().toLocaleDateString(),root.innerHTML);}
 /* CSV extractors for built-in reports (recompute the tabular data) */
 var RPT_CSV={
  hc_by_dept:function(){return {headers:['Department','Headcount','Monthly cost','Avg/person'],rows:(D.departments||[]).filter(function(d){return !d.parentId;}).map(function(d){var r=deptRollup(d.id);return [d.name,r.count,r.cost,r.count?Math.round(r.cost/r.count):0];})};},
