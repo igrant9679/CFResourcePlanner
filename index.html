@@ -14279,6 +14279,7 @@ function _pdSectionsHTML(p,tpl){
       +'<div><div style="font-size:15px;font-weight:800">'+esc(activeSec.title)+'<span class="sec-source-pill '+srcCls2+'">'+esc(activeSec.source||'user')+'</span></div>'+draftedMeta+'</div>'
       +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
       +(canDraft?'<button type="button" class="ai-btn" onclick="pdSectionAIDraft(\''+p.id+'\',\''+activeSec.id+'\')">&#10024; '+(activeSec.draftedAt?'Re-draft':'Draft with AI')+'</button>':'')
+      +((canDraft&&(activeSec.rfpDerived||(activeSec.templatePrompt||'').trim()))?'<button type="button" class="ai-btn" onclick="pdSectionAIDraft(\''+p.id+'\',\''+activeSec.id+'\',true)" title="Generate strictly from this section&#39;s RFP requirement — ignores the BusDev brief, knowledge bank, partners, and winning examples">&#128196; From RFP only</button>':'')
       +'<button type="button" class="ai-btn" onclick="pdSectionVoiceRewrite(\''+p.id+'\',\''+activeSec.id+'\')" '+((activeSec.html||'').trim()?'':'disabled title="Write or draft something first"')+'>&#127912; Voice Rewrite</button>'
       +'<button type="button" class="btn btn-navy btn-sm" onclick="pdSaveSection(\''+p.id+'\',\''+activeSec.id+'\')">&#128190; Save</button>'
       +'</div></div>'
@@ -14357,15 +14358,17 @@ function _propBuildDifferentiatorsCtx(p){
 }
 // Shared section-drafting prompt. kbBlock is an optional Knowledge Bank excerpt
 // block injected by the full-proposal generator (empty for single-section draft).
-function _propSectionPrompt(p,s,kbBlock,partnerBlock){
+function _propSectionPrompt(p,s,kbBlock,partnerBlock,opts){
+  var rfpOnly=!!(opts&&opts.rfpOnly);
+  if(rfpOnly){kbBlock='';partnerBlock='';}
   var attribute=!(p.genSources&&p.genSources.attributePartners===false);
   var sys='You are an expert federal proposal writer drafting a single section of a US government RFP response. Output ONLY clean HTML (use <p>, <ul>/<li>, <strong>, <em>, <h3> for subsection headers; no markdown, no code fences, no commentary before or after). Match the brand voice exactly. Develop and professionalize the BusDev brief — never contradict it. Cite past performance accurately — never invent customers, contract values, dates, or metrics that aren\'t in the provided materials.';
   var t=(s.title||'').toLowerCase();
-  var briefCtx=_propBuildBriefCtx(p);
+  var briefCtx=rfpOnly?'':_propBuildBriefCtx(p);
   // Winning examples: sections promoted from won proposals via the Win/Loss
   // debrief. Match on section title; cap at 2 excerpts to protect the budget.
   var winBlock='';
-  if(p.templateId){
+  if(!rfpOnly&&p.templateId){
     var winTpl=(D.proposalTemplates||[]).find(function(x){return x.id===p.templateId;});
     var wins=((winTpl&&winTpl.winningExamples)||[]).filter(function(w){
       var a=String(w.sectionTitle||'').toLowerCase().trim();
@@ -14393,12 +14396,13 @@ function _propSectionPrompt(p,s,kbBlock,partnerBlock){
       return lines.length?'\n\nSHREDDED REQUIREMENTS THIS SECTION MUST FULLY ADDRESS (cover every one explicitly; a compliance reviewer will check each ID against this section):\n'+lines.join('\n'):'';
     })()
     +'\n\nBRAND VOICE:\n'+_propBuildVoiceCtx()
-    +(_propBuildDifferentiatorsCtx(p)?'\n\nDIFFERENTIATORS & WIN THEMES (weave the relevant ones in naturally; do not list them mechanically):\n'+_propBuildDifferentiatorsCtx(p):'')
-    +((t.indexOf('past')>-1||t.indexOf('experience')>-1)?'\n\nPAST PERFORMANCE LIBRARY (use ONLY these — do not invent):\n'+(_propBuildPPCtx(p)||'(none selected; flag this in your output)'):'')
-    +((t.indexOf('cert')>-1||t.indexOf('capabilit')>-1)?'\n\nACTIVE CERTIFICATIONS:\n'+(_propBuildCertCtx(p)||'(none selected)'):'')
+    +(!rfpOnly&&_propBuildDifferentiatorsCtx(p)?'\n\nDIFFERENTIATORS & WIN THEMES (weave the relevant ones in naturally; do not list them mechanically):\n'+_propBuildDifferentiatorsCtx(p):'')
+    +(!rfpOnly&&(t.indexOf('past')>-1||t.indexOf('experience')>-1)?'\n\nPAST PERFORMANCE LIBRARY (use ONLY these — do not invent):\n'+(_propBuildPPCtx(p)||'(none selected; flag this in your output)'):'')
+    +(!rfpOnly&&(t.indexOf('cert')>-1||t.indexOf('capabilit')>-1)?'\n\nACTIVE CERTIFICATIONS:\n'+(_propBuildCertCtx(p)||'(none selected)'):'')
     +(s.evidence&&s.evidence.length?'\n\nREQUIRED EVIDENCE: '+s.evidence.join(', ')+'.':'')
     +(s.pageBudget?'\n\nTARGET LENGTH: roughly '+s.pageBudget+' page'+(s.pageBudget===1?'':'s')+' of professional prose.':'')
     +(s.html&&s.html.trim()?'\n\nEXISTING DRAFT (rewrite/improve this rather than starting fresh):\n'+s.html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').slice(0,2000):'')
+    +(rfpOnly?'\n\nSTRICT SCOPE: Draft this section using ONLY the per-section RFP instruction and the RFP context above (plus the brand voice). Do NOT draw on the BusDev brief, knowledge bank, teaming-partner material, or winning examples. Address every point the RFP requires for this section.':'')
     +(p.customPrompt&&p.customPrompt.trim()?'\n\nPROPOSAL-OWNER CUSTOM INSTRUCTIONS (highest priority — follow these; they override defaults where they conflict):\n'+p.customPrompt.trim():'');
   return {sys:sys,instruction:instruction};
 }
@@ -14747,7 +14751,7 @@ function _propBuildCertCtx(p){
   if(!inc.length)return '';
   return (D.corporateCertifications||[]).filter(function(c){return inc.indexOf(c.id)>-1;}).map(function(c){return '- '+c.name+(c.number?' ('+c.number+')':'');}).join('\n');
 }
-function pdSectionAIDraft(propId,secId){
+function pdSectionAIDraft(propId,secId,rfpOnly){
   var p=(D.proposals||[]).find(function(x){return x.id===propId;});if(!p)return;
   var s=p.sections.find(function(x){return x.id===secId;});if(!s)return;
   // Auto-save current editor first to avoid data loss
@@ -14755,7 +14759,7 @@ function pdSectionAIDraft(propId,secId){
   var llm=_propLLMOpts(p);
   var btn=event&&event.target;if(btn){btn.disabled=true;btn.textContent='✨ Drafting…';}
   _partnerBuildContext(p,function(partnerBlock){
-  var pr=_propSectionPrompt(p,s,'',partnerBlock);
+  var pr=_propSectionPrompt(p,s,'',rfpOnly?'':partnerBlock,{rfpOnly:!!rfpOnly});
   var sys=pr.sys,instruction=pr.instruction;
   llmComplete({provider:llm.provider,model:llm.model,system:sys,messages:[{role:'user',content:instruction}],max_tokens:4000})
     .then(function(j){
