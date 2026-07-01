@@ -7047,7 +7047,7 @@ function _govDiscoveryHTML(){
     +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
     +'<button class="btn btn-gold btn-sm" id="gov_ingest_btn" onclick="govIngestNow()">⟳ Run ingestion now</button>'
     +'<button class="btn btn-outline btn-sm" onclick="govImportModal()">⬆ Import forecast CSV/XLSX</button>'
-    +'<button class="btn btn-outline btn-sm" onclick="govImportGovwinCsv()" title="Upload the GovWin index.csv manifest as a quick top-up. The scheduled local sync handles documents + full automation.">📋 Import GovWin index.csv</button>'
+    +'<button class="btn btn-outline btn-sm" onclick="govImportGovwinCsv()" title="Pick your local Govwin folder (containing index.csv + the per-opportunity document folders). Brings in new opportunities AND uploads their RFP/RFI documents — the server extracts the text so it reads via 📎 Docs. Only files not already stored are uploaded.">📋 Import GovWin folder (opps + docs)</button>'
     +'<button class="btn btn-gold btn-sm" onclick="govScoreAllUnscored()" title="AI Bid/No-Bid assessment for every not-yet-scored opportunity in the current list — one LLM call each, against the RFP docs + Company Profile">⚖ Score unscored</button>'
     +'<button class="btn '+(_govView==='list'?'btn-navy':'btn-outline')+' btn-sm" onclick="_govView=\'list\';renderView()" title="Card list">☰ List</button>'
     +'<button class="btn '+(_govView==='board'?'btn-navy':'btn-outline')+' btn-sm" onclick="_govView=\'board\';renderView()" title="Stage pipeline board">▦ Board</button>'
@@ -7204,14 +7204,22 @@ function govImportModal(){
       return false;
     }});
 }
-// Manual top-up: upload the GovWin index.csv and upsert the opportunities by
-// GovWin id (same endpoint the scheduled local sync uses). Documents are NOT
-// uploaded here — the local sync pushes extracted RFP/RFI text.
+// Manual top-up: pick the local Govwin folder (index.csv + per-opportunity
+// document folders). Upserts the opportunities by GovWin id (same endpoint the
+// scheduled local sync uses), THEN uploads each opportunity's RFP/RFI documents
+// so the server extracts + stores the text (only files not already stored).
 function govImportGovwinCsv(){
-  var inp=document.createElement('input');inp.type='file';inp.accept='.csv,text/csv';
+  var inp=document.createElement('input');inp.type='file';
+  try{inp.webkitdirectory=true;inp.setAttribute('webkitdirectory','');inp.setAttribute('directory','');}catch(e){}
   inp.onchange=function(){
-    var file=inp.files&&inp.files[0];if(!file)return;
-    var st=document.getElementById('gov_status');if(st)st.textContent='Reading '+file.name+'…';
+    var files=inp.files?Array.prototype.slice.call(inp.files):[];
+    if(!files.length)return;
+    var st=document.getElementById('gov_status');
+    var csvs=files.filter(function(f){return /(^|\/)index\.csv$/i.test(f.webkitRelativePath||'')||/^index\.csv$/i.test(f.name);});
+    csvs.sort(function(a,b){return ((a.webkitRelativePath||a.name).split('/').length)-((b.webkitRelativePath||b.name).split('/').length);});
+    var csv=csvs[0];
+    if(!csv){toast('No index.csv found. Pick your Govwin folder (the one containing index.csv + the opportunity subfolders).','error');return;}
+    if(st)st.textContent='Reading '+csv.name+' ('+files.length+' files in folder)…';
     var rd=new FileReader();
     rd.onload=function(){
       try{
@@ -7222,20 +7230,51 @@ function govImportGovwinCsv(){
         if(c.gid<0){toast('That CSV has no GovWinID column — is it the GovWin index.csv?','error');if(st)st.textContent='';return;}
         var opps=rows.map(function(r){return {govwinId:(r[c.gid]||'').trim(),Agency:r[c.ag]||'',Title:r[c.ti]||'',List:r[c.li]||'',Status:r[c.stt]||'',SolicitationDate:r[c.sd]||'',EstValue:r[c.ev]||'',Folder:r[c.fo]||'',Link:r[c.ln]||''};}).filter(function(o){return o.govwinId;});
         if(!opps.length){toast('No rows with a GovWinID found.','warn');if(st)st.textContent='';return;}
-        _govPostGovwin(opps,0,{added:0,updated:0,skipped:0},st);
+        _govPostGovwin(opps,0,{added:0,updated:0,skipped:0},st,function(){_govUploadDocs(files,st);});
       }catch(e){toast('Could not parse CSV: '+e.message,'error');if(st)st.textContent='';}
     };
-    rd.readAsText(file);
+    rd.readAsText(csv);
   };
   inp.click();
 }
-function _govPostGovwin(opps,i,acc,st){
-  if(i>=opps.length){if(st)st.textContent='Imported '+opps.length+' opportunities · '+acc.added+' new, '+acc.updated+' updated. Refreshing…';_govLoad();toast('GovWin import done: '+acc.added+' new, '+acc.updated+' updated.','success');return;}
+function _govPostGovwin(opps,i,acc,st,done){
+  if(i>=opps.length){
+    var msg='Opportunities: '+acc.added+' new, '+acc.updated+' updated.';
+    if(done){if(st)st.textContent=msg+' Checking documents…';done();return;}
+    if(st)st.textContent=msg+' Refreshing…';_govLoad();toast('GovWin import done: '+acc.added+' new, '+acc.updated+' updated.','success');return;}
   var batch=opps.slice(i,i+200);
-  if(st)st.textContent='Importing '+Math.min(i+batch.length,opps.length)+'/'+opps.length+'…';
+  if(st)st.textContent='Importing opportunities '+Math.min(i+batch.length,opps.length)+'/'+opps.length+'…';
   fetch('/api/govwin/ingest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({opportunities:batch})})
-    .then(function(r){return r.json();}).then(function(j){if(j&&!j.error){acc.added+=j.added||0;acc.updated+=j.updated||0;acc.skipped+=j.skipped||0;}else if(j&&j.error){throw new Error(j.error);}_govPostGovwin(opps,i+200,acc,st);})
+    .then(function(r){return r.json();}).then(function(j){if(j&&!j.error){acc.added+=j.added||0;acc.updated+=j.updated||0;acc.skipped+=j.skipped||0;}else if(j&&j.error){throw new Error(j.error);}_govPostGovwin(opps,i+200,acc,st,done);})
     .catch(function(e){toast('Import failed: '+e.message,'error');if(st)st.textContent='';});
+}
+// Upload the documents found in the picked Govwin folder. Each doc file lives in
+// a "<GovWinID> - <Title>" subfolder, so the GovWin id is the leading number of
+// a path segment. Skips files already stored (docs-manifest) and unsupported
+// types; the server extracts PDF/DOCX/XLSX text.
+function _govUploadDocs(files,st){
+  var DOC_RE=/\.(pdf|docx?|xlsx?|csv)$/i,MAXB=25*1024*1024,docs=[];
+  files.forEach(function(f){
+    if(!DOC_RE.test(f.name)||/(^|\/)index\.csv$/i.test(f.webkitRelativePath||'')||f.size>MAXB)return;
+    var gid='';((f.webkitRelativePath||f.name).split('/')).forEach(function(seg){var m=seg.match(/^(\d{4,})\s*[-_ ]/);if(m&&!gid)gid=m[1];});
+    if(gid)docs.push({gid:gid,file:f,name:f.name});
+  });
+  if(!docs.length){if(st)st.textContent+=' · no document files found in the folder.';_govLoad();toast('GovWin opportunities imported (no documents found in folder).','success');return;}
+  fetch('/api/govwin/docs-manifest').then(function(r){return r.json();}).then(function(man){
+    var have={};(Array.isArray(man)?man:[]).forEach(function(d){have[d.govwin_id+'|'+d.name]=1;});
+    var todo=docs.filter(function(d){return !have[d.gid+'|'+d.name];});
+    if(!todo.length){if(st)st.textContent='All '+docs.length+' documents already imported. Refreshing…';_govLoad();toast('GovWin up to date — '+docs.length+' documents already stored.','success');return;}
+    _govUploadDocsRun(todo,0,{ok:0,fail:0},st);
+  }).catch(function(){_govUploadDocsRun(docs,0,{ok:0,fail:0},st);});
+}
+function _govUploadDocsRun(todo,i,acc,st){
+  if(i>=todo.length){if(st)st.textContent='GovWin import complete · '+acc.ok+' document'+(acc.ok===1?'':'s')+' added'+(acc.fail?', '+acc.fail+' failed':'')+'. Refreshing…';_govLoad();toast('GovWin docs imported: '+acc.ok+' file'+(acc.ok===1?'':'s')+(acc.fail?' ('+acc.fail+' failed)':'')+'.','success');return;}
+  var d=todo[i];
+  if(st)st.textContent='Uploading document '+(i+1)+'/'+todo.length+': '+d.name.slice(0,44)+'…';
+  var fd=new FormData();fd.append('file',d.file,d.name);fd.append('name',d.name);
+  fetch('/api/govwin/'+encodeURIComponent(d.gid)+'/docfile',{method:'POST',body:fd})
+    .then(function(r){return r.json();}).then(function(j){if(j&&j.ok)acc.ok++;else acc.fail++;_govUploadDocsRun(todo,i+1,acc,st);})
+    .catch(function(){acc.fail++;_govUploadDocsRun(todo,i+1,acc,st);});
 }
 function _govParseCSV(text){
   var rows=[],row=[],cur='',q=false;

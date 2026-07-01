@@ -1182,6 +1182,38 @@ app.get('/api/govwin/:govwinId/doctext', async (req, res) => {
     res.json(r.rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// Manifest of every stored doc (govwin_id + name) so the in-app importer can
+// skip files it already has and only upload new ones.
+app.get('/api/govwin/docs-manifest', async (req, res) => {
+  try { const r = await pool.query('SELECT govwin_id, name FROM gov_opp_docs'); res.json(r.rows); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+// In-app GovWin document upload: the browser sends a raw RFP/RFI file (from the
+// user's local Govwin folder); the server extracts text (PDF/DOCX/XLSX) and
+// stores it in gov_opp_docs keyed by GovWin id — the same table the local sync
+// tool and the doc viewer use. Binaries are NOT persisted, only extracted text.
+app.post('/api/govwin/:govwinId/docfile', upload.single('file'), async (req, res) => {
+  try {
+    const gid = String(req.params.govwinId || '');
+    const f = req.file;
+    if (!gid || !f) return res.status(400).json({ error: 'missing govwin id or file' });
+    const name = String((req.body && req.body.name) || f.originalname || 'document');
+    const ext = (name.split('.').pop() || '').toLowerCase();
+    let text = '';
+    try {
+      if (ext === 'pdf') { const pdfParse = require('pdf-parse'); const r = await pdfParse(f.buffer); text = String(r.text || ''); }
+      else if (ext === 'docx' || ext === 'doc') { const mammoth = require('mammoth'); const r = await mammoth.extractRawText({ buffer: f.buffer }); text = String((r && r.value) || ''); }
+      else if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') { const XLSX = require('xlsx'); const wb = XLSX.read(f.buffer, { type: 'buffer' }); text = wb.SheetNames.map((n) => XLSX.utils.sheet_to_csv(wb.Sheets[n])).join('\n\n'); }
+    } catch (e) { text = ''; }
+    text = String(text).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, ' ').slice(0, 300000);
+    const kind = /solicit|rfp|rfi|pws|sow|instruction|amend/i.test(name) ? 'solicitation' : 'attachment';
+    const id = 'doc_' + require('crypto').createHash('sha1').update(gid + '|' + name).digest('hex').slice(0, 22);
+    await pool.query(`INSERT INTO gov_opp_docs (id, govwin_id, name, kind, mime, sha, chars, extracted_text) VALUES ($1,$2,$3,$4,$5,'',$6,$7)
+      ON CONFLICT (govwin_id, name) DO UPDATE SET kind=$4, mime=$5, chars=$6, extracted_text=$7`,
+      [id, gid, name, kind, f.mimetype || '', text.length, text]);
+    res.json({ ok: true, name, chars: text.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // ── GovWin Bid/No-Bid AI scoring (Phase 2) ─────────────────────────────────
 // Weighted 9-dimension rubric → composite 0–100 → band. The model returns a
