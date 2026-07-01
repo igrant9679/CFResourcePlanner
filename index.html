@@ -10874,8 +10874,10 @@ var resTab='location';
 function resSetTab(t){resTab=t;renderView();}
 function ptoCanEdit(){return !!(ME&&(ME.role==='admin'||ME.role==='editor'));}
 function renderResourcesView(q){
-  var tabs=[['location','By Location'],['dept','Departments'],['class','Classifications'],['orgchart','Org Chart'],['pto','PTO']];
-  var addBtn=(resTab==='pto'&&ptoCanEdit())?'<button class="btn btn-gold btn-sm" onclick="openPTOModal()">+ Add Time Off</button>':'';
+  var tabs=[['location','By Location'],['dept','Departments'],['class','Classifications'],['orgchart','Org Chart'],['pto','PTO'],['holidays','Holidays']];
+  var addBtn='';
+  if(resTab==='pto'&&ptoCanEdit())addBtn='<button class="btn btn-gold btn-sm" onclick="openPTOModal()">+ Add Time Off</button>';
+  else if(resTab==='holidays'&&ptoCanEdit())addBtn='<button class="btn btn-gold btn-sm" onclick="openHolidayModal()">+ Add Holiday</button>';
   var nav='<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">'
     +'<div class="pf-subtabs">'+tabs.map(function(t){return '<button class="pf-subtab'+(resTab===t[0]?' active':'')+'" onclick="resSetTab(\''+t[0]+'\')">'+t[1]+'</button>';}).join('')+'</div>'
     +'<span style="flex:1"></span>'+addBtn+'</div>';
@@ -10884,6 +10886,7 @@ function renderResourcesView(q){
   else if(resTab==='class')body=renderClassificationView(q);
   else if(resTab==='orgchart')body=renderOrgChartView(q);
   else if(resTab==='pto')body=renderPTOView(q);
+  else if(resTab==='holidays')body=renderHolidaysView(q);
   else body=renderResLocationView(q);
   return nav+body;
 }
@@ -10979,6 +10982,79 @@ function ptoDelete(memberId,entryId){
   var m=memberById(memberId);if(!m)return;
   if(!confirm('Remove this time-off entry?'))return;
   m.pto=(m.pto||[]).filter(function(e){return e.id!==entryId;});
+  save();renderView();
+}
+/* ── COMPANY HOLIDAYS ──
+   Company-wide observed holidays with a region designation (US / India / Both).
+   D.holidays=[{id,name,date,endDate,region,note}]; region ∈ 'us'|'india'|'both'.
+   Recorded alongside PTO; edit gated to admin/editor (ptoCanEdit). */
+var HOL_REGIONS=[{k:'us',l:'US',flag:'🇺🇸',c:'#2563EB'},{k:'india',l:'India',flag:'🇮🇳',c:'#D97706'},{k:'both',l:'US & India',flag:'🌐',c:'#7C3AED'}];
+var holRegionFilter='all';
+function holSetRegion(k){holRegionFilter=k;renderView();}
+function holRegionCfg(k){return HOL_REGIONS.find(function(r){return r.k===k;})||HOL_REGIONS[0];}
+function holRegionChip(k){var r=holRegionCfg(k);return '<span class="plan-chip" style="border-color:'+r.c+';color:'+r.c+';font-weight:700">'+r.flag+' '+r.l+'</span>';}
+function holidaysAll(){return (D.holidays||[]).slice();}
+// A holiday matches a region filter if it's that region or applies to both.
+function holMatchesRegion(h,f){if(f==='all')return true;return h.region===f||h.region==='both';}
+function renderHolidaysView(q){
+  var s=(q||'').toLowerCase();
+  var list=holidaysAll().filter(function(h){
+    if(!holMatchesRegion(h,holRegionFilter))return false;
+    if(!s)return true;
+    return (h.name||'').toLowerCase().indexOf(s)>=0||(h.note||'').toLowerCase().indexOf(s)>=0;
+  });
+  var today=new Date();today.setHours(0,0,0,0);
+  list.sort(function(a,b){return (planParseDate(a.date)||today)-(planParseDate(b.date)||today);});
+  var upcoming=list.filter(function(h){var en=planParseDate(h.endDate||h.date);return en&&en>=today;});
+  var past=list.filter(function(h){var en=planParseDate(h.endDate||h.date);return !en||en<today;});
+  var filterBar='<div class="plan-seg" style="margin-bottom:12px">'
+    +[['all','All'],['us','🇺🇸 US'],['india','🇮🇳 India']].map(function(f){return '<button class="'+(holRegionFilter===f[0]?'active':'')+'" onclick="holSetRegion(\''+f[0]+'\')">'+f[1]+'</button>';}).join('')+'</div>';
+  function row(h){
+    var st=planParseDate(h.date),en=planParseDate(h.endDate||h.date);
+    var active=st&&en&&st<=today&&en>=today;
+    var span=planFmtShort(st)+(en&&!planSameDay(st,en)?' – '+planFmtShort(en):'')+(st?', '+st.getFullYear():'');
+    return '<tr'+(active?' style="background:rgba(124,58,237,0.08)"':'')+'>'
+      +'<td style="text-align:left;font-weight:600">'+esc(h.name||'')+(active?' <span class="rq-sla rq-sla-warn">today</span>':'')+'</td>'
+      +'<td style="text-align:left">'+esc(span)+'</td>'
+      +'<td style="text-align:left">'+holRegionChip(h.region)+'</td>'
+      +'<td style="text-align:left">'+esc(h.note||'')+'</td>'
+      +'<td style="text-align:right">'+(ptoCanEdit()?'<button class="btn btn-sec btn-sm" onclick="openHolidayModal(\''+h.id+'\')">Edit</button> <button class="btn btn-danger-sm btn-sm" onclick="holidayDelete(\''+h.id+'\')">&times;</button>':'')+'</td>'
+      +'</tr>';
+  }
+  function tbl(arr,label){
+    if(!arr.length)return '';
+    return '<div class="pf-card"><div class="pf-card-h">'+label+' ('+arr.length+')</div>'
+      +'<table class="pf-tbl"><thead><tr><th style="text-align:left">Holiday</th><th style="text-align:left">Date</th><th style="text-align:left">Region</th><th style="text-align:left">Note</th><th></th></tr></thead><tbody>'
+      +arr.map(row).join('')+'</tbody></table></div>';
+  }
+  if(!list.length)return filterBar+'<div class="empty-msg">'+(s||holRegionFilter!=='all'?'No company holidays match the current filter.':'No company holidays recorded yet.'+(ptoCanEdit()?' Click <b>+ Add Holiday</b> to record one and designate US, India, or both.':''))+'</div>';
+  return filterBar+tbl(upcoming,'Upcoming &amp; current')+(past.length?'<div style="margin-top:12px"></div>'+tbl(past,'Past'):'');
+}
+function openHolidayModal(id){
+  if(!ptoCanEdit()){alert('You don\'t have permission.');return;}
+  var existing=id?(D.holidays||[]).find(function(h){return h.id===id;}):null;
+  openFormModal({over:'Resources · Holidays',title:existing?'Edit Holiday':'Add Company Holiday',submitLabel:existing?'Save':'Add',
+    fields:[
+      {key:'name',label:'Holiday name',type:'text',required:true,placeholder:'e.g. Independence Day, Diwali',value:existing?(existing.name||''):''},
+      {key:'date',label:'Date',type:'date',required:true,value:existing?existing.date:''},
+      {key:'endDate',label:'End date (optional, multi-day)',type:'date',value:existing?(existing.endDate||''):''},
+      {key:'region',label:'Region observed',type:'select',value:existing?(existing.region||'us'):'us',options:HOL_REGIONS.map(function(r){return {value:r.k,label:r.l};})},
+      {key:'note',label:'Note (optional)',type:'text',placeholder:'e.g. Office closed',value:existing?(existing.note||''):''}
+    ],
+    onSubmit:function(v,files,setStatus){
+      if(!(v.name||'').trim()){setStatus('Holiday name is required.');return false;}
+      if(v.endDate&&planParseDate(v.endDate)&&planParseDate(v.date)&&planParseDate(v.endDate)<planParseDate(v.date)){setStatus('End date must be on or after the date.');return false;}
+      D.holidays=D.holidays||[];
+      if(existing){existing.name=v.name.trim();existing.date=v.date;existing.endDate=(v.endDate||'');existing.region=v.region;existing.note=(v.note||'').trim();}
+      else{D.holidays.push({id:uid(),name:v.name.trim(),date:v.date,endDate:(v.endDate||''),region:v.region,note:(v.note||'').trim()});}
+      save();closeModal('ovForm');toast('Holiday saved.','success');renderView();
+    }
+  });
+}
+function holidayDelete(id){
+  if(!ptoCanEdit())return;
+  if(!confirm('Remove this holiday?'))return;
+  D.holidays=(D.holidays||[]).filter(function(h){return h.id!==id;});
   save();renderView();
 }
 /* ── CLASSIFICATION VIEW ── */
