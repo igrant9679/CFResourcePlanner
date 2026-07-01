@@ -968,10 +968,19 @@ app.get('/api/govops/summary', async (req, res) => {
         count(*) FILTER (WHERE recompete IS NOT NULL)::int AS recompete,
         coalesce(sum(coalesce(value_high, value_low, 0)),0)::bigint AS value_sum
       FROM gov_opportunities WHERE ${where}`, params);
+    // Archived count — always the archived pool matching the other filters,
+    // independent of the current archived-view toggle, so the card shows even
+    // while viewing the active pool.
+    const archAgg = await pool.query(`SELECT count(*)::int AS n FROM gov_opportunities WHERE archived = true
+        AND ($2='' OR title ILIKE '%'||$2||'%' OR description ILIKE '%'||$2||'%' OR solnum ILIKE '%'||$2||'%')
+        AND ($3='' OR agency ILIKE '%'||$3||'%') AND ($4='' OR naics LIKE $4||'%') AND ($5='' OR set_aside ILIKE '%'||$5||'%')
+        AND ($6='' OR lifecycle=$6) AND ($7='' OR stage=$7) AND ($8='' OR recompete IS NOT NULL)
+        AND ($9='' OR ($9='only' AND no_bid=true) OR ($9='hide' AND coalesce(no_bid,false)=false))
+        AND ($10='' OR bid_band=$10)`, params);
     const stages = {};
     byStage.rows.forEach(r => { stages[r.stage] = r.n; });
     const a = agg.rows[0] || {};
-    res.json({ total: a.total || 0, byStage: stages, no_bid: a.no_bid || 0, scored: a.scored || 0, recompete: a.recompete || 0, value_sum: Number(a.value_sum) || 0 });
+    res.json({ total: a.total || 0, byStage: stages, no_bid: a.no_bid || 0, scored: a.scored || 0, recompete: a.recompete || 0, value_sum: Number(a.value_sum) || 0, archived_count: (archAgg.rows[0] && archAgg.rows[0].n) || 0 });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.patch('/api/govops/:id', async (req, res) => {

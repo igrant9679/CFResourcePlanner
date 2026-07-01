@@ -6972,7 +6972,7 @@ function prospectConvert(id){
 /* ── GOV DISCOVERY (Module 1 client) — SAM.gov + forecast imports + recompete
    flags, scored against the Company Profile, feeding the CRM pipeline and the
    proposal workflow. Records live server-side in gov_opportunities. ── */
-var _govState={list:[],loaded:false,busy:false,runs:[],agencies:[],showRuns:false,summary:null,filters:{q:'',agency:'',naics:'',setAside:'',lifecycle:'',stage:'',recompete:'',noBid:'',bidBand:'',archived:''}};
+var _govState={list:[],loaded:false,busy:false,runs:[],agencies:[],showRuns:false,summary:null,filters:{q:'',agency:'',naics:'',setAside:'',lifecycle:'',stage:'',recompete:'',noBid:'hide',bidBand:'',archived:''}};
 var GOV_STAGES=['identified','qualified','capture','proposal','submitted','won','lost'];
 var _govView='list';   // 'list' | 'board' (kanban grouped by stage)
 var GOV_STAGE_C={identified:'#64748b',qualified:'#546478',capture:'#0EA5E9',proposal:'#C5A55A',submitted:'#7C3AED',won:'#16A34A',lost:'#DC2626'};
@@ -7008,7 +7008,8 @@ function _govReportCards(){
   out.push(card('Total opps',s.total,'#1B2A4A',!f.stage,'_govState.filters.stage=\'\';_govLoad()'));
   GOV_STAGES.forEach(function(st){out.push(card(cap(st),(s.byStage&&s.byStage[st])||0,GOV_STAGE_C[st]||'#64748b',f.stage===st,'_govState.filters.stage=\''+st+'\';_govLoad()'));});
   out.push(card('AI-scored',s.scored||0,'#7C3AED',false,''));
-  out.push(card('No Bid',s.no_bid||0,'#DC2626',f.noBid==='only','_govState.filters.noBid=\'only\';_govLoad()'));
+  out.push(card('No Bid',s.no_bid||0,'#DC2626',f.noBid==='only','_govState.filters.noBid=(_govState.filters.noBid===\'only\'?\'hide\':\'only\');_govLoad()'));
+  out.push(card('Archived',s.archived_count||0,'#64748b',f.archived==='1','_govState.filters.archived=(_govState.filters.archived===\'1\'?\'\':\'1\');_govLoad()'));
   out.push(card('Est. value',money(s.value_sum),'#C5A55A',false,''));
   return '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+out.join('')+'</div>';
 }
