@@ -6999,20 +6999,32 @@ function _govReportCards(){
   var f=_govState.filters;
   function money(n){n=Number(n)||0;if(n>=1e9)return '$'+(n/1e9).toFixed(1)+'B';if(n>=1e6)return '$'+(n/1e6).toFixed(1)+'M';if(n>=1e3)return '$'+Math.round(n/1e3)+'K';return '$'+n;}
   function cap(x){return String(x).charAt(0).toUpperCase()+String(x).slice(1);}
-  function card(label,val,color,active,onclick){
-    return '<div'+(onclick?' onclick="'+onclick+'"':'')+' style="'+(onclick?'cursor:pointer;':'')+'flex:1 1 92px;min-width:92px;border:1px solid '+(active?color:'var(--border)')+';border-top:3px solid '+color+';border-radius:8px;padding:7px 10px;background:'+(active?'#F8FAFC':'#fff')+'">'
+  function card(label,val,color,active,onclick,o){o=o||{};var minw=o.minw||92;
+    return '<div'+(onclick?' onclick="'+onclick+'"':'')+' style="'+(onclick?'cursor:pointer;':'')+'flex:1 1 '+minw+'px;min-width:'+minw+'px;'+(o.maxw?'max-width:'+o.maxw+'px;':'')+'border:1px solid '+(active?color:'var(--border)')+';border-top:3px solid '+color+';border-radius:8px;padding:7px 10px;background:'+(active?'#F8FAFC':'#fff')+'"'+(o.title?' title="'+o.title+'"':'')+'>'
       +'<div style="font-size:19px;font-weight:800;color:var(--text-primary);line-height:1.1">'+val+'</div>'
-      +'<div style="font-size:10px;text-transform:uppercase;letter-spacing:.3px;color:var(--text-muted);margin-top:2px">'+esc(label)+'</div></div>';
+      +'<div style="font-size:10px;'+(o.upper===false?'':'text-transform:uppercase;')+'letter-spacing:.3px;color:var(--text-muted);margin-top:2px;line-height:1.25">'+esc(label)+'</div></div>';
   }
-  var out=[];
-  out.push(card('Total opps',s.total,'#1B2A4A',!f.stage,'_govState.filters.stage=\'\';_govLoad()'));
-  GOV_STAGES.forEach(function(st){out.push(card(cap(st),(s.byStage&&s.byStage[st])||0,GOV_STAGE_C[st]||'#64748b',f.stage===st,'_govState.filters.stage=\''+st+'\';_govLoad()'));});
-  out.push(card('AI-scored',s.scored||0,'#7C3AED',false,''));
-  out.push(card('No Bid',s.no_bid||0,'#DC2626',f.noBid==='only','_govState.filters.noBid=(_govState.filters.noBid===\'only\'?\'hide\':\'only\');_govLoad()'));
-  out.push(card('Archived',s.archived_count||0,'#64748b',f.archived==='1','_govState.filters.archived=(_govState.filters.archived===\'1\'?\'\':\'1\');_govLoad()'));
-  out.push(card('Est. value',money(s.value_sum),'#C5A55A',false,''));
-  return '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+out.join('')+'</div>';
+  function section(lbl,cards){if(!cards.length)return '';return '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);font-weight:700;margin:2px 0 6px">'+lbl+'</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+cards.join('')+'</div>';}
+  // ── pipeline strip ──
+  var main=[];
+  main.push(card('Total opps',s.total,'#1B2A4A',!f.stage,'_govState.filters.stage=\'\';_govLoad()'));
+  GOV_STAGES.forEach(function(st){main.push(card(cap(st),(s.byStage&&s.byStage[st])||0,GOV_STAGE_C[st]||'#64748b',f.stage===st,'_govState.filters.stage=(_govState.filters.stage===\''+st+'\'?\'\':\''+st+'\');_govLoad()'));});
+  main.push(card('AI-scored',s.scored||0,'#7C3AED',false,''));
+  main.push(card('No Bid',s.no_bid||0,'#DC2626',f.noBid==='only','_govState.filters.noBid=(_govState.filters.noBid===\'only\'?\'hide\':\'only\');_govLoad()'));
+  main.push(card('Archived',s.archived_count||0,'#64748b',f.archived==='1','_govState.filters.archived=(_govState.filters.archived===\'1\'?\'\':\'1\');_govLoad()'));
+  main.push(card('Est. value',money(s.value_sum),'#C5A55A',false,''));
+  var html='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+main.join('')+'</div>';
+  // ── by lifecycle (click to filter; click again to clear) ──
+  var LC=['forecast','sources-sought','presolicitation','solicitation','special'];
+  var LCC={'forecast':'#64748b','sources-sought':'#0EA5E9','presolicitation':'#7C3AED','solicitation':'#C5A55A','special':'#0891B2'};
+  var lifeCards=LC.map(function(l){return card(l,(s.byLifecycle&&s.byLifecycle[l])||0,LCC[l]||'#64748b',f.lifecycle===l,'_govState.filters.lifecycle=(_govState.filters.lifecycle===\''+l+'\'?\'\':\''+l+'\');_govLoad()');});
+  html+=section('By lifecycle',lifeCards);
+  // ── by agency (top 12; click to filter; click again to clear) ──
+  var agCards=(s.byAgency||[]).map(function(x,i){return card(x.v,x.n,'#2563EB',f.agency===x.v,'govFilterAgencyIdx('+i+')',{minw:130,maxw:210,upper:false,title:esc(String(x.v)).replace(/"/g,'&quot;')});});
+  html+=section('By agency'+((s.byAgency&&s.byAgency.length>=12)?' (top 12)':''),agCards);
+  return html;
 }
+function govFilterAgencyIdx(i){var s=_govState.summary;if(!s||!s.byAgency||!s.byAgency[i])return;var v=s.byAgency[i].v;_govState.filters.agency=(_govState.filters.agency===v?'':v);_govLoad();}
 function _govDiscoveryHTML(){
   var f=_govState.filters,list=_govState.list;
   var html='<div class="plan-wrap">';

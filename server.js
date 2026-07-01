@@ -984,10 +984,19 @@ app.get('/api/govops/summary', async (req, res) => {
         WHERE archived = ($1='1') AND coalesce(naics,'') <> '' GROUP BY naics ORDER BY n DESC, naics`, [q.archived || '']);
     const setAsideList = await pool.query(`SELECT set_aside AS v, count(*)::int AS n FROM gov_opportunities
         WHERE archived = ($1='1') AND coalesce(set_aside,'') <> '' GROUP BY set_aside ORDER BY n DESC, set_aside`, [q.archived || '']);
+    // Lifecycle / agency breakdowns — each neutralizes its OWN self-filter (by
+    // blanking that param) so its card group stays complete and switchable while
+    // still respecting every other active filter.
+    const lifecycleParams = params.slice(); lifecycleParams[5] = '';   // $6 = lifecycle
+    const agencyParams = params.slice(); agencyParams[2] = '';         // $3 = agency
+    const byLifecycle = await pool.query(`SELECT coalesce(nullif(lifecycle,''),'?') AS v, count(*)::int AS n FROM gov_opportunities WHERE ${where} GROUP BY 1`, lifecycleParams);
+    const byAgency = await pool.query(`SELECT coalesce(nullif(agency,''),'(unknown)') AS v, count(*)::int AS n FROM gov_opportunities WHERE ${where} GROUP BY 1 ORDER BY n DESC, v LIMIT 12`, agencyParams);
     const stages = {};
     byStage.rows.forEach(r => { stages[r.stage] = r.n; });
+    const lifecycles = {};
+    byLifecycle.rows.forEach(r => { lifecycles[r.v] = r.n; });
     const a = agg.rows[0] || {};
-    res.json({ total: a.total || 0, byStage: stages, no_bid: a.no_bid || 0, scored: a.scored || 0, recompete: a.recompete || 0, value_sum: Number(a.value_sum) || 0, archived_count: (archAgg.rows[0] && archAgg.rows[0].n) || 0, naics: naicsList.rows, setAside: setAsideList.rows });
+    res.json({ total: a.total || 0, byStage: stages, no_bid: a.no_bid || 0, scored: a.scored || 0, recompete: a.recompete || 0, value_sum: Number(a.value_sum) || 0, archived_count: (archAgg.rows[0] && archAgg.rows[0].n) || 0, naics: naicsList.rows, setAside: setAsideList.rows, byLifecycle: lifecycles, byAgency: byAgency.rows });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.patch('/api/govops/:id', async (req, res) => {
