@@ -972,11 +972,11 @@ app.get('/api/govops/summary', async (req, res) => {
     // independent of the current archived-view toggle, so the card shows even
     // while viewing the active pool.
     const archAgg = await pool.query(`SELECT count(*)::int AS n FROM gov_opportunities WHERE archived = true
-        AND ($2='' OR title ILIKE '%'||$2||'%' OR description ILIKE '%'||$2||'%' OR solnum ILIKE '%'||$2||'%')
-        AND ($3='' OR agency ILIKE '%'||$3||'%') AND ($4='' OR naics LIKE $4||'%') AND ($5='' OR set_aside ILIKE '%'||$5||'%')
-        AND ($6='' OR lifecycle=$6) AND ($7='' OR stage=$7) AND ($8='' OR recompete IS NOT NULL)
-        AND ($9='' OR ($9='only' AND no_bid=true) OR ($9='hide' AND coalesce(no_bid,false)=false))
-        AND ($10='' OR bid_band=$10)`, params);
+        AND ($1='' OR title ILIKE '%'||$1||'%' OR description ILIKE '%'||$1||'%' OR solnum ILIKE '%'||$1||'%')
+        AND ($2='' OR agency ILIKE '%'||$2||'%') AND ($3='' OR naics LIKE $3||'%') AND ($4='' OR set_aside ILIKE '%'||$4||'%')
+        AND ($5='' OR lifecycle=$5) AND ($6='' OR stage=$6) AND ($7='' OR recompete IS NOT NULL)
+        AND ($8='' OR ($8='only' AND no_bid=true) OR ($8='hide' AND coalesce(no_bid,false)=false))
+        AND ($9='' OR bid_band=$9)`, params.slice(1));
     const stages = {};
     byStage.rows.forEach(r => { stages[r.stage] = r.n; });
     const a = agg.rows[0] || {};
