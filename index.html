@@ -6954,7 +6954,9 @@ function prospectConvert(id){
 /* ── GOV DISCOVERY (Module 1 client) — SAM.gov + forecast imports + recompete
    flags, scored against the Company Profile, feeding the CRM pipeline and the
    proposal workflow. Records live server-side in gov_opportunities. ── */
-var _govState={list:[],loaded:false,busy:false,runs:[],agencies:[],showRuns:false,summary:null,filters:{q:'',agency:'',naics:'',setAside:'',lifecycle:'',stage:'',recompete:'',noBid:'hide',bidBand:'',archived:''}};
+var _govState={list:[],loaded:false,busy:false,runs:[],agencies:[],showRuns:false,summary:null,filters:{q:'',agency:'',naics:'',setAside:'',lifecycle:'',stage:'',recompete:'',noBid:'hide',bidBand:'',archived:'',due:''}};
+var _govSummaryOpen=false;
+function govToggleSummary(){_govSummaryOpen=!_govSummaryOpen;renderView();}
 var GOV_STAGES=['identified','qualified','capture','proposal','submitted','won','lost'];
 var _govView='list';   // 'list' | 'board' (kanban grouped by stage)
 var GOV_STAGE_C={identified:'#64748b',qualified:'#546478',capture:'#0EA5E9',proposal:'#C5A55A',submitted:'#7C3AED',won:'#16A34A',lost:'#DC2626'};
@@ -6996,6 +6998,13 @@ function _govReportCards(){
   main.push(card('Archived',s.archived_count||0,'#64748b',f.archived==='1','_govState.filters.archived=(_govState.filters.archived===\'1\'?\'\':\'1\');_govLoad()'));
   main.push(card('Est. value',money(s.value_sum),'#C5A55A',false,''));
   var html='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+main.join('')+'</div>';
+  // ── by response deadline (days until due; click to filter, click again to clear) ──
+  var dueCards=[
+    card('Due ≤30 days',s.due30||0,'#DC2626',f.due==='30','_govState.filters.due=(_govState.filters.due===\'30\'?\'\':\'30\');_govLoad()'),
+    card('Due 30–60 days',s.due3060||0,'#D97706',f.due==='3060','_govState.filters.due=(_govState.filters.due===\'3060\'?\'\':\'3060\');_govLoad()'),
+    card('Due 60+ days',s.due60||0,'#16A34A',f.due==='60','_govState.filters.due=(_govState.filters.due===\'60\'?\'\':\'60\');_govLoad()')
+  ];
+  html+=section('By response deadline',dueCards);
   // ── by lifecycle (click to filter; click again to clear) ──
   var LC=['forecast','sources-sought','presolicitation','solicitation','special'];
   var LCC={'forecast':'#64748b','sources-sought':'#0EA5E9','presolicitation':'#7C3AED','solicitation':'#C5A55A','special':'#0891B2'};
@@ -7007,6 +7016,24 @@ function _govReportCards(){
   return html;
 }
 function govFilterAgencyIdx(i){var s=_govState.summary;if(!s||!s.byAgency||!s.byAgency[i])return;var v=s.byAgency[i].v;_govState.filters.agency=(_govState.filters.agency===v?'':v);_govLoad();}
+// Active-filter chips — shown in the summary bar so the user always sees what's
+// narrowing the list (even with the cards collapsed); each chip clears its filter.
+function _govActiveFilterChips(){
+  var f=_govState.filters,chips=[];
+  function chip(label,clearJs){return '<span class="plan-chip" style="border-color:var(--navy);color:var(--navy);cursor:pointer" onclick="'+clearJs+'" title="Click to clear">'+esc(label)+' ✕</span>';}
+  if(f.q)chips.push(chip('“'+f.q+'”',"_govState.filters.q='';_govLoad()"));
+  if(f.stage)chips.push(chip('stage: '+f.stage,"_govState.filters.stage='';_govLoad()"));
+  if(f.lifecycle)chips.push(chip('lifecycle: '+f.lifecycle,"_govState.filters.lifecycle='';_govLoad()"));
+  if(f.agency)chips.push(chip('agency: '+f.agency.slice(0,22),"_govState.filters.agency='';_govLoad()"));
+  if(f.naics)chips.push(chip('NAICS: '+f.naics,"_govState.filters.naics='';_govLoad()"));
+  if(f.setAside)chips.push(chip('set-aside: '+f.setAside,"_govState.filters.setAside='';_govLoad()"));
+  if(f.due)chips.push(chip('due: '+({'30':'≤30d','3060':'30–60d','60':'60+d'}[f.due]||f.due),"_govState.filters.due='';_govLoad()"));
+  if(f.bidBand)chips.push(chip('bid: '+f.bidBand,"_govState.filters.bidBand='';_govLoad()"));
+  if(f.recompete)chips.push(chip('recompetes',"_govState.filters.recompete='';_govLoad()"));
+  if(f.noBid==='only')chips.push(chip('only No-Bid',"_govState.filters.noBid='hide';_govLoad()"));
+  if(f.archived==='1')chips.push(chip('archived',"_govState.filters.archived='';_govLoad()"));
+  return chips.length?('<span style="font-size:11px;color:var(--text-muted)">Filters:</span> '+chips.join(' ')):'';
+}
 function _govDiscoveryHTML(){
   var f=_govState.filters,list=_govState.list;
   var html='<div class="plan-wrap">';
@@ -7025,7 +7052,14 @@ function _govDiscoveryHTML(){
     +'<button class="btn btn-outline btn-sm" onclick="_govState.showRuns=!_govState.showRuns;renderView()">'+(_govState.showRuns?'Hide':'Show')+' ingestion log</button>'
     +'</div></div>'
     +'<div id="gov_status" style="font-size:11px;color:#7C3AED;margin-top:6px;min-height:14px"></div></div>';
-  html+=_govReportCards();
+  var _s=_govState.summary;
+  var _headline=_s?('<b>'+_s.total+'</b> shown · <b style="color:#DC2626">'+(_s.due30||0)+'</b> due ≤30d · <b style="color:#D97706">'+(_s.due3060||0)+'</b> 30–60d · <b>'+(_s.no_bid||0)+'</b> No&nbsp;Bid · <b>'+(_s.archived_count||0)+'</b> archived'):'Loading summary…';
+  html+='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:#F8FAFC">'
+    +'<button class="btn '+(_govSummaryOpen?'btn-navy':'btn-outline')+' btn-sm" onclick="govToggleSummary()">'+(_govSummaryOpen?'▾ Hide summary cards':'▸ Summary &amp; filter cards')+'</button>'
+    +'<span style="font-size:12px;color:var(--text-secondary)">'+_headline+'</span>'
+    +'<span style="flex:1"></span>'+_govActiveFilterChips()
+    +'</div>';
+  if(_govSummaryOpen)html+=_govReportCards();
   if(_govState.showRuns){
     html+='<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;font-size:11px"><b>Ingestion runs</b> (every run logs source, fetched, new, updated, errors — failures are per-source and never silently dropped)<br>'
       +(_govState.runs.slice(0,12).map(function(r){

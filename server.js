@@ -1016,6 +1016,14 @@ setInterval(async () => {
   } catch (e) { console.error('[govops] scheduler error:', e.message); }
 }, 3600000);
 
+// Parse the (mixed-format) est_solicitation_date text into a real date so we can
+// bucket by "days until due". Strict regexes keep invalid month/day out of
+// to_date. Handles YYYY-MM-DD, MM/DD/YYYY, and MM/YYYY; anything else → NULL.
+const GOV_DL = "(CASE "
+  + "WHEN est_solicitation_date ~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])' THEN to_date(substr(est_solicitation_date,1,10),'YYYY-MM-DD') "
+  + "WHEN est_solicitation_date ~ '^(0?[1-9]|1[0-2])/(0?[1-9]|[12][0-9]|3[01])/[0-9]{4}' THEN to_date(substring(est_solicitation_date from '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}'),'MM/DD/YYYY') "
+  + "WHEN est_solicitation_date ~ '^(0?[1-9]|1[0-2])/[0-9]{4}' THEN to_date(substring(est_solicitation_date from '^[0-9]{1,2}/[0-9]{4}'),'MM/YYYY') "
+  + "ELSE NULL END)";
 app.get('/api/govops', async (req, res) => {
   try {
     const q = req.query;
@@ -1031,8 +1039,11 @@ app.get('/api/govops', async (req, res) => {
          AND ($6='' OR lifecycle=$6) AND ($7='' OR stage=$7) AND ($8='' OR recompete IS NOT NULL)
          AND ($11='' OR ($11='only' AND no_bid=true) OR ($11='hide' AND coalesce(no_bid,false)=false))
          AND ($12='' OR bid_band=$12)
+         AND ($13='' OR (CASE WHEN $13='30' THEN ${GOV_DL} >= current_date AND ${GOV_DL} <= current_date+30
+                              WHEN $13='3060' THEN ${GOV_DL} > current_date+30 AND ${GOV_DL} <= current_date+60
+                              WHEN $13='60' THEN ${GOV_DL} > current_date+60 ELSE true END))
        ORDER BY score DESC, last_updated DESC LIMIT $9 OFFSET $10`,
-      [q.archived || '', q.q || '', q.agency || '', q.naics || '', q.setAside || '', q.lifecycle || '', q.stage || '', q.recompete || '', Math.min(Number(q.limit) || 100, 300), Number(q.offset) || 0, q.noBid || '', q.bidBand || '']
+      [q.archived || '', q.q || '', q.agency || '', q.naics || '', q.setAside || '', q.lifecycle || '', q.stage || '', q.recompete || '', Math.min(Number(q.limit) || 100, 300), Number(q.offset) || 0, q.noBid || '', q.bidBand || '', q.due || '']
     );
     res.json(r.rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1054,6 +1065,9 @@ app.get('/api/govops/summary', async (req, res) => {
         count(*) FILTER (WHERE coalesce(no_bid,false))::int AS no_bid,
         count(*) FILTER (WHERE bid_band IS NOT NULL AND bid_band<>'')::int AS scored,
         count(*) FILTER (WHERE recompete IS NOT NULL)::int AS recompete,
+        count(*) FILTER (WHERE ${GOV_DL} >= current_date AND ${GOV_DL} <= current_date+30)::int AS due30,
+        count(*) FILTER (WHERE ${GOV_DL} > current_date+30 AND ${GOV_DL} <= current_date+60)::int AS due3060,
+        count(*) FILTER (WHERE ${GOV_DL} > current_date+60)::int AS due60,
         coalesce(sum(coalesce(value_high, value_low, 0)),0)::bigint AS value_sum
       FROM gov_opportunities WHERE ${where}`, params);
     // Archived count — always the archived pool matching the other filters,
@@ -1084,7 +1098,7 @@ app.get('/api/govops/summary', async (req, res) => {
     const lifecycles = {};
     byLifecycle.rows.forEach(r => { lifecycles[r.v] = r.n; });
     const a = agg.rows[0] || {};
-    res.json({ total: a.total || 0, byStage: stages, no_bid: a.no_bid || 0, scored: a.scored || 0, recompete: a.recompete || 0, value_sum: Number(a.value_sum) || 0, archived_count: (archAgg.rows[0] && archAgg.rows[0].n) || 0, naics: naicsList.rows, setAside: setAsideList.rows, byLifecycle: lifecycles, byAgency: byAgency.rows });
+    res.json({ total: a.total || 0, byStage: stages, no_bid: a.no_bid || 0, scored: a.scored || 0, recompete: a.recompete || 0, value_sum: Number(a.value_sum) || 0, archived_count: (archAgg.rows[0] && archAgg.rows[0].n) || 0, naics: naicsList.rows, setAside: setAsideList.rows, byLifecycle: lifecycles, byAgency: byAgency.rows, due30: a.due30 || 0, due3060: a.due3060 || 0, due60: a.due60 || 0 });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.patch('/api/govops/:id', async (req, res) => {
