@@ -13491,7 +13491,53 @@ function _pdFilesHTML(p){
     +'<input type="file" id="pd_rfp_file" accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="font-size:11px">'
     +'<button type="button" id="pd_rfp_upbtn" class="btn btn-navy btn-sm" onclick="pdUploadRFP(\''+p.id+'\')">Upload &amp; Extract</button>'
     +'<span id="pd_rfp_upstatus" style="font-size:11px;color:#7C3AED"></span>'
-    +'</div></div>';
+    +'</div></div>'
+    +(rfp.sourceAttachmentId?(
+       '<div style="margin-top:12px;border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--page-bg)">'
+       +'<div style="font-size:11px;font-weight:700;margin-bottom:4px">&#129513; Build proposal sections from the RFP</div>'
+       +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Extract the proposal\'s required section structure straight from this RFP (Section L / volumes / numbered response requirements). Each becomes a draftable section carrying its own RFP instruction — then generate a response for any section from that content on the <b>Sections</b> tab.</div>'
+       +'<div class="fld" style="margin-bottom:8px"><label class="fld-l">&#10022; Custom AI instructions <span style="font-weight:400;color:var(--text-muted);font-size:10px">— optional; applied to every drafted section, and used to scope which sections to draft. e.g. &ldquo;Generate a response for Sections 1.2 and 1.4 only.&rdquo;</span></label>'
+       +'<textarea class="fld-i" id="pd_rfp_custom" rows="2" placeholder="e.g. Generate a response for Sections 1.2 and 1.4 only." onchange="pdSaveCustomPromptVal(\''+p.id+'\',this.value)">'+esc(p.customPrompt||'')+'</textarea></div>'
+       +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+       +'<button type="button" id="pd_rfp_secbtn" class="btn btn-gold btn-sm" onclick="pdExtractSectionsFromRFP(\''+p.id+'\')">&#129513; Extract sections from RFP</button>'
+       +'<span id="pd_rfp_secstatus" style="font-size:11px;color:#7C3AED"></span></div>'
+       +((p.sections&&p.sections.length)?'<div style="font-size:10px;color:var(--text-muted);margin-top:6px">This proposal already has <b>'+p.sections.length+'</b> section'+(p.sections.length===1?'':'s')+' — extracting will offer to replace them.</div>':'')
+       +'</div>'
+     ):'');
+}
+function pdSaveCustomPromptVal(id,val){var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;p.customPrompt=String(val||'');save();}
+// Extract the RFP's own required section structure into draftable proposal
+// sections. Each section carries the RFP's per-section instruction as its
+// templatePrompt, so pdSectionAIDraft generates a response grounded in the
+// extracted content. If the custom prompt names sections, auto-scope to them.
+function pdExtractSectionsFromRFP(id){
+  var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
+  if(!(p.rfp&&p.rfp.sourceAttachmentId)){alert('Upload an RFP first (Upload & Extract above).');return;}
+  if(p.sections&&p.sections.length&&!confirm('Replace the current '+p.sections.length+' section'+(p.sections.length===1?'':'s')+' with sections extracted from the RFP?\n\nAny drafted content in the current sections will be cleared.'))return;
+  var btn=document.getElementById('pd_rfp_secbtn');if(btn)btn.disabled=true;
+  function status(m){var el=document.getElementById('pd_rfp_secstatus');if(el)el.textContent=m;}
+  status('Extracting the RFP section structure with AI…');
+  var sys='You are a federal proposal manager. You read a solicitation/RFP and identify the EXACT ordered list of sections the offeror\'s proposal must contain. Prefer Section L (Instructions to Offerors), the required volume/section outline, or the numbered response requirements. Preserve the RFP\'s own numbering and titles. Return ONLY valid JSON.';
+  var instruction='From this RFP, extract the ordered list of sections the offeror must write. For each section return: "number" (the RFP\'s label/number, e.g. "1.2", "L.3.1", or "Volume I"), "title" (the section name), "instruction" (a concise but complete description of exactly what the offeror must address in this section — quote or closely paraphrase the RFP\'s requirement, including specific content items, evaluation factors, and compliance points), and "pageBudget" (integer page limit if the RFP states one for this section, else 0). Return JSON only: {"sections":[{"number":"","title":"","instruction":"","pageBudget":0}]}. Include every distinct required section; do not invent sections the RFP does not call for.';
+  var llm=_propLLMOpts(p);
+  llmDocComplete({attachmentId:p.rfp.sourceAttachmentId,provider:llm.provider||undefined,model:llm.model||undefined,system:sys,instruction:instruction,max_tokens:4000})
+    .then(function(j){
+      var ex=llmExtractJSON(j);
+      var list=ex&&(ex.sections||ex.list||(Array.isArray(ex)?ex:null));
+      if(!list||!list.length)throw new Error('The AI did not return any sections. Check the RFP has an instructions/section-list section, or try again.');
+      p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)throw new Error('Proposal no longer exists.');
+      p.sections=list.slice(0,60).map(function(s){
+        var num=String((s&&s.number)||'').trim(),ttl=String((s&&s.title)||'').trim()||'Section';
+        return {id:uid(),title:(num?num+' ':'')+ttl,source:'ai',pageBudget:Number(s&&s.pageBudget)||0,html:'',draftedAt:0,draftedBy:'',draftedWith:{provider:'',model:''},templatePrompt:String((s&&s.instruction)||'').slice(0,4000),evidence:[],include:true,rfpDerived:true};
+      });
+      p.sectionsSource='rfp';
+      p.events=p.events||[];p.events.push({ts:Date.now(),actorId:ME?ME.id:'',actorName:ME?ME.name:'—',type:'sections.extractedFromRFP',payload:{count:p.sections.length}});
+      var scoped=0;
+      if(p.customPrompt&&p.customPrompt.trim()){var mm=_propSectionsMatchingPrompt(p,p.customPrompt);if(mm.ids.length){p.sections.forEach(function(s){s.include=mm.ids.indexOf(s.id)>-1;});scoped=mm.ids.length;}}
+      save();renderProposalDetail(id);renderView();
+      toast('Extracted '+p.sections.length+' section'+(p.sections.length===1?'':'s')+' from the RFP'+(scoped?' · scoped to '+scoped+' per your instructions':'')+'. Open the Sections tab to draft.','success');
+    })
+    .catch(function(e){if(btn)btn.disabled=false;status('');alert('Section extraction failed: '+(e&&e.message||e));});
 }
 function pdUploadRFP(id){
   var p=(D.proposals||[]).find(function(x){return x.id===id;});if(!p)return;
@@ -14198,10 +14244,11 @@ function pdScopeSectionsFromPrompt(id){
 }
 function _pdSectionsHTML(p,tpl){
   if(!p.sections||!p.sections.length){
+    var rfpExtract=(p.rfp&&p.rfp.sourceAttachmentId)?'<div style="margin-top:10px"><button class="btn btn-gold" onclick="pdExtractSectionsFromRFP(\''+p.id+'\')">&#129513; Extract sections from the RFP</button><div style="font-size:10px;color:var(--text-muted);margin-top:4px">Builds the section list from the RFP\'s own structure — each section is drafted from its extracted requirement.</div></div>':'<div style="font-size:11px;color:var(--text-muted);margin-top:8px">Or attach an RFP on the <b>Files</b> tab and extract its sections automatically.</div>';
     if(!p.templateId){
-      return '<div class="empty-recruit"><div style="font-size:13px;margin-bottom:6px">No template linked</div><div style="font-size:11px">Pick a template in Settings (or create the proposal again with a template) to populate the section list.</div></div>';
+      return '<div class="empty-recruit"><div style="font-size:13px;margin-bottom:6px">No sections yet</div><div style="font-size:11px">Pick a template in Settings to populate a standard section list — or extract the sections straight from the RFP.</div>'+rfpExtract+'</div>';
     }
-    return '<div class="empty-recruit"><div style="font-size:13px;margin-bottom:8px">Sections not initialized yet</div><div style="font-size:11px;margin-bottom:10px">Initialize this proposal\'s sections from the linked template (<b>'+esc((tpl&&tpl.name)||'unknown')+'</b>). You can edit each section after.</div><button class="btn btn-gold" onclick="pdInitSectionsFromTemplate(\''+p.id+'\')">Initialize Sections from Template</button></div>';
+    return '<div class="empty-recruit"><div style="font-size:13px;margin-bottom:8px">Sections not initialized yet</div><div style="font-size:11px;margin-bottom:10px">Initialize from the linked template (<b>'+esc((tpl&&tpl.name)||'unknown')+'</b>), or extract the sections straight from the RFP. You can edit each section after.</div><button class="btn btn-gold" onclick="pdInitSectionsFromTemplate(\''+p.id+'\')">Initialize from Template</button>'+rfpExtract+'</div>';
   }
   if(!_pdActiveSection||!p.sections.find(function(s){return s.id===_pdActiveSection;}))_pdActiveSection=p.sections[0].id;
   var activeSec=p.sections.find(function(s){return s.id===_pdActiveSection;});
@@ -14261,6 +14308,7 @@ function _pdSectionsHTML(p,tpl){
     +'<div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap">'
     +'<button type="button" class="btn btn-navy btn-sm" onclick="pdSaveCustomPrompt(\''+p.id+'\')">&#128190; Save instructions</button>'
     +'<button type="button" class="btn btn-outline btn-sm" onclick="pdScopeSectionsFromPrompt(\''+p.id+'\')" title="Tick only the sections your instructions reference (by number or title); the rest are excluded from generation and the assembled proposal">&#8627; Select sections from prompt</button>'
+    +((p.rfp&&p.rfp.sourceAttachmentId)?'<button type="button" class="btn btn-outline btn-sm" onclick="pdExtractSectionsFromRFP(\''+p.id+'\')" title="Rebuild the section list from the RFP\'s own structure — each section is drafted from its extracted requirement">&#129513; Extract sections from RFP</button>':'')
     +'<span id="pd_custom_msg" style="font-size:11px;color:var(--green)"></span>'
     +'</div></div>'
     +'<div class="sec-layout">'
