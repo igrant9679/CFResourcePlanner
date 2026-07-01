@@ -6972,7 +6972,7 @@ function prospectConvert(id){
 /* ── GOV DISCOVERY (Module 1 client) — SAM.gov + forecast imports + recompete
    flags, scored against the Company Profile, feeding the CRM pipeline and the
    proposal workflow. Records live server-side in gov_opportunities. ── */
-var _govState={list:[],loaded:false,busy:false,runs:[],agencies:[],showRuns:false,filters:{q:'',agency:'',naics:'',setAside:'',lifecycle:'',stage:'',recompete:'',noBid:'',bidBand:''}};
+var _govState={list:[],loaded:false,busy:false,runs:[],agencies:[],showRuns:false,filters:{q:'',agency:'',naics:'',setAside:'',lifecycle:'',stage:'',recompete:'',noBid:'',bidBand:'',archived:''}};
 var GOV_STAGES=['identified','qualified','capture','proposal','submitted','won','lost'];
 var _govView='list';   // 'list' | 'board' (kanban grouped by stage)
 var GOV_STAGE_C={identified:'#64748b',qualified:'#546478',capture:'#0EA5E9',proposal:'#C5A55A',submitted:'#7C3AED',won:'#16A34A',lost:'#DC2626'};
@@ -7027,9 +7027,11 @@ function _govDiscoveryHTML(){
     +'<label style="font-size:11px;display:inline-flex;gap:4px;align-items:center"><input type="checkbox" '+(f.recompete?'checked':'')+' onchange="_govState.filters.recompete=this.checked?\'1\':\'\';_govLoad()"> recompetes</label>'
     +'<select class="fld-sel" style="width:auto" onchange="_govState.filters.noBid=this.value;_govLoad()" title="Show, hide, or isolate opportunities marked No Bid"><option value="">No Bid: show all</option><option value="hide"'+(f.noBid==='hide'?' selected':'')+'>Hide No Bid</option><option value="only"'+(f.noBid==='only'?' selected':'')+'>Only No Bid</option></select>'
     +'<select class="fld-sel" style="width:auto" onchange="_govState.filters.bidBand=this.value;_govLoad()" title="Filter by AI Bid/No-Bid band"><option value="">Bid band: any</option>'+['Bid','Likely Bid','Review','No-Bid'].map(function(b){return '<option'+(f.bidBand===b?' selected':'')+'>'+b+'</option>';}).join('')+'</select>'
+    +'<select class="fld-sel" style="width:auto" onchange="_govState.filters.archived=this.value;_govLoad()" title="View the active pipeline or the archive"><option value="">Active only</option><option value="1"'+(f.archived==='1'?' selected':'')+'>🗄 Only archived</option></select>'
     +'<button class="btn btn-outline btn-sm" onclick="govSaveSearch()">★ Save search</button>'
     +(gp.searches||[]).map(function(s){return '<span class="plan-chip" style="cursor:pointer" onclick="govApplySearch(\''+s.id+'\')" title="Apply saved search — daily ingestion reports new matches per saved search">'+esc(s.name)+' <span onclick="event.stopPropagation();govDelSearch(\''+s.id+'\')" style="color:var(--red);font-weight:800">&times;</span></span>';}).join('')
     +'</div>';
+  if(f.archived==='1')html+='<div style="font-size:11px;background:#F1F5F9;border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:8px;color:var(--text-secondary)">🗄 Viewing <b>archived</b> opportunities'+(list?' ('+list.length+')':'')+'. Use <b>↩ Unarchive</b> on any card to restore it to the active pipeline, or switch the Archived dropdown back to <b>Active only</b>.</div>';
   if(_govState.busy)html+='<div class="empty-msg">Loading…</div>';
   else if(!list.length)html+='<div class="empty-msg">No opportunities yet. Add your SAM.gov API key in <b>Admin → Integrations → Data Sources</b>, then click <b>Run ingestion now</b> — or <b>Import forecast CSV</b> from the GSA Acquisition Gateway / DHS APFS / EPA forecast exports (no key needed).</div>';
   else html+=(_govView==='reports')?_govReportsHTML(list):(_govView==='board')?_govBoardHTML(list):list.map(_govCardHTML).join('');
@@ -7106,7 +7108,9 @@ function _govCardHTML(o){
     +(o.doc_count?'<button class="btn btn-outline btn-sm" style="font-size:10px" onclick="govShowDocs(\''+gid+'\')" title="Read the ingested RFP/RFI document text">📎 Docs ('+o.doc_count+')</button>':'')
     +'<button class="btn btn-outline btn-sm" style="font-size:10px" onclick="govScoreBid(\''+o.id+'\')" title="AI Bid/No-Bid assessment from the RFP docs + Company Profile">⚖ '+(bb?'Re-score':'Score')+'</button>'
     +'<button class="btn btn-sm" style="font-size:10px;'+(nb?'background:#16A34A;color:#fff;border-color:#16A34A;':'background:#FEE2E2;color:#B91C1C;border-color:#FCA5A5;')+'" onclick="govSetNoBid(\''+o.id+'\','+(nb?'false':'true')+')" title="'+(nb?'Click to undo No-Bid':'Mark as No Bid — we will not pursue this')+'">'+(nb?'↩ Un-No-Bid':'🚫 No Bid')+'</button>'
-    +'<button class="btn btn-sec btn-sm" style="font-size:10px" onclick="govArchive(\''+o.id+'\')">Archive</button>'
+    +(_govState.filters.archived==='1'
+      ? '<button class="btn btn-sm" style="font-size:10px;background:#16A34A;color:#fff;border-color:#16A34A" onclick="govUnarchive(\''+o.id+'\')" title="Restore to the active pipeline">↩ Unarchive</button>'
+      : '<button class="btn btn-sec btn-sm" style="font-size:10px" onclick="govArchive(\''+o.id+'\')">Archive</button>')
     +'</div></div></div>';
 }
 function govIngestNow(){
@@ -7368,6 +7372,7 @@ function govStageChange(id,stage){
   govSetStage(id,stage);
 }
 function govArchive(id){fetch('/api/govops/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({archived:true})}).then(function(){_govState.list=_govState.list.filter(function(x){return x.id!==id;});renderView();}).catch(function(){toast('Archive failed.','error');});}
+function govUnarchive(id){fetch('/api/govops/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({archived:false})}).then(function(){_govState.list=_govState.list.filter(function(x){return x.id!==id;});renderView();toast('Restored to the active pipeline.','success');}).catch(function(){toast('Unarchive failed.','error');});}
 function govSaveSearch(){
   var name=prompt('Name this saved search (the daily ingestion digest reports new matches per saved search):');
   if(!name)return;
