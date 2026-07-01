@@ -977,10 +977,17 @@ app.get('/api/govops/summary', async (req, res) => {
         AND ($5='' OR lifecycle=$5) AND ($6='' OR stage=$6) AND ($7='' OR recompete IS NOT NULL)
         AND ($8='' OR ($8='only' AND no_bid=true) OR ($8='hide' AND coalesce(no_bid,false)=false))
         AND ($9='' OR bid_band=$9)`, params.slice(1));
+    // Distinct NAICS / set-aside values for the filter dropdowns — over the
+    // current archived scope only (ignoring the text filters) so the option
+    // lists stay complete and stable as the user filters.
+    const naicsList = await pool.query(`SELECT naics AS v, count(*)::int AS n FROM gov_opportunities
+        WHERE archived = ($1='1') AND coalesce(naics,'') <> '' GROUP BY naics ORDER BY n DESC, naics`, [q.archived || '']);
+    const setAsideList = await pool.query(`SELECT set_aside AS v, count(*)::int AS n FROM gov_opportunities
+        WHERE archived = ($1='1') AND coalesce(set_aside,'') <> '' GROUP BY set_aside ORDER BY n DESC, set_aside`, [q.archived || '']);
     const stages = {};
     byStage.rows.forEach(r => { stages[r.stage] = r.n; });
     const a = agg.rows[0] || {};
-    res.json({ total: a.total || 0, byStage: stages, no_bid: a.no_bid || 0, scored: a.scored || 0, recompete: a.recompete || 0, value_sum: Number(a.value_sum) || 0, archived_count: (archAgg.rows[0] && archAgg.rows[0].n) || 0 });
+    res.json({ total: a.total || 0, byStage: stages, no_bid: a.no_bid || 0, scored: a.scored || 0, recompete: a.recompete || 0, value_sum: Number(a.value_sum) || 0, archived_count: (archAgg.rows[0] && archAgg.rows[0].n) || 0, naics: naicsList.rows, setAside: setAsideList.rows });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.patch('/api/govops/:id', async (req, res) => {
