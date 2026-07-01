@@ -7005,6 +7005,9 @@ function _govReportCards(){
     card('Due 60+ days',s.due60||0,'#16A34A',f.due==='60','_govState.filters.due=(_govState.filters.due===\'60\'?\'\':\'60\');_govLoad()')
   ];
   html+=section('By response deadline',dueCards);
+  // ── by set-aside (makeup check; click a value to filter, click again to clear) ──
+  var saCards=(s.bySetAside||[]).map(function(x,i){var clickable=x.v!=='(blank)';return card(x.v,x.n,'#0E7490',f.setAside===x.v,clickable?('govFilterSetAsideIdx('+i+')'):'',{upper:false,minw:110,maxw:190});});
+  html+=section('By set-aside',saCards);
   // ── by lifecycle (click to filter; click again to clear) ──
   var LC=['forecast','sources-sought','presolicitation','solicitation','special'];
   var LCC={'forecast':'#64748b','sources-sought':'#0EA5E9','presolicitation':'#7C3AED','solicitation':'#C5A55A','special':'#0891B2'};
@@ -7016,6 +7019,7 @@ function _govReportCards(){
   return html;
 }
 function govFilterAgencyIdx(i){var s=_govState.summary;if(!s||!s.byAgency||!s.byAgency[i])return;var v=s.byAgency[i].v;_govState.filters.agency=(_govState.filters.agency===v?'':v);_govLoad();}
+function govFilterSetAsideIdx(i){var s=_govState.summary;if(!s||!s.bySetAside||!s.bySetAside[i])return;var v=s.bySetAside[i].v;if(v==='(blank)')return;_govState.filters.setAside=(_govState.filters.setAside===v?'':v);_govLoad();}
 // Active-filter chips — shown in the summary bar so the user always sees what's
 // narrowing the list (even with the cards collapsed); each chip clears its filter.
 function _govActiveFilterChips(){

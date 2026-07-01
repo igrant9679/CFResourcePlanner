@@ -1053,23 +1053,29 @@ app.get('/api/govops', async (req, res) => {
 app.get('/api/govops/summary', async (req, res) => {
   try {
     const q = req.query;
+    const dueClause = (n) => `($${n}='' OR (CASE WHEN $${n}='30' THEN ${GOV_DL} >= current_date AND ${GOV_DL} <= current_date+30 WHEN $${n}='3060' THEN ${GOV_DL} > current_date+30 AND ${GOV_DL} <= current_date+60 WHEN $${n}='60' THEN ${GOV_DL} > current_date+60 ELSE true END))`;
     const where = `archived = ($1='1')
       AND ($2='' OR title ILIKE '%'||$2||'%' OR description ILIKE '%'||$2||'%' OR solnum ILIKE '%'||$2||'%')
       AND ($3='' OR agency ILIKE '%'||$3||'%') AND ($4='' OR naics LIKE $4||'%') AND ($5='' OR set_aside ILIKE '%'||$5||'%')
       AND ($6='' OR lifecycle=$6) AND ($7='' OR stage=$7) AND ($8='' OR recompete IS NOT NULL)
       AND ($9='' OR ($9='only' AND no_bid=true) OR ($9='hide' AND coalesce(no_bid,false)=false))
-      AND ($10='' OR bid_band=$10)`;
-    const params = [q.archived || '', q.q || '', q.agency || '', q.naics || '', q.setAside || '', q.lifecycle || '', q.stage || '', q.recompete || '', q.noBid || '', q.bidBand || ''];
+      AND ($10='' OR bid_band=$10) AND ${dueClause(11)}`;
+    const params = [q.archived || '', q.q || '', q.agency || '', q.naics || '', q.setAside || '', q.lifecycle || '', q.stage || '', q.recompete || '', q.noBid || '', q.bidBand || '', q.due || ''];
     const byStage = await pool.query(`SELECT coalesce(nullif(stage,''),'identified') AS stage, count(*)::int AS n FROM gov_opportunities WHERE ${where} GROUP BY 1`, params);
     const agg = await pool.query(`SELECT count(*)::int AS total,
         count(*) FILTER (WHERE coalesce(no_bid,false))::int AS no_bid,
         count(*) FILTER (WHERE bid_band IS NOT NULL AND bid_band<>'')::int AS scored,
         count(*) FILTER (WHERE recompete IS NOT NULL)::int AS recompete,
-        count(*) FILTER (WHERE ${GOV_DL} >= current_date AND ${GOV_DL} <= current_date+30)::int AS due30,
-        count(*) FILTER (WHERE ${GOV_DL} > current_date+30 AND ${GOV_DL} <= current_date+60)::int AS due3060,
-        count(*) FILTER (WHERE ${GOV_DL} > current_date+60)::int AS due60,
         coalesce(sum(coalesce(value_high, value_low, 0)),0)::bigint AS value_sum
       FROM gov_opportunities WHERE ${where}`, params);
+    // Deadline buckets neutralize the due self-filter ($11) so the cards stay
+    // stable and switchable while every OTHER breakdown reflects the due filter.
+    const dueParams = params.slice(); dueParams[10] = '';
+    const dueAgg = await pool.query(`SELECT
+        count(*) FILTER (WHERE ${GOV_DL} >= current_date AND ${GOV_DL} <= current_date+30)::int AS due30,
+        count(*) FILTER (WHERE ${GOV_DL} > current_date+30 AND ${GOV_DL} <= current_date+60)::int AS due3060,
+        count(*) FILTER (WHERE ${GOV_DL} > current_date+60)::int AS due60
+      FROM gov_opportunities WHERE ${where}`, dueParams);
     // Archived count — always the archived pool matching the other filters,
     // independent of the current archived-view toggle, so the card shows even
     // while viewing the active pool.
@@ -1078,7 +1084,7 @@ app.get('/api/govops/summary', async (req, res) => {
         AND ($2='' OR agency ILIKE '%'||$2||'%') AND ($3='' OR naics LIKE $3||'%') AND ($4='' OR set_aside ILIKE '%'||$4||'%')
         AND ($5='' OR lifecycle=$5) AND ($6='' OR stage=$6) AND ($7='' OR recompete IS NOT NULL)
         AND ($8='' OR ($8='only' AND no_bid=true) OR ($8='hide' AND coalesce(no_bid,false)=false))
-        AND ($9='' OR bid_band=$9)`, params.slice(1));
+        AND ($9='' OR bid_band=$9) AND ${dueClause(10)}`, params.slice(1));
     // Distinct NAICS / set-aside values for the filter dropdowns — over the
     // current archived scope only (ignoring the text filters) so the option
     // lists stay complete and stable as the user filters.
@@ -1091,14 +1097,16 @@ app.get('/api/govops/summary', async (req, res) => {
     // still respecting every other active filter.
     const lifecycleParams = params.slice(); lifecycleParams[5] = '';   // $6 = lifecycle
     const agencyParams = params.slice(); agencyParams[2] = '';         // $3 = agency
+    const setAsideParams = params.slice(); setAsideParams[4] = '';     // $5 = set_aside
     const byLifecycle = await pool.query(`SELECT coalesce(nullif(lifecycle,''),'?') AS v, count(*)::int AS n FROM gov_opportunities WHERE ${where} GROUP BY 1`, lifecycleParams);
     const byAgency = await pool.query(`SELECT coalesce(nullif(agency,''),'(unknown)') AS v, count(*)::int AS n FROM gov_opportunities WHERE ${where} GROUP BY 1 ORDER BY n DESC, v LIMIT 12`, agencyParams);
+    const bySetAside = await pool.query(`SELECT coalesce(nullif(set_aside,''),'(blank)') AS v, count(*)::int AS n FROM gov_opportunities WHERE ${where} GROUP BY 1 ORDER BY n DESC, v`, setAsideParams);
     const stages = {};
     byStage.rows.forEach(r => { stages[r.stage] = r.n; });
     const lifecycles = {};
     byLifecycle.rows.forEach(r => { lifecycles[r.v] = r.n; });
-    const a = agg.rows[0] || {};
-    res.json({ total: a.total || 0, byStage: stages, no_bid: a.no_bid || 0, scored: a.scored || 0, recompete: a.recompete || 0, value_sum: Number(a.value_sum) || 0, archived_count: (archAgg.rows[0] && archAgg.rows[0].n) || 0, naics: naicsList.rows, setAside: setAsideList.rows, byLifecycle: lifecycles, byAgency: byAgency.rows, due30: a.due30 || 0, due3060: a.due3060 || 0, due60: a.due60 || 0 });
+    const a = agg.rows[0] || {}; const du = dueAgg.rows[0] || {};
+    res.json({ total: a.total || 0, byStage: stages, no_bid: a.no_bid || 0, scored: a.scored || 0, recompete: a.recompete || 0, value_sum: Number(a.value_sum) || 0, archived_count: (archAgg.rows[0] && archAgg.rows[0].n) || 0, naics: naicsList.rows, setAside: setAsideList.rows, byLifecycle: lifecycles, byAgency: byAgency.rows, bySetAside: bySetAside.rows, due30: du.due30 || 0, due3060: du.due3060 || 0, due60: du.due60 || 0 });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.patch('/api/govops/:id', async (req, res) => {
