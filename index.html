@@ -10195,6 +10195,16 @@ function _homeFY26MonthlyTotal(){return _homeFY26Projects().reduce(function(a,p)
 // FY26 = federal fiscal year Oct 1 2025 → Sep 30 2026. Months elapsed counts from Oct 1.
 function _homeFY26MonthsElapsed(){var now=new Date(),fs=new Date(2025,9,1),fe=new Date(2026,8,30,23,59);if(now<fs)return 0;if(now>fe)return 12;return (now.getFullYear()-2025)*12+(now.getMonth()-9)+1;}
 
+/* ---- Gov Discovery (GovWin) — server-side data, loaded once into a lightweight
+   home cache (independent of the Gov Discovery module's filtered _govState). ---- */
+var _homeGov={loaded:false,busy:false,list:[]};
+function _homeGovLoad(){
+  if(_homeGov.busy||_homeGov.loaded)return;
+  _homeGov.busy=true;
+  fetch('/api/govops?limit=300',{cache:'no-store'}).then(function(r){return r.json();}).then(function(rows){_homeGov.list=Array.isArray(rows)?rows:[];_homeGov.loaded=true;_homeGov.busy=false;if(viewMode==='home')renderView();}).catch(function(){_homeGov.busy=false;_homeGov.loaded=true;if(viewMode==='home')renderView();});
+}
+function _homeGovVal(o){var lo=Number(o.value_low)||0,hi=Number(o.value_high)||0;if(lo&&hi)return (lo+hi)/2;return hi||lo||0;}
+
 /* ---- Widget registry — each render() returns the card BODY ---- */
 var HOME_WIDGETS=[
   {key:'revenue',lane:'perf',size:'w6',persona:['ceo','cfo'],title:'Revenue trajectory',sub:'Contracted (to date + remainder) vs projected · FY26–FY28',render:function(){
@@ -10298,6 +10308,30 @@ var HOME_WIDGETS=[
   {key:'proposals',lane:'exec',size:'',persona:['ceo','coo'],title:'Proposals in flight',sub:'Pipeline → Proposals',render:function(){
     var ps=D.proposals||[];if(!ps.length)return _homeEmpty('No proposals yet.');var by={};ps.forEach(function(p){by[p.status||'draft']=(by[p.status||'draft']||0)+1;});function row(k,lbl,cls){return '<div class="exh-mrow"><span class="exh-lab">'+lbl+'</span><span class="exh-chip '+(cls||'flat')+'">'+(by[k]||0)+'</span></div>';}
     return row('to-be-drafted','To be drafted','warn')+row('draft','In draft')+row('in-review','In review')+row('submitted','Submitted')+'<div class="exh-mrow"><span class="exh-lab">Total active</span><span class="exh-v num">'+ps.filter(function(p){return p.status!=='won'&&p.status!=='lost';}).length+'</span></div>';
+  }},
+  {key:'gov',lane:'exec',size:'',persona:['ceo','coo'],title:'Gov Discovery pipeline',sub:'GovWin capture',render:function(){
+    if(!_homeGov.loaded){_homeGovLoad();return '<div class="exh-empty">Loading Gov Discovery…</div>';}
+    var l=_homeGov.list||[];if(!l.length)return _homeEmpty('No GovWin opportunities loaded.');
+    var open=l.filter(function(o){return !o.no_bid&&!/won|lost/i.test(o.stage||'');});
+    var val=l.reduce(function(a,o){return a+_homeGovVal(o);},0);
+    var scored=l.filter(function(o){return o.bid_band||o.bid_score!=null;}).length;
+    var nobid=l.filter(function(o){return o.no_bid;}).length;
+    var b='<div class="exh-bigstat"><span class="n num">'+l.length+'</span><span class="u">opportunities'+(l.length>=300?' (top 300)':'')+'</span></div>';
+    b+='<div class="exh-mrow tight"><span class="exh-lab">Est. value (midpoint)</span><span class="exh-v num">'+_homeMoneyShort(val)+'</span></div>';
+    b+='<div class="exh-mrow tight"><span class="exh-lab">Open (not no-bid)</span><span class="exh-v num">'+open.length+'</span></div>';
+    b+='<div class="exh-mrow tight"><span class="exh-lab">AI-scored (bid band)</span><span class="exh-v num">'+scored+'</span></div>';
+    b+='<div class="exh-mrow tight"><span class="exh-lab">No-bid</span><span class="exh-v num" style="color:var(--exh-muted)">'+nobid+'</span></div>';
+    return b;
+  }},
+  {key:'govstages',lane:'exec',size:'',persona:['ceo','coo'],title:'Gov Discovery by stage',sub:'GovWin capture funnel',render:function(){
+    if(!_homeGov.loaded){_homeGovLoad();return '<div class="exh-empty">Loading Gov Discovery…</div>';}
+    var l=_homeGov.list||[];if(!l.length)return _homeEmpty('No GovWin opportunities loaded.');
+    var stages=(typeof GOV_STAGES!=='undefined')?GOV_STAGES.slice():['identified','qualified','proposal','submitted','won','lost'];
+    var by={};l.forEach(function(o){var s=o.stage||'identified';if(stages.indexOf(s)<0)stages.push(s);by[s]=(by[s]||0)+1;});
+    var max=Math.max.apply(null,stages.map(function(s){return by[s]||0;}))||1;
+    return stages.map(function(s){var n=by[s]||0,w=Math.round(n/max*100);var col=/won/i.test(s)?'var(--exh-good)':/lost/i.test(s)?'#9aa6b6':'#2563EB';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0"><span style="font-size:12px;color:var(--exh-text);min-width:80px;text-transform:capitalize">'+esc(s)+'</span><div class="exh-mini" style="flex:1">'+(n?'<span style="width:'+Math.max(4,w)+'%;background:'+col+'"></span>':'')+'</div><span class="num" style="font-size:12px;font-weight:700;color:var(--exh-ink);min-width:20px;text-align:right">'+n+'</span></div>';
+    }).join('');
   }},
   {key:'risks',lane:'risk',size:'w6',persona:['ceo','coo','cfo'],title:'Risk register',sub:'Proforma · open critical & high',render:function(){
     var rs=((D.proforma||{}).risks)||[];var open=rs.filter(function(r){return !/RESOLVED|CLOSED/i.test(r.status||'')&&/CRITICAL|HIGH/i.test(r.level||'');});if(!open.length)return _homeEmpty('No open critical or high risks.');
