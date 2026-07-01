@@ -949,6 +949,31 @@ app.get('/api/govops', async (req, res) => {
     res.json(r.rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// Aggregate counts for the report-card strip. Mirrors the /api/govops filters
+// (minus limit/offset) so the cards reflect the true pool, not the capped page.
+app.get('/api/govops/summary', async (req, res) => {
+  try {
+    const q = req.query;
+    const where = `archived = ($1='1')
+      AND ($2='' OR title ILIKE '%'||$2||'%' OR description ILIKE '%'||$2||'%' OR solnum ILIKE '%'||$2||'%')
+      AND ($3='' OR agency ILIKE '%'||$3||'%') AND ($4='' OR naics LIKE $4||'%') AND ($5='' OR set_aside ILIKE '%'||$5||'%')
+      AND ($6='' OR lifecycle=$6) AND ($7='' OR stage=$7) AND ($8='' OR recompete IS NOT NULL)
+      AND ($9='' OR ($9='only' AND no_bid=true) OR ($9='hide' AND coalesce(no_bid,false)=false))
+      AND ($10='' OR bid_band=$10)`;
+    const params = [q.archived || '', q.q || '', q.agency || '', q.naics || '', q.setAside || '', q.lifecycle || '', q.stage || '', q.recompete || '', q.noBid || '', q.bidBand || ''];
+    const byStage = await pool.query(`SELECT coalesce(nullif(stage,''),'identified') AS stage, count(*)::int AS n FROM gov_opportunities WHERE ${where} GROUP BY 1`, params);
+    const agg = await pool.query(`SELECT count(*)::int AS total,
+        count(*) FILTER (WHERE coalesce(no_bid,false))::int AS no_bid,
+        count(*) FILTER (WHERE bid_band IS NOT NULL AND bid_band<>'')::int AS scored,
+        count(*) FILTER (WHERE recompete IS NOT NULL)::int AS recompete,
+        coalesce(sum(coalesce(value_high, value_low, 0)),0)::bigint AS value_sum
+      FROM gov_opportunities WHERE ${where}`, params);
+    const stages = {};
+    byStage.rows.forEach(r => { stages[r.stage] = r.n; });
+    const a = agg.rows[0] || {};
+    res.json({ total: a.total || 0, byStage: stages, no_bid: a.no_bid || 0, scored: a.scored || 0, recompete: a.recompete || 0, value_sum: Number(a.value_sum) || 0 });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 app.patch('/api/govops/:id', async (req, res) => {
   try {
     const b = req.body || {};

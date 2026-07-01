@@ -6972,7 +6972,7 @@ function prospectConvert(id){
 /* ── GOV DISCOVERY (Module 1 client) — SAM.gov + forecast imports + recompete
    flags, scored against the Company Profile, feeding the CRM pipeline and the
    proposal workflow. Records live server-side in gov_opportunities. ── */
-var _govState={list:[],loaded:false,busy:false,runs:[],agencies:[],showRuns:false,filters:{q:'',agency:'',naics:'',setAside:'',lifecycle:'',stage:'',recompete:'',noBid:'',bidBand:'',archived:''}};
+var _govState={list:[],loaded:false,busy:false,runs:[],agencies:[],showRuns:false,summary:null,filters:{q:'',agency:'',naics:'',setAside:'',lifecycle:'',stage:'',recompete:'',noBid:'',bidBand:'',archived:''}};
 var GOV_STAGES=['identified','qualified','capture','proposal','submitted','won','lost'];
 var _govView='list';   // 'list' | 'board' (kanban grouped by stage)
 var GOV_STAGE_C={identified:'#64748b',qualified:'#546478',capture:'#0EA5E9',proposal:'#C5A55A',submitted:'#7C3AED',won:'#16A34A',lost:'#DC2626'};
@@ -6987,7 +6987,30 @@ function _govLoad(){
     if(!f.agency){var _ag={};_govState.list.forEach(function(o){if(o.agency)_ag[o.agency]=1;});_govState.agencies=Object.keys(_ag).sort();}
     if(viewMode==='opp'&&oppView==='gov')renderView();
   }).catch(function(){_govState.busy=false;_govState.loaded=true;renderView();});
+  fetch('/api/govops/summary?'+qs,{cache:'no-store'}).then(function(r){return r.json();}).then(function(s){_govState.summary=s&&!s.error?s:null;if(viewMode==='opp'&&oppView==='gov')renderView();}).catch(function(){});
   fetch('/api/govops/runs',{cache:'no-store'}).then(function(r){return r.json();}).then(function(rows){_govState.runs=Array.isArray(rows)?rows:[];}).catch(function(){});
+}
+// Report-card strip at the top of Gov Discovery — a live vector on the pool:
+// total + per-stage counts (+ AI-scored / No-Bid / est. pipeline value). Reads
+// the server aggregate (_govState.summary) so counts reflect the FULL pool, not
+// the capped page. Stage / Total / No-Bid cards click through to that filter.
+function _govReportCards(){
+  var s=_govState.summary;if(!s)return '';
+  var f=_govState.filters;
+  function money(n){n=Number(n)||0;if(n>=1e9)return '$'+(n/1e9).toFixed(1)+'B';if(n>=1e6)return '$'+(n/1e6).toFixed(1)+'M';if(n>=1e3)return '$'+Math.round(n/1e3)+'K';return '$'+n;}
+  function cap(x){return String(x).charAt(0).toUpperCase()+String(x).slice(1);}
+  function card(label,val,color,active,onclick){
+    return '<div'+(onclick?' onclick="'+onclick+'"':'')+' style="'+(onclick?'cursor:pointer;':'')+'flex:1 1 92px;min-width:92px;border:1px solid '+(active?color:'var(--border)')+';border-top:3px solid '+color+';border-radius:8px;padding:7px 10px;background:'+(active?'#F8FAFC':'#fff')+'">'
+      +'<div style="font-size:19px;font-weight:800;color:var(--text-primary);line-height:1.1">'+val+'</div>'
+      +'<div style="font-size:10px;text-transform:uppercase;letter-spacing:.3px;color:var(--text-muted);margin-top:2px">'+esc(label)+'</div></div>';
+  }
+  var out=[];
+  out.push(card('Total opps',s.total,'#1B2A4A',!f.stage,'_govState.filters.stage=\'\';_govLoad()'));
+  GOV_STAGES.forEach(function(st){out.push(card(cap(st),(s.byStage&&s.byStage[st])||0,GOV_STAGE_C[st]||'#64748b',f.stage===st,'_govState.filters.stage=\''+st+'\';_govLoad()'));});
+  out.push(card('AI-scored',s.scored||0,'#7C3AED',false,''));
+  out.push(card('No Bid',s.no_bid||0,'#DC2626',f.noBid==='only','_govState.filters.noBid=\'only\';_govLoad()'));
+  out.push(card('Est. value',money(s.value_sum),'#C5A55A',false,''));
+  return '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+out.join('')+'</div>';
 }
 function _govDiscoveryHTML(){
   var f=_govState.filters,list=_govState.list;
@@ -7007,6 +7030,7 @@ function _govDiscoveryHTML(){
     +'<button class="btn btn-outline btn-sm" onclick="_govState.showRuns=!_govState.showRuns;renderView()">'+(_govState.showRuns?'Hide':'Show')+' ingestion log</button>'
     +'</div></div>'
     +'<div id="gov_status" style="font-size:11px;color:#7C3AED;margin-top:6px;min-height:14px"></div></div>';
+  html+=_govReportCards();
   if(_govState.showRuns){
     html+='<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;font-size:11px"><b>Ingestion runs</b> (every run logs source, fetched, new, updated, errors — failures are per-source and never silently dropped)<br>'
       +(_govState.runs.slice(0,12).map(function(r){
