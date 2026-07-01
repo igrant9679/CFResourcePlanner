@@ -536,6 +536,7 @@ async function govProfile() {
     samApiKey: (gp.settings && gp.settings.samApiKey) || '',
     sources: (gp.settings && gp.settings.sources) || {},   // per-adapter on/off toggles
     urlSources: gp.urlSources || [],                        // [{id,name,url,kind:'csv'|'rss',adapter}]
+    schedule: (gp.settings && gp.settings.schedule) || null, // {enabled,everyHours} for the auto scheduler
   };
 }
 async function govUpsert(unified, profile, stats) {
@@ -880,6 +881,86 @@ function govwinIngestAuthed(req) {
   if (!need) return true;                       // open if no token configured
   return (req.get('X-Govwin-Token') || (req.body && req.body.token) || '') === need;
 }
+// ── DoD SBIR/STTR (dodsbirsttr.mil) — OPEN topics + full-topic instruction PDF ──
+// Public DSIP API. topicReleaseStatus 591 = Open. Each open topic becomes a
+// solicitation-lifecycle opportunity (program as the set-aside, close date as the
+// date); the full-topic PDF is downloaded, text-extracted (pdf-parse), and stored
+// in gov_opp_docs so it reads in the app's 📎 Docs viewer. Browser UA required.
+const SBIR_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36';
+function sbirHeaders(json) { return { 'User-Agent': SBIR_UA, 'Referer': 'https://www.dodsbirsttr.mil/topics-app/', 'Accept': json ? 'application/json, text/plain, */*' : '*/*' }; }
+function sbirStripHtml(s) { return String(s || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim(); }
+function sbirDate(ms) { if (!ms) return ''; const d = new Date(Number(ms)); return isNaN(d) ? '' : d.toISOString().slice(0, 10); }
+async function sbirIngest(profile, stats, errors) {
+  const BASE = 'https://www.dodsbirsttr.mil/topics/api/public';
+  const searchParam = JSON.stringify({ searchText: null, components: null, programYear: null, solicitationCycleNames: [], releaseNumbers: [], topicReleaseStatus: [591], modernizationPriorities: [], sortBy: 'finalTopicCode,asc', technologyAreaIds: [], component: null, program: null });
+  let page = 0; const size = 50; const MAX = 400; let topics = [];
+  try {
+    while (topics.length < MAX) {
+      const url = BASE + '/topics/search?searchParam=' + encodeURIComponent(searchParam) + '&size=' + size + '&page=' + page;
+      const r = await fetch(url, { headers: sbirHeaders(true) });
+      if (!r.ok) throw new Error('search HTTP ' + r.status);
+      const j = await r.json();
+      const rows = j.data || j.content || [];
+      topics = topics.concat(rows);
+      if (rows.length < size || (j.total && topics.length >= j.total)) break;
+      page++;
+    }
+  } catch (e) { errors.push({ source: 'dod-sbir', error: 'search: ' + e.message }); return; }
+  stats.fetched += topics.length;
+  let pdfParse; try { pdfParse = require('pdf-parse'); } catch (e) { pdfParse = null; }
+  const kws = (profile && profile.ingestKeywords) || [];
+  for (const t of topics) {
+    try {
+      const id = 'dod-sbir_' + t.topicId;
+      let desc = t.topicTitle || '';
+      try {
+        const dr = await fetch(BASE + '/topics/' + encodeURIComponent(t.topicId) + '/details', { headers: sbirHeaders(true) });
+        if (dr.ok) { const dj = await dr.json(); const body = sbirStripHtml([dj.objective, dj.description, dj.phase1Description].filter(Boolean).join(' \n\n ')); if (body) desc = body; if (dj.keywords) desc += ' \n\nKeywords: ' + (Array.isArray(dj.keywords) ? dj.keywords.join(', ') : dj.keywords); }
+      } catch (e) {}
+      desc = desc.slice(0, 4000);
+      const unified = {
+        solnum: t.topicCode || '', title: (t.topicCode ? t.topicCode + ': ' : '') + (t.topicTitle || 'SBIR/STTR topic'),
+        agency: t.component || 'DoD', sub_agency: t.command || '', description: desc, naics: '', psc: '',
+        set_aside: t.program || 'SBIR', est_solicitation_date: sbirDate(t.topicEndDate), source: 'dod-sbir',
+        source_url: 'https://www.dodsbirsttr.mil/topics-app/#/topics/' + t.topicId, notice_type: 'solicitation', lifecycle: 'solicitation',
+      };
+      if (kws.length) { const hay = (unified.title + ' ' + unified.description).toLowerCase(); if (!kws.some((k) => hay.indexOf(String(k).toLowerCase()) > -1)) { stats.filtered = (stats.filtered || 0) + 1; continue; } }
+      const sc = govScore(unified, profile, profile.weights);
+      const tlEntry = { source: 'dod-sbir', notice_type: 'solicitation', url: unified.source_url, at: new Date().toISOString(), title: unified.title };
+      const existing = await pool.query('SELECT id, timeline FROM gov_opportunities WHERE id=$1', [id]);
+      if (existing.rows.length) {
+        const tl = (existing.rows[0].timeline || []).concat([tlEntry]).slice(-25);
+        await pool.query(`UPDATE gov_opportunities SET title=$2, agency=$3, sub_agency=$4, description=CASE WHEN length($5)>length(coalesce(description,'')) THEN $5 ELSE description END, set_aside=$6, est_solicitation_date=$7, source_url=$8, notice_type=$9, lifecycle=$10, solnum=$11, score=$12, score_parts=$13, timeline=$14, raw=$15, last_updated=now() WHERE id=$1`,
+          [id, unified.title, unified.agency, unified.sub_agency, unified.description, unified.set_aside, unified.est_solicitation_date, unified.source_url, unified.notice_type, unified.lifecycle, unified.solnum, sc.score, JSON.stringify(sc.parts), JSON.stringify(tl), JSON.stringify(t)]);
+        stats.updated++;
+      } else {
+        await pool.query(`INSERT INTO gov_opportunities (id, solnum, title, agency, sub_agency, description, naics, psc, set_aside, value_low, value_high, est_solicitation_date, est_award_date, place, poc_name, poc_email, source, source_url, notice_type, lifecycle, score, score_parts, timeline, raw)
+          VALUES ($1,$2,$3,$4,$5,$6,'','',$7,null,null,$8,'','','','','dod-sbir',$9,$10,$11,$12,$13,$14,$15)`,
+          [id, unified.solnum, unified.title, unified.agency, unified.sub_agency, unified.description, unified.set_aside, unified.est_solicitation_date, unified.source_url, unified.notice_type, unified.lifecycle, sc.score, JSON.stringify(sc.parts), JSON.stringify([tlEntry]), JSON.stringify(t)]);
+        stats.added++;
+      }
+      if (pdfParse) {
+        try {
+          const docName = (t.topicCode || t.topicId) + ' — Full Topic & Instructions.pdf';
+          const have = await pool.query('SELECT chars FROM gov_opp_docs WHERE govwin_id=$1 AND name=$2', [id, docName]);
+          if (!have.rows.length || !have.rows[0].chars) {
+            const pr = await fetch(BASE + '/topics/' + encodeURIComponent(t.topicId) + '/download/PDF', { headers: sbirHeaders(false) });
+            if (pr.ok) {
+              const buf = Buffer.from(await pr.arrayBuffer());
+              if (buf.slice(0, 5).toString('latin1') === '%PDF-') {
+                const parsed = await pdfParse(buf);
+                const text = String(parsed.text || '').slice(0, 300000);
+                await pool.query(`INSERT INTO gov_opp_docs (id, govwin_id, name, kind, mime, sha, chars, extracted_text) VALUES ($1,$2,$3,'solicitation','application/pdf','',$4,$5)
+                  ON CONFLICT (govwin_id, name) DO UPDATE SET chars=$4, extracted_text=$5`,
+                  ['doc_sbir_' + t.topicId, id, docName, text.length, text]);
+              }
+            }
+          }
+        } catch (e) { errors.push({ source: 'dod-sbir', error: 'doc ' + (t.topicCode || t.topicId) + ': ' + e.message }); }
+      }
+    } catch (e) { errors.push({ source: 'dod-sbir', error: ((t && t.topicCode) || '?') + ': ' + e.message }); }
+  }
+}
 async function govRunIngestion(triggerKind) {
   const run = await pool.query('INSERT INTO ingestion_runs (source, trigger_kind) VALUES ($1,$2) RETURNING id', ['daily', triggerKind]);
   const runId = run.rows[0].id;
@@ -893,6 +974,7 @@ async function govRunIngestion(triggerKind) {
     if (on('apfs')) await apfsIngest(profile, stats, errors);
     if (on('fpds')) await fpdsRecompete(profile, stats, errors);
     if (on('usaspending')) await usaspendingRecompete(profile, stats, errors);
+    if (on('sbir')) await sbirIngest(profile, stats, errors);
     for (const src of (profile.urlSources || [])) {
       if (src.enabled === false) continue;
       await urlSourceIngest(src, profile, stats, errors);
@@ -919,14 +1001,20 @@ async function govRunIngestion(triggerKind) {
     return { runId, ...stats, errors };
   }
 }
-// Daily scheduler: checked every 2h; runs if the last auto run is >22h old.
+// Scheduler: ticks hourly; runs the ingestion when scheduling is enabled and the
+// last auto run is older than the configured cadence (Gov Discovery → Data
+// Sources → Automatic download schedule). Defaults to every 24h when unset.
 setInterval(async () => {
   try {
+    let sched = { enabled: true, everyHours: 24 };
+    try { const p = await govProfile(); if (p && p.schedule) sched = Object.assign(sched, p.schedule); } catch (e) {}
+    if (sched.enabled === false) return;
+    const everyMs = Math.max(1, Number(sched.everyHours) || 24) * 3600000;
     const r = await pool.query("SELECT max(started_at) AS last FROM ingestion_runs WHERE trigger_kind = 'auto'");
     const last = r.rows[0].last ? new Date(r.rows[0].last).getTime() : 0;
-    if (Date.now() - last > 22 * 3600000) { console.log('[govops] starting scheduled ingestion'); await govRunIngestion('auto'); }
+    if (Date.now() - last >= everyMs - 60000) { console.log('[govops] scheduled ingestion (every ' + (sched.everyHours || 24) + 'h)'); await govRunIngestion('auto'); }
   } catch (e) { console.error('[govops] scheduler error:', e.message); }
-}, 2 * 3600000);
+}, 3600000);
 
 app.get('/api/govops', async (req, res) => {
   try {

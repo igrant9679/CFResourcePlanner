@@ -7062,7 +7062,7 @@ var _govDocs={gid:'',rows:[]};
 function govCloseDocs(){var e=document.getElementById('govdocs_ov');if(e)e.remove();}
 function govShowDocs(gid){
   _govDocs={gid:gid,rows:[]};
-  var opp=_govState.list.find(function(x){return x.id==='govwin_'+gid;});
+  var opp=_govState.list.find(function(x){return x.id==='govwin_'+gid||x.id===gid;});
   var title=opp?opp.title:gid;
   var ov=document.createElement('div');ov.id='govdocs_ov';
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:3000;display:flex;align-items:center;justify-content:center';
@@ -7435,6 +7435,14 @@ function govSourcesModal(){
     +tgl('apfs','DHS APFS (apfs-cloud.dhs.gov)','Full DHS forecast incl. incumbents, contract numbers, POC emails — the richest free source. No key needed. Filtered to your Company Profile NAICS.')
     +tgl('fpds','FPDS recompete leads','Queries FPDS ATOM for contracts in your NAICS ending 12–18 months out — surfaces them as [Recompete] leads with incumbent + value. No key needed.')
     +tgl('usaspending','USAspending enrichment','Flags existing records as recompetes when a matching incumbent contract is expiring. No key needed.')
+    +tgl('sbir','DoD SBIR/STTR — open topics (dodsbirsttr.mil)','Every OPEN SBIR/STTR topic as a solicitation — tagged with its program (SBIR/STTR), component, and close date — plus the full-topic instruction PDF, text-extracted and readable via 📎 Docs. No key needed.')
+    +(function(){var sch=gp.settings.schedule||{enabled:true,everyHours:24};var fo=[[6,'Every 6 hours'],[12,'Every 12 hours'],[24,'Daily'],[48,'Every 2 days'],[168,'Weekly']];
+      return '<span class="fld-section-hdr">Automatic download schedule</span>'
+      +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Runs all enabled sources on a cadence and pulls in new opportunities (and SBIR instruction docs). <b>Run ingestion now</b> always works regardless of this.</div>'
+      +'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:4px">'
+      +'<label style="font-size:12px;display:inline-flex;gap:6px;align-items:center"><input type="checkbox" '+(sch.enabled!==false?'checked':'')+' onchange="govSetSchedule(\'enabled\',this.checked)"> Enabled</label>'
+      +'<select class="fld-sel" style="width:auto" '+(sch.enabled===false?'disabled':'')+' onchange="govSetSchedule(\'everyHours\',this.value)">'+fo.map(function(o){return '<option value="'+o[0]+'"'+(Number(sch.everyHours||24)===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+'</select>'
+      +'<span style="font-size:11px;color:var(--text-muted)">checked hourly; runs when the last auto-run is older than the interval</span></div>';})()
     +'<span class="fld-section-hdr">URL sources (file or feed — no scraping)</span>'
     +'<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Paste a direct CSV/XLSX download link (agency OSDBU forecast pages: EPA, HHS, DOE/NNSA, NASA, State, USDA, Commerce, Treasury — or a data.gov dataset file) or an RSS/ATOM feed (NZ GETS saved-search feeds, state portals like Virginia eVA). These run on the daily schedule too. Agencies are migrating to the GSA Gateway — when a source retires, just delete its row.</div>'
     +urlRows
@@ -7452,6 +7460,7 @@ function govSourcesModal(){
   openModal('ovAdmin');
 }
 function govToggleSource(k,on){var gp=_govPipe();gp.settings=gp.settings||{};gp.settings.sources=gp.settings.sources||{};gp.settings.sources[k]=!!on;save();}
+function govSetSchedule(field,val){var gp=_govPipe();gp.settings=gp.settings||{};gp.settings.schedule=gp.settings.schedule||{enabled:true,everyHours:24};if(field==='enabled')gp.settings.schedule.enabled=!!val;else gp.settings.schedule.everyHours=Number(val)||24;save();govSourcesModal();}
 function govAddKeyword(){
   var gp=_govPipe();gp.settings=gp.settings||{};gp.settings.ingestKeywords=gp.settings.ingestKeywords||[];
   var raw=gv('gov_kw_input')||'';
